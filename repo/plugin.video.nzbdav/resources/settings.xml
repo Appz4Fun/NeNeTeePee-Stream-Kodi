@@ -691,6 +691,11 @@
 						<hidden>true</hidden>
 					</control>
 				</setting>
+				<setting id="next_episode_premiere_guard" type="boolean" label="30373" help="30374">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
 			</group>
 		</category>
 		<category id="player_installation" label="30010" help="30359">

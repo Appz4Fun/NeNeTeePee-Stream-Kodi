@@ -3271,6 +3271,9 @@ class _ScriptPlayFakeWindow:
     def setProperty(self, key, value):
         self._store[key] = value
 
+    def clearProperty(self, key):
+        self._store.pop(key, None)
+
 
 @patch("resources.lib.resolver.resolve_and_play")
 @patch("xbmcaddon.Addon")
@@ -3328,6 +3331,142 @@ def test_handle_script_play_remembers_pick_and_targets_next_episode_later(
     mock_search.assert_called_once()
     query = mock_search.call_args.args[0]
     assert (query.season, query.episode) == ("1", "9")
+
+
+@patch("resources.lib.router._get_script_setting", return_value="true")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch(
+    "resources.lib.router._lookup_episode_info",
+    return_value={"title": "Rick and Morty"},
+)
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_handle_script_play_retargets_a_stale_season_premiere_after_an_episode_ends(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_infolabel,
+    mock_addon,
+    mock_resolve_and_play,
+    mock_setting,
+):
+    """The reported failure, end to end: after S09E07 plays through, a play
+    auto-fires for S09E01 with season/episode *explicitly* populated -- so the
+    blank-season/episode recovery never engages -- and the picker opens on the
+    season premiere. Note the incoming tmdb_id is the episode's, not the
+    show's, which is why show identity has to key off tvdb/imdb."""
+    from resources.lib.router import _handle_script_play
+    from resources.lib.router_lastepisode import mark_last_episode_completed
+    from resources.lib.router_scriptplay import _script_play_resolve_selected
+
+    mock_infolabel.return_value = ""
+    _ScriptPlayFakeWindow._store = {}
+
+    with patch(
+        "resources.lib.router_lastepisode.xbmcgui.Window",
+        return_value=_ScriptPlayFakeWindow(),
+    ):
+        picked_params = {
+            "type": "episode",
+            "imdb": "tt2861424",
+            "tvdb": "275274",
+            "tmdb_id": "11759797",  # S09E07's TMDB id, not the show's
+            "title": "Rick and Morty",
+            "season": "9",
+            "episode": "7",
+        }
+        selection = {"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"}
+        _script_play_resolve_selected(picked_params, selection, [selection], None)
+        mock_resolve_and_play.assert_called_once()
+
+        # S09E07 plays through to its natural end.
+        mark_last_episode_completed()
+
+        # The misfire: an explicit S09E01 play for the same show.
+        _handle_script_play(
+            {
+                "type": "episode",
+                "imdb": "tt2861424",
+                "tvdb": "275274",
+                "tmdb_id": "11759791",  # S09E01's TMDB id
+                "title": "Rick and Morty",
+                "season": "9",
+                "episode": "1",
+            }
+        )
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert (query.season, query.episode) == ("9", "8")
+
+
+@patch("resources.lib.router._get_script_setting", return_value="false")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch(
+    "resources.lib.router._lookup_episode_info",
+    return_value={"title": "Rick and Morty"},
+)
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_stale_season_premiere_guard_can_be_switched_off(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_infolabel,
+    mock_addon,
+    mock_resolve_and_play,
+    mock_setting,
+):
+    """With the setting off, an explicit premiere play is taken at face value."""
+    from resources.lib.router import _handle_script_play
+    from resources.lib.router_lastepisode import mark_last_episode_completed
+    from resources.lib.router_scriptplay import _script_play_resolve_selected
+
+    mock_infolabel.return_value = ""
+    _ScriptPlayFakeWindow._store = {}
+
+    with patch(
+        "resources.lib.router_lastepisode.xbmcgui.Window",
+        return_value=_ScriptPlayFakeWindow(),
+    ):
+        _script_play_resolve_selected(
+            {
+                "type": "episode",
+                "tvdb": "275274",
+                "title": "Rick and Morty",
+                "season": "9",
+                "episode": "7",
+            },
+            {"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"},
+            [{"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"}],
+            None,
+        )
+        mark_last_episode_completed()
+        _handle_script_play(
+            {
+                "type": "episode",
+                "tvdb": "275274",
+                "title": "Rick and Morty",
+                "season": "9",
+                "episode": "1",
+            }
+        )
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert (query.season, query.episode) == ("9", "1")
 
 
 @patch(

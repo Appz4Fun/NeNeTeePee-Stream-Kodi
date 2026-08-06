@@ -73,6 +73,57 @@ def _write_back_episode_params(params, season, episode):
         params["episode"] = episode
 
 
+def _stale_premiere_guard_enabled():
+    """Whether the season-premiere misfire guard is switched on (default on)."""
+    import resources.lib.router as _router
+
+    setting = _router._get_script_setting("next_episode_premiere_guard", "true")
+    return str(setting).strip().lower() != "false"
+
+
+def _script_play_guard_stale_premiere(params, title, season, episode):
+    """Retarget a stale season-premiere play at the real next episode.
+
+    Unlike the blank-season/episode recovery above, the numbers here arrive
+    explicitly populated -- they are simply the wrong ones, chosen upstream by
+    whatever auto-fired the play when the previous episode ended.
+    ``recall_stale_premiere`` decides whether this play matches that signature;
+    everything else passes through untouched.
+    """
+    if not _stale_premiere_guard_enabled():
+        return title, season, episode
+
+    from resources.lib.router_lastepisode import recall_stale_premiere
+
+    guard_season, guard_episode = recall_stale_premiere(params, season, episode)
+    if not (guard_season and guard_episode):
+        return title, season, episode
+
+    xbmc.log(
+        "NZB-DAV: Season-premiere misfire for {!r}; targeting S{:02d}E{:02d} "
+        "instead of S{:02d}E{:02d}".format(
+            title,
+            int(guard_season),
+            int(guard_episode),
+            int(season),
+            int(episode),
+        ),
+        xbmc.LOGINFO,
+    )
+    # Tell the user we overrode what they clicked -- backing out and playing
+    # the premiere again goes through, since the guard is one-shot.
+    from resources.lib.http_util import notify
+    from resources.lib.i18n import addon_name, fmt
+
+    notify(
+        addon_name(),
+        fmt(30372, int(guard_season), int(guard_episode)),
+        4000,
+    )
+    _write_back_episode_params(params, guard_season, guard_episode)
+    return title, guard_season, guard_episode
+
+
 def _script_play_resolve_episode_args(
     params, search_type, title, season, episode, imdb
 ):
@@ -104,6 +155,13 @@ def _script_play_resolve_episode_args(
             season, episode = recalled_season, recalled_episode
             _write_back_episode_params(params, season, episode)
             return title, season, episode
+
+    # The other broken shape: season/episode arrive fully populated but point
+    # at the season premiere, auto-fired right after a later episode of that
+    # same season finished. Nothing in the params looks wrong -- only the pick
+    # we remember for this show gives it away.
+    if search_type == "episode" and season and episode:
+        return _script_play_guard_stale_premiere(params, title, season, episode)
 
     # Recover the numbers from the focused ListItem, but trust them only when
     # that item is the same show we're about to search (the focus may have

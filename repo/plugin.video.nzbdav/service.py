@@ -435,6 +435,21 @@ class NzbdavPlayer(xbmc.Player):
         self._cleanup_proxy_session()
         self._clear_stream_properties()
 
+    @staticmethod
+    def _mark_episode_completed():
+        """Flag the last picked episode as watched through to its end.
+
+        Feeds ``router_lastepisode.recall_stale_premiere``: a play that lands
+        on the season premiere right after this is the auto-fire misfire, not
+        a deliberate replay. Deliberately not called from onPlayBackStopped.
+        """
+        try:
+            from resources.lib.router_lastepisode import mark_last_episode_completed
+
+            mark_last_episode_completed()
+        except (ImportError,) + _PLAYER_RUNTIME_ERRORS:
+            pass
+
     def onPlayBackEnded(self):
         """Mark stream inactive when playback finishes naturally."""
         with self._state_lock:
@@ -447,6 +462,7 @@ class NzbdavPlayer(xbmc.Player):
             "NeNeTeePee-Stream-Kodi: Playback completed for '{}'".format(title),
             xbmc.LOGINFO,
         )
+        self._mark_episode_completed()
         self._clear_stable_resume(resume_key)
         self._cleanup_proxy_session()
         self._clear_stream_properties()
