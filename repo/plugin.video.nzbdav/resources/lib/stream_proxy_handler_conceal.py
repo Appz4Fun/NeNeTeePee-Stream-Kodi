@@ -365,13 +365,18 @@ class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _ebml_lookahead_response_ok(resp, from_offset):
-        """Only a 206 whose Content-Range starts at ``from_offset`` is usable."""
+        """Only a 206 whose Content-Range starts at ``from_offset`` is usable.
+
+        A 206 without Content-Range can't prove where its body starts, and the
+        scan turns body positions into absolute resume offsets, so it is
+        rejected (the gap then falls back to plain zero-fill).
+        """
         status = getattr(resp, "status", None) or resp.getcode()
         if status != 206:
             return False
         content_range = _sp._get_header(resp, "Content-Range")
         if not content_range:
-            return True
+            return False
         try:
             first = content_range.split()[1].split("-", 1)[0]
             return int(first) == from_offset

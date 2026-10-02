@@ -638,3 +638,21 @@ def test_refused_commit_never_zero_fills_over_a_concurrent_plan(proxy_env):
     assert len(out) == SIZE
     assert out[16000:16300] == bytes(300)
     assert out[16300:16500] == racing.render(16300, 200)
+
+
+@pytest.mark.parametrize(
+    "status,content_range,ok",
+    [
+        (206, "bytes 17024-37759/37760", True),
+        (206, "bytes 17000-37759/37760", False),
+        # A 206 without Content-Range can't prove where its body starts, and
+        # the look-ahead turns body positions into absolute resume offsets.
+        (206, None, False),
+        (200, None, False),
+    ],
+)
+def test_lookahead_only_trusts_a_206_that_proves_its_start(status, content_range, ok):
+    resp = _Response(FakeUpstream(), 17024, SIZE - 1)
+    resp.status = status
+    resp.headers = _Headers({"Content-Range": content_range} if content_range else {})
+    assert _StreamHandler._ebml_lookahead_response_ok(resp, 17024) is ok
