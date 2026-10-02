@@ -180,6 +180,11 @@ def _complete_playback(handle, succeeded, item, resume_key, captured):
         _finish_resume_state(resume_key, captured, handed_off)
 
 
+def _ensure_resume_not_cancelled(chosen, monitor):
+    if chosen is None or monitor.abortRequested():
+        raise StreamNZBCancelled()
+
+
 def play_streamnzb(params, settings_getter, handle=None):
     """Complete every plugin handle; handle-less errors/cancellation notify.
 
@@ -198,8 +203,7 @@ def play_streamnzb(params, settings_getter, handle=None):
         item, path = _playback_listitem(entry, params)
         resume_key, captured = _capture_resume(params)
         chosen = _choose_resume(item, resume_key, captured)
-        if chosen is None or monitor.abortRequested():
-            raise StreamNZBCancelled()
+        _ensure_resume_not_cancelled(chosen, monitor)
         if handle is None:
             xbmc.Player().play(path, item)
         succeeded = True

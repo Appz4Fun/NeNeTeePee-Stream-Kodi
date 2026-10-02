@@ -51,6 +51,9 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         self._serve_proxy_set_write_timeout()
 
         st = self._serve_proxy_init_state(ctx, start, end)
+        # MKV/WebM: tap every byte sent so a later gap can be concealed
+        # structurally (no-op for other containers).
+        self._ebml_conceal_begin(ctx, st)
 
         try:
             if self._serve_proxy_emit_prefetch_prefix(ctx, st, range_header):
@@ -66,6 +69,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         except (BrokenPipeError, ConnectionResetError, _sp._socket.timeout):
             self._serve_proxy_classify_disconnect(st)
         finally:
+            self._ebml_conceal_end(ctx, st)
             self._serve_proxy_finalize(ctx, st)
 
     def _serve_proxy_send_headers(self, ctx, range_header, start, end, content_length):
@@ -173,12 +177,16 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         must return immediately), else False to proceed into the read loop.
         """
         waited_for_initial_prefetch = False
-        if range_header and st.current == 0:
-            cached_prefix = self._pop_cached_fallback_range(ctx, st.current, st.end)
+        # Never let the cached prefix cover a stored EBML plan's bytes.
+        prefix_end = self._ebml_read_bound(ctx, st)
+        if range_header and st.current == 0 and prefix_end >= st.current:
+            cached_prefix = self._pop_cached_fallback_range(ctx, st.current, prefix_end)
             if not cached_prefix:
                 self._wait_for_initial_range_prefetch(ctx, st.current)
                 waited_for_initial_prefetch = True
-                cached_prefix = self._pop_cached_fallback_range(ctx, st.current, st.end)
+                cached_prefix = self._pop_cached_fallback_range(
+                    ctx, st.current, prefix_end
+                )
             if cached_prefix:
                 self.wfile.write(cached_prefix)
                 written = len(cached_prefix)
@@ -230,6 +238,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         identical to the original ``return``/``continue`` control flow.
         """
         steps = (
+            self._serve_proxy_conceal_replay_step,
             self._serve_proxy_read_step,
             self._serve_proxy_cutover_step,
             self._serve_proxy_retry_step,
@@ -256,7 +265,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
     def _serve_proxy_read_step(self, ctx, st):
         """Read upstream once, account for bytes, and notify candidates."""
         result, written = self._stream_upstream_range(
-            st.active_ctx, st.current, st.end, contract_mode=st.contract_mode
+            st.active_ctx, st.current, st.read_end, contract_mode=st.contract_mode
         )
         st.result = result
         st.total_streamed += written
@@ -285,7 +294,9 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         # still coax forward (genuinely downloading, per 58f3d4f) keeps
         # waiting, while a stuck/dead primary escalates to failover.
         st.progressed_this_iter = bool(written)
-        return None
+        # A read bounded by a stored EBML plan ended cleanly at the plan's
+        # start: loop so the replay step serves the plan's bytes.
+        return self._serve_proxy_bounded_read_done(ctx, st)
 
     def _serve_proxy_cutover_step(self, ctx, st):
         """Switch to a validated live fallback, or note a pending fall-through."""
@@ -349,7 +360,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             ) = self._retry_original_range(
                 st.active_ctx,
                 st.current,
-                st.end,
+                st.read_end,
                 st.contract_mode,
                 # The player's first content read takes the SHORT,
                 # first-read-patient schedule; a mid-stream rebuffer keeps
@@ -379,6 +390,8 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             if st.current > st.end:
                 st.terminal_reason = "complete"
                 return "return"
+            if self._serve_proxy_bounded_read_done(ctx, st):
+                return "continue"
         return None
 
     def _serve_proxy_progress_step(self, ctx, st):

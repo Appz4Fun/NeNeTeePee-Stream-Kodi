@@ -419,11 +419,21 @@ def test_stream_upstream_range_miss_updates_served_high_water():
 
 
 class _FakeMonitor:
+    """Kodi-faithful monitor: ``waitForAbort(t <= 0)`` blocks forever in Kodi.
+
+    Real Kodi 21 treats a non-positive (or omitted) timeout as an infinite
+    wait, so the double refuses it instead of returning instantly.
+    """
+
     def __init__(self, abort_after=None):
         self._calls = 0
         self._abort_after = abort_after
 
-    def waitForAbort(self, _timeout=0.0):
+    def waitForAbort(self, timeout=-1):
+        if timeout is None or timeout <= 0:
+            raise AssertionError(
+                "waitForAbort({!r}) blocks forever in Kodi".format(timeout)
+            )
         self._calls += 1
         if self._abort_after is not None and self._calls >= self._abort_after:
             return True
@@ -495,6 +505,29 @@ def test_run_readahead_prefetch_repoints_to_url_after_fallback_cutover():
     assert seen[0] == ("http://webdav/primary.mkv", "Basic PRIMARY")
     assert all(s == ("http://webdav/fallback.mkv", "Basic FALLBACK") for s in seen[1:])
     assert len(seen) > 1  # it kept prefetching from the new source
+
+
+def test_run_readahead_prefetch_loop_guard_never_blocks_forever():
+    """Regression: the loop guard used ``waitForAbort(0)``, which never returns
+    on real Kodi, so the daemon prefetched nothing on devices. The guard must
+    poll ``abortRequested()`` and still fill the window."""
+    proxy = _make_proxy()
+    content_length = 300_000
+    buf = ReadAheadBuffer(cap_bytes=10 * 1024 * 1024, content_length=content_length)
+    ctx = {
+        "remote_url": "http://webdav/x.mkv",
+        "auth_header": None,
+        "content_length": content_length,
+        _READAHEAD_BUFFER_KEY: buf,
+    }
+    monitor = _FakeMonitor()
+    with patch("xbmc.Monitor", return_value=monitor), patch.object(
+        _StreamHandler,
+        "_fetch_primary_range_bytes",
+        staticmethod(lambda _u, _a, start, end, _c: b"Q" * (end - start + 1)),
+    ):
+        proxy._run_readahead_prefetch(ctx)
+    assert buf.next_fetch_offset() == content_length
 
 
 def test_run_readahead_prefetch_bounded_by_cap():

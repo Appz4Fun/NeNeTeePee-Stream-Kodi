@@ -1367,8 +1367,8 @@ msgid "Abort a stream early if a rolling 16MB window becomes more than half zero
 msgstr "Abort a stream early if a rolling 16MB window becomes more than half zero-filled, which usually means a dead release. Only active when Strict upstream contract mode isn't Off."
 
 msgctxt "#30351"
-msgid "Cap the total zero-filled data allowed per stream; the stream ends with a clean error once the budget is hit."
-msgstr "Cap the total zero-filled data allowed per stream; the stream ends with a clean error once the budget is hit."
+msgid "When missing articles can't be fetched from any source, zero fill skips the unreadable data so playback keeps going. In MKV and WebM files the gap becomes padding the player skips cleanly, resuming at the next intact section; other files get plain zeros, which can cause a brief glitch. This option caps the total skipped data per stream; the stream ends with a clean error once the cap is hit."
+msgstr "When missing articles can't be fetched from any source, zero fill skips the unreadable data so playback keeps going. In MKV and WebM files the gap becomes padding the player skips cleanly, resuming at the next intact section; other files get plain zeros, which can cause a brief glitch. This option caps the total skipped data per stream; the stream ends with a clean error once the cap is hit."
 
 msgctxt "#30352"
 msgid "Re-issue the original range request with backoff on transient upstream errors before falling back to skip-filling."

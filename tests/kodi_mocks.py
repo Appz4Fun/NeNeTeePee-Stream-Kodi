@@ -101,9 +101,17 @@ def _install_monitor_defaults() -> None:
     # the expected iteration.
     import time as _real_time
 
-    def _waitForAbort(timeout=0.0):
-        if timeout and timeout > 0:
-            _real_time.sleep(timeout)
+    # Kodi 21 treats a non-positive (or omitted) timeout as an INFINITE wait
+    # (verified on a real Kodi 21.3). Fail loudly instead of returning at once,
+    # so production code can't ship a ``waitForAbort(0)`` "poll" that hangs on
+    # devices; non-blocking checks must use ``abortRequested()``.
+    def _waitForAbort(timeout=-1):
+        if timeout is None or timeout <= 0:
+            raise AssertionError(
+                "waitForAbort({!r}) blocks forever in Kodi; use "
+                "abortRequested()".format(timeout)
+            )
+        _real_time.sleep(timeout)
         return False
 
     xbmc_mod.Monitor.return_value.waitForAbort.side_effect = _waitForAbort

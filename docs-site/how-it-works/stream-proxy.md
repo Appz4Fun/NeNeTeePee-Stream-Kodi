@@ -109,7 +109,11 @@ determined is remuxed whenever a remux mode is selected.
 
 Pass-through reads upstream in 64 KB chunks (heap-safe on 32-bit), and on a
 mid-stream read failure it **skip-probes forward** to the next readable offset
-and zero-fills the gap so the decoder keeps running. For video, a throughput
+and fills the gap so the decoder keeps running. For MKV and WebM the gap is
+concealed structurally when that can be confirmed: the unreadable span becomes
+EBML `Void` elements that the demuxer skips, and playback resumes at the next
+intact cluster. Otherwise, and for every other container, the gap is plain
+zeros. For video, a throughput
 watchdog also closes the response when proxy-to-Kodi throughput stays under
 100 KB/s over a 20-second window. Kodi then reconnects with a fresh upstream
 fetch instead of wedging on a trickle. Pass-through is also the only path where
@@ -125,6 +129,7 @@ session. Defaults in parentheses.
 | **Strict upstream contract mode** (Warn only) | Validates the upstream's status, `Content-Range`, and `Content-Length`. **Off** disables the density breaker entirely; **Enforce** treats a contract violation as fatal. |
 | **Enable density breaker** (off) | When contract mode isn't Off, aborts the stream if a rolling 16 MB window becomes more than 50% zero-fill — i.e. the source has gone mostly synthetic (a dead release). |
 | **Enable zero-fill budget** (on) | Caps zero-fill at 64 MB per response and 5% of the session; exceeding it ends the stream with a clean error rather than serving mostly-fake bytes. |
+| Zero fill for MKV/WebM (always on, no setting) | For MKV/WebM, zero fill replaces an unreadable span with Void elements sized to valid boundaries instead of plain zeros. The span may extend to the next verified cluster (one bounded look-ahead of at most 16 MB / 15 s), and that whole span counts against the zero-fill budget. Falls back to plain zeros when the file structure can't be confirmed. Lost frames aren't recovered. |
 | **Enable retry ladder before skip probe** (on) | Re-issues the original range with 2/4/8-second backoff on transient errors before skip-probing. A fresh open uses a short 0.25/0.5/1-second ladder so playback doesn't hang silently at the start. |
 | **Max seconds to wait for a slow/stalled backend before giving up (0=off)** (120 s, max 600) | For an *established* stream that stalls on a recoverable backend condition (still-downloading or a transient 5xx), holds Kodi's connection open with abortable backoff up to this budget; the clock resets on any real forward byte. Doesn't apply to genuinely missing articles (those zero-fill) or a fresh open. |
 | **Read-ahead buffer size in MB (keeps filling while paused; 0=off)** (256 MB, max 4096) | A bounded forward prefetch, so resuming after a pause is instant. `0` behaves exactly as if there were no buffer. |
