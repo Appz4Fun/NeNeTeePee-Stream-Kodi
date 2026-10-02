@@ -197,6 +197,18 @@ class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
             return "continue"
         return None
 
+    def _ebml_refresh_read_bound(self, ctx, st):
+        """Re-read the plan store after concealment was not committed.
+
+        Planning (and its look-ahead) can take seconds, and a concurrent
+        request on this session may store a plan meanwhile. Returns True when
+        a stored plan now covers ``current`` (the loop's replay step must emit
+        it); otherwise ``st.read_end`` stops short of the next plan so the
+        legacy zero-fill can be clipped before it.
+        """
+        st.read_end = self._ebml_read_bound(ctx, st)
+        return st.read_end < st.current
+
     def _ebml_clip_skip(self, st, skip):
         """Never let a legacy zero-fill run into a stored plan's span."""
         if skip is None or st.read_end >= st.end:

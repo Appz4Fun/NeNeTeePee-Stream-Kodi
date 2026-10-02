@@ -608,3 +608,33 @@ def test_concurrent_commit_of_same_gap_replays_the_winner(proxy_env):
     _h, out = proxy_env(ctx, FakeUpstream(missing=[(16000, 16700)]))
     assert out == reference
     assert ctx[_EBML_CONCEAL_STORE_KEY].plan_count() == 1
+
+
+class _RacingLaterPlanStore(ec.ConcealPlanStore):
+    """Another request commits a different plan inside this gap, once."""
+
+    def __init__(self, racing_plan):
+        super().__init__()
+        self.racing_plan = racing_plan
+
+    def add(self, source_key, plan):
+        if self.racing_plan is None:
+            return super().add(source_key, plan)
+        super().add(source_key, self.racing_plan)
+        self.racing_plan = None
+        return False
+
+
+def test_refused_commit_never_zero_fills_over_a_concurrent_plan(proxy_env):
+    # While this request planned the gap at 16000, another request stored a
+    # plan starting inside the pending legacy skip (16000 + 1024). The legacy
+    # zeros must stop short of it, and its bytes must be replayed as stored.
+    racing = ec.ConcealPlan(
+        ec.KIND_PAYLOAD, 16300, 16500, ((16300, b"\xaa\xbb\xcc\xdd"),), "race"
+    )
+    ctx = _ctx()
+    ctx[_EBML_CONCEAL_STORE_KEY] = _RacingLaterPlanStore(racing)
+    _h, out = proxy_env(ctx, FakeUpstream(missing=[(16000, 16700)]))
+    assert len(out) == SIZE
+    assert out[16000:16300] == bytes(300)
+    assert out[16300:16500] == racing.render(16300, 200)

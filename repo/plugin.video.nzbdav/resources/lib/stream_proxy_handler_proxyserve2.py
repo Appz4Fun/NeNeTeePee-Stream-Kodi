@@ -175,6 +175,9 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
             return "return"
         if self._ebml_try_conceal(ctx, st, skip):
             return None
+        if self._ebml_refresh_read_bound(ctx, st):
+            return "continue"
+        skip = self._ebml_clip_skip(st, skip)
         if self._serve_proxy_density_breaker_tripped(st, skip):
             return "return"
         if self._serve_proxy_session_budget_exceeded(ctx, st, skip):
