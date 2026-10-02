@@ -53,19 +53,6 @@ CLUSTER_ID_BYTES = b"\x1f\x43\xb6\x75"
 
 # EBML globals allowed at any level.
 _GLOBAL_IDS = frozenset((ID_VOID, ID_CRC32))
-_ROOT_CHILDREN = frozenset((ID_EBML, ID_SEGMENT))
-_SEGMENT_CHILDREN = frozenset(
-    (
-        ID_SEEKHEAD,
-        ID_INFO,
-        ID_TRACKS,
-        ID_CLUSTER,
-        ID_CUES,
-        ID_CHAPTERS,
-        ID_TAGS,
-        ID_ATTACHMENTS,
-    )
-)
 _CLUSTER_CHILDREN = frozenset(
     (
         ID_TIMESTAMP,
@@ -75,21 +62,6 @@ _CLUSTER_CHILDREN = frozenset(
         ID_SIMPLEBLOCK,
         ID_BLOCKGROUP,
         ID_ENCRYPTEDBLOCK,
-    )
-)
-_BLOCKGROUP_CHILDREN = frozenset(
-    (
-        ID_BLOCK,
-        ID_BLOCKVIRTUAL,
-        ID_BLOCKADDITIONS,
-        ID_BLOCKDURATION,
-        ID_REFERENCEPRIORITY,
-        ID_REFERENCEBLOCK,
-        ID_REFERENCEVIRTUAL,
-        ID_CODECSTATE,
-        ID_DISCARDPADDING,
-        ID_SLICES,
-        ID_REFERENCEFRAME,
     )
 )
 # All-ones IDs are reserved by EBML.

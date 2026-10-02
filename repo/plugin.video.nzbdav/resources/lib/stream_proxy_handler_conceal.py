@@ -34,6 +34,8 @@ def _close_quietly(resp):
     try:
         resp.close()
     except OSError:
+        # The scan is already finished or abandoned and nothing reads this
+        # socket again, so a reset while closing it changes nothing.
         pass
 
 

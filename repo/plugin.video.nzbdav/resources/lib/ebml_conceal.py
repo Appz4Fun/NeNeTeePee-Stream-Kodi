@@ -58,11 +58,8 @@ from resources.lib.ebml_conceal_plan import (
     plan_concealment,
 )
 from resources.lib.ebml_conceal_primitives import (
-    _BLOCKGROUP_CHILDREN,
     _CLUSTER_CHILDREN,
     _GLOBAL_IDS,
-    _ROOT_CHILDREN,
-    _SEGMENT_CHILDREN,
     CLUSTER_ID_BYTES,
     ID_ATTACHMENTS,
     ID_BLOCK,
@@ -166,6 +163,35 @@ __all__ = [
     "void_header",
 ]
 
+# Allowed direct children of the masters the tracker descends into.
+_ROOT_CHILDREN = frozenset((ID_EBML, ID_SEGMENT))
+_SEGMENT_CHILDREN = frozenset(
+    (
+        ID_SEEKHEAD,
+        ID_INFO,
+        ID_TRACKS,
+        ID_CLUSTER,
+        ID_CUES,
+        ID_CHAPTERS,
+        ID_TAGS,
+        ID_ATTACHMENTS,
+    )
+)
+_BLOCKGROUP_CHILDREN = frozenset(
+    (
+        ID_BLOCK,
+        ID_BLOCKVIRTUAL,
+        ID_BLOCKADDITIONS,
+        ID_BLOCKDURATION,
+        ID_REFERENCEPRIORITY,
+        ID_REFERENCEBLOCK,
+        ID_REFERENCEVIRTUAL,
+        ID_CODECSTATE,
+        ID_DISCARDPADDING,
+        ID_SLICES,
+        ID_REFERENCEFRAME,
+    )
+)
 _CHILDREN = {
     ID_SEGMENT: _SEGMENT_CHILDREN,
     ID_CLUSTER: _CLUSTER_CHILDREN,
