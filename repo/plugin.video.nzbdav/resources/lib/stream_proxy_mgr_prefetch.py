@@ -192,7 +192,11 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
         buf, monitor, content_length = setup
         if self._readahead_defer_start(buf, monitor):
             return
-        while not buf.should_stop() and not monitor.waitForAbort(0):
+        # abortRequested(), not waitForAbort(0): Kodi treats a non-positive
+        # timeout as an infinite wait, which parked this daemon forever on its
+        # first pass so it never prefetched on real devices. The throttle and
+        # error paths below already yield with positive waitForAbort backoffs.
+        while not buf.should_stop() and not monitor.abortRequested():
             try:
                 if self._readahead_prefetch_once(ctx, buf, monitor, content_length):
                     return

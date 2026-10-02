@@ -98,6 +98,23 @@ _MAX_RECOVERY_SECONDS = 30
 # Cap zero-filled bytes per response to prevent runaway silent playback when
 # an NZB is mostly corrupt. 64 MB ≈ several seconds of 4K REMUX video.
 _MAX_TOTAL_ZERO_FILL = 67108864
+# EBML (Matroska/WebM) gap concealment on the original-byte pass-through path.
+# After the skip-probe finds readable data again, a structure-aware plan may
+# replace the unreadable span with correctly sized Void elements instead of
+# literal zeros (see ebml_conceal.py). When the span escapes its Cluster, ONE
+# bounded look-ahead read searches for the next verified Cluster to resume at.
+# These bound that read (bytes, wall clock) and the whole concealed span; the
+# readable bytes skipped to reach the resume Cluster are charged to the same
+# zero-fill budgets as the gap itself. Exceeding any bound falls back to the
+# legacy literal zero-fill.
+_EBML_LOOKAHEAD_MAX_BYTES = 16 * 1024 * 1024
+_EBML_LOOKAHEAD_MAX_SECONDS = 15.0
+_EBML_CONCEAL_MAX_SPAN = 48 * 1024 * 1024
+# Session-ctx keys: the per-session plan store (replayed on repeat/overlapping
+# ranges) and the container verdict (False once byte 0 proved non-EBML).
+_EBML_CONCEAL_STORE_KEY = "_ebml_conceal_store"
+_EBML_CONTAINER_KEY = "_ebml_container"
+_EBML_CONCEAL_EXTENSIONS = (".mkv", ".mka", ".mk3d", ".webm")
 # Patient forward-stall wait (pass-through). When an ESTABLISHED forward stream
 # (real upstream bytes already delivered this request) stalls on a RECOVERABLE
 # backend condition — a still-downloading high-water short read

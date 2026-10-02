@@ -56,12 +56,17 @@ def _no_real_network():
     # result. Combined with the DNS guard, an un-mocked daemon urlopen now both
     # builds its opener and fails its connect instantly. The tail-prewarm daemon
     # also defers ~1.5s on Monitor.waitForAbort (which REALLY sleeps in this
-    # harness); zero that defer so the daemon reaches (and fast-fails) its read at
-    # once. The dedicated defer tests override waitForAbort themselves and assert
+    # harness); shrink that defer to 1 ms (never 0: real Kodi's waitForAbort(0)
+    # waits forever) so the daemon reaches (and fast-fails) its read at once.
+    # The dedicated defer tests override waitForAbort themselves and assert
     # the defer-then-fetch ordering, not the duration, so they are unaffected.
     with patch("socket.getaddrinfo", side_effect=_guarded_getaddrinfo), patch(
         "urllib.request.getproxies", return_value={}
-    ), patch("resources.lib.stream_proxy._TAIL_PREWARM_DEFER_SECONDS", 0):
+    ), patch(
+        # Tiny but positive: Kodi's waitForAbort(0) waits forever.
+        "resources.lib.stream_proxy._TAIL_PREWARM_DEFER_SECONDS",
+        0.001,
+    ):
         yield
 
 
@@ -13726,6 +13731,72 @@ def test_find_skip_offset_probes_normally_when_flag_clear():
     # First skip size is 1 MB; probe succeeded.
     assert result == 1048576
     assert mock_urlopen.called
+
+
+def _probe_reset_mid_body():
+    resp = _mock_urlopen_response([])
+    resp.read = MagicMock(side_effect=ConnectionResetError("reset"))
+    return resp
+
+
+def test_find_skip_offset_moves_past_missing_data_without_backoff():
+    """A probe the backend answers (206) but can't fill means the data is
+    missing at that offset, not that the backend is down. Retrying it with
+    backoff only burns the recovery budget, so a dead span wider than 4 MB
+    used to exhaust it before the 16 MB probe ever ran."""
+    from resources.lib.stream_proxy import _StreamHandler
+
+    ctx = {"remote_url": "http://nzbdav/movie.mkv", "auth_header": None}
+    responses = iter(
+        [
+            _mock_urlopen_response([]),  # +1 MB: 206 with an empty body
+            _probe_reset_mid_body(),  # +4 MB: 206, then reset mid-body
+            _mock_urlopen_response([b"Y" * 64]),  # +16 MB: readable
+        ]
+    )
+    monitor = MagicMock()
+    monitor.waitForAbort.return_value = False
+    with patch(
+        "resources.lib.stream_proxy.urlopen",
+        side_effect=lambda *a, **kw: next(responses),
+    ) as mock_urlopen, patch(
+        "resources.lib.stream_proxy.xbmc.Monitor", return_value=monitor
+    ):
+        result = _StreamHandler._find_skip_offset(
+            ctx, failed_byte=0, range_end=64 * 1048576
+        )
+
+    assert result == 16777216
+    assert mock_urlopen.call_count == 3
+    monitor.waitForAbort.assert_not_called()
+
+
+def test_find_skip_offset_still_backs_off_when_backend_unavailable():
+    """A 5xx or refused probe still retries the same skip with backoff."""
+    from resources.lib.stream_proxy import _StreamHandler
+
+    ctx = {"remote_url": "http://nzbdav/movie.mkv", "auth_header": None}
+    refused = MagicMock()
+    refused.__enter__ = MagicMock(side_effect=ConnectionRefusedError())
+    responses = iter(
+        [
+            _mock_urlopen_response([b"E"], status=503),
+            refused,
+            _mock_urlopen_response([b"Y" * 64]),
+        ]
+    )
+    monitor = MagicMock()
+    monitor.waitForAbort.return_value = False
+    with patch(
+        "resources.lib.stream_proxy.urlopen",
+        side_effect=lambda *a, **kw: next(responses),
+    ), patch("resources.lib.stream_proxy.xbmc.Monitor", return_value=monitor):
+        result = _StreamHandler._find_skip_offset(
+            ctx, failed_byte=0, range_end=64 * 1048576
+        )
+
+    assert result == 1048576
+    assert monitor.waitForAbort.call_count == 2
 
 
 def test_retry_original_range_short_circuits_when_upstream_marked_down():

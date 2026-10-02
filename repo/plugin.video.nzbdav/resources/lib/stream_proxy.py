@@ -138,6 +138,12 @@ from resources.lib.stream_proxy_const import (  # noqa: F401,E402  pylint: disab
     _DENSITY_BREAKER_WINDOW_BYTES,
     _DENSITY_BREAKER_ZERO_FILL_RATIO,
     _DURATION_RE,
+    _EBML_CONCEAL_EXTENSIONS,
+    _EBML_CONCEAL_MAX_SPAN,
+    _EBML_CONCEAL_STORE_KEY,
+    _EBML_CONTAINER_KEY,
+    _EBML_LOOKAHEAD_MAX_BYTES,
+    _EBML_LOOKAHEAD_MAX_SECONDS,
     _FALLBACK_CURRENT_RANGE_CACHE_KEY,
     _FALLBACK_FINGERPRINT_WORKERS,
     _FALLBACK_INCONCLUSIVE,
@@ -237,6 +243,9 @@ from resources.lib.stream_proxy_const import (  # noqa: F401,E402  pylint: disab
 # MRO. These imports sit after the module-level constants the mixins capture
 # in default arguments (e.g. _AUTH_HEADER_NOT_PROVIDED) so the partially
 # initialized module already exposes them when each mixin class body runs.
+from resources.lib.stream_proxy_handler_conceal import (  # noqa: E402
+    _EbmlConcealMixin,
+)
 from resources.lib.stream_proxy_handler_cutover import (  # noqa: E402,F401  pylint: disable=unused-import
     _FallbackCutoverMixin,
 )
@@ -284,6 +293,7 @@ class _StreamHandler(  # pylint: disable=too-many-ancestors
     _RangeCacheMixin,
     _ProxyServeMixin,
     _ProxyServeStallMixin,
+    _EbmlConcealMixin,
     _UpstreamRelayMixin,
     _RangeParseMixin,
 ):

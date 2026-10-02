@@ -70,6 +70,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **EBML-aware gap concealment for MKV/WebM.** When missing articles leave an
+  unreadable span in a Matroska or WebM stream, pass-through now replaces it
+  with correctly sized EBML Void elements instead of literal zeros, so the
+  demuxer skips the damage and resumes at the next intact cluster.
+  ffmpeg no longer logs `invalid as first byte of an EBML number` and resyncs
+  blindly. Verified fallback cutover still runs first. Response length and
+  offsets are unchanged, repeat and overlapping ranges replay identical bytes,
+  and the whole concealed span counts against the zero-fill budgets. When the
+  structure can't be confirmed, it falls back to plain zeros and logs why.
+  This is now how zero fill works for MKV/WebM, with no separate setting; the
+  **Enable zero-fill budget** help text describes it. The approach is adapted
+  from StreamNZB's EBML hole fill (GPL-3.0).
 - **Complete media filters.** Many more options in each filter group:
   resolutions from 240p to 4320p, HDR / HDR10+ / Dolby Vision / HLG / SDR,
   18 audio formats, 14 video codecs, and 48 languages. Languages moved to
@@ -114,6 +126,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Zero fill now gets past dead spans of 4 to 16 MB.** Each skip probe the
+  backend answered but couldn't fill (missing articles) was retried with
+  2/4/6/8 s backoff, which spent the 30 s recovery budget before the 16 MB
+  probe ran. The stream then closed even though readable data was close
+  ahead. Missing data now moves straight to the next probe size; only an
+  unreachable backend or a non-2xx status still backs off. Recovery from an
+  8 MB dead span went from a closed stream after about 45 s to under 1 s
+  in live testing.
+- **A concealed span is charged to the zero-fill budget even if Kodi
+  disconnects mid-write.** The plan is stored for replay when committed, so
+  it is now charged and logged at that point, not after the write.
+- **Read-ahead buffer now actually prefetches on Kodi.** The prefetch loop
+  polled for shutdown with `waitForAbort(0)`, which real Kodi treats as wait
+  forever, so the read-ahead daemon parked on its first pass and never
+  filled. It now checks `abortRequested()`, and the test Kodi mocks reject
+  non-positive `waitForAbort` timeouts so this can't slip back in.
 - **Blu-ray `.m2ts` files are recognized as playable video.** Raw BD-rip main
   titles (for example `00000.m2ts`) were not recognized in NZBGet reuse or
   WebDAV discovery, so an already-downloaded release was submitted again.

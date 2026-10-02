@@ -42,13 +42,16 @@ def _reap_readahead_threads():
     monitor = sys.modules["xbmc"].Monitor.return_value
     saved_side = monitor.waitForAbort.side_effect
     saved_ret = monitor.waitForAbort.return_value
-    monitor.waitForAbort.side_effect = lambda timeout=0.0: True
+    saved_abort = monitor.abortRequested.return_value
+    monitor.waitForAbort.side_effect = lambda timeout=-1: True
+    monitor.abortRequested.return_value = True
     try:
         for thread in leftover:
             thread.join(timeout=2)
     finally:
         monitor.waitForAbort.side_effect = saved_side
         monitor.waitForAbort.return_value = saved_ret
+        monitor.abortRequested.return_value = saved_abort
 
 
 @pytest.fixture(autouse=True)
