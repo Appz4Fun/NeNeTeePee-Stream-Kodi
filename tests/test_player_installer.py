@@ -132,7 +132,7 @@ def test_player_json_uses_script_handoff_instead_of_plugin_media_url():
     assert "plugin.video.nzbdav" in PLAYER_JSON["play_episode"]
     assert "type=episode" in PLAYER_JSON["play_episode"]
     assert "title={showname_url}" in PLAYER_JSON["play_episode"]
-    assert "tmdb_id={tmdb_id}" in PLAYER_JSON["play_episode"]
+    assert "tmdb_id={tmdb}" in PLAYER_JSON["play_episode"]
     roundtripped = json.loads(json.dumps(PLAYER_JSON))
     assert roundtripped["name"] == PLAYER_JSON["name"]
 

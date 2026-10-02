@@ -21,11 +21,12 @@ finished file from an SMB share or a local/mounted path.
 
 ## Enable and configure
 
-These settings are in the **NZBGet Backend** group on the **NZBGet** tab:
+Select **NZBGet** on **Playback backend**. Its connection and completed-folder
+settings appear below the dropdown:
 
 | Setting | Default | What to enter |
 |---------|---------|---------------|
-| **Use NZBGet instead of nzbdav for playback** | Off | Turn on to switch to NZBGet mode. |
+| **Playback backend → NZBGet** | nzbdav / InfiniDysk | Select NZBGet to switch to NZBGet mode. |
 | **NZBGet URL** | `http://localhost:6789` | Your NZBGet address. |
 | **NZBGet Username** | `nzbget` | NZBGet control username. |
 | **NZBGet Password** | *(empty)* | NZBGet control password. |
@@ -43,8 +44,8 @@ NZBGet. **Download timeout (seconds)** defaults to 3600 and is clamped to
 leaves the job running in NZBGet, so it can finish for a later play.
 
 <!--
-Screenshot placeholder: capture the NZBGet settings tab with the backend
-toggle, connection fields, and the two test actions.
+Screenshot placeholder: capture Playback backend with NZBGet selected,
+connection fields, and the two test actions.
 To add: save it as docs-site/images/nzbget-settings.png, then replace this
 comment with:  ![NZBGet settings](../images/nzbget-settings.png)
 -->
@@ -169,7 +170,7 @@ NZBGet saves to `/mnt/nzbget/downloads` on the server and you mounted
     CoreELEC:~ # ls /storage/nzbget/downloads
     ```
 
-2. On the **NZBGet** tab, set **Completed Folder (SMB or Local Path)** to
+2. On **Playback backend** with **NZBGet** selected, set **Completed Folder (SMB or Local Path)** to
    `/storage/nzbget/downloads`.
 3. Run **Test Completed Folder**.
 

@@ -4,7 +4,7 @@
 
 """NZBGet backend resolver: submit to NZBGet, wait, play from SMB.
 
-Reached only when ``nzbget_enabled`` is true; ``resolver.resolve`` delegates
+Reached only when the playback backend is NZBGet; ``resolver.resolve`` delegates
 here. Honors the same ``setResolvedUrl``-on-failure contract as the nzbdav
 path: exactly one resolution per exit, failures resolve False.
 """

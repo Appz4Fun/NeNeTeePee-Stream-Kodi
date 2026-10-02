@@ -4,7 +4,14 @@ Before you install NZB-DAV, make sure the surrounding pieces are in place. NZB-D
 is the glue between Kodi and your existing Usenet stack — it doesn't replace any
 of these components.
 
-## Required
+## StreamNZB alternative
+
+With **Playback backend → StreamNZB**, a reachable StreamNZB server and its
+stream token replace the nzbdav/WebDAV and local search-provider requirements
+below. Configure Usenet access and indexers on StreamNZB. Kodi and TMDBHelper
+remain required. See [StreamNZB backend](../features/streamnzb-backend.md).
+
+## Required for nzbdav / NZBGet
 
 | Component | What you need | Notes |
 |-----------|---------------|-------|

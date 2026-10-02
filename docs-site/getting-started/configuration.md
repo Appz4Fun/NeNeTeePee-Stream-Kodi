@@ -1,22 +1,30 @@
 # Configure connections
 
 Open the add-on settings at **Settings → Add-ons → My add-ons → Video add-ons →
-NZB-DAV → Configure**. This page walks through the **Connection** tab, which
-is the minimum you need before your first search. It also covers the
-**Indexers** and **NZBGet** tabs if you use them. Every setting is listed in
+NZB-DAV → Configure**. Choose and configure your server on **Playback backend**.
+For nzbdav / InfiniDysk or NZBGet, configure a search provider on **Indexers**,
+starting with NZBHydra2 at the top. Every setting is listed in
 the [settings reference](../reference/settings.md).
 
 <!--
-Screenshot placeholder — Capture the NZB-DAV Connection settings tab.
+Screenshot placeholder — Capture the NZB-DAV Playback backend settings tab.
 IMPORTANT: use sanitized/dummy values (example hostnames, no real IPs or
 usernames) — do not commit a screenshot of a live configuration.
 To add: save it as docs-site/images/settings.png, then replace this comment
 with:  ![NZB-DAV settings](../images/settings.png)
 -->
 
+## Choose the playback backend
+
+Select **nzbdav / InfiniDysk**, **NZBGet** or **StreamNZB** on the
+**Playback backend** tab. Existing NZBGet selections migrate automatically.
+For StreamNZB, enter its server/base URL and stream token, then use the existing
+TMDBHelper player. Follow [StreamNZB backend](../features/streamnzb-backend.md);
+the nzbdav, WebDAV and local search-provider steps below are not required.
+
 ## Connect to nzbdav
 
-Under **nzbdav**, enter the address and API key of your nzbdav server. If you
+On **Playback backend**, under **nzbdav / InfiniDysk**, enter the address and API key of your nzbdav server. If you
 run [InfiniDysk](https://github.com/infinidysk/infinidysk), the maintained
 nzbdav fork, enter its address and API key here the same way.
 
@@ -30,7 +38,9 @@ it confirms both the URL and the API key.
 
 ## Connect to WebDAV
 
-nzbdav serves finished files over WebDAV. NZB-DAV streams from there.
+The **WebDAV** group is also on **Playback backend**, visible with
+**nzbdav / InfiniDysk** selected. nzbdav serves finished files over WebDAV;
+NZB-DAV streams from there.
 
 | Setting | What to enter |
 |---------|---------------|
@@ -50,7 +60,8 @@ server error.
 
 ## Enable a search provider
 
-You need at least one provider. Turn on whichever you use and fill in its
+For nzbdav and NZBGet, open **Indexers** and enable at least one provider.
+NZBHydra2 is the first option. Turn on whichever you use and fill in its
 details. You can enable more than one — results are merged and de-duplicated.
 
 !!! tip "Recommended: NZBHydra2"
@@ -108,7 +119,7 @@ details. You can enable more than one — results are merged and de-duplicated.
     Added in 2.0.0-beta.1 and available on the
     [Beta channel](beta-channel.md).
 
-The last group on the **Connection** tab, **TV search accuracy**, has one
+The last group on the **Indexers** tab, **TV search accuracy**, has one
 setting: **TMDB API key (optional, movies and TV)**. Enter a key from TMDB
 here, not from TVDB. With a key, NZB-DAV converts the ids TMDBHelper sends:
 
@@ -131,9 +142,9 @@ key or a lookup fails, NZB-DAV falls back to the supplied ids or the title.
 !!! info "Beta feature"
     Added in 2.0.0-beta.1 — available on the [Beta channel](beta-channel.md).
 
-If you use NZBGet as your backend, fill in the **NZBGet** tab as well:
+If you use NZBGet, its fields appear on **Playback backend**:
 
-1. Turn on **Use NZBGet instead of nzbdav for playback**.
+1. Select **NZBGet** in the **Playback backend** dropdown.
 2. Enter the **NZBGet URL**, **NZBGet Username**, **NZBGet Password**, and
    **NZBGet Category**.
 3. Set **Completed Folder (SMB or Local Path)** to NZBGet's completed-downloads

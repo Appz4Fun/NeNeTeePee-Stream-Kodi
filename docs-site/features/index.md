@@ -59,3 +59,9 @@ flowchart TD
 Every one of these stages is configurable. The
 [Settings reference](../reference/settings.md) documents each setting; the
 [How it works](../how-it-works/architecture.md) section explains the internals.
+
+## StreamNZB backend
+
+[StreamNZB](streamnzb-backend.md) supplies server-ranked releases and direct
+HTTP playback through the existing TMDBHelper player. Configure its URL and
+stream token in the Playback backend tab.

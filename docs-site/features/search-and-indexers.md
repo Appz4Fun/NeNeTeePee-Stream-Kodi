@@ -92,7 +92,7 @@ comment with:  ![Manage Indexers dialog](../images/manage-indexers.png)
 Id-keyed searches are far more accurate than title searches. TMDBHelper
 normally passes the ids NZB-DAV needs, and they are used directly. When one is
 missing and you've set **TMDB API key (optional, movies and TV)** on the
-**Connection** tab:
+**Indexers** tab:
 
 - **Episodes** — NZB-DAV looks up the show's TVDB id from its TMDB or IMDb id,
   because many indexers key TV on TVDB ids. All providers share the one lookup.

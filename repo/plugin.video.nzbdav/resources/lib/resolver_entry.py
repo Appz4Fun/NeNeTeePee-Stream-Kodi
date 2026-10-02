@@ -259,6 +259,13 @@ def resolve(handle, params):
     title = _resolver.unquote(params.get("title", ""))
     effects = None
 
+    from resources.lib.playback_backend import get_backend, get_setting
+    from resources.lib.streamnzb_player import play_streamnzb
+
+    if get_backend(get_setting) == "streamnzb":
+        play_streamnzb(params, get_setting, handle=handle)
+        return
+
     if not nzb_url and not params.get("_season_pack"):
         _resolver._reject_resolve_handle(
             handle, notify_message=_resolver._string(30096)
@@ -336,6 +343,15 @@ def resolve_and_play(nzb_url, title, params=None):
         # streaming/fallback machinery below is bypassed.
         resolve_params = params or {}
         settings_getter = resolve_params.get("_settings_getter")
+        from resources.lib.playback_backend import get_backend, get_setting
+        from resources.lib.streamnzb_player import play_streamnzb
+
+        backend_getter = settings_getter or get_setting
+        if get_backend(backend_getter) == "streamnzb":
+            stream_params = dict(resolve_params)
+            stream_params.setdefault("title", title)
+            play_streamnzb(stream_params, backend_getter)
+            return
         if _resolver._nzbget_enabled(settings_getter):
             _resolver._resolve_and_play_nzbget_delegate(
                 nzb_url, title, params, resolve_params

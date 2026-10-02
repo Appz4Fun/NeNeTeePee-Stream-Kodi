@@ -9,9 +9,8 @@ required-creds block reordered behind an optional one) only surfaces
 on a fresh install. These tests pin the load-bearing invariants:
 
     * Required defaults that the first-run UX depends on.
-    * Category ordering inside the Connections panel (Fix #3 — the
-      nzbdav + WebDAV blocks must appear ahead of Hydra/Prowlarr so a
-      top-down user finishes with a working playback backend).
+    * Playback backend fields stay together; search providers belong on
+      Indexers, with NZBHydra2 first.
     * That ``*_enabled`` flags whose paired credentials default empty
       also default ``false`` (Fix #2 — opt-in after credentials).
     * That ``prowlarr_indexer_ids`` precedes its associated
@@ -45,18 +44,6 @@ def _setting_by_id(category, setting_id):
         if child.get("id") == setting_id:
             return child
     return None
-
-
-def _connections_category(root):
-    """The Connections category has label 30000 and is the FIRST category.
-
-    Settings live under <settings version="1"><section><category><group>
-    <setting>...</setting></group></category></section></settings>.
-    """
-    for cat in root.find("section").findall("category"):
-        if cat.get("label") == "30000":
-            return cat
-    raise AssertionError("Connections category (label=30000) not found")
 
 
 def _index_of_setting(category, predicate):
@@ -112,7 +99,7 @@ def test_settings_xml_uses_new_format_with_category_help(settings_root):
 
 def test_webdav_url_default_is_localhost_8080(settings_root):
     """First install must have a discoverable webdav starting point."""
-    cat = _connections_category(settings_root)
+    cat = _category_by_label(settings_root, "30600")
     webdav_url = _setting_by_id(cat, "webdav_url")
     assert webdav_url is not None, "webdav_url setting missing"
     assert webdav_url.findtext("default") == "http://localhost:8080"
@@ -124,7 +111,7 @@ def test_webdav_url_default_is_localhost_8080(settings_root):
 def test_nzbhydra_enabled_defaults_false(settings_root):
     """nzbhydra_enabled with empty hydra_api_key would always fail
     test_hydra on first launch — flipped to opt-in after creds."""
-    cat = _connections_category(settings_root)
+    cat = _category_by_label(settings_root, "30163")
     hydra = _setting_by_id(cat, "nzbhydra_enabled")
     assert hydra is not None
     assert hydra.findtext("default") == "false"
@@ -136,45 +123,46 @@ def test_nzbhydra_enabled_defaults_false(settings_root):
 def test_prowlarr_enabled_remains_false(settings_root):
     """Confirm the Fix #2 audit conclusion: prowlarr_enabled was already
     correct; this test pins it so a future edit doesn't regress it."""
-    cat = _connections_category(settings_root)
+    cat = _category_by_label(settings_root, "30163")
     prowlarr = _setting_by_id(cat, "prowlarr_enabled")
     assert prowlarr.findtext("default") == "false"
 
 
-# --- Fix #3: Connections category order -----------------------------------
-
-
-def test_connections_category_required_creds_first(settings_root):
-    """nzbdav + WebDAV (required playback backend) must appear BEFORE
-    Hydra / Prowlarr (optional indexers) in the Connections panel.
-    First-run users completing the panel top-down should finish with a
-    working playback backend even if they skip the indexer rows."""
-    cat = _connections_category(settings_root)
-
-    nzbdav_url_idx = _index_of_setting(cat, lambda s: s.get("id") == "nzbdav_url")
-    webdav_url_idx = _index_of_setting(cat, lambda s: s.get("id") == "webdav_url")
-    hydra_url_idx = _index_of_setting(cat, lambda s: s.get("id") == "hydra_url")
-    prowlarr_host_idx = _index_of_setting(cat, lambda s: s.get("id") == "prowlarr_host")
-
-    assert nzbdav_url_idx >= 0
-    assert webdav_url_idx >= 0
-    assert hydra_url_idx >= 0
-    assert prowlarr_host_idx >= 0
-
-    # nzbdav before webdav (logical pairing — nzbdav serves the WebDAV mount).
-    assert nzbdav_url_idx < webdav_url_idx
-    # Both required blocks before either optional indexer.
-    assert webdav_url_idx < hydra_url_idx
-    assert webdav_url_idx < prowlarr_host_idx
-    # Hydra before Prowlarr (preserve the prior Hydra-first convention).
-    assert hydra_url_idx < prowlarr_host_idx
+def test_backend_and_indexer_panels(settings_root):
+    """Keep the backend credentials together and Hydra first among indexers."""
+    categories = _categories(settings_root)
+    assert [cat.get("id") for cat in categories[:2]] == ["backend", "indexers"]
+    assert not {"connection", "nzbget"}.intersection(
+        cat.get("id") for cat in categories
+    )
+    backend = _category_by_label(settings_root, "30600")
+    indexers = _category_by_label(settings_root, "30163")
+    for setting_id, value in (
+        ("nzbdav_url", "0"),
+        ("webdav_url", "0"),
+        ("nzbget_url", "1"),
+        ("nzbget_smb_root", "1"),
+        ("streamnzb_url", "2"),
+        ("streamnzb_token", "2"),
+    ):
+        setting = _setting_by_id(backend, setting_id)
+        assert setting is not None
+        assert _dependency_for(setting, "visible", "playback_backend").text == value
+        assert _setting_by_id(indexers, setting_id) is None
+    assert _index_of_setting(backend, lambda s: s.get("id") == "nzbdav_url") < (
+        _index_of_setting(backend, lambda s: s.get("id") == "webdav_url")
+    )
+    assert next(indexers.iter("setting")).get("id") == "nzbhydra_enabled"
+    for setting_id in ("hydra_url", "prowlarr_host", "direct_indexers_enabled"):
+        assert _setting_by_id(backend, setting_id) is None
+        assert _setting_by_id(indexers, setting_id) is not None
 
 
 def test_prowlarr_indexer_ids_precedes_test_action(settings_root):
     """``prowlarr_indexer_ids`` is consumed by the Test Prowlarr action;
     it must appear BEFORE that action in the panel so users finish
     selecting indexers before validating the connection."""
-    cat = _connections_category(settings_root)
+    cat = _category_by_label(settings_root, "30163")
     settings_list = list(cat.iter("setting"))
 
     indexer_ids_idx = next(
@@ -217,13 +205,14 @@ def test_direct_indexer_options_depend_on_master_toggle(settings_root):
     same UpdateSettingControl path regardless of group composition.
     """
     cat = _category_by_label(settings_root, "30163")
-    settings_list = list(cat.iter("setting"))
-    master_idx = _index_of_setting(
-        cat, lambda s: s.get("id") == "direct_indexers_enabled"
-    )
-    assert master_idx >= 0
+    direct_groups = [
+        group
+        for group in cat.findall("group")
+        if group.get("label") in {"30166", "30167"}
+    ]
+    assert len(direct_groups) == 2
 
-    for setting in settings_list[master_idx + 1 :]:
+    for setting in (s for group in direct_groups for s in group.iter("setting")):
         assert (
             _dependency_for(setting, "enable", "direct_indexers_enabled") is not None
         ), "setting {} is not tied to direct_indexers_enabled via enable=".format(
