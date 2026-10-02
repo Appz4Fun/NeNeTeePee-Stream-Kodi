@@ -42,7 +42,7 @@ itself.
    the beta build stays in the **Versions** list, and it's easy to reinstall it
    by accident.
 
-Settings that are new in 2.0.0 aren't in 1.2.3. For example, the NZBGet tab,
+Settings that are new in 2.0.0 aren't in 1.2.3. For example, the NZBGet backend,
 the read-ahead buffer, and the fallback submit delay don't exist there. See
 [Beta channel and beta features](../getting-started/beta-channel.md).
 
@@ -131,7 +131,7 @@ often removes more than you expect. See
 Check nzbdav before you change any NZB-DAV settings.
 
 1. Run **Test nzbdav Connection**. It reads nzbdav's queue with your API key.
-2. Confirm the **API Key** in the NZB-DAV **Connection** settings matches
+2. Confirm the **API Key** in the NZB-DAV **Playback backend** settings matches
    nzbdav's key.
 3. In the nzbdav UI, check whether the job was accepted, failed, or is still
    queued.

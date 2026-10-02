@@ -1,8 +1,33 @@
 <?xml version="1.0" encoding="utf-8" standalone="yes"?>
 <settings version="1">
 	<section id="plugin.video.nzbdav">
-		<category id="connection" label="30000" help="30356">
-			<group id="1" label="30004">
+
+		<category id="backend" label="30600" help="30612">
+			<group id="1">
+				<setting id="playback_backend" type="integer" label="30600" help="30604">
+					<level>0</level>
+					<default>0</default>
+					<constraints><options>
+						<option label="30601">0</option>
+						<option label="30208">1</option>
+						<option label="30602">2</option>
+					</options></constraints>
+					<control type="list" format="string"><heading>30600</heading></control>
+				</setting>
+				<setting id="streamnzb_url" type="string" label="30603" help="30605">
+					<level>0</level>
+					<default></default>
+					<constraints><allowempty>true</allowempty></constraints>
+					<control type="edit" format="string"><heading>30603</heading></control>
+					<dependencies><dependency type="visible" setting="playback_backend">2</dependency></dependencies>
+				</setting>
+				<setting id="streamnzb_token" type="string" label="30606" help="30611">
+					<level>0</level>
+					<default></default>
+					<constraints><allowempty>true</allowempty></constraints>
+					<control type="edit" format="string"><heading>30606</heading><hidden>true</hidden></control>
+					<dependencies><dependency type="visible" setting="playback_backend">2</dependency></dependencies>
+				</setting>
 				<setting id="nzbdav_url" type="string" label="30005" help="30232">
 					<level>0</level>
 					<default>http://localhost:3000</default>
@@ -12,6 +37,9 @@
 					<control type="edit" format="string">
 						<heading>30005</heading>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
 				</setting>
 				<setting id="nzbdav_api_key" type="string" label="30003" help="30233">
 					<level>0</level>
@@ -23,6 +51,9 @@
 						<heading>30003</heading>
 						<hidden>true</hidden>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
 				</setting>
 				<setting id="action_test_nzbdav" type="action" label="30114" help="30234">
 					<level>0</level>
@@ -30,9 +61,10 @@
 					<control type="button" format="action">
 						<close>true</close>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
 				</setting>
-			</group>
-			<group id="2" label="30006">
 				<setting id="webdav_url" type="string" label="30007" help="30235">
 					<level>0</level>
 					<default>http://localhost:8080</default>
@@ -42,6 +74,9 @@
 					<control type="edit" format="string">
 						<heading>30007</heading>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
 				</setting>
 				<setting id="webdav_username" type="string" label="30008" help="30236">
 					<level>0</level>
@@ -52,6 +87,9 @@
 					<control type="edit" format="string">
 						<heading>30008</heading>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
 				</setting>
 				<setting id="webdav_password" type="string" label="30009" help="30237">
 					<level>0</level>
@@ -63,6 +101,9 @@
 						<heading>30009</heading>
 						<hidden>true</hidden>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
 				</setting>
 				<setting id="action_test_webdav" type="action" label="30188" help="30238">
 					<level>0</level>
@@ -70,9 +111,100 @@
 					<control type="button" format="action">
 						<close>true</close>
 					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="nzbget_url" type="string" label="30211" help="30250">
+					<level>0</level>
+					<default>http://localhost:6789</default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30211</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="nzbget_username" type="string" label="30212" help="30251">
+					<level>0</level>
+					<default>nzbget</default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30212</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="nzbget_password" type="string" label="30213" help="30252">
+					<level>0</level>
+					<default></default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30213</heading>
+						<hidden>true</hidden>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="nzbget_category" type="string" label="30214" help="30253">
+					<level>0</level>
+					<default></default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30214</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="action_test_nzbget" type="action" label="30215" help="30254">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.nzbdav/test_nzbget)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="nzbget_smb_root" type="string" label="30216" help="30255">
+					<level>0</level>
+					<default></default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30216</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="action_test_nzbget_smb" type="action" label="30217" help="30256">
+					<level>0</level>
+					<data>RunPlugin(plugin://plugin.video.nzbdav/test_nzbget_smb)</data>
+					<control type="button" format="action">
+						<close>true</close>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
 				</setting>
 			</group>
-			<group id="3" label="30001">
+		</category>
+		<category id="indexers" label="30163" help="30358">
+			<group id="1" label="30001">
 				<setting id="nzbhydra_enabled" type="boolean" label="30125" help="30239">
 					<level>0</level>
 					<default>false</default>
@@ -107,7 +239,7 @@
 					</control>
 				</setting>
 			</group>
-			<group id="4" label="30126">
+			<group id="2" label="30126">
 				<setting id="prowlarr_enabled" type="boolean" label="30127" help="30243">
 					<level>0</level>
 					<default>false</default>
@@ -152,124 +284,14 @@
 					</control>
 				</setting>
 			</group>
-			<group id="5" label="30228">
-				<setting id="tmdb_api_key" type="string" label="30229" help="30248">
-					<level>0</level>
-					<default></default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<control type="edit" format="string">
-						<heading>30229</heading>
-						<hidden>true</hidden>
-					</control>
-				</setting>
-			</group>
-		</category>
-		<category id="nzbget" label="30208" help="30357">
-			<group id="1" label="30209">
-				<setting id="nzbget_enabled" type="boolean" label="30210" help="30249">
-					<level>0</level>
-					<default>false</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="nzbget_url" type="string" label="30211" help="30250">
-					<level>0</level>
-					<default>http://localhost:6789</default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<control type="edit" format="string">
-						<heading>30211</heading>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-				<setting id="nzbget_username" type="string" label="30212" help="30251">
-					<level>0</level>
-					<default>nzbget</default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<control type="edit" format="string">
-						<heading>30212</heading>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-				<setting id="nzbget_password" type="string" label="30213" help="30252">
-					<level>0</level>
-					<default></default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<control type="edit" format="string">
-						<heading>30213</heading>
-						<hidden>true</hidden>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-				<setting id="nzbget_category" type="string" label="30214" help="30253">
-					<level>0</level>
-					<default></default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<control type="edit" format="string">
-						<heading>30214</heading>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-				<setting id="action_test_nzbget" type="action" label="30215" help="30254">
-					<level>0</level>
-					<data>RunPlugin(plugin://plugin.video.nzbdav/test_nzbget)</data>
-					<control type="button" format="action">
-						<close>true</close>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-				<setting id="nzbget_smb_root" type="string" label="30216" help="30255">
-					<level>0</level>
-					<default></default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<control type="edit" format="string">
-						<heading>30216</heading>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-				<setting id="action_test_nzbget_smb" type="action" label="30217" help="30256">
-					<level>0</level>
-					<data>RunPlugin(plugin://plugin.video.nzbdav/test_nzbget_smb)</data>
-					<control type="button" format="action">
-						<close>true</close>
-					</control>
-					<dependencies>
-						<dependency type="visible" setting="nzbget_enabled">true</dependency>
-					</dependencies>
-				</setting>
-			</group>
-		</category>
-		<category id="indexers" label="30163" help="30358">
-			<group id="1" label="30164">
+			<group id="3" label="30164">
 				<setting id="direct_indexers_enabled" type="boolean" label="30165" help="30289">
 					<level>0</level>
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
 			</group>
-			<group id="2" label="30166">
+			<group id="4" label="30166">
 				<setting id="direct_indexer_nzblife_enabled" type="boolean" label="30174" help="30257">
 					<level>0</level>
 					<default>false</default>
@@ -481,7 +503,7 @@
 					</dependencies>
 				</setting>
 			</group>
-			<group id="3" label="30167">
+			<group id="5" label="30167">
 				<setting id="direct_indexer_custom1_enabled" type="boolean" label="30169" help="30275">
 					<level>0</level>
 					<default>false</default>
@@ -645,6 +667,19 @@
 					<dependencies>
 						<dependency type="enable" setting="direct_indexers_enabled">true</dependency>
 					</dependencies>
+				</setting>
+			</group>
+			<group id="6" label="30228">
+				<setting id="tmdb_api_key" type="string" label="30229" help="30248">
+					<level>0</level>
+					<default></default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<control type="edit" format="string">
+						<heading>30229</heading>
+						<hidden>true</hidden>
+					</control>
 				</setting>
 			</group>
 		</category>

@@ -70,6 +70,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Select nzbdav / InfiniDysk, NZBGet, or StreamNZB in the Playback backend
+  dropdown. The selected backend's connection fields appear on the same tab;
+  NZBHydra2 is now first under Indexers.
+- StreamNZB returns its ranked movie and episode releases and hands its playback
+  URL directly to Kodi. Configure its server URL and masked stream token;
+  StreamNZB owns indexer search, NZB handling, and server-side failover.
+- Preserve existing NZBGet selections through a one-time migration. Support
+  plugin resolution and TMDBHelper RunScript playback, including episode show
+  identity and season/episode numbers. Kodi reconnect recovery remains unverified.
+
 - **EBML-aware gap concealment for MKV/WebM.** When missing articles leave an
   unreadable span in a Matroska or WebM stream, pass-through now replaces it
   with correctly sized EBML Void elements instead of literal zeros, so the

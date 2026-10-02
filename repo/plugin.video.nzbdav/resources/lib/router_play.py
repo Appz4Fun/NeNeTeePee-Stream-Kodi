@@ -596,7 +596,9 @@ def _dupe_max_backups(getter):
             return str(getter(key, default) or default)
         return _router._get_addon_setting(addon, key, default)
 
-    nzbget_on = _read("nzbget_enabled", "false").lower() == "true"
+    from resources.lib.playback_backend import get_backend
+
+    nzbget_on = get_backend(_read) == "nzbget"
     fallback_on = _read("fallback_streams_enabled", "true").lower() != "false"
     if not (nzbget_on and fallback_on):
         return None

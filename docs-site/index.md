@@ -40,9 +40,8 @@ seeking, on-the-fly remuxing, and mid-playback source switching.
 
 ## Choose a backend
 
-NZB-DAV plays through one of two kinds of backend. You pick one with the
-**Use NZBGet instead of nzbdav for playback** switch on the **NZBGet** settings
-tab.
+NZB-DAV supports three playback backends. Select one with the
+**Playback backend → NZBGet** dropdown on the **Playback backend** tab.
 
 | | **Streaming:** [nzbdav](https://github.com/nzbdav-dev/nzbdav) or [InfiniDysk](https://www.infinidysk.com/) ([GitHub](https://github.com/infinidysk/infinidysk)) | **Download first:** [NZBGet](https://github.com/nzbgetcom/nzbget) *(beta)* |
 |---|---|---|
@@ -140,3 +139,10 @@ a few minutes:
     The [README](https://github.com/Appz4Fun/nzbdavkodi#readme) is the short
     version. This site is the complete guide: every setting, every feature, and
     a technical breakdown of [how it all works](how-it-works/architecture.md).
+
+## StreamNZB option
+
+[StreamNZB](features/streamnzb-backend.md) searches and streams through the same
+TMDBHelper player. Select it in the Playback backend dropdown and enter its
+server URL and stream token. Local search-provider and WebDAV settings are not
+required for this mode.

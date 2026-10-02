@@ -50,7 +50,9 @@ def _redact_route_params(params):
     redacted = {}
     for key, value in params.items():
         lowered = key.lower()
-        sensitive = "url" in lowered or "api" in lowered or "key" in lowered
+        sensitive = any(
+            word in lowered for word in ("url", "api", "key", "token", "password")
+        )
         redacted[key] = "***" if sensitive else value
     return redacted
 
@@ -92,6 +94,14 @@ def _route_resolve(params):
 
 
 def _route_resolve_v2(params):
+    from resources.lib.playback_backend import get_backend, get_setting
+    from resources.lib.streamnzb_player import play_streamnzb
+
+    # Source manifests identify NZBs, not movies/shows. With StreamNZB selected,
+    # report the missing content identity without fetching an unrelated NZB.
+    if get_backend(get_setting) == "streamnzb":
+        play_streamnzb({}, get_setting)
+        return
     from resources.lib.resolver import resolve_and_play
     from resources.lib.source_manifest import load_source_manifest
 

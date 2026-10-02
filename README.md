@@ -21,6 +21,12 @@ required. An optional download-first NZBGet backend is also available.
 > (NZBHydra2, Prowlarr, or direct Newznab), your own nzbdav, InfiniDysk, or
 > NZBGet server, and your own Usenet provider.
 
+StreamNZB is also available in the **Playback backend** dropdown. Enter its
+reachable server URL and stream token and use the existing TMDBHelper player.
+StreamNZB supplies the release list and playback URL, with no NZB-DAV indexer,
+WebDAV or proxy configuration required. See the
+[StreamNZB setup and recovery limits](docs-site/features/streamnzb-backend.md).
+
 ## 📖 Full documentation
 
 **This README is the short version. The complete guide — every setting, every
@@ -118,7 +124,7 @@ Full steps: [Install the add-on](https://appz4fun.github.io/nzbdavkodi/getting-s
 1. Open **My add-ons → Video add-ons → NZB-DAV → Configure** and enter your
    **nzbdav** URL + API key and **WebDAV** credentials (InfiniDysk uses the same
    fields). Use the **Test** actions. To use NZBGet instead, fill in the
-   **NZBGet** tab and enable **Use NZBGet instead of nzbdav for playback**.
+   **Playback backend** tab after selecting **NZBGet** in the dropdown.
 2. Enable a search provider and test it. [NZBHydra2](https://github.com/theotherp/nzbhydra2)
    is recommended over entering each indexer's API on the Indexers tab: it's
    easier to manage and highly configurable, and results still show which

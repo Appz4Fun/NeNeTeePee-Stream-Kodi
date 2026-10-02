@@ -102,6 +102,7 @@ nav:
       - Playback, remux, and seeking: features/playback-and-remux.md
       - Fallback streams: features/fallback-streams.md
       - NZBGet backend: features/nzbget-backend.md
+      - StreamNZB backend: features/streamnzb-backend.md
   - Settings reference:
       - All settings: reference/settings.md
       - advancedsettings.xml and seeking: reference/advancedsettings.md

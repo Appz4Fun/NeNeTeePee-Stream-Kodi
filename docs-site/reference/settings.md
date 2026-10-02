@@ -8,15 +8,25 @@ For each setting you'll find its label, its internal id (useful if you edit
 that run a test or open a dialog — are listed with each tab.
 
 !!! note "Defaults are chosen to be safe"
-    You can run NZB-DAV by setting only the **Connection** tab. Everything else
-    has a working default. The **Advanced** tab in particular should be changed
+    Configure your selected **Playback backend** and, for nzbdav / InfiniDysk
+    or NZBGet, at least one provider under **Indexers**. Other settings
+    have working defaults. The **Advanced** tab in particular should be changed
     only when you have a specific reason.
 
-## Connection
+## Playback backend
 
-Your links to nzbdav, WebDAV, and your search providers.
+| Setting | Default | Purpose |
+|---------|---------|---------|
+| **Playback backend** | nzbdav / InfiniDysk | Select nzbdav / InfiniDysk, NZBGet or StreamNZB. Existing NZBGet selections migrate automatically. |
+| **StreamNZB server/base URL** | Empty | HTTP/HTTPS server reachable from Kodi. Visible with StreamNZB selected. |
+| **StreamNZB stream token** | Empty | Masked stream token; never dashboard admin credentials. Visible with StreamNZB selected. |
 
-### nzbdav
+See [StreamNZB backend](../features/streamnzb-backend.md) for setup and limits.
+
+Connection fields for all three backends appear on this tab. Only the selected
+backend's fields are shown. There are no separate Connection or NZBGet tabs.
+
+### nzbdav / InfiniDysk
 
 | Setting | id | Default | Description |
 |---------|----|---------|-------------|
@@ -35,6 +45,34 @@ Your links to nzbdav, WebDAV, and your search providers.
 
 **Action:** *Test WebDAV Connection* — verifies WebDAV reachability and
 credentials.
+
+### NZBGet
+
+An alternative backend to nzbdav. When enabled, NZB-DAV downloads through NZBGet
+and plays from an SMB share or a local/mounted path. See [NZBGet backend](../features/nzbget-backend.md).
+The URL, username, password, category, and completed-folder fields appear on
+**Playback backend** when you select **NZBGet**.
+
+!!! info "Beta feature"
+    Added in 2.0.0-beta.1, available on the
+    [Beta channel](../getting-started/beta-channel.md).
+
+| Setting | id | Default | Description |
+|---------|----|---------|-------------|
+| Playback backend | `playback_backend` | `0` (nzbdav) | Select `1` for NZBGet or `2` for StreamNZB. Old `nzbget_enabled` choices migrate on first invocation. |
+| NZBGet URL | `nzbget_url` | `http://localhost:6789` | NZBGet control address. |
+| NZBGet Username | `nzbget_username` | `nzbget` | NZBGet control username. |
+| NZBGet Password | `nzbget_password` | *(empty)* | NZBGet control password. Stored hidden. |
+| NZBGet Category | `nzbget_category` | *(empty)* | Category to submit under; also used to locate the completed file. |
+| Completed Folder (SMB or Local Path) | `nzbget_smb_root` | *(empty)* | `smb://` URL or local/mounted path of NZBGet's completed-downloads base. An [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs) is recommended. |
+
+**Actions:** *Test NZBGet Connection*, *Test Completed Folder*.
+
+## Indexers
+
+NZBHydra2 is the first provider, followed by Prowlarr and direct Newznab
+indexers. These settings apply to nzbdav / InfiniDysk and NZBGet. StreamNZB
+manages indexers on its own server and ignores these local settings.
 
 ### NZBHydra2
 
@@ -58,43 +96,10 @@ credentials.
 **Action:** *Test Prowlarr Connection* — verifies URL, key, and indexer
 reachability.
 
-### TV search accuracy
+### Direct Newznab indexers
 
-| Setting | id | Default | Description |
-|---------|----|---------|-------------|
-| TMDB API key (optional, movies and TV) | `tmdb_api_key` | *(empty)* | A TMDB key (not a TVDB key). For episodes, it resolves the show's TVDB id when TMDBHelper didn't supply one. For movies, it converts a TMDB movie id into an IMDb id when no IMDb id was supplied. IDs supplied by TMDBHelper are used directly. Without the key, or on lookup failure, the search uses whatever ids and title it already has. Stored hidden. |
-
-!!! info "Beta feature"
-    Added in 2.0.0-beta.1 (TV lookup), available on the
-    [Beta channel](../getting-started/beta-channel.md).
-
-## NZBGet
-
-An alternative backend to nzbdav. When enabled, NZB-DAV downloads through NZBGet
-and plays from an SMB share or a local/mounted path. See [NZBGet backend](../features/nzbget-backend.md).
-The URL, username, password, category, and completed-folder fields appear only
-after you enable the backend.
-
-!!! info "Beta feature"
-    Added in 2.0.0-beta.1, available on the
-    [Beta channel](../getting-started/beta-channel.md).
-
-| Setting | id | Default | Description |
-|---------|----|---------|-------------|
-| Use NZBGet instead of nzbdav for playback | `nzbget_enabled` | `false` | Switch the entire download/playback path to NZBGet. |
-| NZBGet URL | `nzbget_url` | `http://localhost:6789` | NZBGet control address. |
-| NZBGet Username | `nzbget_username` | `nzbget` | NZBGet control username. |
-| NZBGet Password | `nzbget_password` | *(empty)* | NZBGet control password. Stored hidden. |
-| NZBGet Category | `nzbget_category` | *(empty)* | Category to submit under; also used to locate the completed file. |
-| Completed Folder (SMB or Local Path) | `nzbget_smb_root` | *(empty)* | `smb://` URL or local/mounted path of NZBGet's completed-downloads base. An [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs) is recommended. |
-
-**Actions:** *Test NZBGet Connection*, *Test Completed Folder*.
-
-## Indexers
-
-Direct Newznab indexers, for when you don't run NZBHydra2 or Prowlarr. The
-indexer fields and buttons are always listed but stay greyed out until you
-enable direct indexers.
+Direct indexer fields and buttons stay greyed out until you enable direct
+indexers.
 
 | Setting | id | Default | Description |
 |---------|----|---------|-------------|
@@ -130,6 +135,16 @@ stored hidden). All default to off/empty.
 
 !!! info "Beta feature"
     *Manage Indexers* was added in 2.0.0-beta.1 and is available on the
+    [Beta channel](../getting-started/beta-channel.md).
+
+### TV search accuracy
+
+| Setting | id | Default | Description |
+|---------|----|---------|-------------|
+| TMDB API key (optional, movies and TV) | `tmdb_api_key` | *(empty)* | A TMDB key (not a TVDB key). For episodes, it resolves the show's TVDB id when TMDBHelper didn't supply one. For movies, it converts a TMDB movie id into an IMDb id when no IMDb id was supplied. IDs supplied by TMDBHelper are used directly. Without the key, or on lookup failure, the search uses whatever ids and title it already has. Stored hidden. |
+
+!!! info "Beta feature"
+    Added in 2.0.0-beta.1 (TV lookup), available on the
     [Beta channel](../getting-started/beta-channel.md).
 
 ## Player Installation

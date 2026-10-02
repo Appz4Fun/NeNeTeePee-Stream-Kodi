@@ -41,6 +41,8 @@ from resources.lib.i18n import addon_name as _addon_name
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
 from resources.lib.nzbdav_api import get_completed_jobs
+from resources.lib.playback_backend import get_backend
+from resources.lib.playback_backend import get_setting as _get_backend_setting
 
 # Cohesive helper groups split into sibling modules to keep this router below
 # Codacy's 500-NLOC file gate. Re-exported here so the test suite's
@@ -179,6 +181,7 @@ from resources.lib.router_settings import (  # noqa: F401
     _translate_path,
     _update_loading_dialog,
 )
+from resources.lib.streamnzb_player import play_streamnzb
 
 _ORIGINAL_URLOPEN = urlopen
 
@@ -638,6 +641,9 @@ def _handle_play(handle, params):
     from resources.lib.http_util import notify
 
     params = _clean_params(params)
+    if get_backend(_get_backend_setting) == "streamnzb":
+        play_streamnzb(params, _get_backend_setting, handle=handle)
+        return
     search_type, title, year, imdb, tvdb, tmdb_id, season, episode = (
         _extract_search_params(params)
     )
@@ -697,6 +703,10 @@ def _handle_search(handle, params):
     from resources.lib.http_util import notify
 
     params = _clean_params(params)
+    if get_backend(_get_backend_setting) == "streamnzb":
+        xbmcplugin.endOfDirectory(handle)
+        play_streamnzb(params, _get_backend_setting)
+        return
     search_type, title, year, imdb, tvdb, tmdb_id, season, episode = (
         _extract_search_params(params)
     )
@@ -748,6 +758,9 @@ def _handle_script_play(params):
     from resources.lib.http_util import notify
 
     params = _clean_params(params)
+    if get_backend(_get_script_setting) == "streamnzb":
+        play_streamnzb(params, _get_script_setting)
+        return
     search_type, title, year, imdb, tvdb, tmdb_id, season, episode = (
         _extract_search_params(params)
     )

@@ -17,32 +17,21 @@ import resources.lib.resolver as _resolver  # noqa: F401  pylint: disable=unused
 
 
 def _nzbget_enabled(settings_getter=None):
-    """Return True when the NZBGet backend toggle is on.
+    """Return whether the dropdown (or an unmigrated legacy toggle) uses NZBGet.
 
-    When the caller has an injected ``settings_getter`` (the handle-less
-    ``resolve_and_play`` path passes one to avoid Kodi settings-API reads
-    during RunScript/widget invocations), use it so the toggle is read the
-    same way as the rest of that flow — otherwise an unavailable
-    ``xbmcaddon.Addon().getSetting`` would silently disable NZBGet and fall
-    back to nzbdav despite the user enabling it.
-
-    Read defensively either way: ``Addon()`` can raise ``RuntimeError`` early
-    in startup, an injected getter may raise, and ``getSetting`` can (rarely)
-    return None, so any failure falls back to the nzbdav path instead of
-    letting an exception escape ``resolve`` / ``resolve_and_play`` before a
-    resolution call — the exact resolve-hang that TODO.md §H.2-H9 guards
-    against.
+    Preserve injected settings readers for RunScript and resolver callers.
     """
-    try:
-        if settings_getter is not None:
-            value = settings_getter("nzbget_enabled", "")
-        else:
-            value = _resolver.xbmcaddon.Addon("plugin.video.nzbdav").getSetting(
-                "nzbget_enabled"
+    from resources.lib.playback_backend import get_backend
+
+    if settings_getter is None:
+
+        def settings_getter(key, default=""):
+            return (
+                _resolver.xbmcaddon.Addon("plugin.video.nzbdav").getSetting(key)
+                or default
             )
-        return (value or "").strip().lower() == "true"
-    except (RuntimeError, AttributeError, TypeError):
-        return False
+
+    return get_backend(settings_getter) == "nzbget"
 
 
 def _scrub_bookmark_for_nzbget(params):

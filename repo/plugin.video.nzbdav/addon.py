@@ -24,8 +24,11 @@ lib_path = os.path.join(addon_dir, "resources", "lib")
 if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
+from resources.lib.playback_backend import migrate_backend  # noqa: E402
 from resources.lib.router import route  # noqa: E402
 from resources.lib.script_player import run_tmdb_play  # noqa: E402
+
+migrate_backend()
 
 if len(sys.argv) > 1 and sys.argv[1] == "tmdb_play":
     run_tmdb_play(sys.argv[2:])
