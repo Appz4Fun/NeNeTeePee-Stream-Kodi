@@ -13,6 +13,14 @@ reached at call time via ``_sp.<name>`` so test monkeypatches on
 
 import resources.lib.stream_proxy as _sp  # noqa: E402
 
+# Skip-probe outcomes. MISSING means the backend answered 200/206 but could
+# not deliver the bytes (empty body or reset mid-body): the data at that
+# offset is gone, so retrying the same offset only burns recovery time.
+# UNAVAILABLE (refused, timeout, non-2xx) is worth retrying with backoff.
+_PROBE_OK = "ok"
+_PROBE_MISSING = "missing"
+_PROBE_UNAVAILABLE = "unavailable"
+
 
 class _RangeParseMixin:  # pylint: disable=too-few-public-methods
     """Skip-probe offset search, zero-fill, and HTTP Range header parsing."""
@@ -33,15 +41,18 @@ class _RangeParseMixin:  # pylint: disable=too-few-public-methods
             # TODO.md §H.2-M14.
             if delay and probe_monitor.waitForAbort(delay):
                 return False, True
-            if _sp._StreamHandler._skip_probe_succeeds(
+            outcome = _sp._StreamHandler._skip_probe_outcome(
                 ctx, skip, target, probe_end, start_time
-            ):
+            )
+            if outcome == _PROBE_OK:
                 return True, False
+            if outcome == _PROBE_MISSING:
+                return False, False
         return False, False
 
     @staticmethod
-    def _skip_probe_succeeds(ctx, skip, target, probe_end, start_time):
-        """Probe one range; True only when upstream serves non-empty bytes."""
+    def _skip_probe_outcome(ctx, skip, target, probe_end, start_time):
+        """Probe one range; ``_PROBE_OK`` only when upstream serves bytes."""
         req = _sp.Request(ctx["remote_url"])
         _sp._add_request_headers(req, ctx.get("auth_header"))
         req.add_header("Range", "bytes={}-{}".format(target, probe_end))
@@ -52,26 +63,36 @@ class _RangeParseMixin:  # pylint: disable=too-few-public-methods
             ) as resp:
                 status = getattr(resp, "status", None) or resp.getcode()
                 if status not in (200, 206):
-                    return False
+                    return _PROBE_UNAVAILABLE
                 # Validate the probe actually returned bytes — an upstream
                 # that 206s with an empty body would otherwise be accepted
                 # as recovered, sending the main loop straight back into the
                 # same bad region on the next range read.
-                body = resp.read(64)
+                try:
+                    body = resp.read(64)
+                except (OSError, ValueError) as e:
+                    body = b""
+                    _sp.xbmc.log(
+                        "NZB-DAV: Probe at +{} bytes read failed ({}): {}".format(
+                            skip, type(e).__name__, e
+                        ),
+                        _sp.xbmc.LOGDEBUG,
+                    )
                 if not body:
                     _sp.xbmc.log(
                         "NZB-DAV: Probe at +{} bytes returned status={} but "
-                        "empty body; treating as probe failure".format(skip, status),
+                        "no data; data missing there, trying the next "
+                        "skip".format(skip, status),
                         _sp.xbmc.LOGWARNING,
                     )
-                    return False
+                    return _PROBE_MISSING
                 elapsed = _sp.time.monotonic() - start_time
                 _sp.xbmc.log(
                     "NZB-DAV: Probe succeeded at +{} bytes after "
                     "{:.1f}s".format(skip, elapsed),
                     _sp.xbmc.LOGINFO,
                 )
-                return True
+                return _PROBE_OK
         except (OSError, ValueError) as e:
             _sp.xbmc.log(
                 "NZB-DAV: Probe at +{} bytes failed ({}): {}".format(
@@ -79,7 +100,7 @@ class _RangeParseMixin:  # pylint: disable=too-few-public-methods
                 ),
                 _sp.xbmc.LOGDEBUG,
             )
-            return False
+            return _PROBE_UNAVAILABLE
 
     def _write_zeros(self, count):
         """Write 'count' zero bytes to the client in fixed-size chunks."""

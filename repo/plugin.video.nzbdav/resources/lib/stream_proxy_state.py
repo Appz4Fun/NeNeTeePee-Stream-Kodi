@@ -47,6 +47,8 @@ class _ProxyStreamState:  # pylint: disable=too-few-public-methods
         "retry_ladder_enabled",
         "result",
         "progressed_this_iter",
+        "read_end",
+        "conceal",
     )
 
     def __init__(self):
@@ -77,3 +79,8 @@ class _ProxyStreamState:  # pylint: disable=too-few-public-methods
         self.retry_ladder_enabled = False
         self.result = None
         self.progressed_this_iter = False
+        # Last byte the next upstream read may cover: st.end, or the byte
+        # before the next stored EBML concealment plan (which is replayed).
+        self.read_end = 0
+        # Per-request EBML tap (tracker + original wfile) or None.
+        self.conceal = None

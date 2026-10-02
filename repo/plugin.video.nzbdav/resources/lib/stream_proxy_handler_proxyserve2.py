@@ -162,12 +162,22 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         return False
 
     def _serve_proxy_zerofill_step(self, ctx, st):
-        """Probe forward and zero-fill the unreadable gap. Verbatim move."""
+        """Probe forward, then conceal or zero-fill the unreadable gap.
+
+        MKV/WebM first tries a structural (EBML Void) concealment; when that
+        is unsafe or over budget the legacy literal zero-fill runs unchanged.
+        """
         remaining = st.end - st.current + 1
         skip = self._find_skip_offset(st.active_ctx, st.current, st.end)
+        skip = self._ebml_clip_skip(st, skip)
 
         if self._serve_proxy_recovery_exhausted(st, skip, remaining):
             return "return"
+        if self._ebml_try_conceal(ctx, st, skip):
+            return None
+        if self._ebml_refresh_read_bound(ctx, st):
+            return "continue"
+        skip = self._ebml_clip_skip(st, skip)
         if self._serve_proxy_density_breaker_tripped(st, skip):
             return "return"
         if self._serve_proxy_session_budget_exceeded(ctx, st, skip):

@@ -248,7 +248,7 @@ See [Playback and remux](../features/playback-and-remux.md) and
 |---------|----|---------|-------------|
 | Strict upstream contract mode | `strict_contract_mode` | `1` (Warn only) | How to react when the upstream violates the strict Range/Content-Length contract: `0` Off, `1` Warn only, `2` Enforce. Off also disables the density breaker. |
 | Enable density breaker | `density_breaker_enabled` | `false` | Abort a stream when a rolling 16 MB window becomes more than 50% zero-fill (catches dead releases early). Only active when contract mode isn't Off. |
-| Enable zero-fill budget | `zero_fill_budget_enabled` | `true` | Cap total per-stream zero-fill; the stream ends with a clean error when the budget is hit. |
+| Enable zero-fill budget | `zero_fill_budget_enabled` | `true` | Cap total per-stream zero-fill; the stream ends with a clean error when the budget is hit. Zero fill skips data that can't be fetched from any source. For MKV/WebM the gap becomes EBML Void elements the player skips, resuming at the next intact cluster; other files, or MKV whose structure can't be confirmed, get plain zeros. |
 | Enable retry ladder before skip probe | `retry_ladder_enabled` | `true` | Re-issue the original range request with backoff on transient upstream errors before skip-filling. |
 | Max seconds to wait for a slow/stalled backend before giving up (0=off) | `passthrough_stall_wait` | `120` | For an established stream that stalls on a recoverable backend condition, hold the connection open up to this budget. `0` closes immediately. Clamped to 0–600. |
 | Read-ahead buffer size in MB (keeps filling while paused; 0=off) | `readahead_buffer_mb` | `256` | Per-session forward read-ahead prefetch. Keeps filling while paused. `0` disables. Clamped to 0–4096. |
