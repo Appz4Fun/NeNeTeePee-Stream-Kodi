@@ -29,6 +29,14 @@ import resources.lib.stream_proxy as _sp  # noqa: E402
 from resources.lib import ebml_conceal as _ec  # noqa: E402
 
 
+def _close_quietly(resp):
+    """Close a look-ahead response, ignoring socket errors on close."""
+    try:
+        resp.close()
+    except OSError:
+        pass
+
+
 class _EbmlTapWriter:  # pylint: disable=too-few-public-methods
     """``wfile`` proxy that feeds every successfully written byte to a tracker."""
 
@@ -68,7 +76,7 @@ class _ConcealRequest:  # pylint: disable=too-few-public-methods
         self.inner_wfile = inner_wfile
 
 
-class _EbmlConcealMixin:
+class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
     """EBML tap, structural concealment, and plan replay for pass-through."""
 
     # -- lifecycle ---------------------------------------------------------
@@ -101,7 +109,7 @@ class _EbmlConcealMixin:
         if cs is None:
             return
         self.wfile = cs.inner_wfile
-        if cs.tracker.is_ebml is False and isinstance(ctx, dict):
+        if cs.tracker.ebml_detected is False and isinstance(ctx, dict):
             ctx[_sp._EBML_CONTAINER_KEY] = False
 
     # -- helpers -----------------------------------------------------------
@@ -232,11 +240,28 @@ class _EbmlConcealMixin:
         caller must skip the legacy zero-fill), False to fall back to it.
         """
         cs = st.conceal
-        if cs is None or cs.tap.broken:
+        if cs is None or cs.tap.broken or cs.tracker.ebml_detected is False:
             return False
-        if cs.tracker.is_ebml is False:
+        plan = self._ebml_plan_gap(cs, st, skip)
+        if plan is None:
             return False
-        gap_start = st.current
+        store = self._ebml_store(ctx, create=True)
+        key = self._ebml_source_key(st.active_ctx)
+        refusal = self._ebml_commit_refusal(ctx, st, store, key, plan)
+        if refusal is not None:
+            self._ebml_log_unrepaired(st, skip, refusal)
+            return False
+        if not store.add(key, plan):
+            return self._ebml_replay_concurrent(st, store, key, skip)
+        # Charge and log at commit, before the write (see _ebml_charge_plan).
+        self._ebml_charge_plan(ctx, st, plan, skip)
+        emit_end = min(plan.end, st.end + 1)
+        self._ebml_emit_plan(st, plan, emit_end)
+        self._ebml_self_check(cs, plan, emit_end)
+        return True
+
+    def _ebml_plan_gap(self, cs, st, skip):
+        """Plan the gap from the tracker snapshot; None (logged) if unrepaired."""
         active_ctx = st.active_ctx
 
         def find_cluster(from_offset, limit):
@@ -245,43 +270,50 @@ class _EbmlConcealMixin:
         snapshot = cs.tracker.snapshot()
         plan = _ec.plan_concealment(
             snapshot,
-            gap_start,
-            gap_start + skip,
+            st.current,
+            st.current + skip,
             find_cluster=find_cluster,
             max_span=_sp._EBML_CONCEAL_MAX_SPAN,
         )
-        if not plan.structural:
-            detail = plan.reason
-            if plan.reason == "no_structural_context" and snapshot.desync_reason:
-                detail = "{} ({})".format(plan.reason, snapshot.desync_reason)
-            self._ebml_log_unrepaired(st, skip, detail)
-            return False
-        store = self._ebml_store(ctx, create=True)
-        key = self._ebml_source_key(active_ctx)
-        next_start = store.next_start(key, gap_start)
+        if plan.structural:
+            return plan
+        detail = plan.reason
+        if plan.reason == "no_structural_context" and snapshot.desync_reason:
+            detail = "{} ({})".format(plan.reason, snapshot.desync_reason)
+        self._ebml_log_unrepaired(st, skip, detail)
+        return None
+
+    def _ebml_commit_refusal(self, ctx, st, store, key, plan):
+        """Why ``plan`` must not be committed (log detail), or None."""
+        next_start = store.next_start(key, st.current)
         if next_start is not None and plan.end > next_start:
-            self._ebml_log_unrepaired(st, skip, "overlaps_stored_plan")
-            return False
+            return "overlaps_stored_plan"
         refusal = self._ebml_budget_refusal(ctx, st, plan.span)
         if refusal is not None:
-            self._ebml_log_unrepaired(
-                st, skip, "{} (span={})".format(refusal, plan.span)
-            )
-            return False
-        if not store.add(key, plan):
-            # A concurrent request on this session committed a plan for the
-            # same gap first: replay it so both responses send identical bytes.
-            existing = store.covering(key, gap_start)
-            if existing is None:
-                self._ebml_log_unrepaired(st, skip, "plan_store_refused")
-                return False
-            self._ebml_emit_plan(st, existing, min(existing.end, st.end + 1))
-            return True
+            return "{} (span={})".format(refusal, plan.span)
+        return None
 
+    def _ebml_replay_concurrent(self, st, store, key, skip):
+        """``store.add`` refused the plan: replay a concurrent twin if any.
+
+        A concurrent request on this session committed a plan for the same
+        gap first: replay it so both responses send identical bytes.
+        """
+        existing = store.covering(key, st.current)
+        if existing is None:
+            self._ebml_log_unrepaired(st, skip, "plan_store_refused")
+            return False
+        self._ebml_emit_plan(st, existing, min(existing.end, st.end + 1))
+        return True
+
+    def _ebml_charge_plan(self, ctx, st, plan, skip):
+        """Charge a newly committed plan's whole span and log it.
+
+        Charged once, at commit and before the write: replays are not
+        re-charged, and the client may drop mid-write while the committed
+        plan stays stored for later requests.
+        """
         st.recovery_count += 1
-        # Charge the whole span once, at commit and before the write: replays
-        # are not re-charged, and the client may drop mid-write while the
-        # committed plan stays stored for later requests.
         _sp._update_session_recovery_state(
             self.server, ctx, zero_fill=plan.span, recoveries=1
         )
@@ -290,7 +322,7 @@ class _EbmlConcealMixin:
             "NZB-DAV: EBML-concealed unreadable span at byte {} (probe skip={}, "
             "kind={}, plan={}-{}, span={}, voids={}, detail={}) "
             "(reason=ebml_conceal_{})".format(
-                gap_start,
+                st.current,
                 skip,
                 plan.kind,
                 plan.start,
@@ -302,8 +334,10 @@ class _EbmlConcealMixin:
             ),
             _sp.xbmc.LOGWARNING,
         )
-        emit_end = min(plan.end, st.end + 1)
-        self._ebml_emit_plan(st, plan, emit_end)
+
+    @staticmethod
+    def _ebml_self_check(cs, plan, emit_end):
+        """After emitting a whole plan the tracker must be synced again."""
         if emit_end == plan.end and not cs.tracker.synced and not cs.tap.broken:
             _sp.xbmc.log(
                 "NZB-DAV: EBML concealment self-check failed: tracker lost sync "
@@ -312,7 +346,6 @@ class _EbmlConcealMixin:
                 ),
                 _sp.xbmc.LOGERROR,
             )
-        return True
 
     # -- bounded look-ahead ------------------------------------------------
 
@@ -343,11 +376,7 @@ class _EbmlConcealMixin:
         upstream bytes only; nothing read here is sent to the client.
         """
         content_length = int(active_ctx.get("content_length") or 0)
-        stop = from_offset + _sp._EBML_LOOKAHEAD_MAX_BYTES
-        if limit is not None:
-            stop = min(stop, limit)
-        if content_length:
-            stop = min(stop, content_length)
+        stop = self._ebml_lookahead_stop(from_offset, limit, content_length)
         if stop <= from_offset:
             return None, "window_empty"
         monitor = _sp.xbmc.Monitor()
@@ -355,14 +384,8 @@ class _EbmlConcealMixin:
             return None, "aborted"
         budget = _sp._EBML_LOOKAHEAD_MAX_SECONDS
         deadline = _sp.time.monotonic() + budget
-        req = _sp.Request(active_ctx["remote_url"])
-        _sp._add_request_headers(req, active_ctx.get("auth_header"))
-        req.add_header("Range", "bytes={}-{}".format(from_offset, stop - 1))
         try:
-            # nosemgrep
-            resp = _sp.urlopen(  # nosec B310 — URL from user-configured nzbdav/WebDAV setting
-                req, timeout=min(_sp._UPSTREAM_READ_TIMEOUT, budget)
-            )
+            resp = self._ebml_lookahead_open(active_ctx, from_offset, stop, budget)
         except (OSError, ValueError) as exc:
             return None, "open_failed:{}".format(type(exc).__name__)
         try:
@@ -374,10 +397,30 @@ class _EbmlConcealMixin:
         except (MemoryError, OSError, ValueError) as exc:
             return None, "read_failed:{}".format(type(exc).__name__)
         finally:
-            try:
-                resp.close()
-            except OSError:
-                pass
+            _close_quietly(resp)
+
+    @staticmethod
+    def _ebml_lookahead_stop(from_offset, limit, content_length):
+        """Exclusive end of the look-ahead window (byte, Segment and file caps)."""
+        stop = from_offset + _sp._EBML_LOOKAHEAD_MAX_BYTES
+        if limit is not None:
+            stop = min(stop, limit)
+        if content_length:
+            stop = min(stop, content_length)
+        return stop
+
+    @staticmethod
+    def _ebml_lookahead_open(active_ctx, from_offset, stop, budget):
+        """Open the single bounded Range request; raises OSError/ValueError."""
+        req = _sp.Request(active_ctx["remote_url"])
+        _sp._add_request_headers(req, active_ctx.get("auth_header"))
+        req.add_header("Range", "bytes={}-{}".format(from_offset, stop - 1))
+        # nosemgrep
+        return (
+            _sp.urlopen(  # nosec B310 — URL from user-configured nzbdav/WebDAV setting
+                req, timeout=min(_sp._UPSTREAM_READ_TIMEOUT, budget)
+            )
+        )
 
     @staticmethod
     def _ebml_lookahead_scan(  # pylint: disable=too-many-arguments,too-many-positional-arguments

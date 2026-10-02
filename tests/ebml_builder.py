@@ -85,8 +85,7 @@ class Node:
     def walk(self):
         yield self
         for child in self.children or ():
-            for node in child.walk():
-                yield node
+            yield from child.walk()
 
 
 def simple_block(name, track=1, frame=b"", frame_len=64, fill=0x11):
@@ -108,7 +107,7 @@ def cluster(name, timestamp, blocks, size=None):
     return Node(name, ID_CLUSTER, children=[ts] + list(blocks), size=size)
 
 
-class Mkv:
+class Mkv:  # pylint: disable=too-few-public-methods
     """A built file: ``data`` bytes plus a name -> Node index."""
 
     def __init__(self, segment_children, segment_size=None):

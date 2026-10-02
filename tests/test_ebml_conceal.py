@@ -158,7 +158,7 @@ def test_tracker_parses_whole_file_in_any_chunking(chunk):
     mkv = standard_file()
     tracker = _track(mkv.data, chunk=chunk, content_length=len(mkv.data))
     snap = tracker.snapshot()
-    assert tracker.is_ebml is True
+    assert tracker.ebml_detected is True
     assert snap.synced and snap.pos == len(mkv.data)
     assert snap.seen_cluster
 
@@ -183,7 +183,7 @@ def test_tracker_snapshot_inside_header_reports_partial():
 
 def test_tracker_non_ebml_stream_is_disabled():
     tracker = _track(b"X" * 4096)
-    assert tracker.is_ebml is False
+    assert tracker.ebml_detected is False
     assert not tracker.snapshot().synced
 
 
@@ -265,7 +265,7 @@ def test_plan_payload_only_hole_keeps_zero_padding():
     plan = ec.plan_concealment(snap, gap_start, gap_start + 100)
     assert plan.kind == ec.KIND_PAYLOAD
     assert (plan.start, plan.end) == (gap_start, gap_start + 100)
-    assert plan.edits == ()
+    assert not plan.edits
     out = _assert_structural(mkv.data, plan)
     assert out[gap_start : gap_start + 100] == bytes(100)
 
@@ -363,7 +363,7 @@ def test_plan_refuses_header_already_emitted():
     plan = ec.plan_concealment(snap, b1.start + 1, b1.start + 50)
     assert plan.kind == ec.KIND_UNREPAIRED
     assert plan.reason == "header_already_emitted"
-    assert not plan.structural and plan.edits == ()
+    assert not plan.structural and not plan.edits
     assert (plan.start, plan.end) == (b1.start + 1, b1.start + 50)
 
 

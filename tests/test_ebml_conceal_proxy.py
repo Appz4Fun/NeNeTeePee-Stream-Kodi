@@ -53,7 +53,7 @@ FALLBACK = "http://fallback/movie.mkv"
 CLUSTER_STARTS = (663, 5647, 9397, 13072, 16847, 20727, 24449, 28106, 31826, 35562)
 
 
-class _Headers:
+class _Headers:  # pylint: disable=too-few-public-methods
     def __init__(self, values):
         self._values = {k.lower(): v for k, v in values.items()}
 
@@ -185,8 +185,8 @@ def _header_values(handler, name):
     return [c[0][1] for c in handler.send_header.call_args_list if c[0][0] == name]
 
 
-@pytest.fixture
-def proxy_env():
+@pytest.fixture(name="proxy_env")
+def fixture_proxy_env():
     """Patch probe sizes/delays to fixture scale; yield a serve() helper."""
     logs = []
 
@@ -593,7 +593,7 @@ def test_cached_byte0_prefix_never_covers_a_stored_plan(proxy_env):
     assert again == first
 
 
-class _RacingStore(ec.ConcealPlanStore):
+class _RacingStore(ec.ConcealPlanStore):  # pylint: disable=too-few-public-methods
     """Simulates another request committing the same gap's plan first."""
 
     def add(self, source_key, plan):
