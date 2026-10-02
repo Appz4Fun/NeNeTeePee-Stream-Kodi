@@ -40,7 +40,7 @@ class StreamEntry:
     headers: dict = field(default_factory=dict, repr=False)
 
 
-def safe_display(text, token=""):
+def safe_display(text, token=None):
     """Redact secrets and make upstream Kodi markup inert."""
     value = text if isinstance(text, str) else ""
     if token:
@@ -56,23 +56,35 @@ def safe_display(text, token=""):
     return value.replace("[", "（").replace("]", "）").replace("\r", "")
 
 
+def _valid_base_parts(parts):
+    return all(
+        (
+            parts.scheme in ("http", "https"),
+            bool(parts.hostname),
+            parts.port != 0,
+            not parts.username,
+            not parts.password,
+            not parts.query,
+            not parts.fragment,
+            not parts.path.endswith(".json"),
+        )
+    )
+
+
+def _clean_url_text(value):
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and not any(c.isspace() or c == "|" for c in value)
+    )
+
+
 def normalize_base_url(value):
     """Accept a server base (including a reverse-proxy prefix), not a manifest."""
     value = value.strip() if isinstance(value, str) else ""
     try:
         parts = urlsplit(value)
-        valid = (
-            parts.scheme in ("http", "https")
-            and parts.hostname
-            and parts.port != 0
-            and not parts.username
-            and not parts.password
-            and not parts.query
-            and not parts.fragment
-            and not any(c.isspace() for c in value)
-            and not parts.path.endswith(".json")
-            and "|" not in value
-        )
+        valid = _valid_base_parts(parts) and _clean_url_text(value)
     except (ValueError, TypeError):
         valid = False
     if not valid:
@@ -82,6 +94,23 @@ def normalize_base_url(value):
 
 def _positive_id(value):
     return isinstance(value, str) and re.fullmatch(r"[0-9]+", value) and int(value) > 0
+
+
+def _stable_identity(params):
+    imdb = params.get("imdb", "")
+    if isinstance(imdb, str) and re.fullmatch(r"tt[0-9]{7,9}", imdb):
+        return imdb
+    for key, prefix in (("tmdb_id", "tmdb"), ("tvdb", "tvdb")):
+        if _positive_id(params.get(key, "")):
+            return prefix + ":" + params[key]
+    raise StreamNZBError("StreamNZB needs an IMDb, TMDB or TVDB ID from TMDBHelper.")
+
+
+def _episode_coordinate(params, key):
+    value = params.get(key, "") or params.get("ep_" + key, "")
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9]+", value):
+        raise StreamNZBError("StreamNZB needs the show's season and episode numbers.")
+    return int(value)
 
 
 def content_identity(params):
@@ -94,38 +123,18 @@ def content_identity(params):
     kind = params.get("type", "movie")
     if kind not in ("movie", "episode", "series"):
         raise StreamNZBError("StreamNZB needs a movie or series episode identity.")
-    imdb = params.get("imdb", "")
-    identity = (
-        imdb if isinstance(imdb, str) and re.fullmatch(r"tt[0-9]{7,9}", imdb) else ""
-    )
-    for key, prefix in (("tmdb_id", "tmdb"), ("tvdb", "tvdb")):
-        if not identity and _positive_id(params.get(key, "")):
-            identity = prefix + ":" + params[key]
-    if not identity:
-        raise StreamNZBError(
-            "StreamNZB needs an IMDb, TMDB or TVDB ID from TMDBHelper."
-        )
+    identity = _stable_identity(params)
     if kind == "movie":
         return "movie", identity
-    season = params.get("season", "") or params.get("ep_season", "")
-    episode = params.get("episode", "") or params.get("ep_episode", "")
-    if not (
-        isinstance(season, str)
-        and re.fullmatch(r"[0-9]+", season)
-        and isinstance(episode, str)
-        and re.fullmatch(r"[0-9]+", episode)
-    ):
-        raise StreamNZBError("StreamNZB needs the show's season and episode numbers.")
-    return "series", "{}:{}:{}".format(identity, int(season), int(episode))
+    return "series", "{}:{}:{}".format(
+        identity,
+        _episode_coordinate(params, "season"),
+        _episode_coordinate(params, "episode"),
+    )
 
 
 def _playable_url(value):
-    if (
-        not isinstance(value, str)
-        or not value
-        or any(c.isspace() for c in value)
-        or "|" in value
-    ):
+    if not _clean_url_text(value):
         return False
     try:
         parts = urlsplit(value)
@@ -138,6 +147,15 @@ def _playable_url(value):
         return False
 
 
+def _valid_header(key, value):
+    return (
+        isinstance(key, str)
+        and bool(re.fullmatch(r"[!#$%&'*+.^_`~0-9A-Za-z-]+", key))
+        and isinstance(value, str)
+        and not any(c in value for c in "\r\n\x00")
+    )
+
+
 def _request_headers(hints):
     proxy = hints.get("proxyHeaders", {})
     if not isinstance(proxy, dict):
@@ -146,39 +164,78 @@ def _request_headers(hints):
     if not isinstance(headers, dict):
         return None
     for key, value in headers.items():
-        if not isinstance(key, str) or not re.fullmatch(
-            r"[!#$%&'*+.^_`~0-9A-Za-z-]+", key
-        ):
-            return None
-        if not isinstance(value, str) or any(c in value for c in "\r\n\x00"):
+        if not _valid_header(key, value):
             return None
     return dict(headers)
 
 
-def parse_streams(payload, token=""):
+def _playable_hints(row):
+    hints = row.get("behaviorHints", {})
+    if hints is None:
+        hints = {}
+    if not isinstance(hints, dict):
+        return None
+    # Advanced search diagnostics can use a real slot URL even when there
+    # are no releases; source marks these separately from playable rows.
+    if hints.get("bingeGroup") == "streamnzb-debug":
+        return None
+    return hints
+
+
+def _parse_entry(row, token):
+    if not isinstance(row, dict) or not _playable_url(row.get("url")):
+        return None
+    hints = _playable_hints(row)
+    if hints is None:
+        return None
+    headers = _request_headers(hints)
+    if headers is None:
+        return None
+    name = safe_display(row.get("name"), token) or "StreamNZB"
+    description = safe_display(row.get("description") or row.get("title"), token)
+    return StreamEntry(name, description, row["url"], headers)
+
+
+def parse_streams(payload, token=None):
     """Validate the top-level schema; omit unsupported/malformed individual rows."""
     if not isinstance(payload, dict) or not isinstance(payload.get("streams"), list):
         raise StreamNZBError("StreamNZB returned an invalid stream response.")
     entries = []
     for row in payload["streams"]:
-        if not isinstance(row, dict) or not _playable_url(row.get("url")):
-            continue
-        hints = row.get("behaviorHints", {})
-        if hints is None:
-            hints = {}
-        if not isinstance(hints, dict):
-            continue
-        # Advanced search diagnostics can use a real slot URL even when there
-        # are no releases; source marks these separately from playable rows.
-        if hints.get("bingeGroup") == "streamnzb-debug":
-            continue
-        headers = _request_headers(hints)
-        if headers is None:
-            continue
-        name = safe_display(row.get("name"), token) or "StreamNZB"
-        description = safe_display(row.get("description") or row.get("title"), token)
-        entries.append(StreamEntry(name, description, row["url"], headers))
+        entry = _parse_entry(row, token)
+        if entry is not None:
+            entries.append(entry)
     return entries
+
+
+def _request_body(url):
+    try:
+        return http_get(url, timeout=_TIMEOUT, max_bytes=_MAX_RESPONSE)
+    except HTTPError as error:
+        if error.code in (401, 403):
+            raise StreamNZBError(
+                "StreamNZB rejected the stream token. Check its stream settings."
+            ) from None
+        raise StreamNZBError(
+            "StreamNZB HTTP request failed (status {}).".format(error.code)
+        ) from None
+    except (URLError, OSError, ValueError, HTTPException):
+        raise StreamNZBError(
+            "StreamNZB request failed or timed out. "
+            "Check the server URL and connectivity."
+        ) from None
+
+
+def _decode_payload(body):
+    try:
+        return json.loads(body)
+    except (ValueError, TypeError):
+        raise StreamNZBError("StreamNZB returned malformed JSON.") from None
+
+
+def _check_cancelled(cancelled):
+    if cancelled and cancelled():
+        raise StreamNZBCancelled()
 
 
 def fetch_streams(base_url, token, params, cancelled=None):
@@ -196,27 +253,7 @@ def fetch_streams(base_url, token, params, cancelled=None):
     url = "{}/{}/stream/{}/{}.json".format(
         base, quote(token.strip(), safe=""), content_type, quote(identity, safe="")
     )
-    if cancelled and cancelled():
-        raise StreamNZBCancelled()
-    try:
-        body = http_get(url, timeout=_TIMEOUT, max_bytes=_MAX_RESPONSE)
-    except HTTPError as error:
-        if error.code in (401, 403):
-            raise StreamNZBError(
-                "StreamNZB rejected the stream token. Check its stream settings."
-            ) from None
-        raise StreamNZBError(
-            "StreamNZB HTTP request failed (status {}).".format(error.code)
-        ) from None
-    except (URLError, OSError, ValueError, HTTPException):
-        raise StreamNZBError(
-            "StreamNZB request failed or timed out. "
-            "Check the server URL and connectivity."
-        ) from None
-    if cancelled and cancelled():
-        raise StreamNZBCancelled()
-    try:
-        payload = json.loads(body)
-    except (ValueError, TypeError):
-        raise StreamNZBError("StreamNZB returned malformed JSON.") from None
-    return parse_streams(payload, token.strip())
+    _check_cancelled(cancelled)
+    body = _request_body(url)
+    _check_cancelled(cancelled)
+    return parse_streams(_decode_payload(body), token.strip())

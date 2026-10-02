@@ -44,4 +44,6 @@ def migrate_backend():
     try:
         xbmcaddon.Addon("plugin.video.nzbdav").setSetting("playback_backend", value)
     except (RuntimeError, AttributeError, TypeError):
+        # Kodi can refuse settings writes during startup or shutdown. Leave
+        # the stored legacy value intact so the next invocation can retry.
         pass

@@ -315,6 +315,14 @@ def test_abort_before_and_after_request(cancel_results):
     assert get.call_count == (len(cancel_results) - 1)
 
 
+def test_cancel_after_response_takes_precedence_over_malformed_json():
+    cancelled = MagicMock(side_effect=[False, True])
+    with patch.object(streamnzb, "http_get", return_value="invalid"), pytest.raises(
+        streamnzb.StreamNZBCancelled
+    ):
+        streamnzb.fetch_streams("http://stream.example", TOKEN, MOVIE, cancelled)
+
+
 @pytest.fixture(name="player_mocks")
 def _player_mocks():
     """Module-bound Kodi mocks; ensure the player never enters NZB machinery."""
@@ -428,6 +436,20 @@ def test_failed_plugin_handoff_preserves_captured_resume(player_mocks):
         streamnzb_player.play_streamnzb(MOVIE, settings, 7)
     mocks["preserve"].assert_called_once_with("streamnzb:movie:tt0133093", 300.0)
     mocks["consumed"].assert_not_called()
+
+
+@pytest.mark.parametrize("handle", [None, 7])
+def test_resume_dialog_failure_preserves_captured_bookmark(player_mocks, handle):
+    mocks = player_mocks
+    mocks["clear"].return_value = 300.0
+    mocks["choose"].side_effect = RuntimeError("Kodi shutting down")
+    streamnzb_player.play_streamnzb(MOVIE, settings, handle)
+    mocks["preserve"].assert_called_once_with("streamnzb:movie:tt0133093", 300.0)
+    mocks["consumed"].assert_not_called()
+    mocks["notify"].assert_called_once()
+    mocks["kodi"].Player.assert_not_called()
+    if handle is not None:
+        assert mocks["plugin"].setResolvedUrl.call_args.args[1] is False
 
 
 def test_abort_after_bookmark_capture_preserves_resume(player_mocks):

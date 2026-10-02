@@ -33,6 +33,30 @@ def _matching_number(supplied, focused):
     return supplied.isdigit() and focused.isdigit() and int(supplied) == int(focused)
 
 
+def _focused_episode_matches(title, season, episode):
+    from resources.lib.router_episodeinfo import _episode_info_from_listitem
+
+    show, recovered_season, recovered_episode = _episode_info_from_listitem(title)
+    matches = all(
+        (
+            show.strip().casefold() == title.strip().casefold(),
+            _matching_number(season, recovered_season),
+            _matching_number(episode, recovered_episode),
+        )
+    )
+    if matches:
+        return season or recovered_season, episode or recovered_episode
+    return season, episode
+
+
+def _needs_episode_recovery(params, title, season, episode):
+    return (
+        params.get("type") in ("episode", "series")
+        and bool(title)
+        and not (season and episode)
+    )
+
+
 def _recover_episode_numbers(params):
     """Use the existing same-show focused-item recovery for missing numbers.
 
@@ -43,21 +67,8 @@ def _recover_episode_numbers(params):
     season = clean.get("season") or clean.get("ep_season", "")
     episode = clean.get("episode") or clean.get("ep_episode", "")
     title = clean.get("title", "")
-    if (
-        clean.get("type") in ("episode", "series")
-        and title
-        and not (season and episode)
-    ):
-        from resources.lib.router_episodeinfo import _episode_info_from_listitem
-
-        show, recovered_season, recovered_episode = _episode_info_from_listitem(title)
-        if (
-            show.strip().casefold() == title.strip().casefold()
-            and _matching_number(season, recovered_season)
-            and _matching_number(episode, recovered_episode)
-        ):
-            season = season or recovered_season
-            episode = episode or recovered_episode
+    if _needs_episode_recovery(clean, title, season, episode):
+        season, episode = _focused_episode_matches(title, season, episode)
     clean["season"], clean["episode"] = season, episode
     return clean
 
@@ -135,6 +146,40 @@ def _finish_resume_state(key, captured, succeeded):
         xbmc.log("NZB-DAV: StreamNZB resume cleanup failed", xbmc.LOGWARNING)
 
 
+def _capture_resume(params):
+    """Reuse native resume choice, without arming NZB-DAV's retry monitor."""
+    from resources.lib import resolver
+
+    kind, identity = content_identity(params)
+    key = "streamnzb:{}:{}".format(kind, identity)
+    captured = resolver._coerce_resume_seconds(
+        resolver._clear_kodi_playback_state(params)
+    )
+    return key, captured
+
+
+def _choose_resume(item, key, captured):
+    from resources.lib import resolver, resume_choice
+
+    offset = max(captured, resolver._read_stored_resume(key))
+    chosen = resume_choice.choose_resume_seconds(key, offset)
+    if chosen is not None:
+        resolver._apply_resume_start_offset(item, chosen)
+    return chosen
+
+
+def _complete_playback(handle, succeeded, item, resume_key, captured):
+    handed_off = succeeded and handle is None
+    try:
+        if handle is not None:
+            xbmcplugin.setResolvedUrl(
+                handle, succeeded, item if succeeded else xbmcgui.ListItem()
+            )
+            handed_off = succeeded
+    finally:
+        _finish_resume_state(resume_key, captured, handed_off)
+
+
 def play_streamnzb(params, settings_getter, handle=None):
     """Complete every plugin handle; handle-less errors/cancellation notify.
 
@@ -151,19 +196,10 @@ def play_streamnzb(params, settings_getter, handle=None):
         monitor = xbmc.Monitor()
         entry = _select_stream(params, settings_getter, monitor)
         item, path = _playback_listitem(entry, params)
-        # Reuse native resume choice, without arming NZB-DAV's retry monitor.
-        from resources.lib import resolver, resume_choice
-
-        kind, identity = content_identity(params)
-        resume_key = "streamnzb:{}:{}".format(kind, identity)
-        captured = resolver._coerce_resume_seconds(
-            resolver._clear_kodi_playback_state(params)
-        )
-        offset = max(captured, resolver._read_stored_resume(resume_key))
-        chosen = resume_choice.choose_resume_seconds(resume_key, offset)
+        resume_key, captured = _capture_resume(params)
+        chosen = _choose_resume(item, resume_key, captured)
         if chosen is None or monitor.abortRequested():
             raise StreamNZBCancelled()
-        resolver._apply_resume_start_offset(item, chosen)
         if handle is None:
             xbmc.Player().play(path, item)
         succeeded = True
@@ -177,12 +213,4 @@ def play_streamnzb(params, settings_getter, handle=None):
         notify("StreamNZB", string(30610))
         xbmc.log("NZB-DAV: StreamNZB playback failed (details redacted)", xbmc.LOGERROR)
     finally:
-        handed_off = succeeded and handle is None
-        try:
-            if handle is not None:
-                xbmcplugin.setResolvedUrl(
-                    handle, succeeded, item if succeeded else xbmcgui.ListItem()
-                )
-                handed_off = succeeded
-        finally:
-            _finish_resume_state(resume_key, captured, handed_off)
+        _complete_playback(handle, succeeded, item, resume_key, captured)
