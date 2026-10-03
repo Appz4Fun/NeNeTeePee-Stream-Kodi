@@ -315,7 +315,7 @@ def _same_group_resolution_gate(primary_meta, candidate_meta):
     # differs, so an unparsed-resolution candidate can never slip a
     # different-resolution encode past the gate. The shared resolution
     # check below only fails OPEN when one side is unknown, so this stricter
-    # gate is what enforces "same resolution as parsed by PTT".
+    # gate is what enforces "same resolution as parsed by PTT."
     left_res = _fs._meta_value_from_meta(primary_meta, "resolution")
     right_res = _fs._meta_value_from_meta(candidate_meta, "resolution")
     if not left_res or left_res != right_res:

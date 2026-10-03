@@ -1,4 +1,4 @@
-# nzbdav Kodi Addon — Stream-Fallback System
+# Stream-fallback system in the nzbdav Kodi addon
 
 > Contributor-level code map of the multi-tier stream-fallback mechanism. All
 > module paths are relative to `repo/plugin.video.nzbdav/resources/lib/`.
@@ -22,7 +22,7 @@ stream fails at a byte range. Main components:
 | Candidate gating | `fallback_streams.py` + `fallback_streams_identity.py`, `fallback_streams_match.py`, `fallback_streams_attach.py`, `fallback_streams_select*.py`, `fallback_streams_probe.py` | content-identity + metadata gates, tiering, post-date dedup, fingerprint ranges, prepare payload |
 | Resolver orchestration | `resolver.py` + `resolver_entry.py`, `resolver_fallback.py`, `resolver_fallback_jobs.py`, `resolver_flow.py`, `resolver_playback.py` | drives the flow, owns `fallback_state`, arms the live push |
 | Stream proxy | `stream_proxy.py` + `stream_proxy_handler_cutover.py`, `stream_proxy_handler_probe.py`, `stream_proxy_mgr_*.py`, `stream_proxy_fallback.py`, `stream_proxy_const.py` | serves bytes, prevalidates, executes the live cutover |
-| Dead-candidate tracking | `dead_candidates.py` | per-session set of provably-dead releases |
+| Dead-candidate tracking | `dead_candidates.py` | per-session set of provably dead releases |
 | Backend submit | `nzbdav_api.py`, `resolver_submit.py` | submits NZB jobs to nzbdav |
 
 The lifecycle is deliberately delayed: nothing is submitted until the video is
@@ -101,12 +101,12 @@ The `fallback_state` dict built by `_start_fallback_submit_worker`
 `playback_started`, `thread`, `cancel_job`) is the shared channel between the
 resolver and the worker. The proxy session's `ctx` dict holds `remote_url`,
 `auth_header`, `fallback_sources`, `fallback_active_index`,
-`fallback_switch_count` (initialised by `_attach_fallback_context_fields` in
+`fallback_switch_count` (initialized by `_attach_fallback_context_fields` in
 `stream_proxy_fallback.py`), and per-cutover validation hints. The
 `DeadCandidates` set (`dead_candidates.py`, keyed by NZB URL and nzo_id) is
 threaded through every path to exclude poisoned candidates.
 
-## Candidate Selection
+## Candidate selection
 
 Candidates come from the **picker's search-result pool** for the selected
 release. When NZBHydra2 is in use, the pool is also augmented with same-title
@@ -193,7 +193,7 @@ submitted as fallbacks** on the active (`require_same_group=True`) path:
   wouldn't apply. Two releases from the same posting time with different
   groups could then both pass, as long as they satisfy `_same_content()`.
 
-## Submission Timing
+## Submission timing
 
 Fallback submission is a **two-stage, deliberately delayed** process anchored
 to **playback start**, not to picker selection or primary submission.
@@ -246,7 +246,7 @@ submits nothing.
 The `resolve()` (setResolvedUrl) and `resolve_and_play()` (service-side) paths
 behave the same way for fallback submission.
 
-## Byte-Stream Verification
+## Byte-stream verification
 
 A fallback candidate may take over only once it passes **sampled byte-stream
 verification**: `content_length` equality plus SHA-256 fingerprints of sampled
@@ -274,7 +274,7 @@ payload entry carries `content_length` (`build_prepare_fallback_payload`).
 A digest that's present and different is a MISMATCH. An empty digest, a probe
 5xx, or a timeout is INCONCLUSIVE.
 
-**Eager vs lazy validation.** Both happen:
+**Eager versus lazy validation.** Both happen:
 
 - **Eager (prevalidation thread).** `_start_fallback_prevalidation`
   (`stream_proxy_mgr_prefetch.py`) warms candidates *before* any failure. The
@@ -321,7 +321,7 @@ the same function and logs `Primary stuck on no-progress AWAITING_DOWNLOAD …`.
 - **INCONCLUSIVE**: increment `transient_miss_count`. The source is abandoned
   (`failed = True`) only when
   `misses > _FALLBACK_SOURCE_TRANSIENT_MISS_MAX` (4, `stream_proxy_const.py`).
-  That means **after exceeding 4 misses, on the 5th**, not on the 4th.
+  That means **after exceeding 4 misses, on the fifth**, not on the fourth.
 
 Failed sources are skipped during selection.
 

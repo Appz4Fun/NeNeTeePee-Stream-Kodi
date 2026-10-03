@@ -38,7 +38,7 @@ def _qp(url):
 
 # --- _build_prowlarr_query: Prowlarr's {token:value} query syntax (#313) ---
 # Prowlarr's native /api/v1/search binds only Query/Type/IndexerIds and parses
-# ids/season/episode out of the query TEXT as {tvdbid:..} tokens — it ignores
+# ids/season/episode out of the query TEXT as {tvdbid:..} tokens—it ignores
 # imdbid=/tvdbid=/season=/ep= params entirely (verified against Prowlarr src).
 
 
@@ -96,7 +96,7 @@ def test_build_prowlarr_query_sanitizes_decorated_tvdb():
 
 
 def test_build_prowlarr_query_strips_ampersand_from_title():
-    """A '&' in the title must not reach Prowlarr's keyword query — indexers
+    """A '&' in the title must not reach Prowlarr's keyword query—indexers
     AND query terms against release names that spell it 'and' or omit it, so
     an '&' token matches nothing and the search returns nothing (#294)."""
     from resources.lib.prowlarr import _build_prowlarr_query
@@ -126,8 +126,8 @@ def test_parse_results_movie():
     into expected result entries.
 
     Asserts the function returns two results and that the first result
-    contains the expected title, a link containing "prowlarr", a size of
-    "45000000000", an indexer of "NZBgeek", and a present `pubdate` field.
+    contains the expected title, a link containing `prowlarr`, a size of
+    `45000000000`, an indexer of `NZBgeek`, and a present `pubdate` field.
     """
     xml_text = _load_fixture("prowlarr_movie_response.xml")
     results = parse_results(xml_text)
@@ -249,7 +249,7 @@ def test_search_prowlarr_tv(mock_http, mock_settings):
 @patch("resources.lib.prowlarr._http_get")
 def test_search_prowlarr_tv_prefers_tvdbid(mock_http, mock_settings):
     """When a TVDB id is available, episode searches must key on tvdbid
-    (not imdbid) — many indexers index TV by TheTVDB id (issue #318)."""
+    (not imdbid)—many indexers index TV by TheTVDB id (issue #318)."""
     mock_settings.return_value = ("http://prowlarr:9696", "testkey", ["3"])
     mock_http.return_value = _load_fixture("prowlarr_tv_response.xml")
 
@@ -371,7 +371,7 @@ def test_search_prowlarr_invalid_xml_reports_bad_response(mock_http, mock_settin
 
 
 def test_search_prowlarr_no_indexer_ids_returns_empty_without_error():
-    """When no indexer IDs are configured, return ([], None) — not an error."""
+    """When no indexer IDs are configured, return ([], None)—not an error."""
     with patch("resources.lib.prowlarr._get_settings") as mock_settings:
         mock_settings.return_value = ("http://prowlarr:9696", "testkey", [])
         results, error = search_prowlarr("movie", "The Matrix")
@@ -411,7 +411,7 @@ def test_search_prowlarr_imdb_fallback_to_title(mock_http, mock_settings):
 @patch("resources.lib.prowlarr._http_get")
 def test_search_prowlarr_tvdb_fallback_to_title(mock_http, mock_settings):
     """When a tvdbid episode search returns nothing, retry by title and
-    drop the tvdbid — mirrors the imdbid->title fallback (issue #318)."""
+    drop the tvdbid—mirrors the imdbid->title fallback (issue #318)."""
     empty_xml = """<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
         <channel><newznab:response offset="0" total="0"/></channel>
@@ -453,7 +453,7 @@ def test_search_prowlarr_url_error_returns_error(mock_http, mock_settings):
     assert error == "Prowlarr unavailable: Connection refused"
 
 
-# --- parse_results fallback-path coverage (source text / source url hostname) ---
+# --- parse_results fallback-path coverage (source text / source URL hostname) ---
 
 
 def test_parse_results_falls_back_to_source_text_when_attr_missing():
@@ -478,7 +478,7 @@ def test_parse_results_falls_back_to_source_text_when_attr_missing():
 
 
 def test_parse_results_falls_back_to_source_url_hostname():
-    """No attr, no source text — just a ``<source url="..."/>`` element.
+    """No attr, no source text—just a ``<source url="..."/>`` element.
     parse_results must extract the hostname as the indexer label."""
     xml_text = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
@@ -498,7 +498,7 @@ def test_parse_results_falls_back_to_source_url_hostname():
 
 def test_parse_results_enclosure_length_fills_in_when_attr_size_missing():
     """When ``<newznab:attr name="size">`` is missing, the <enclosure>
-    ``length`` attribute provides the size — matches SABnzbd-compatible
+    ``length`` attribute provides the size—matches SABnzbd-compatible
     fallback behavior."""
     xml_text = """<?xml version="1.0" encoding="UTF-8"?>
 <rss version="2.0" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
@@ -519,7 +519,7 @@ def test_parse_results_enclosure_length_fills_in_when_attr_size_missing():
 #
 # Prowlarr's /api/v1/search endpoint answers with a JSON array, not Newznab
 # XML. The old XML-only parser crashed every search with
-# "syntax error: line 1, column 0". These tests pin the JSON path.
+# "syntax error: line 1, column 0." These tests pin the JSON path.
 
 
 def test_parse_results_json_movie():
@@ -541,7 +541,7 @@ def test_parse_results_json_movie():
 
     # publishDate (ISO-8601) is normalized to RFC-2822 so the stable-identity
     # and "Age" sort consumers (pubdate_to_epoch / filter._pubdate_sort_key)
-    # can parse it — they reject ISO-8601 outright (issue #313 review).
+    # can parse it—they reject ISO-8601 outright (issue #313 review).
     from datetime import datetime, timezone
 
     from resources.lib.http_util import pubdate_to_epoch
@@ -555,7 +555,7 @@ def test_parse_results_json_movie():
     # 400-day-old release -> 400 // 30 == 13 months.
     assert results[1]["size"] == "8200000000"
     assert results[1]["age"] == "13 months"
-    # Distinct, correctly-ordered post identities -> "Age" sort works.
+    # Distinct, correctly ordered post identities -> "Age" sort works.
     assert pubdate_to_epoch(results[1]["pubdate"]) < pubdate_to_epoch(first["pubdate"])
 
 
@@ -582,7 +582,7 @@ def test_parse_results_json_protocol_filter_case_insensitive():
 
 
 def test_parse_results_json_keeps_only_usenet_protocol():
-    """nzbdav is usenet-only: keep strictly ``protocol == 'usenet'`` — drop
+    """nzbdav is usenet-only: keep strictly ``protocol == 'usenet'``—drop
     torrents AND any release with a missing/unknown protocol."""
     json_text = (
         '[{"title": "U", "downloadUrl": "http://x/1", "protocol": "usenet"}, '

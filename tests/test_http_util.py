@@ -184,13 +184,13 @@ def test_notify_default_duration_does_not_crash():
 
 def test_notify_escapes_builtin_metacharacters():
     """notify must not let a `,` or `)` in heading/message break out of
-    the Notification(...) builtin call. TODO.md §H.2-H15 / §H.3 fix.
+    the Notification builtin call. TODO.md §H.2-H15 / §H.3 fix.
 
     The previous implementation interpolated the upstream-controlled
     text directly into the executebuiltin string, so an apikey-bearing
-    error like "HTTP 401, key=abc)" would terminate the Notification
+    error like "HTTP 401, key=abc)" would end the Notification
     call early and let the rest run as a separate builtin. The escape
-    maps the two structural metacharacters to visually-similar Unicode
+    maps the two structural metacharacters to visually similar Unicode
     that the Kodi parser treats as inert characters.
     """
     import sys
@@ -287,7 +287,7 @@ def test_redact_text_redacts_multiple_credential_params():
 
 def test_redact_text_redacts_digit_prefixed_values():
     """The ``\\1=REDACTED`` backreference must not misfire when the secret value
-    begins with a digit — the literal ``=`` terminates the group, so there is no
+    begins with a digit—the literal ``=`` terminates the group, so there is no
     ``\\1<digit>`` ambiguity."""
     result = redact_text("apikey=123secret token=999 key=0abc&next=1")
 
@@ -301,7 +301,7 @@ def test_redact_text_redacts_digit_prefixed_values():
 
 def test_redact_text_strips_embedded_url_userinfo_password():
     """redact_text must also scrub `scheme://user:pass@host` userinfo when
-    a URL is embedded in a free-form error string (e.g. a urllib/xbmcvfs
+    a URL is embedded in a free-form error string (for example, a urllib/xbmcvfs
     error echoing the NZBGet RPC URL or the smb://user:pass@host root).
     redact_url only handles a parseable URL; this covers the in-text case."""
     msg = "URLError refused smb://alice:supersecret@host/completed/The.Movie"
@@ -319,7 +319,7 @@ def test_redact_text_preserves_userinfo_without_password():
 
 def test_redact_text_redacts_password_containing_at_sign():
     """A password with a literal `@` (common in SMB/NZBGet creds) must be
-    fully scrubbed — the naive userinfo regex stopped at the FIRST `@` and
+    fully scrubbed—the naive userinfo regular expression stopped at the FIRST `@` and
     leaked the tail. Split on the LAST `@` of the authority instead."""
     result = redact_text("refused http://user:p@ss99@box:6789/jsonrpc")
     assert "ss99" not in result
@@ -335,7 +335,7 @@ def test_redact_text_redacts_smb_password_containing_at_sign():
 
 def test_redact_text_redacts_empty_username_password():
     """`smb://:password@host` (guest/anonymous share, empty username) must be
-    redacted — the old regex required a non-empty username and left it
+    redacted—the old regular expression required a non-empty username and left it
     entirely unscrubbed."""
     result = redact_text("SMB error: smb://:GuestPw123@nas.local/completed/X")
     assert "GuestPw123" not in result
@@ -454,7 +454,7 @@ def test_http_post_json_rejects_non_http_scheme():
 
 
 def test_clean_search_query_drops_ampersand():
-    """A literal '&' in the title (e.g. 'Your Friends & Neighbors') must not
+    """A literal '&' in the title (for example, 'Your Friends & Neighbors') must not
     reach the indexer keyword search: release names spell it 'and' or omit it,
     so an '&' token matches nothing and the search returns zero results (#294).
     """

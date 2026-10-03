@@ -22,7 +22,7 @@ def read_box_header(data, offset):
     Accepts any buffer (bytes, bytearray, memoryview) and always returns
     box_type as immutable, hashable ``bytes`` so callers can use it in
     ``set`` / ``dict`` lookups regardless of the input buffer's type.
-    Closes TODO.md §H.2-H3b — eliminates per-call ``bytes(data)`` full
+    Closes TODO.md §H.2-H3b—eliminates per-call ``bytes(data)`` full
     buffer copies that the recursive walker used to do just to make box
     types hashable.
 
@@ -45,7 +45,7 @@ def read_box_header(data, offset):
             return None
     elif size == 0:
         # Box extends to end of data. Spec only allows this for mdat;
-        # refuse it for other box types so we don't silently consume the
+        # refuse it for other box types so the parser doesn't silently consume the
         # tail of the file as a non-mdat box.
         if box_type != b"mdat":
             return None
@@ -56,7 +56,7 @@ def read_box_header(data, offset):
 # Box types that are not ftyp/moov/mdat but may appear at the top level
 _KNOWN_PASSTHROUGH = {b"free", b"wide", b"uuid", b"skip", b"pdin"}
 
-# Top-level boxes we record by their own offset/size keys.
+# Top-level boxes the parser records by their own offset/size keys.
 _TOP_LEVEL_KEYS = {b"ftyp": "ftyp", b"moov": "moov", b"mdat": "mdat"}
 
 
@@ -136,7 +136,7 @@ def _rewrite_stco(data, body_start, body_end, delta):
         new_val = old + delta
         # Python ints don't overflow, so the only real check is against the
         # uint32 ceiling. A negative delta that would push below 0 also
-        # matters though — struct.pack_into >I on a negative int would
+        # matters though—struct.pack_into >I on a negative int would
         # raise, so guard explicitly.
         if new_val > _MAX_STCO_OFFSET or new_val < 0:
             return False
@@ -148,7 +148,7 @@ def _rewrite_co64(data, body_start, body_end, delta):
     """Rewrite 64-bit chunk offsets in a co64 box.
 
     Returns True on success, False if the box is structurally invalid
-    (truncated header). Mirrors the `_rewrite_stco` contract — the
+    (truncated header). Mirrors the `_rewrite_stco` contract—the
     earlier silent-success behavior meant a malformed co64 made the
     whole rewrite report success while leaving offsets unchanged for
     that track. Closes TODO.md §H.3.
@@ -157,7 +157,7 @@ def _rewrite_co64(data, body_start, body_end, delta):
     if count_off + 4 > body_end:
         return False
     count = struct.unpack_from(">I", data, count_off)[0]
-    # Clamp to the actual body size — same DoS guard as _rewrite_stco.
+    # Clamp to the actual body size—same DoS guard as _rewrite_stco.
     count = _bounded_chunk_count(count, body_start, body_end, 8)
     entry_off = count_off + 4
     for i in range(count):
@@ -194,9 +194,9 @@ def _rewrite_offsets_recursive(data, delta, start=0, end=None):
 
     Operates on a mutable bytearray in-place using ``[start, end)``
     bounds rather than slicing a child buffer per container box. The
-    previous slice-and-assign-back pattern was O(N²) in moov size — at
+    previous slice-and-assign-back pattern was O(N²) in moov size—at
     each container level the body bytes were copied out, recursed into,
-    then copied back, which on a deeply-nested 50 MB moov hung the
+    then copied back, which on a deeply nested 50 MB moov hung the
     proxy. Closes TODO.md §H.2-H3b.
 
     Returns True on success, False if stco overflow detected.
@@ -251,10 +251,10 @@ def rewrite_moov_offsets(moov_bytes, delta):
     return bytes(data)
 
 
-_HEAD_PROBE_SIZE = 65536  # 64 KB — enough to find ftyp and moov-at-front
-_TAIL_PROBE_SIZE = 524288  # 512 KB — initial tail probe for moov-at-end
-_TAIL_PROBE_MAX = 8 * 1048576  # 8 MB — max tail probe before giving up
-_MAX_MOOV_SIZE = 50 * 1048576  # 50 MB — safety cap for moov fetch
+_HEAD_PROBE_SIZE = 65536  # 64 KB—enough to find ftyp and moov-at-front
+_TAIL_PROBE_SIZE = 524288  # 512 KB—initial tail probe for moov-at-end
+_TAIL_PROBE_MAX = 8 * 1048576  # 8 MB—max tail probe before giving up
+_MAX_MOOV_SIZE = 50 * 1048576  # 50 MB—safety cap for moov fetch
 
 
 def _resp_status(resp):
@@ -503,7 +503,7 @@ def fetch_remote_mp4_layout(url, file_size, auth_header=None):
             url, head_data, head_layout, ftyp_data, ftyp_end, auth_header
         )
 
-    # 2. Moov not in head — try computed location, then tail probe
+    # 2. Moov not in head—try computed location, then tail probe
     return _layout_for_trailing_moov(
         url, file_size, head_layout, ftyp_data, ftyp_end, auth_header
     )
@@ -551,10 +551,10 @@ def build_faststart_layout(layout_info):
     original_moov_offset = layout_info["original_moov_offset"]
 
     if layout_info["moov_before_mdat"]:
-        # Already faststart — serve ftyp + moov as header, rest as payload.
+        # Already faststart—serve ftyp + moov as header, rest as payload.
         return _already_faststart_layout(ftyp_data, moov_data, original_moov_offset)
 
-    # Moov is after mdat — need to rewrite offsets. Files >4GB typically use
+    # Moov is after mdat—need to rewrite offsets. Files over 4 GB typically use
     # co64 (64-bit chunk offsets); the stco overflow check in
     # rewrite_moov_offsets() only triggers for 32-bit stco values near 2^32.
     # Virtual layout: ftyp + moov + original[ftyp_end:moov_start]; everything
@@ -562,7 +562,7 @@ def build_faststart_layout(layout_info):
     delta = len(moov_data)
     rewritten_moov = rewrite_moov_offsets(moov_data, delta)
     if rewritten_moov is None:
-        return None  # stco overflow — caller uses fallback
+        return None  # stco overflow—caller uses fallback
 
     header_data = ftyp_data + rewritten_moov
     payload_size = original_moov_offset - ftyp_end
@@ -606,7 +606,7 @@ class RangeCache:
     def get(self, start, end):
         """Return bytes for [start, end) if fully cached, else None."""
         with self._lock:
-            # Snapshot items before iterating — we may mutate _entries
+            # Snapshot items before iterating—this loop may mutate _entries
             # inside the loop (del + re-insert for LRU ordering), and
             # some OrderedDict implementations raise RuntimeError on
             # concurrent structure change even from the same thread.
@@ -614,7 +614,7 @@ class RangeCache:
             for entry_start, entry_data in items:
                 entry_end = entry_start + len(entry_data)
                 if entry_start <= start and end <= entry_end:
-                    # Move to end (most recent) — re-insert instead of
+                    # Move to end (most recent)—re-insert instead of
                     # move_to_end to avoid pylint E1101 false positive.
                     del self._entries[entry_start]
                     self._entries[entry_start] = entry_data

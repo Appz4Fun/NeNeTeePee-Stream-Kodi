@@ -91,16 +91,16 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
             if result is not None:
                 return result
             # Fall through to the cleanup block below instead of
-            # returning early — the partial output that ffmpeg
+            # returning early—the partial output that ffmpeg
             # leaves on a failed remux otherwise leaks until the OS
             # next clears tempdir. Closes TODO.md §H.3 (mkstemp
             # leak on TimeoutExpired / SubprocessError) for the
             # ffmpeg-non-zero-exit case in particular.
         except _sp.subprocess.TimeoutExpired as e:
-            # communicate() timing out does NOT kill the child. Without
-            # an explicit kill + reap, the ffmpeg process orphans and
+            # communicate() timing out does NOT stop the child. Without
+            # an explicit stop + reap, the ffmpeg process orphans and
             # holds the output fd + the inbound HTTP socket, potentially
-            # for hours. Kill + drain the pipe before the exception
+            # for hours. Stop and drain the pipe before the exception
             # propagates; .communicate() on the killed proc reaps it.
             _sp.xbmc.log(
                 (
@@ -118,7 +118,7 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
             )
             # Non-timeout subprocess errors usually mean Popen itself
             # failed or communicate() hit a pipe error. Still try to
-            # reap the child defensively — it's cheap when the proc
+            # reap the child defensively—it's cheap when the proc
             # already exited and essential when it didn't.
             if proc is not None and proc.poll() is None:
                 _sp.StreamProxy._kill_and_reap_faststart(proc)
@@ -135,7 +135,7 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
         if proc.returncode != 0:
             # ffmpeg error messages routinely echo the full input URL,
             # including embedded basic-auth (legacy callers) and
-            # apikey=... query strings. Strip those before they land in
+            # apikey=<value> query strings. Strip those before they land in
             # kodi.log. Closes TODO.md §H.2-H2b.
             _sp.xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Temp faststart failed: {}".format(
@@ -150,7 +150,7 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _kill_and_reap_faststart(proc):
-        """Kill + drain a faststart ffmpeg child (documented reap idiom)."""
+        """Stop and drain a faststart ffmpeg child (documented reap idiom)."""
         try:
             proc.kill()
             proc.communicate(timeout=5)

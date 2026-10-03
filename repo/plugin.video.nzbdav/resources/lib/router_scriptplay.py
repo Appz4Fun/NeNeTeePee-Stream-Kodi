@@ -24,7 +24,7 @@ def _script_play_recover_episode_info(params, title, season, episode):
     have moved by the time the player fires). On a same-show match, the
     recovered numbers are also threaded back into ``params`` so the downstream
     ``resolver_params = dict(params)`` carries them into
-    ``_clear_kodi_playback_state`` — otherwise the actual SxxExx TMDBHelper
+    ``_clear_kodi_playback_state``—otherwise the actual SxxExx TMDBHelper
     bookmark that triggered the widget play is left behind and the next replay
     can still hit the stale plugin-URL resume failure.
     """
@@ -79,8 +79,8 @@ def _script_play_resolve_episode_args(
     # TMDBHelper Next-Up / widget / home-screen plays often invoke the player
     # with only the series ids and empty season/episode, so an episode search
     # broadens to the whole show. Recover the numbers from the focused
-    # ListItem, but trust them only when that item is the same show we're
-    # about to search (the focus may have moved by the time the player fires).
+    # ListItem, but trust them only when that item is the same show being
+    # searched (the focus may have moved by the time the player fires).
     if search_type == "episode" and not (season and episode):
         title, season, episode = _script_play_recover_episode_info(
             params, title, season, episode
@@ -184,7 +184,7 @@ def _script_play_search_filter_tag(
 
     # The indexer search + filtering below can take several seconds; with no
     # on-screen indicator the player looks frozen/crashed. Show a NON-modal
-    # background progress dialog (see _open_loading_dialog — the modal
+    # background progress dialog (see _open_loading_dialog—the modal
     # DialogProgress native-crashes Kodi mid-search on CoreELEC/Arctic Fuse).
     # The finally guarantees it is closed before the picker opens and on every
     # early return / exception below.
@@ -319,7 +319,7 @@ def _script_play_auto_select(params, best, filtered):
         _router._get_script_setting
     ):
         # In NZBGet mode the nzbdav completed-history hint is dead weight
-        # (resolve_and_play delegates to NZBGet before reading it) — skip the
+        # (resolve_and_play delegates to NZBGet before reading it)—skip the
         # lookup instead of stalling on a stale nzbdav config.
         completed_job = _router._script_completed_job_for_selection(target)
     if completed_job:

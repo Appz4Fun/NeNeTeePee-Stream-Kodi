@@ -15,8 +15,8 @@ def test_check_active_reads_window_properties(mock_window):
     """Service picks up stream info from window properties.
 
     All three of nzbdav.active / stream_url / stream_title are cleared
-    after the values are snapshotted onto the player instance — see
-    TODO.md §H.2-L29 for why we don't leave URL/title around after
+    after the values are snapshotted onto the player instance—see
+    TODO.md §H.2-L29 for why the code doesn't leave URL/title around after
     consumption.
     """
     mock_window.getProperty.side_effect = lambda key: {
@@ -168,7 +168,7 @@ def test_on_playback_ended_clears_stable_resume_offset(mock_clear_resume):
 
 
 def test_playback_stop_hook_survives_proxy_errors():
-    """A misbehaving proxy must not crash the Kodi player callback —
+    """A misbehaving proxy must not crash the Kodi player callback:
     xbmc.Player callbacks run on Kodi's thread and an uncaught exception
     can destabilize the whole addon service."""
     proxy = MagicMock()
@@ -260,7 +260,7 @@ def test_tick_terminal_error_clears_playing_flag(mock_window):
     """Regression (id 3365909884 follow-up): a terminal ERROR->IDLE transition
     must clear the persistent ``nzbdav.playing`` liveness flag, so the
     plugin-process fallback submit worker observes the dead session and aborts
-    its standby wait instead of submitting backups. Covers the retries-disabled
+    its standby wait instead of submitting backups. Covers the zero-retries
     and max-retries terminal paths."""
     from service import _PROP_PLAYING
 
@@ -386,12 +386,12 @@ def test_tick_waits_before_declaring_failure(mock_window):
 
 def test_service_main_loop_absorbs_tick_exceptions():
     """A crash inside ``player.tick()`` used to bubble up to main()'s
-    loop and kill the service, silently breaking every future stream.
+    loop and stop the service, silently breaking every future stream.
     The hardened main() wraps tick() so a single exception just logs
     and the loop keeps spinning."""
     import service
 
-    # monitor.abortRequested returns True on the 3rd call → 2 full loop
+    # monitor.abortRequested returns True on the third call → 2 full loop
     # iterations, each calling player.tick() once.
     mock_monitor = MagicMock()
     mock_monitor.abortRequested.side_effect = [False, False, True]
@@ -454,7 +454,7 @@ def test_service_main_loop_resets_failure_streak_on_good_tick():
         service.main()
 
     log_lines = [c.args[0] for c in mock_log.call_args_list]
-    # Two first-failure ERROR lines — one per streak (since the good
+    # Two first-failure ERROR lines—one per streak (since the good
     # tick between them resets the counter).
     first_failure_lines = [
         line for line in log_lines if "Unhandled exception in player.tick()" in line
@@ -550,7 +550,7 @@ def test_service_logs_when_proxy_restart_fails():
 
 
 def test_stream_proxy_is_alive_returns_false_before_start():
-    """A freshly-constructed StreamProxy without start() called must
+    """A freshly constructed StreamProxy without start() called must
     report is_alive()==False so the service's health check doesn't
     mistake the initial idle state for a crash."""
     from resources.lib.stream_proxy import StreamProxy
@@ -620,7 +620,7 @@ def test_main_noop_cache_warning_does_not_touch_addon(
     # Make the Addon call raise if it gets evaluated
     mock_addon_cls.side_effect = RuntimeError("Eager Addon() call detected")
 
-    # Make the monitor abort immediately to exit the main loop after one tick
+    # Make the monitor request shutdown immediately to exit the main loop after one tick
     mock_monitor = MagicMock()
     mock_monitor.abortRequested.side_effect = [False, True]
     mock_monitor.waitForAbort.return_value = False
@@ -669,8 +669,8 @@ def test_read_settings_clamps_max_retries_high(mock_addon_cls):
 
 @patch("service.xbmcaddon.Addon")
 def test_read_settings_clamps_retry_delay_high(mock_addon_cls):
-    """A 99999-second retry_delay would freeze the monitor for ~28 h —
-    must clamp to the upper bound."""
+    """A 99999-second retry_delay would freeze the monitor for ~28 h.
+    It must clamp to the upper bound."""
     import service as service_mod
 
     mock_addon_cls.return_value = _addon_with_settings(
@@ -697,7 +697,7 @@ def test_read_settings_clamps_negative_values(mock_addon_cls):
         }
     )
     _, max_retries, retry_delay = NzbdavPlayer._read_settings()
-    # max_retries lo bound is 0 (disable retries entirely is valid).
+    # max_retries lo bound is 0 (turning retries off entirely is valid).
     assert max_retries == service_mod._STREAM_MAX_RETRIES_MIN == 0
     # retry_delay lo bound is 1 (smallest poll the tick can honor).
     assert retry_delay == service_mod._STREAM_RETRY_DELAY_MIN == 1
@@ -726,7 +726,7 @@ def test_read_settings_clamp_logs_warning(mock_addon_cls, mock_log):
         {
             "stream_auto_retry": "true",
             "stream_max_retries": "99999",
-            "stream_retry_delay": "1",  # in-range — should NOT log
+            "stream_retry_delay": "1",  # in-range—should NOT log
         }
     )
     NzbdavPlayer._read_settings()
@@ -734,7 +734,7 @@ def test_read_settings_clamp_logs_warning(mock_addon_cls, mock_log):
     assert any(
         "stream_max_retries" in line and "out of range" in line for line in log_lines
     )
-    # retry_delay was in range — no warning for it.
+    # retry_delay was in range—no warning for it.
     assert not any(
         "stream_retry_delay" in line and "out of range" in line for line in log_lines
     )

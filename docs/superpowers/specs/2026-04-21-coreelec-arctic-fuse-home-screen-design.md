@@ -1,4 +1,4 @@
-# CoreELEC Arctic Fuse Home Screen Design
+# CoreELEC Arctic Fuse home screen design
 
 ## Summary
 
@@ -18,7 +18,7 @@ The implementation is intentionally split into two steps:
 
 This split exists because the current addon version exposes several stable route classes but does not make every provider/network/company ID obvious from the saved skin settings alone.
 
-## Current Context
+## Current context
 
 Observed on the target box:
 
@@ -43,7 +43,7 @@ Interpretation:
 - Prefer native skin features over custom addon development.
 - Guarantee that `Home` never collapses to a blank landing hub.
 
-## Non-Goals
+## Non-goals
 
 - Do not build a wrapper plugin just to launch rows.
 - Do not add a `Collections` top-level hub.
@@ -51,9 +51,9 @@ Interpretation:
 - Do not introduce a submenu layer for `Add More`.
 - Do not show placeholder or empty rows when a source is unavailable.
 
-## Information Architecture
+## Information architecture
 
-### Top-Level Hubs
+### Top-level hubs
 
 The final home navigation is:
 
@@ -69,7 +69,7 @@ This is the smallest menu that still keeps the sources semantically separated:
 - `TV` is for TV-centric network and channel discovery
 - `Streamers` is for service-brand browsing
 
-### Hub Layout Rules
+### Hub layout rules
 
 Each hub uses native Arctic Fuse widgets with these constraints:
 
@@ -80,7 +80,7 @@ Each hub uses native Arctic Fuse widgets with these constraints:
 
 This keeps navigation shallow and predictable.
 
-## Hub Definitions
+## Hub definitions
 
 ### Home
 
@@ -100,7 +100,7 @@ Rows:
 
 Rationale:
 
-- these are broad, daily-use entry points
+- these are broad, daily use entry points
 - they refresh often enough to justify the main landing page
 - moving service-specific rows off Home reduces clutter and background work
 - `Home` must still render rows 1 and 2 when Trakt auth is missing, so the landing hub cannot go blank
@@ -154,11 +154,11 @@ Rationale:
 - this hub is brand/service-oriented rather than media-type-oriented
 - it provides the direct "show me what is on this service" path that the user asked for
 
-## Source Resolution Rules
+## Source resolution rules
 
 The design defines route class, semantics, and fallback behavior. Implementation must not configure hubs from free-text labels alone.
 
-### Exact Route Classes
+### Exact route classes
 
 Use these route classes as the canonical basis for the final plugin URLs:
 
@@ -190,7 +190,7 @@ Implementation note derived from the installed addon code:
 - `with_networks` and `with_watch_providers` must be treated as numeric-ID-backed configuration in this addon version
 - free-text network/provider names are not acceptable as the final persisted hub configuration
 
-### Source Inventory Gate
+### Source inventory gate
 
 Before changing any Arctic Fuse hub settings, implementation must produce a source inventory for every row with:
 
@@ -205,7 +205,7 @@ Before changing any Arctic Fuse hub settings, implementation must produce a sour
 
 The home screen is configured only from that inventory. This is the mechanism that makes the design reproducible.
 
-### Amazon Semantics
+### Amazon semantics
 
 The `Amazon / Prime Video` row is explicitly a movie watch-provider row, not a network row.
 
@@ -215,7 +215,7 @@ Required rule:
 - prefer US `Prime Video` watch-provider semantics
 - if that cannot be made stable on the target addon version, fall back to a company-based movie row and rename the row truthfully
 
-### Netflix Fallback Rule
+### Netflix fallback rule
 
 `Netflix Originals` should use one Trakt user/list as primary and the other as documented fallback:
 
@@ -224,7 +224,7 @@ Required rule:
 
 The mapping must be written down so a future broken list can be swapped quickly without rediscovering the source.
 
-### Trakt Availability Rule
+### Trakt availability rule
 
 Because the box does not currently show a standalone Trakt addon in `/storage/.kodi/addons`, implementation must verify the cheapest working route:
 
@@ -235,14 +235,14 @@ Because the box does not currently show a standalone Trakt addon in `/storage/.k
 
 The design goal is functional Trakt-backed rows, not loyalty to a particular addon.
 
-## Performance Rules
+## Performance rules
 
 The home screen should optimize for measured speed rather than maximum content density.
 
 Required behavior:
 
 - keep `Home` limited to three rows
-- keep Arctic Fuse hub preloading disabled
+- keep Arctic Fuse hub preloading turned off
 - avoid stacked nested widgets or wrapper scripts
 - avoid indirect launcher nodes when a direct plugin path exists
 - keep row limits low enough that poster loads and metadata churn remain modest
@@ -260,7 +260,7 @@ Explicit tradeoff:
 - some sources could be normalized through custom nodes or helper wrappers, but that would make the system slower to build and more brittle to maintain
 - this design chooses directness over abstraction
 
-## Failure Behavior
+## Failure behavior
 
 If a source is broken, unauthenticated, empty, or too slow to be worth keeping on the landing surface:
 
@@ -291,7 +291,7 @@ The implementation should rely on these existing components only:
 
 No new custom addon or wrapper service is part of this design.
 
-## Data Flow
+## Data flow
 
 For each row:
 
@@ -302,7 +302,7 @@ For each row:
 
 This keeps the overview and deep-browse flows aligned. The user never has to learn a different path for "preview row" versus "full list."
 
-## Testing And Verification
+## Testing and verification
 
 Implementation is complete only when the box proves the design in use.
 
@@ -317,9 +317,9 @@ Required checks:
 7. verify Trakt-backed rows that matter most to the user actually load on the box
 8. verify `Netflix Originals` has a documented primary and fallback source
 9. verify the `Amazon / Prime Video` row uses provider or company semantics, never movie-network semantics
-10. verify the performance budgets above with three runs and median timing recorded from the target box
+10. verify the performance budgets listed earlier with three runs and median timing recorded from the target box
 
-## Implementation Notes
+## Implementation notes
 
 The design deliberately leaves one implementation detail open: the exact Arctic Fuse storage surface used to persist hub and widget definitions.
 
@@ -337,4 +337,4 @@ The implementation plan should therefore start by discovering:
 1. the concrete storage/write path for Arctic Fuse custom hubs on this box
 2. the exact provider/network/company IDs and final plugin URLs required by the source inventory
 
-Only after that inventory exists should it apply the hub mapping above.
+Only after that inventory exists should it apply the hub mapping described earlier.

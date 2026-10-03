@@ -33,8 +33,8 @@ def _terminal_submit_error_result(submit_error, ctx):
 def _adopt_after_submit_failure(submit_error, ctx, after_timeout):
     """Probe queue/history after a timeout or non-transient HTTP submit error.
 
-    Returns ``("return", adopted_nzo_id)`` when an existing job was adopted,
-    otherwise ``None`` to let the caller continue its classification.
+    Returns ``(kind, adopted_nzo_id)`` with ``kind="return"`` when an existing job was
+    adopted, otherwise ``None`` to let the caller continue its classification.
     """
     title = ctx["title"]
     adopted_nzo_id = _resolver._adopt_queued_or_completed_job(
@@ -64,14 +64,15 @@ def _handle_submit_attempt_error(submit_error, ctx):
 
     ``ctx`` carries the per-call context (title, dialog, monitor,
     attempt_label, settings_getter, selected_indexer, rejected_completed_ids).
-    Returns ``("return", value)`` when the retry loop must stop and return
-    ``value``, or ``("retry", None)`` when the caller should keep retrying.
+    Returns ``(kind, value)`` with ``kind="return"`` when the retry loop must stop and
+    return ``value``, or ``kind="retry"`` (``value`` is None) when the caller should
+    keep retrying.
     """
     status = submit_error["status"]
     title = ctx["title"]
     if status in ("cancelled", "shutdown"):
         # User hit cancel on the progress dialog or Kodi is shutting down.
-        # Stop immediately — no retry, no adoption, no error dialog.
+        # Stop immediately—no retry, no adoption, no error dialog.
         _resolver.xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Submit aborted ({}) for '{}'").format(
                 status, title
@@ -140,9 +141,9 @@ def _handle_submit_timeout(submit_error, ctx):
     """Handle a client-side submit timeout: probe-then-adopt, else retry.
 
     nzbdav's /api?mode=addurl handler can take > 30 s on big NZBs (fetch +
-    parse + enumerate) — longer than the default HTTP timeout. A timeout does
-    NOT mean the submit failed. Probe the queue before retrying so we adopt the
-    job nzbdav is already processing instead of double-submitting.
+    parse + enumerate)—longer than the default HTTP timeout. A timeout does
+    NOT mean the submit failed. Probe the queue before retrying so the resolver adopts
+    the job nzbdav is already processing instead of double-submitting.
     """
     title = ctx["title"]
     _resolver.xbmc.log(
@@ -166,7 +167,7 @@ def _handle_submit_nontransient(submit_error, ctx):
 
     Before surfacing the error to the user, probe the queue: if the job is
     already running, attach to it. This covers the race where a concurrent
-    submit (e.g. retried play of the same title) beat us to nzbdav.
+    submit (for example, retried play of the same title) reached nzbdav first.
     """
     adopted = _adopt_after_submit_failure(submit_error, ctx, after_timeout=False)
     if adopted is not None:

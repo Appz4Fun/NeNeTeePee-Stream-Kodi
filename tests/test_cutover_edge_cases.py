@@ -25,7 +25,7 @@ from resources.lib.fallback_streams import (
 )
 
 
-# 1: backward-seek / replayed bytes — fingerprint geometry stays stable
+# 1: backward-seek / replayed bytes—fingerprint geometry stays stable
 #    across seeks. fingerprint_ranges is purely a function of the
 #    content_length the proxy already cached at session-prepare time, so
 #    seeking back into already-played ranges must not invalidate the
@@ -39,7 +39,7 @@ def test_fingerprint_ranges_deterministic_for_same_content_length():
     assert len(a) == 100
 
 
-# 2: forward seek inside the cached upstream window — small files
+# 2: forward seek inside the cached upstream window—small files
 #    fingerprint as a single full range, so a seek inside that range
 #    can't fall outside any "validated" zone.
 def test_fingerprint_ranges_small_file_returns_single_range():
@@ -50,18 +50,18 @@ def test_fingerprint_ranges_small_file_returns_single_range():
     assert ranges == [(0, 2047)]
 
 
-# 3: forward seek past EOF — validation MUST refuse content_length=0,
+# 3: forward seek past EOF—validation MUST refuse content_length=0,
 #    otherwise an "advertise 8.5 GB / serve 0 bytes" upstream would slip
 #    through prevalidation and surface as a stall once Kodi seeked past
 #    the cache horizon.
 def test_fingerprint_ranges_zero_content_length_returns_empty():
     """No ranges to validate against when the upstream reports no
-    bytes — prevalidation must not produce a false "validated" mark."""
+    bytes—prevalidation must not produce a false "validated" mark."""
     assert not fingerprint_ranges(0)
     assert not fingerprint_ranges(-1)
 
 
-# 4: primary fails before first frame — at session prepare time the
+# 4: primary fails before first frame—at session prepare time the
 #    addon's /direct_play handler HEAD-validates each fallback and
 #    rejects any that doesn't return a Content-Length. This is the
 #    earliest gate in the chain.
@@ -92,7 +92,7 @@ def test_direct_play_skips_unstreamable_fallbacks():
     # the function body, so patching the whole ``sys.modules`` entry
     # was racy across pytest sessions (MagicMock subbed in only for
     # this test, but shared globals leaked). Patch the two symbols
-    # the function actually pulls — the function-local
+    # the function actually pulls—the function-local
     # ``from resources.lib.resolver import (_direct_playback_service_config,
     # _prepare_direct_playback)`` resolves these patched attributes
     # at call time.
@@ -120,11 +120,11 @@ def test_direct_play_skips_unstreamable_fallbacks():
     xbmcplugin.setResolvedUrl.assert_called()
 
 
-# 5: all fallbacks pre-fail — `_validated_probe_url` must enforce the
+# 5: all fallbacks pre-fail—`_validated_probe_url` must enforce the
 #    configured-origin allow list when no session probe base is supplied.
 def test_validated_probe_url_rejects_off_origin_when_only_global_bases():
     """Without per-session probe-base augmentation, an off-origin URL
-    falls through to the configured allow-list and gets rejected — that
+    falls through to the configured allow-list and gets rejected—that
     is the safety net for unknown peers."""
     base_parts = _split_http_url("http://nzbdav-rs:8080/")
     base = _PrecomputedProbeBase(base_parts, _origin_key(base_parts), "/")
@@ -134,7 +134,7 @@ def test_validated_probe_url_rejects_off_origin_when_only_global_bases():
     )
 
 
-# 6: fallback hash mismatch — `_validated_probe_url` must accept URLs
+# 6: fallback hash mismatch—`_validated_probe_url` must accept URLs
 #    only when origin AND base path align.
 def test_validated_probe_url_accepts_session_origin():
     """When the session adds its own primary URL as a probe base, peers
@@ -148,7 +148,7 @@ def test_validated_probe_url_accepts_session_origin():
     assert accepted.startswith("http://127.0.0.1:5001/")
 
 
-# 7: rapid serial cutovers — fallback detection by name must still
+# 7: rapid serial cutovers—fallback detection by name must still
 #    surface the most recent terminal entry. nzbdav_api.find_terminal_by_name
 #    accepts both Completed and Failed (and returns the matching slot).
 def test_find_terminal_by_name_returns_failed_slot():
@@ -182,7 +182,7 @@ def test_find_terminal_by_name_returns_failed_slot():
     assert result["fail_message"] == "no importable video file found"
 
 
-# 8: empty fallback list — find_completed_by_name MUST stay strict and
+# 8: empty fallback list—find_completed_by_name MUST stay strict and
 #    only return Completed (otherwise picker_completed_stream would try
 #    to play a Failed entry).
 def test_find_completed_by_name_excludes_failed():
@@ -209,8 +209,8 @@ def test_find_completed_by_name_excludes_failed():
     assert result is None
 
 
-# 9: lying upstream — _dump_submitted_nzb is opt-in. Without
-#    NZBDAV_DUMP_NZBS_DIR a regular submit must NOT touch disk, so
+# 9: lying upstream—_dump_submitted_nzb is opt-in. Without
+#    NZBDAV_DUMP_NZBS_DIR a regular submit must NOT write to disk, so
 #    silent debug captures don't leak indexer URLs into user storage.
 def test_dump_submitted_nzb_no_op_without_env(monkeypatch, tmp_path):
     """Without the explicit env var the dump must do nothing."""
@@ -223,7 +223,7 @@ def test_dump_submitted_nzb_no_op_without_env(monkeypatch, tmp_path):
     assert not list(tmp_path.iterdir())
 
 
-# 10: empty fallback set — when all candidates dedup to the picked
+# 10: empty fallback set—when all candidates dedup to the picked
 #    release's link, no fallback peer can be attached and the loader
 #    must return None so the resolver's fallback worker short-circuits.
 def test_fallback_loader_short_circuits_for_lone_picked_link(monkeypatch):
@@ -272,7 +272,7 @@ def test_fallback_loader_short_circuits_for_lone_picked_link(monkeypatch):
 def test_split_http_url_returns_none_on_reject(rejected):
     """Type-contract regression: rejected URLs must be ``None``, never
     ``False``. Same-shaped return on every reject path lets callers
-    safely use ``parts is None`` or truthiness — both work, but only
+    safely use ``parts is None`` or truthiness—both work, but only
     consistently if reject = None."""
     result = _split_http_url(rejected)
     assert result is None, "expected None for {!r}, got {!r}".format(rejected, result)

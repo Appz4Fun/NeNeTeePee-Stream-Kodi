@@ -162,7 +162,7 @@ def _setting_int(addon, key, default=0):
 def _split_http_url(url):
     """Parse a URL and return parts only for simple HTTP(S) URLs.
 
-    Returns the parsed ``SplitResult`` on accept, ``None`` on reject —
+    Returns the parsed ``SplitResult`` on accept, ``None`` on reject—
     NOT ``False``. Returning a bool here was a contract drift; callers
     use both truthiness (``if parts:``) and identity checks
     (``parts is None``) and the latter silently miss-classified rejected
@@ -195,8 +195,8 @@ def _http_url_parts_are_valid(parts):
         return False
     if not parts.netloc or not parts.hostname:
         return False
-    # urlsplit accepts whitespace inside netloc (e.g. "http:// host /")
-    # — `parts.hostname` silently strips it, masking a malformed URL
+    # urlsplit accepts whitespace inside netloc (for example, "http:// host /")—
+    # `parts.hostname` silently strips it, masking a malformed URL
     # that would never resolve. Reject any whitespace in the raw
     # netloc explicitly.
     if any(ch.isspace() for ch in parts.netloc):
@@ -224,7 +224,7 @@ def _canonical_probe_path(path):
     match but many WebDAV servers decode/normalize it back outside the base
     path, which would forward the Authorization header to an escaped path. Decode
     the path and reject anything containing a ``..`` segment or a backslash so the
-    containment check sees what the server will actually resolve.
+    containment check sees what the server actually resolves.
     """
     try:
         decoded = unquote(path or "/", errors="strict")
@@ -300,10 +300,10 @@ def _setting_default_from_root(root, setting_id):
 def _configured_stream_bases():
     """Return configured WebDAV/nzbdav bases that fallback probes may hit.
 
-    Reads from settings.xml on disk first — calling addon.getSetting()
+    Reads from settings.xml on disk first—calling addon.getSetting()
     from a background prevalidation thread (script-mode invocation)
     SIGSEGVs in the Kodi C++ binding the same way webdav.py /
-    stream_proxy.py did before we switched their reads to disk."""
+    stream_proxy.py did before their reads switched to disk."""
     raw_bases = ()
     try:
         from resources.lib.router import _get_script_setting
@@ -316,9 +316,9 @@ def _configured_stream_bases():
         raw_bases = ()
     # If the script-mode settings.xml read returned nothing (no profile
     # yet, or addon hasn't saved settings), fall back to the addon API.
-    # In script-mode this is the very SIGSEGV path we're trying to avoid,
-    # but with raw_bases populated from disk above we never get here in
-    # the script-mode case — only on a fresh GUI invocation where the
+    # In script-mode this is the very SIGSEGV path to avoid,
+    # but with raw_bases populated from disk earlier, this never runs in
+    # the script-mode case—only on a fresh GUI invocation where the
     # binding is safe.
     if not any(raw_bases):
         try:
@@ -339,7 +339,7 @@ def _configured_stream_bases():
     for raw_base in raw_bases:
         # .strip() (not just .rstrip("/")): a stray trailing space in the
         # configured nzbdav_url/webdav_url (a common copy-paste artifact) lands
-        # inside the netloc, and _split_http_url rejects any whitespace there —
+        # inside the netloc, and _split_http_url rejects any whitespace there—
         # silently emptying the probe-base allow-list so fallback content-length
         # probes all return 0 and byte-identical fallbacks fail validation.
         parts = _fs._split_http_url(str(raw_base or "").strip().rstrip("/"))

@@ -13,22 +13,22 @@ def _normalize_title(value):
     """Normalize release titles for conservative duplicate grouping."""
     if not isinstance(value, str):
         return ""
-    # "&amp;" is the XML/HTML escape for "&". XML parsing normally decodes it,
+    # "&amp;" is the XML/HTML escape for ``&``. XML parsing normally decodes it,
     # but double-escaped feeds leave a literal entity in the title; rewrite it to
     # "&" so it collapses to nothing (like a bare "&") instead of leaving a stray
     # "amp" token. Decode REPEATEDLY so even a double-escaped "&amp;amp;" fully
     # resolves -- each pass replaces "&amp;" (5 chars) with "&" (1 char), so the
     # string strictly shrinks and the loop terminates. The rewrite is exact, so a
-    # genuine "amp" word (e.g. "Marshall Amp") is left untouched.
+    # genuine "amp" word (for example, "Marshall Amp") is left untouched.
     lowered = value.lower()
     while "&amp;" in lowered:
         lowered = lowered.replace("&amp;", "&")
     normalized = _fs._NON_WORD_RE.sub(" ", lowered)
     tokens = normalized.split()
-    # Treat "&", the conjunction words ("and" plus the common foreign forms
+    # Treat ``&``, the conjunction words ("and" plus the common foreign forms
     # "et"/"und"), and an omitted conjunction as one identity: drop a conjunction
     # token so "Friends & Neighbors" (the "&" is already stripped by the non-word
-    # sub), "Friends and Neighbors", "Friends Neighbors", and "Jules et Jim"/
+    # sub), "Friends and Neighbors," "Friends Neighbors," and "Jules et Jim"/
     # "Jules Jim" all normalize equal and peer as fallbacks. Fold ONLY an
     # INTERIOR conjunction (operand on both sides) -- that is the only true
     # conjunction position. A leading/trailing token is content-bearing ("And
@@ -212,7 +212,7 @@ def _subset_titles_related(left, right, left_tokens, right_tokens, corroborated)
         # title (years/resolutions are already stripped into year/meta), so a
         # numeric tail that survives normalization is content-distinguishing.
         # The same holds for MULTI-CHARACTER Roman-numeral / ordinal-word
-        # sequel tails ("Rocky" -> "Rocky IV", "Iron Man" -> "Iron Man
+        # sequel tails ("Rocky" -> "Rocky IV," "Iron Man" -> "Iron Man
         # Three"). Single-letter romans (i/v/x) and "one"/"eleven"+ are
         # deliberately NOT in _SEQUEL_TAIL_TOKENS, so a stray "Movie x"/junk
         # tail stays a legitimate junk-suffix repost. Reject these tails
@@ -229,10 +229,10 @@ def _subset_titles_related(left, right, left_tokens, right_tokens, corroborated)
 def _titles_core_related(primary_title, candidate_title, corroborated=False):
     """Return whether two normalized core titles plausibly name the same work.
 
-    Reposts often differ only by a junk suffix (e.g. "Movie" vs "Movie
+    Reposts often differ only by a junk suffix (for example, "Movie" vs "Movie
     mirror"), so a single trailing extra token on one side is treated as noise
     and accepted. A multi-token extra tail looks like a distinguishing subtitle
-    (e.g. "Avatar" vs "Avatar The Way Of Water") and is rejected unless
+    (for example, "Avatar" vs "Avatar The Way Of Water") and is rejected unless
     ``corroborated`` positive identity (matching year/episode) backs it up. An
     empty token set on either side fails closed unless corroborated.
     """
@@ -257,14 +257,14 @@ def _disjoint_titles_related(left, right, corroborated):
 
     Neither token set is a subset of the other, so each carries its own
     distinguishing tail. A MULTI-token distinguishing tail on either side looks
-    like a different work in a franchise ("Mission Impossible Fallout" vs
-    "...Dead Reckoning", "Star Wars The Force Awakens" vs "...The Last Jedi")
+    like a different work in a franchise (Mission Impossible Fallout versus
+    Dead Reckoning, or Star Wars The Force Awakens versus The Last Jedi)
     rather than a repost, so require corroborating positive identity (a matching
     year, or a matching season+episode set) before accepting it -- a loose
     >=2-token prefix overlap is too weak on its own. A single-token difference on
     each side stays repost noise ("Movie mirror" vs "Movie repost") and keeps the
     existing token-overlap behavior, mirroring the <=1-trailing-token junk-suffix
-    rule of the subset case above.
+    rule of the earlier subset case.
     """
     left_extra = left - right
     right_extra = right - left
@@ -279,7 +279,7 @@ def _content_discriminators_match(primary, candidate):
     Edition (Theatrical vs Extended/Director's) and PROPER/REPACK status are
     content discriminators: a Theatrical encode is not a valid fallback for an
     Extended encode even though title/year match. Resolution, codec, group,
-    HDR, and audio are deliberately *not* checked here — those only affect the
+    HDR, and audio are deliberately *not* checked here—those only affect the
     fallback tier, not whether the candidate is the same content.
     """
     primary_meta = _fs._result_meta(primary)
@@ -314,8 +314,8 @@ def _identity_corroborated(primary_identity, candidate_identity):
 def _collapse_phantom_season(primary_identity, candidate_identity):
     """Return season tuples with a phantom (mis-parsed) lone season collapsed.
 
-    A movie whose release-group suffix mis-parses as a season (e.g.
-    "...HEVC-REMUX-ALT01" -> seasons=[1], episodes=[]) would otherwise look
+    A movie whose release-group suffix mis-parses as a season (for example,
+    a title ending HEVC-REMUX-ALT01 -> seasons=[1], episodes=[]) would otherwise look
     episodic, and the season-presence parity check would then reject the same
     movie posted by a normal group (seasons=[]). When BOTH sides have no
     episode, the season PRESENCE differs, and both parsed the SAME year, treat
@@ -369,7 +369,7 @@ def _episode_content_matches(primary_identity, candidate_identity):
     if not _fs._episode_set_pair_matches(primary_episodes, candidate_episodes):
         return False
     # A differing parsed year marks a distinct production sharing the same
-    # SxxExx (a reboot/remake, e.g. "Doctor Who 2005 S01E01" vs the 2023
+    # SxxExx (a reboot/remake, for example, "Doctor Who 2005 S01E01" vs the 2023
     # reboot). Mirror the movie-path year reject. Only rejects when BOTH
     # sides parsed a year and they differ, so same-episode reposts where one
     # side omits the year are unaffected.
@@ -449,11 +449,11 @@ def _same_content_seasonal_tail(primary_identity, candidate_identity):
         # PTT keeps the part word inside the title ("Dune Part Two"), so the
         # core titles never compare equal to the bare original. One side naming
         # an explicit part while the other names none is a sequel-vs-original
-        # mismatch (e.g. "Dune Part Two" vs "Dune"); treat it as different
-        # content. A differing explicit part is already rejected above. This is
+        # mismatch (for example, "Dune Part Two" vs "Dune"); treat it as different
+        # content. A differing explicit part is already rejected earlier. This is
         # the movie discriminator only: episodes routinely keep an episode-title
         # token ("Chapter One") that PTT leaves in the title, so the same SxxExx
-        # posted with and without that token must still peer (handled above).
+        # posted with and without that token must still peer (handled earlier).
         return False
 
     # Movies: a differing year is different content.
@@ -621,10 +621,12 @@ _TITLE_STOP_TOKENS = frozenset(
 )
 
 
-_TITLE_TOKEN_CACHE_TITLE_KEY = "_fallback_title_tokens_title"  # nosec B105 — cache key
+# These cache keys are re-exported by fallback_streams and read through _fs.
+# They identify cached title data, not credentials.
+_TITLE_TOKEN_CACHE_TITLE_KEY = "_fallback_title_tokens_title"  # nosec B105
 
 
-_TITLE_TOKEN_CACHE_VALUE_KEY = "_fallback_title_tokens"  # nosec B105 — cache key
+_TITLE_TOKEN_CACHE_VALUE_KEY = "_fallback_title_tokens"  # nosec B105
 
 
 def _is_content_title_token(token):

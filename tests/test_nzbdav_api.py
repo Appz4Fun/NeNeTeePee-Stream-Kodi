@@ -153,7 +153,7 @@ def test_get_submit_timeout_falls_back_on_garbage(mock_xbmcaddon):
 
 @patch("resources.lib.nzbdav_api.xbmcaddon")
 def test_get_submit_timeout_clamps_typo_high(mock_xbmcaddon):
-    """A typo'd huge value (e.g. 300000 — meant 300, accidentally
+    """A typo'd huge value (for example, 300000—meant 300, accidentally
     typed too many zeros, observed in the wild) is clamped to the
     upper bound rather than producing a multi-hour timeout that
     would block the resolver effectively forever."""
@@ -165,7 +165,7 @@ def test_get_submit_timeout_clamps_typo_high(mock_xbmcaddon):
 
 @patch("resources.lib.nzbdav_api.xbmcaddon")
 def test_get_submit_timeout_clamps_too_low(mock_xbmcaddon):
-    """A nonsensically small value (e.g. 0 or 1) is clamped up to
+    """A nonsensically small value (for example, 0 or 1) is clamped up to
     the minimum so nzbdav has a fighting chance of responding."""
     from resources.lib.nzbdav_api import _SUBMIT_TIMEOUT_MIN
 
@@ -176,7 +176,7 @@ def test_get_submit_timeout_clamps_too_low(mock_xbmcaddon):
 @patch("resources.lib.nzbdav_api._get_settings")
 @patch("resources.lib.nzbdav_api._http_get")
 def test_submit_nzb_failure_returns_rejected_error(mock_http, mock_settings):
-    """nzbdav 200 + status=false (e.g. empty / truncated NZB) is now
+    """nzbdav 200 + status=false (for example, empty / truncated NZB) is now
     surfaced as a structured ``rejected`` error so the resolver can show
     the user the real reason instead of silently retrying.
     """
@@ -192,7 +192,7 @@ def test_submit_nzb_failure_returns_rejected_error(mock_http, mock_settings):
 @patch("resources.lib.nzbdav_api._http_get")
 def test_submit_nzb_rejected_message_redacts_apikey(mock_http, mock_settings):
     """A rejection that echoes the failing indexer URL (with apikey) must be
-    redacted in the returned ``message`` too — not just the log line — since
+    redacted in the returned ``message`` too—not just the log line—since
     the resolver can surface it in a dialog or recovery log.
     """
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")
@@ -211,7 +211,7 @@ def test_submit_nzb_rejected_message_redacts_apikey(mock_http, mock_settings):
 
 def test_response_slots_filters_non_dict_entries():
     """Malformed nzbdav JSON (None / str / scalar slot entries) must be
-    dropped at the boundary so downstream ``slot.get(...)`` walkers can't crash.
+    dropped at the boundary so downstream ``slot.get`` walkers can't crash.
     """
     response = {"queue": {"slots": [{"nzo_id": "a"}, None, "junk", 5, {"nzo_id": "b"}]}}
     assert _response_slots(response, "queue") == [{"nzo_id": "a"}, {"nzo_id": "b"}]
@@ -271,7 +271,7 @@ def test_submit_nzb_returns_timeout_sentinel_on_wrapped_timeout(
 def test_submit_nzb_non_timeout_urlerror_is_not_timeout_sentinel(
     mock_http, mock_settings
 ):
-    """A URLError that isn't a timeout (e.g. DNS failure) must stay
+    """A URLError that isn't a timeout (for example, DNS failure) must stay
     in the None/None branch so the caller's existing connection-error
     retry logic keeps working."""
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")
@@ -851,7 +851,7 @@ def test_sanitize_empty_string():
 
 
 def test_sanitize_none():
-    """Defensive: don't crash when passed None (e.g., from a missing body)."""
+    """Defensive: don't crash when passed None (for example, from a missing body)."""
     assert _sanitize_server_message(None) == ""
 
 
@@ -897,9 +897,9 @@ def test_cancel_job_succeeds_on_queue(mock_http, mock_settings):
 @patch("resources.lib.nzbdav_api._get_settings")
 @patch("resources.lib.nzbdav_api._http_get")
 def test_cancel_job_returns_false_when_not_in_queue(mock_http, mock_settings):
-    """When nzbdav reports the job isn't in the queue (e.g. it raced into
-    history before our cleanup ran), cancel_job returns False but does
-    NOT treat it as an error — this is the normal race case."""
+    """When nzbdav reports the job isn't in the queue (for example, it raced into
+    history before the add-on cleanup ran), cancel_job returns False but does
+    NOT treat it as an error—this is the normal race case."""
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")
     mock_http.return_value = '{"status":false,"error":"Unrecognized Guid format."}'
 
@@ -1062,8 +1062,8 @@ def test_submit_nzb_handles_undecodable_body(mock_http, mock_settings):
 @patch("resources.lib.nzbdav_api._get_settings")
 @patch("resources.lib.nzbdav_api._http_get")
 def test_submit_nzb_sanitizes_html_in_body(mock_http, mock_settings):
-    """Some servers return styled HTML error pages — strip the tags
-    before we put the message in a Kodi dialog."""
+    """Some servers return styled HTML error pages—strip the tags
+    before the add-on puts the message in a Kodi dialog."""
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")
     mock_http.side_effect = _make_http_error(
         500, b"<html><body><h1>Error</h1><p>duplicate nzo_id</p></body></html>"
@@ -1135,7 +1135,7 @@ def test_submit_nzb_returns_none_none_on_url_error(mock_http, mock_settings):
 @patch("resources.lib.nzbdav_api._http_get")
 def test_submit_nzb_http_error_caught_before_url_error(mock_http, mock_settings):
     """HTTPError is a subclass of URLError. The except clauses must be
-    ordered correctly — HTTPError before URLError — or every HTTP error
+    ordered correctly—HTTPError before URLError—or every HTTP error
     would be caught by the broad URLError clause and returned as
     (None, None) instead of the (None, error_dict) tuple. This test
     guards against that subtle bug."""
@@ -1154,7 +1154,7 @@ def test_submit_nzb_http_error_caught_before_url_error(mock_http, mock_settings)
 def test_get_job_status_handles_non_dict_json_array(mock_http, mock_settings):
     """nzbdav misbehaviour: a malformed proxy / 5xx error page may return a
     JSON array (or null / scalar) instead of an object. The chained
-    ``response.get(...)`` helpers must not crash with AttributeError —
+    ``response.get`` helpers must not crash with AttributeError—
     treat non-dict JSON as the absence of the expected fields.
     """
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")

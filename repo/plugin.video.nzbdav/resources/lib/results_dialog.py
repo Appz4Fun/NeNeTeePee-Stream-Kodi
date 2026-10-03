@@ -91,7 +91,7 @@ def _build_result_item(result, row_index):
     src_display = _SRC_SHORT.get(quality, quality)
     li.setProperty("quality", _c(src_display, _SRC_COLORS.get(quality, "FFAAAAAA")))
 
-    # Container (MKV, MP4, etc.) — default to MKV since most scene releases
+    # Container (MKV, MP4, etc.)—default to MKV since most scene releases
     # are MKV and only MP4 releases tag the title.
     default_container = "" if is_pack else "MKV"
     container = (meta.get("container", "") or default_container).upper()
@@ -227,7 +227,7 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         self.close()
 
     def _show_all(self):
-        """A held OK always disables filters, including when already disabled."""
+        """A held OK always turns off filters, including when they are already off."""
         if not self._closing and self.all_results and not self.show_all:
             self._toggle_show_all()
 

@@ -2,7 +2,7 @@
 
 All fixtures here are session-scoped because the 20-minute test runs once.
 The compose_up fixture's finalizer always runs `docker compose down -v`,
-so even on test failure we end with a clean machine.
+so even on test failure the machine ends up clean.
 """
 
 # pylint: disable=redefined-outer-name
@@ -47,7 +47,7 @@ def _compose(*args: str, **kw) -> subprocess.CompletedProcess:
 
 def _existing_containers() -> list[str]:
     # `--all` includes stopped containers from a prior crashed run, not just
-    # currently-running ones. Without this flag a crashed run that left
+    # ones that are currently running. Without this flag a crashed run that left
     # stopped containers behind would silently pass the preflight guard and
     # then fail later on volume/port conflicts.
     out = subprocess.run(
@@ -226,7 +226,7 @@ def addons_user_confirmed(tmdbhelper_player_added):
 
     Without this step the orchestrator's Addons.ExecuteAddon for TMDBHelper
     is intercepted by the modal dialog and Player.GetActivePlayers never
-    reports a player within the 60s timeout in the test body.
+    reports a player within the 60 s timeout in the test body.
 
     Strategy: trigger TMDBHelper, then send Input.Select repeatedly with
     short sleeps so any queued "enable this add-on?" dialogs (TMDBHelper
@@ -262,7 +262,7 @@ def addons_user_confirmed(tmdbhelper_player_added):
             return json.loads(r.read())
 
     # Provoke the dialogs by invoking TMDBHelper (with a benign param it
-    # treats as no-op). Any locally-installed addon would do; TMDBHelper
+    # treats as no-op). Any locally installed addon would do; TMDBHelper
     # is the one most likely to also need confirmation downstream.
     _rpc(
         "Addons.ExecuteAddon",

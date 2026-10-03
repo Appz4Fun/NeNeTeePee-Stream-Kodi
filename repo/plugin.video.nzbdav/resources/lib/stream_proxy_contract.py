@@ -33,7 +33,7 @@ from resources.lib.stream_proxy import (  # noqa: E402
 def _passthrough_watchdog_applies(ctx):
     """True if the throughput watchdog should monitor this stream.
 
-    Only video gets the watchdog — audio bit rates legitimately fall under
+    Only video gets the watchdog—audio bit rates legitimately fall under
     the 100 KB/s floor (a 64 kbps MP3 is 8 KB/s). Surfaced as a helper so
     the caller is short and the policy is testable in isolation.
     """
@@ -44,7 +44,7 @@ def _passthrough_watchdog_applies(ctx):
 def _set_upstream_read_timeout(resp, timeout):
     """Best-effort: arm a recv() deadline on an urlopen response's socket.
 
-    urllib inherits the urlopen connect timeout for reads, but we set a
+    urllib inherits the urlopen connect timeout for reads, but this function sets a
     tighter, explicit deadline on the body socket so a stalled upstream
     surfaces as a recoverable read error promptly (which drives live
     fallback) rather than blocking until the equal proxy->Kodi write
@@ -67,7 +67,7 @@ def _set_upstream_read_timeout(resp, timeout):
 
 
 def _fault_primary_fail_threshold():
-    """Parse the fault-injection byte threshold env, or None when disabled."""
+    """Parse the fault-injection byte threshold env, or None when off."""
     raw = os.environ.get(_FAULT_PRIMARY_FAIL_AFTER_BYTES_ENV)
     if not raw:
         return None
@@ -89,7 +89,7 @@ def _fault_forced_primary_failure(ctx, start):
     # Spare the tail so the demuxer initializes and playback survives long
     # enough for fallbacks to attach (see _FAULT_TAIL_GUARD_BYTES). Only when
     # the file is large enough that the tail guard and the threshold band
-    # don't overlap — small test files keep the simple start>=threshold rule.
+    # don't overlap—small test files keep the simple start>=threshold rule.
     content_length = int(ctx.get("content_length", 0) or 0)
     in_tail_guard = (
         content_length > _FAULT_TAIL_GUARD_BYTES + threshold
@@ -151,7 +151,7 @@ def _classify_contract_range(status, content_range, expected_range, is_full_obje
         # real upstream that returned 206 with valid Content-Length
         # but no Content-Range. Left as a soft (warn-logged) issue;
         # the chunk loop's `requested = end - start + 1` clamp
-        # bounds what we actually stream, so the upside of going
+        # bounds what the proxy actually streams, so the upside of going
         # hard is purely diagnostic. See TODO.md §H.3.
         return (
             "Content-Range missing expected={!r}".format(expected_range),
@@ -243,10 +243,10 @@ def _density_ratio(window):
 def _would_trip_density_breaker(window, skip):
     if skip <= 0:
         return False
-    # An empty recovery window means "no progress samples yet" — most
+    # An empty recovery window means "no progress samples yet"—most
     # commonly, the very first range read failed before any bytes were
     # streamed. Returning True here would 100%-trip the breaker on the
-    # very first recovery attempt and abort the stream before any
+    # very first recovery attempt and stop the stream before any
     # genuine recovery had a chance to land. Require at least one
     # progress sample before letting the breaker fire. Closes
     # TODO.md §H.3 ("density breaker trips on empty recovery window").

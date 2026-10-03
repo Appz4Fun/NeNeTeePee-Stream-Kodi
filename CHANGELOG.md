@@ -27,15 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 | **[1.0.6](#106--2026-05-04)** | 2026-05-04 | Pass-through-first proxy, live duplicate-release fallback streams, authenticated settings checks, fallback worker cleanup, threshold-zero remux semantics |
 | **[1.0.5](#105--2026-05-04)** | 2026-05-04 | Direct Newznab indexers, manual Indexers settings, concurrent provider fan-out, Kodi repo publishing fixes, WebDAV range compatibility, cache eviction race fix |
 | **[1.0.4](#104--2026-04-25)** | 2026-04-25 | Pass-through stall watchdog (closes the slow-trickle wedge where seek doesn't unstick), proxy seek perf, sha256 cache keys, credential redaction sweep, Prowlarr UI label fix, §H.2 audit closure batch |
-| **[1.0.3](#103--2026-04-23)** | 2026-04-23 | Hotfix: ffmpeg safety check no longer rejects -headers values with legitimate CR/LF — unblocks every auth'd force-remux stream that regressed in v1.0.0-pre-alpha/v1.0.1/v1.0.2 |
-| **[1.0.2](#102--2026-04-23)** | 2026-04-23 | Hotfix: find_video_file no longer rejects cross-origin PROPFIND hrefs — unblocks reverse-proxied nzbdav setups that regressed in v1.0.0-pre-alpha / v1.0.1 |
+| **[1.0.3](#103--2026-04-23)** | 2026-04-23 | Hotfix: ffmpeg safety check no longer rejects -headers values with legitimate CR/LF—unblocks every auth'd force-remux stream that regressed in v1.0.0-pre-alpha/v1.0.1/v1.0.2 |
+| **[1.0.2](#102--2026-04-23)** | 2026-04-23 | Hotfix: find_video_file no longer rejects cross-origin PROPFIND hrefs—unblocks reverse-proxied nzbdav setups that regressed in v1.0.0-pre-alpha / v1.0.1 |
 | **[1.0.1](#101--2026-04-23)** | 2026-04-23 | Source-data Dolby Vision probe: pure-Python RPU parser replaces the ffmpeg-stderr probe, adds P7 MEL/FEL discrimination with a hybrid routing matrix that keeps the 2026-04-15 P8 matroska fix in place |
 | **[1.0.0-pre-alpha](#100-pre-alpha--2026-04-15)** | 2026-04-15 | Force-remux for 20 GB+ files (matroska default), self-healing fmp4 HLS opt-in (full random seek, DV-aware), threaded submit + queue adoption, real-ffmpeg integration tests, PROXY.md |
 | **[0.6.21](#0621--2026-04-13)** | 2026-04-13 | Stale-job cleanup + real nzbdav error messages on submit failure |
 | **[0.6.20](#0620--2026-04-13)** | 2026-04-13 | Resolve-loop: no UI freeze, no silent retry on bad WebDAV creds |
 | **[0.6.19](#0619--2026-04-12)** | 2026-04-12 | README refresh + pylint CI fix |
 | **[0.6.18](#0618--2026-04-12)** | 2026-04-12 | Big MKVs play, seek, and self-heal. **Recommended upgrade.** |
-| [0.6.17](#0617--2026-04-12) | 2026-04-12 | Kill zombie ffmpeg after a stall |
+| [0.6.17](#0617--2026-04-12) | 2026-04-12 | Clean up zombie ffmpeg after a stall |
 | [0.6.16](#0616--2026-04-12) | 2026-04-12 | First attempt at fixing huge MKVs (superseded by 0.6.18) |
 | **[0.6.15](#0615--2026-04-12)** | 2026-04-12 | Stream survives missing Usenet articles |
 | **[0.6.14](#0614--2026-04-12)** | 2026-04-12 | Route every file through the local proxy |
@@ -90,10 +90,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   preserves byte offsets and response length, and repeated or overlapping
   range requests receive the same replacement bytes. Verified fallback cutover
   runs first, and concealed spans count against the zero-fill budgets.
-  If the structure cannot be confirmed, the proxy uses plain zeros and logs
+  If the proxy can't confirm the structure, it uses plain zeros and logs
   why. This applies to Matroska and WebM pass-through streams; it does not
-  reconstruct missing frames or guarantee recovery for every format. No
-  separate setting is required. The approach is adapted from StreamNZB's
+  reconstruct missing frames or guarantee recovery for every format. It
+  needs no separate setting. The approach adapts StreamNZB's
   EBML hole filling (GPL-3.0).
 - **Complete media filters.** Many more options in each filter group:
   resolutions from 240p to 4320p, HDR / HDR10+ / Dolby Vision / HLG / SDR,
@@ -148,8 +148,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   8 MB dead span went from a closed stream after about 45 s to under 1 s
   in live testing.
 - **A concealed span is charged to the zero-fill budget even if Kodi
-  disconnects mid-write.** The plan is stored for replay when committed, so
-  it is now charged and logged at that point, not after the write.
+  disconnects mid-write.** The proxy stores the plan for replay when it commits
+  it, so it now charges and logs the span at that point, not after the write.
 - **Read-ahead buffer now actually prefetches on Kodi.** The prefetch loop
   polled for shutdown with `waitForAbort(0)`, which real Kodi treats as wait
   forever, so the read-ahead daemon parked on its first pass and never
@@ -188,8 +188,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Exact season-pack episode reuse.** Completed multi-episode (season-pack)
   downloads now build an exact per-episode inventory of the finished job:
   playing an episode selects the file that actually matches the requested
-  season/episode — on both the NZBGet SMB path and the nzbdav WebDAV path —
-  instead of falling back to the largest video in the folder. Auxiliary files
+  season/episode—on both the NZBGet SMB path and the nzbdav WebDAV path—instead
+  of falling back to the largest video in the folder. Auxiliary files
   (samples, trailers, featurettes, descriptive extras) are classified and
   excluded so they can never be picked over the real episode. Validated packs
   are recorded by exact backend job id after stream validation, and later
@@ -202,11 +202,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **SMB playback is now gated on a readability probe.** A file that lists
-  over SMB can still fail to open — it may still be settling after NZBGet's
+  over SMB can still fail to open—it may still be settling after NZBGet's
   move, or Kodi's cached SMB session may return "Permission denied" while
   fresh sessions read it fine. The resolver now probes the selected file
-  through `xbmcvfs` (the exact cached libsmbclient session VideoPlayer will
-  use) and keeps retrying within the resolve budget until it actually reads.
+  through `xbmcvfs` (the exact cached libsmbclient session VideoPlayer
+  uses) and keeps retrying within the resolve budget until it actually reads.
   A never-readable file propagates a distinct unreadable state that fails
   closed: it is never recorded into the season-pack catalog, the
   picker-reuse path won't pointlessly re-submit the already-completed NZB,
@@ -242,11 +242,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Kodi's versioned schema so every option and category shows real help text,
 > unified XXE protection across every XML parser, a large complexity-reduction
 > refactor that split every god-file into cohesive modules, and a full MkDocs
-> documentation site. Marked **beta** — this is a lot of surface area at once;
+> documentation site. Marked **beta**—this is a lot of surface area at once;
 > please report anything that looks off before it promotes to stable.
 >
 > The addon version was bumped internally to 1.2.4 and 1.2.5 while this work
-> was in flight, but neither was tagged or released — this changelog folds
+> was in flight, but neither was tagged or released—this changelog folds
 > that unreleased 1.2.4 content in below rather than losing it.
 
 ### Added
@@ -258,8 +258,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nzbdav streaming/fallback/WebDAV path is untouched and used unchanged when
   the toggle is off. Includes a JSON-RPC client (submit/poll/cancel/test), a
   resume-or-restart prompt when replaying a previously downloaded NZB, and a
-  pre-cached green `DL` picker tag (reusing the same identity gates — exact
-  name, ±15% size, recorded Usenet post-date — as the nzbdav cached-stream
+  pre-cached green `DL` picker tag (reusing the same identity gates—exact
+  name, ±15% size, recorded Usenet post-date—as the nzbdav cached-stream
   tag) so already-completed releases are visible before you pick.
 - **NZBGet mode: Smart Duplicates for broken downloads.** Picking a release
   now also submits every other same-name result on the picker to NZBGet as a
@@ -267,7 +267,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   IMDb/TVDB id or a title fallback, your pick scored highest, duplicate mode
   `SCORE`). If the pick turns out unrepairable, NZBGet automatically fails
   over to a backup and the resolver follows that failover live instead of
-  reporting a failed playback — including recovering from NZBGet's own
+  reporting a failed playback—including recovering from NZBGet's own
   "already downloaded this" content-fingerprint veto by re-submitting with
   `FORCE` once nothing else in the release can play. Canceling removes the
   whole duplicate set. Backups are submitted in the background (never delay
@@ -289,7 +289,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   show's TVDB id and search indexers by id instead of title text, for more
   accurate episode results.
 - **Read-ahead prefetch.** nzbdav only fetches Usenet articles for byte ranges
-  Kodi actively reads, so pausing never used to build a real buffer — a
+  Kodi actively reads, so pausing never used to build a real buffer—a
   momentary bitrate spike after resume could starve the decoder. A background
   per-session read-ahead daemon now pulls ahead of the play head independent
   of Kodi, so pausing actually builds a lead (configurable buffer size,
@@ -297,37 +297,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Graceful-starvation guard and patient forward-stall wait.** A stalled
   backend now explains itself with a toast instead of black-screening
   silently, and an established stream that hits a recoverable backend
-  condition holds the connection open (configurable budget, default 120s,
+  condition holds the connection open (configurable budget, default 120 s,
   0 closes immediately) instead of dropping.
-- **Optional nzbdav queue-clear prompt** when starting a new download —
-  probes the queue without ever cancelling the title's own in-flight job.
+- **Optional nzbdav queue-clear prompt** when starting a new download:
+  it probes the queue without ever cancelling the title's own in-flight job.
 - **Per-option and per-category help text in the Configure dialog.**
   `settings.xml` migrated from Kodi's legacy flat add-on-settings schema to
   the versioned schema, adding 124 individual per-setting help strings and 8
-  per-category help strings — Kodi's legacy schema silently ignores the
+  per-category help strings—Kodi's legacy schema silently ignores the
   `help=` attribute entirely, so this required rewriting all ~130 settings
   across all 8 categories, not just adding an attribute.
 - **Full MkDocs documentation site**, published to GitHub Pages: 22 pages
   covering getting started, features, a complete settings reference (every
   setting, default, and behavior), a technical "how it works" section with
   15 diagrams, and operations/troubleshooting.
-- **Extreme functional test harness** — a 3-container Docker Compose rig
+- **Extreme functional test harness**—a 3-container Docker Compose rig
   (fault-injecting proxy, seeded NNTP, real Kodi + TMDBHelper) that drives
   actual playback through the add-on end-to-end and correlates injected
   faults against observed player behavior, for validating fallback/recovery
   changes beyond what unit tests can cover.
-- `/direct_play` diagnostic plugin route for explicit-URL playback testing —
-  HEAD-validates each upstream, peels embedded `user:pass@` auth into
+- `/direct_play` diagnostic plugin route for explicit-URL playback testing:
+  it HEAD-validates each upstream, peels embedded `user:pass@` auth into
   headers, and hands Kodi the proxy URL directly. Unblocks repeatable
   byte-precise cutover tests without a live nzbdav backing store.
 
 ### Changed
 
-- **Tiered same-release fallback matching and bounded recovery** — a 27-commit
+- **Tiered same-release fallback matching and bounded recovery**—a 27-commit
   hardening pass across dropout, black-screen, and cutover handling. Includes
   same-release/different-upload fallback expansion through Hydra's internal
   API (finds real same-content peers instead of giving up on a deduped single
-  row), a graceful-starvation guard, and the read-ahead prefetch above.
+  row), a graceful-starvation guard, and the read-ahead prefetch described earlier.
   Fingerprint sample count raised 20 → 100 (still byte-precise, single-digit
   ms detect-to-swap latency).
 - **Job-start stub guard redesigned to be pack-agnostic.** Replaces the old
@@ -338,7 +338,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Fallback candidates deduped by Usenet post-date** (1-hour window,
   anchor-based) so same-hour reposts collapse to the single highest-ranked
   tier instead of competing as separate candidates.
-- **Large god-files decomposed into cohesive sibling modules** —
+- **Large god-files decomposed into cohesive sibling modules**:
   `resolver`, `router`, `fallback_streams`, `filter`, `nzbdav_api`, `service`,
   `webdav`, and `stream_proxy` split apart with the same public surface and
   test `@patch` targets still resolving, cutting shipped-library Lizard
@@ -349,10 +349,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   builders so it can no longer break the query string.
 - **Prowlarr search now parses the native `/api/v1/search` JSON response**
   directly instead of assuming a Newznab-XML shape.
-- **Regex hot paths pre-compiled** throughout `stream_proxy`, fallback
+- **Regular expression hot paths pre-compiled** throughout `stream_proxy`, fallback
   parsing, `router_play`, and `http_util`, and several caches added
   (parsed metadata, WebDAV content-length hints, fallback manifests) with
-  provider search now fanning out concurrently — cut `just test`'s wall time
+  provider search now fanning out concurrently—cut `just test`'s wall time
   from 7:42 to well under a minute.
 - **Results dialog: explicit keyboard/remote navigation (focus traps),
   zebra-striped rows, and improved text contrast** so D-pad/keyboard focus
@@ -373,7 +373,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously left its dependent settings stuck hidden until you left the
   category tab and came back, or hit Apply and reopened the dialog. Root
   cause: Kodi's settings dialog only builds GUI controls for a group that has
-  at least one visible setting when the category is first opened — if every
+  at least one visible setting when the category is first opened—if every
   setting in a group is hidden, the whole group gets zero controls built, and
   there's nothing left for the live update to reveal later. Switching those
   dependents from a `visible` to an `enable` dependency fixes it: the row
@@ -398,7 +398,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reads across `webdav.py`, `resolver.py`, `stream_proxy.py`, and
   `fallback_streams.py` now parse `settings.xml` from disk instead of
   touching the C++ binding from a background thread.
-- **Resolver could hang indefinitely after nzbdav-rs failed an NZB** — it
+- **Resolver could hang indefinitely after nzbdav-rs failed an NZB**—it
   remaps the `nzo_id` when moving a job from queue to history, so the old
   history lookup never matched. The poll loop now also looks a job up by
   name, so the resolve closes promptly whether nzbdav-rs finishes the job or
@@ -424,8 +424,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unified XXE (billion-laughs / external-entity) protection.** Every XML
   parser that touches network-supplied data (Hydra, Prowlarr, WebDAV
   PROPFIND, NZB manifests) now routes through one shared
-  `xml_safety.safe_fromstring()` helper, replacing several inconsistent —
-  and in one case silently ineffective — inline guards that had accumulated
+  `xml_safety.safe_fromstring()` helper, replacing several inconsistent
+  (and in one case silently ineffective) inline guards that had accumulated
   across the codebase.
 - **Secured `subprocess.Popen` execution** around ffmpeg invocations.
 - **Cleared 44 outstanding code-scanning alerts**, and scoped CodeQL/Bandit/
@@ -545,7 +545,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   probe threads are skipped and the submit falls back to a synchronous path
   instead of aborting the whole submit.
 - **NZBHydra2 search result cap raised from 100 to 10000.** Configured
-  `max_results` values above 100 are now passed through unchanged so wide
+  `max_results` values greater than 100 are now passed through unchanged so wide
   pre-filter searches honor the user setting.
 
 **Tests**
@@ -571,7 +571,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The post-picker resolver path does less blocking work before playback.**
   Bookmark cleanup overlaps submit/poll work, noncritical cleanup waits are
   bounded, progress dialog updates are best-effort, and resolver poll sleeps use
-  nonblocking abort checks.
+  nonblocking shutdown checks.
 - **Already-ready plain MKV streams without fallback sources skip proxy
   prepare** and are handed directly to Kodi as WebDAV URLs. This was live
   validated on CoreELEC with Apex and Shelter after the previous freeze point.
@@ -658,7 +658,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Fixed**
 - **Malformed fallback `group_bytes` now fails closed.** A malformed
-  pre-attached manifest can no longer abort duplicate grouping for every result;
+  pre-attached manifest can no longer stop duplicate grouping for every result;
   that candidate is skipped instead.
 
 **Tests**
@@ -731,7 +731,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the shared redaction/error helper, and WebDAV distinguishes reachable,
   auth-failed, server-error, and generic failure cases.
 - **Fallback submit worker shutdown** now signals, joins, and optionally
-  cancels submitted standby jobs on playback abort or resolver failure. Worker
+  cancels submitted standby jobs on playback stop or resolver failure. Worker
   exceptions also cancel recorded pending/running fallback jobs before exit.
 - **Fallback job snapshots** wait briefly for a completing worker unless
   shutdown has been requested, then copy the final submitted-job list under
@@ -795,14 +795,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > HEVC MKV (6.88 GB) played fine for 14 minutes via the pass-through proxy,
 > then the upstream WebDAV started delivering tiny chunks every ~25 s. Each
 > chunk arrived under the 30 s per-read socket timeout, so neither
-> `_UPSTREAM_OPEN_TIMEOUT` nor Kodi's own watchdog ever fired — bytes
+> `_UPSTREAM_OPEN_TIMEOUT` nor Kodi's own watchdog ever fired—bytes
 > dripped in below playable rate, `CVideoPlayerAudio::Process - stream
-> stalled` logged 33 s later, and a user-issued seek-back-1min was logged
+> stalled` logged 33 s later, and a user-issued 1-minute seek back was logged
 > in `service.py` but **no follow-up Pass-through entry** ever appeared in
 > kodi.log: Kodi's CFileCache had marked the source as still "open" and
 > never issued a fresh range request. The fix samples bytes-per-second
 > over a 20 s rolling window and closes the response when rate drops below
-> 100 KB/s — Kodi's CCurlFile sees EOF and reconnects. Gated to `video/*`
+> 100 KB/s—Kodi's CCurlFile sees EOF and reconnects. Gated to `video/*`
 > content types so a 64 kbps audio stream (~8 KB/s) isn't false-killed
 > every 20 s.
 >
@@ -815,9 +815,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > retired in favour of the digest-pinned semgrep/semgrep Docker image).
 
 **Added**
-- **`_passthrough_watchdog_applies(ctx)` helper** in `stream_proxy.py` —
+- **`_passthrough_watchdog_applies(ctx)` helper** in `stream_proxy.py`
   encodes the policy "throughput watchdog runs only when the response is
-  serving a `video/*` content type" as a tiny, separately-testable
+  serving a `video/*` content type" as a tiny, separately testable
   function. Avoids the fragile invariant where the watchdog placement
   inside `_stream_upstream_range` happens to be passthrough-only by
   call-graph today; future refactors that add a remux-mode caller would
@@ -825,11 +825,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`_PASSTHROUGH_MIN_THROUGHPUT_BPS = 102400` and
   `_PASSTHROUGH_THROUGHPUT_WINDOW_SECONDS = 20.0`** constants in
   `stream_proxy.py`. 100 KB/s is well below any video bit rate that
-  needs streaming (slowest video is ~1 Mbps = 125 KB/s) and well above
+  needs streaming (slowest video is ~1 Mbps = 125 KB/s) and well over
   realistic audio rates (a 64 kbps MP3 is 8 KB/s).
 - **Per-session ctx keys** `passthrough_window_t0`,
   `passthrough_window_bytes`, `passthrough_stall_detected`,
-  `passthrough_stall_bps`, `passthrough_stall_window_seconds` —
+  `passthrough_stall_bps`, `passthrough_stall_window_seconds`:
   bookkeeping for the rolling-window throughput sampler. The flag
   `passthrough_stall_detected` is set immediately before the
   `_socket.timeout` raise so the existing `_serve_proxy` exception
@@ -866,7 +866,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and verifies the return value of `.write()`; a disk-full or
   permission failure on `special://profile/addon_data/.../players/`
   used to leave a half-written `nzbdav.json` and silently log
-  "successfully installed". A failed write now surfaces as an install
+  `successfully installed`. A failed write now surfaces as an install
   notification with the failure reason. Closes §H.2-L23.
 - **Service watchdog window-property cleanup** at `service.py:_check_active`
   now clears all three `nzbdav.*` window properties (`active`,
@@ -882,7 +882,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Changed**
 - **Search and proxy cache keys** are now sha256 of their canonical
   content instead of the previous lossy fingerprint. Existing cache
-  entries are silently regenerated on next access — transparent to
+  entries are silently regenerated on next access—transparent to
   the user, no settings changed, no manual cache-clear needed. Removes
   a class of cache-collision false-hits that were shipping the wrong
   results when two distinct queries happened to fingerprint the same
@@ -892,7 +892,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `*token*`/`*secret*`/`*password*`/`*key*` query parameter are now
   redacted by a shared helper before any exception message,
   format-string interpolation, or `xbmc.log` call. Closes the
-  H2-tier of the §H.2 audit pass — previously a wrapped exception's
+  H2-tier of the §H.2 audit pass—previously a wrapped exception's
   `repr()` was leaking the apikey through error-formatting helpers
   that bypassed the existing `redact_url` path.
 - **Path-traversal and SSRF guards** tightened across the addon's
@@ -904,14 +904,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   9.99/10 with exit code 4. Every workflow action under
   `.github/workflows/` is now SHA-pinned to an immutable commit
   digest; the deprecated `returntocorp/semgrep-action` was retired
-  in favour of running `semgrep/semgrep` CLI from a digest-pinned
+  in favor of running the `semgrep/semgrep` command-line tool from a digest-pinned
   Docker image. CI security posture is now consistent across every
   workflow file.
 
 **Security**
 - §H.2-H credential-leakage findings closed (see "Credential redaction
-  in error logs" above and the §H.2 cluster in TODO.md Part H).
-- §H.4 scanner-alert sweep closed (path-traversal / SSRF guards above).
+  in error logs" earlier and the §H.2 cluster in TODO.md Part H).
+- §H.4 scanner-alert sweep closed (path-traversal / SSRF guards listed earlier).
 - §H.2-L23 TMDBHelper installer disk-full path closed.
 - All `.github/workflows/` actions SHA-pinned (no remaining floating
   `@v1` / `@v6` references on third-party actions).
@@ -926,7 +926,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > that carries the `Authorization` header LEGITIMATELY contains `\r\n` as
 > the HTTP header separator required by ffmpeg's HTTP demuxer. v1.0.0-pre-
 > alpha through v1.0.2 therefore rejected every auth'd ffmpeg command with
-> "Refusing to start unsafe ffmpeg command", Kodi got an immediate HTTP 500
+> `Refusing to start unsafe ffmpeg command`, Kodi got an immediate HTTP 500
 > from the proxy, and the "Playback never started" watchdog tripped 30 s
 > later. Real users hitting force-remux (20 GB+ MKVs, every DV file) on
 > nzbdav with WebDAV auth hit this on every playback.
@@ -951,9 +951,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Hotfix for `Completed but no video found` on reverse-proxied nzbdav
 > setups.** `v1.0.0-pre-alpha` added a cross-origin host check on every
 > PROPFIND href inside `find_video_file`. nzbdav legitimately returns its
-> INTERNAL hostname (e.g. `http://localhost:8080/…`) in href values even
-> when the client addresses it at a different public endpoint (e.g.
-> `http://192.168.1.93:3000`), so the check rejected every href on host
+> INTERNAL hostname (for example, `http://localhost:8080/…`) in href values even
+> when the client addresses it at a different public endpoint (for
+> example, `http://192.168.1.93:3000`), so the check rejected every href on host
 > mismatch and the video-find loop exhausted its 5 retries with no
 > candidate file. Real users with `nzbdav_url=http://192.168.1.93:3000`
 > and nzbdav's internal `localhost:8080` hit this on every playback.
@@ -961,12 +961,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > The fix: when the href host doesn't match the client-configured host,
 > trust the PATH portion but ignore the host. All follow-up requests
 > still go to the configured WebDAV host, so the original security goal
-> — preventing an attacker-controlled server from redirecting us to a
-> different host — is preserved without breaking real-world setups.
+> (preventing an attacker-controlled server from redirecting the add-on to a
+> different host) is preserved without breaking real-world setups.
 
 **Fixed**
 - **Cross-origin PROPFIND href regression** at `webdav.py:239-267` from
-  PR #83's security hardening. The fully-qualified-href host check now
+  PR #83's security hardening. The host check for fully qualified hrefs now
   logs a `LOGDEBUG` note and uses the href's path portion instead of
   rejecting the entire response. Regression test added at
   `tests/test_webdav.py` (`test_find_video_file_accepts_cross_origin_href_path`).
@@ -980,16 +980,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > (`dv_rpu.py`) and remote container probe (`dv_source.py`) that reads real
 > RPU data out of MP4 / MKV files via HTTP range requests. For the first
 > time the addon can tell P7 MEL from P7 FEL, profile 8 from profile 5, and
-> no-DV-at-all from probe-couldn't-read — information the old stderr probe
+> no-DV-at-all from probe-couldn't-read—information the old stderr probe
 > could never produce. Routing uses a hybrid matrix that keeps the
 > 2026-04-15 P8 matroska fix in place while enabling the new P7 MEL → fmp4
 > capability (MEL is metadata-only EL and should not trip the CAMLCodec
 > dual-layer init path that hung on P8). Falls back to matroska on any
-> probe failure or unrecognised profile — no regression surface for content
+> probe failure or unrecognized profile—no regression surface for content
 > that previously played.
 
 **Added**
-- **`plugin.video.nzbdav/resources/lib/dv_rpu.py`** — pure-Python Dolby
+- **`plugin.video.nzbdav/resources/lib/dv_rpu.py`**—pure-Python Dolby
   Vision RPU parser. Ports the minimum subset of `quietvoid/dovi_tool`
   needed to detect profile (5/7/8) and classify profile 7 MEL vs FEL from
   the NLQ fields. Includes a bit-stream reader, exp-Golomb unsigned/signed
@@ -999,7 +999,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bit-for-bit against dovi_tool run on three vendored fixtures (FEL orig,
   MEL orig, profile 8). Pinned upstream commit in the module docstring so
   drift is detectable.
-- **`plugin.video.nzbdav/resources/lib/dv_source.py`** — remote container
+- **`plugin.video.nzbdav/resources/lib/dv_source.py`**—remote container
   probe. Fetches only the bytes needed to locate the first HEVC access
   unit in an MP4 (moov walk → stbl → stsz + stco/co64 → first chunk
   offset → `_http_range`) or MKV (EBML walk → Segment → Tracks + Cluster
@@ -1021,7 +1021,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Vendored DV RPU fixtures** at `tests/fixtures/dovi/` with a README
   documenting the upstream commit SHA and the MIT license notice.
 - **Comprehensive tests** at `tests/test_dv_rpu.py` and
-  `tests/test_dv_source.py` — parser tests backed by real RPU fixtures,
+  `tests/test_dv_source.py`—parser tests backed by real RPU fixtures,
   container tests driving synthetic MP4/MKV through mocked urlopen.
   Routing tests at `tests/test_stream_proxy.py` cover each cell of the
   matrix.
@@ -1032,40 +1032,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from ~5–10 s (ffmpeg subprocess spawn + analysis) to typically <1 s
   (two to three HTTP Range requests totalling a few MiB). Content-Length
   is now threaded through to the probe so moov-at-tail MP4 files are
-  probed correctly — previously the probe defaulted to a 1 MiB ceiling
+  probed correctly—previously the probe defaulted to a 1 MiB ceiling
   that silently regressed SDR moov-at-tail MP4s off the fmp4 path.
 
 **Removed**
 - **`_parse_ffmpeg_dv_profile`** and **`_probe_dv_profile`** from
   `stream_proxy.py`. Their role is fully subsumed by the pure-Python
-  source-RPU probe above.
+  source-RPU probe described earlier.
 
 ---
 
 ## [1.0.0-pre-alpha][] — 2026-04-15
 
-> **First major rewrite milestone — tagged on the spike/hls-fmp4 branch as a pre-release before merging to main.** Big-file force-remux on by default, the fmp4 HLS spike landed and self-heals on failure, the submit pipeline stops freezing on slow nzbdav, the resolver hardens against typo'd settings, and `PROXY.md` documents the proxy subsystem end-to-end. 100 GB DV REMUXes now force-remux through ffmpeg instead of crashing 32-bit Kodi on pass-through, and the experimental fragmented-MP4 HLS branch (opt-in via Advanced settings) automatically falls back to the known-good piped-Matroska path before Kodi ever sees a broken URL when ffmpeg can't produce output. Verified on a CoreELEC ARM64 test box against multiple UHD remuxes — fmp4 HLS gives full random seek for non-DV-Profile-7 sources, matroska fallback covers the DV P7 case.
+> **First major rewrite milestone—tagged on the spike/hls-fmp4 branch as a pre-release before merging to main.** Big-file force-remux on by default, the fmp4 HLS spike landed and self-heals on failure, the submit pipeline stops freezing on slow nzbdav, the resolver hardens against typo'd settings, and `PROXY.md` documents the proxy subsystem end-to-end. 100 GB DV REMUXes now force-remux through ffmpeg instead of crashing 32-bit Kodi on pass-through, and the experimental fragmented-MP4 HLS branch (opt-in via Advanced settings) automatically falls back to the known-good piped-Matroska path before Kodi ever sees a broken URL when ffmpeg can't produce output. Verified on a CoreELEC ARM64 test box against multiple UHD remuxes—fmp4 HLS gives full random seek for non-DV-Profile-7 sources, matroska fallback covers the DV P7 case.
 
 **Added**
-- **`Force remux output format` setting** (`force_remux_mode`) in Advanced. Default `matroska` (piped MKV, DV-safe, seek-limited and known-good on Amlogic). Experimental `hls_fmp4` produces an HLS VOD playlist with fragmented-MP4 segments for full random seek across multi-hundred-gigabyte sources. Gated by an automatic Dolby Vision profile 7 fallback (P7 dual-layer FEL has no fmp4 representation), an early-spawn `ffmpeg` validation, and a 30 s production-output watchdog — see "Runtime fmp4→matroska fallback" under **Changed**.
+- **`Force remux output format` setting** (`force_remux_mode`) in Advanced. Default `matroska` (piped MKV, DV-safe, seek-limited and known-good on Amlogic). Experimental `hls_fmp4` produces an HLS VOD playlist with fragmented-MP4 segments for full random seek across multi-hundred-gigabyte sources. Gated by an automatic Dolby Vision profile 7 fallback (P7 dual-layer FEL has no fmp4 representation), an early-spawn `ffmpeg` validation, and a 30 s production-output watchdog—see "Runtime fmp4→matroska fallback" under **Changed**.
 - **`HlsProducer` class** in `stream_proxy.py`. Owns the long-lived ffmpeg subprocess for fmp4 HLS sessions: per-session working directory, seek-driven respawns with generation-bound segment completeness tracking, an init-file readiness gate, a session-wide stderr log reused across respawns (fixes a latent `stderr=PIPE` deadlock from the per-segment-spawn era), and a canonical-init-bytes cache that lets Kodi keep its `EXT-X-MAP` cache valid across seek respawns even though ffmpeg writes a slightly different `init.mp4` each time.
 - **HLS HTTP routes** in the stream handler: `/hls/<session>/playlist.m3u8`, `/hls/<session>/init.mp4`, `/hls/<session>/seg_NNNNNN.m4s`. Playlist emits `#EXT-X-VERSION:7` and `#EXT-X-MAP:URI="init.mp4"` when `hls_segment_format=fmp4`. Segment and init URLs enforce that the extension in the request path matches the session's configured segment format. The init handler serves the canonical-bytes cache, never the on-disk file, so a respawn-time overwrite race can't poison Kodi.
-- **Dolby Vision profile probe** (historical). The initial `v1.0.0-pre-alpha` tag shipped with `_probe_dv_profile` + `_parse_ffmpeg_dv_profile`, a pair of helpers that ran `ffmpeg -i ... -f null -` against the source and scanned stderr for `DOVI configuration record: ... profile: N`. This pair has since been **retired** in favour of the pure-Python source-RPU probe (`dv_rpu.py` + `dv_source.probe_dolby_vision_source`) that parses the first HEVC access unit's RPU NAL directly — see the entry below for details. Later in the same pre-release cycle the routing gate was broadened so ANY confirmed DV profile routed to matroska (commit 3dce841), and that broadening was preserved when the source-RPU probe landed.
+- **Dolby Vision profile probe** (historical). The initial `v1.0.0-pre-alpha` tag shipped with `_probe_dv_profile` + `_parse_ffmpeg_dv_profile`, a pair of helpers that ran `ffmpeg -i ... -f null -` against the source and scanned stderr for `DOVI configuration record: ... profile: N`. This pair has since been **retired** in favour of the pure-Python source-RPU probe (`dv_rpu.py` + `dv_source.probe_dolby_vision_source`) that parses the first HEVC access unit's RPU NAL directly—see the entry below for details. Later in the same pre-release cycle the routing gate was broadened so ANY confirmed DV profile routed to matroska (commit 3dce841), and that broadening was preserved when the source-RPU probe landed.
 - **`-tag:v hvc1`** on the fmp4 branch. HLS fmp4 spec mandates `hvc1` sample entry for HEVC (parameter sets in the sample description box, not inband), and Amlogic's HLS demuxer needs the right tag to locate `dvcC`/`dvvC` DV configuration records in the init segment. Metadata swap, not a re-encode.
 - **`-strict -2`** on the fmp4 branch. Required to enable TrueHD and DTS-HD MA in the MP4/fMP4 muxer on ffmpeg 6.x; without it ffmpeg refuses to write the init header at all on virtually every UHD REMUX.
-- **Runtime fmp4 → matroska self-healing fallback.** `HlsProducer.prepare()` now has TWO failure-detection windows in series: (1) a 500 ms argv-rejection poll catching "ffmpeg refuses my flags" failures, and (2) a 30 s production-output wait that polls the filesystem for `init.mp4` + `seg_000000.m4s` while watching ffmpeg liveness. If either window trips, prepare raises and the existing `_register_session` catch rewrites `ctx` to the matroska shape *before* the proxy URL goes back to Kodi. Every fmp4 bug we found on this branch — absolute-path init bug, `-strict -2` missing, analysis hang, runaway respawn loop — now recovers automatically to the known-good matroska path with no user-visible failure. Window 1 also handles the rc=0 early-completion case so synthetic short-source integration tests don't false-trip.
-- **`_submit_nzb_with_ui_pump`** in `resolver.py`. `submit_nzb` now runs in a daemon thread with the resolve-side dialog pumping at 250 ms cadence (advancing the progress bar, redrawing the message, watching for cancel). A SECOND daemon thread concurrently polls nzbdav's queue via the new `find_queued_by_name` — as soon as nzbdav has enqueued the job (typically a few seconds after the submit arrives, well before its `addurl` response is generated), the resolver adopts that `nzo_id` and returns immediately without waiting for the rest of the addurl reply. Common case: the "submitting" phase feels instant on any NZB nzbdav accepts, regardless of how slow its addurl processing is. Cancel and Kodi-shutdown are routed through structured sentinels so the resolver bails out cleanly without orphaning state.
-- **`find_queued_by_name`** in `nzbdav_api.py`. Structural sibling of the existing `find_completed_by_name` — reads `/api?mode=queue` and returns `{nzo_id, status, name}` if the title is currently in nzbdav's active queue. Used by both the concurrent submit probe and a post-timeout adoption path that runs whenever `submit_nzb` returns the new `{"status": "timeout"}` sentinel.
+- **Runtime fmp4 → matroska self-healing fallback.** `HlsProducer.prepare()` now has TWO failure-detection windows in series: (1) a 500 ms argv-rejection poll catching "ffmpeg refuses my flags" failures, and (2) a 30 s production-output wait that polls the filesystem for `init.mp4` + `seg_000000.m4s` while watching ffmpeg liveness. If either window trips, prepare raises and the existing `_register_session` catch rewrites `ctx` to the matroska shape *before* the proxy URL goes back to Kodi. Every fmp4 bug found on this branch—absolute-path init bug, `-strict -2` missing, analysis hang, runaway respawn loop—now recovers automatically to the known-good matroska path with no user-visible failure. Window 1 also handles the rc=0 early-completion case so synthetic short-source integration tests don't false-trip.
+- **`_submit_nzb_with_ui_pump`** in `resolver.py`. `submit_nzb` now runs in a daemon thread with the resolve-side dialog pumping at 250 ms cadence (advancing the progress bar, redrawing the message, watching for cancel). A SECOND daemon thread concurrently polls nzbdav's queue via the new `find_queued_by_name`—as soon as nzbdav has enqueued the job (typically a few seconds after the submit arrives, well before its `addurl` response is generated), the resolver adopts that `nzo_id` and returns immediately without waiting for the rest of the addurl reply. Common case: the "submitting" phase feels instant on any NZB nzbdav accepts, regardless of how slow its addurl processing is. Cancel and Kodi-shutdown are routed through structured sentinels so the resolver bails out cleanly without orphaning state.
+- **`find_queued_by_name`** in `nzbdav_api.py`. Structural sibling of the existing `find_completed_by_name`—reads `/api?mode=queue` and returns `{nzo_id, status, name}` if the title is currently in nzbdav's active queue. Used by both the concurrent submit probe and a post-timeout adoption path that runs whenever `submit_nzb` returns the new `{"status": "timeout"}` sentinel.
 - **Settings clamping** for `submit_timeout`. Now bound to `[5, 600]` seconds via a new `_clamp_int_setting` helper. After observing a real-world `submit_timeout=300000` (83 hours, accidentally typed extra zeros) bricking the resolver, the clamp guarantees a typo'd setting can't cascade into a multi-hour blocking call.
-- **Persistent `ffmpeg.log` archive.** Every `HlsProducer.close()` now copies the session's `ffmpeg.log` to `special://temp/nzbdav-hls-logs/ffmpeg-<session_id>.log` (rolling 10 most-recent) BEFORE the session directory is wiped. Every fmp4 bug we hit during this spike was harder to debug because the smoking-gun log was already gone; now post-mortem inspection survives the cleanup.
-- **`just test-integration` target** + `tests/test_integration_hls_ffmpeg.py`. Runs the actual `ffmpeg` binary against a synthetic test MKV (generated on the fly via `lavfi`, served from a localhost HTTP server), exercises `HlsProducer` end-to-end with the production command, and asserts that `init.mp4` is a valid ISO BMFF file (`ftyp`/`moov`/`stsd` present) and that segments are non-empty. Skips automatically if no ffmpeg is on PATH. Catches every class of ffmpeg-related bug we hit on this spike at PR time — every single one was invisible to the existing unit tests because they mock `subprocess.Popen`.
-- **`PROXY.md`** — detailed architecture document covering rationale, component interactions, session lifecycle, the four serving tiers, force-remux modes, `HlsProducer` internals (generation boundaries, canonical init cache, late-binding fallback), and a symptom→file debugging playbook.
+- **Persistent `ffmpeg.log` archive.** Every `HlsProducer.close()` now copies the session's `ffmpeg.log` to `special://temp/nzbdav-hls-logs/ffmpeg-<session_id>.log` (rolling 10 most-recent) BEFORE the session directory is wiped. Every fmp4 bug hit during this spike was harder to debug because the smoking-gun log was already gone; now post-mortem inspection survives the cleanup.
+- **`just test-integration` target** + `tests/test_integration_hls_ffmpeg.py`. Runs the actual `ffmpeg` binary against a synthetic test MKV (generated on the fly via `lavfi`, served from a localhost HTTP server), exercises `HlsProducer` end-to-end with the production command, and asserts that `init.mp4` is a valid ISO BMFF file (`ftyp`/`moov`/`stsd` present) and that segments are non-empty. Skips automatically if no ffmpeg is on PATH. Catches every class of ffmpeg-related bug found on this spike at PR time—every single one was invisible to the existing unit tests because they mock `subprocess.Popen`.
+- **`PROXY.md`**—detailed architecture document covering rationale, component interactions, session lifecycle, the four serving tiers, force-remux modes, `HlsProducer` internals (generation boundaries, canonical init cache, late-binding fallback), and a symptom→file debugging playbook.
 
 **Changed**
 - **`force_remux_threshold_mb` default** bumped from `0` (off) to `20000` (20 GB). 12 GB MKVs pass through cleanly on 32-bit Kodi, 58 GB REMUXes reliably crash `CFileCache::OpenInputStream`; 20 GB is the empirical breakpoint. Huge files now force-remux out of the box. Set back to `0` to restore the previous pass-through-only behavior.
 - **`HLS segment duration`** shortened from 30 s to 6 s. Fixed-EXTINF playlists drift relative to ffmpeg's actual keyframe-aligned cuts; with 30 s nominal segments and 3–5 s source GOPs, the drift accumulated into visible seek miss + A/V desync over a 2-hour movie. 6 s matches typical UHD REMUX GOP lengths and the CMAF / Apple HLS author guide default.
-- **ffmpeg probe limits** for the HLS producer: `-probesize` raised from 1 MB → 50 MB, `-analyzeduration` raised from 0 → 15 s. Fixes "track 1: codec frame size is not set" on E-AC-3 / DTS-HD MA / TrueHD sources where a sparsely-interleaved MKV doesn't give ffmpeg enough audio packets to lock down the codec frame size at default analyze settings — that warning previously caused outright "no audio" or a constant ~0.7 s desync depending on the codec. Costs ~3–5 s extra startup latency per spawn (covered by the 30 s playback-never-started watchdog below).
-- **`_DEFAULT_SUBMIT_TIMEOUT`** raised from 30 s → 120 s. nzbdav's `/api?mode=addurl` handler routinely takes 30+ s on a big NZB (fetch the .nzb from the indexer, parse XML, enumerate segments). The previous 30 s default was tripping client-side on every large submission, and the resolver was incorrectly retrying — sometimes hitting nzbdav's duplicate-rejection path and producing misleading errors while the original submit was still completing in the background. The 120 s ceiling pairs with the new timeout sentinel + queue adoption to make the worst case "concurrent probe wins, submit silently completes in the background" instead of "user sees a failure".
+- **ffmpeg probe limits** for the HLS producer: `-probesize` raised from 1 MB → 50 MB, `-analyzeduration` raised from 0 → 15 s. Fixes "track 1: codec frame size is not set" on E-AC-3 / DTS-HD MA / TrueHD sources where a sparsely interleaved MKV doesn't give ffmpeg enough audio packets to lock down the codec frame size at default analyze settings—that warning previously caused outright "no audio" or a constant ~0.7 s desync depending on the codec. Costs ~3–5 s extra startup latency per spawn (covered by the 30 s playback-never-started watchdog below).
+- **`_DEFAULT_SUBMIT_TIMEOUT`** raised from 30 s → 120 s. nzbdav's `/api?mode=addurl` handler routinely takes 30+ s on a big NZB (fetch the .nzb from the indexer, parse XML, enumerate segments). The previous 30 s default was tripping client-side on every large submission, and the resolver was incorrectly retrying—sometimes hitting nzbdav's duplicate-rejection path and producing misleading errors while the original submit was still completing in the background. The 120 s ceiling pairs with the new timeout sentinel + queue adoption to make the worst case "concurrent probe wins, submit silently completes in the background" instead of "user sees a failure."
 - **`Playback never started` watchdog** raised from 5 s to 30 s in `service.py:tick`. The previous threshold was tripping during the legitimate fmp4 startup sequence (HlsProducer spawn + ffmpeg analyzeduration + first segment write + Kodi HLS demuxer + Amlogic decoder init can land at 4–8 s on a healthy stream), killing playback before Kodi could even fire `onAVStarted`. 30 s gives every legitimate path comfortable headroom while still catching genuinely dead streams within a reasonable window.
 - **fmp4 ffmpeg arguments switched to relative filenames + cwd.** `-hls_fmp4_init_filename` on ffmpeg 6.0.1 (CoreELEC build) rejects absolute paths with "Failed to open segment" / "No such file or directory" even when the parent directory exists and is writable. Fixed by passing bare relative names (`init.mp4`, `seg_%06d.m4s`, `ffmpeg_playlist.m3u8`) to ffmpeg and spawning the subprocess with `cwd=session_dir`. Reader-side code (segment_path, _init_file_complete, wait_for_init, the HTTP handlers) still uses absolute paths, so nothing on the disk-reading path changes.
 - **`_segment_complete`** in `HlsProducer` now records a `_spawn_time` at every ffmpeg `Popen` and verifies that any `seg_<n+1>.m4s` used as a "seg_n is done" signal was written by the current generation (mtime ≥ spawn_time). Without this, a stale `seg_<n+1>` left on disk from the backward-seek cache could make a half-written new `seg_<n>` look complete and produce a truncated response.
@@ -1079,12 +1079,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **C1: router handle-hang.** `router.py` dispatch now guarantees the Kodi plugin handle is resolved on every action route. Previously `/resolve`, `/install_player`, `/clear_cache`, `/settings`, `/configure_*`, `/test_hydra`, and `/test_nzbdav` were reached from menu items with `isFolder=False` but never called `setResolvedUrl` or `endOfDirectory`, leaving Kodi waiting indefinitely on a thrown exception. A new `_safe_resolve_handle` helper is wired into a try/except wrapping every dispatch path.
 - **C5: SQLite resolver cleanup.** `resolver._clear_kodi_playback_state` narrowed from a multi-table DELETE to the `bookmark` table only, with a 2 s SQLite busy timeout, proper `LIKE` wildcard escaping on `tmdb_id` (`%`, `_`, `\` all escaped with `ESCAPE '\\'`), `sqlite3.OperationalError` caught separately from the generic exception path, and a skip path when `xbmc.Player().isPlayingVideo()` is true so the cleanup doesn't race Kodi's own internal library vacuum (which was occasionally freezing the decoder during database-heavy sessions).
 - **Submit timeout misclassification.** `submit_nzb` now distinguishes `socket.timeout` (and `URLError(reason=socket.timeout(...))`) from other network errors and returns a structured `(None, {"status": "timeout"})` sentinel instead of the old `(None, None)` "retry freely" shape. The resolver runs a 12 s queue + history adoption probe on the sentinel and adopts the existing `nzo_id` if found, instead of retrying the submit and either bouncing as a duplicate or orphaning the in-progress job. Works on Python 3.8 (bare `socket.timeout`) and 3.10+ (where `socket.timeout` is an alias for `TimeoutError`).
-- **Submit running on the plugin thread.** `submit_nzb` no longer blocks the Kodi plugin thread for the full 120 s timeout window. The new `_submit_nzb_with_ui_pump` runs it in a daemon worker thread and pumps the dialog at 250 ms cadence so the cancel button is live, the message updates, and the user sees progress instead of a frozen "Submitting NZB..." dialog.
-- **Nondeterministic init.mp4 across seek respawns.** When ffmpeg respawns at a different `-ss` for a seek, the new `init.mp4` has a different `edts`/`elst` (edit list) box than the original — the codec config (`hvcC`/`mp4a`) is byte-identical, but Kodi caches `EXT-X-MAP` once per playlist, so segments produced after the respawn referenced an edit list the cached init doesn't know about and playback stalled or desynced. Fixed by caching the first generation's init bytes in `HlsProducer._canonical_init_bytes` and serving those bytes on every Kodi fetch regardless of what's on disk.
+- **Submit running on the plugin thread.** `submit_nzb` no longer blocks the Kodi plugin thread for the full 120 s timeout window. The new `_submit_nzb_with_ui_pump` runs it in a daemon worker thread and pumps the dialog at 250 ms cadence so the cancel button is live, the message updates, and the user sees progress instead of a frozen `Submitting NZB...` dialog.
+- **Nondeterministic init.mp4 across seek respawns.** When ffmpeg respawns at a different `-ss` for a seek, the new `init.mp4` has a different `edts`/`elst` (edit list) box than the original—the codec config (`hvcC`/`mp4a`) is byte-identical, but Kodi caches `EXT-X-MAP` once per playlist, so segments produced after the respawn referenced an edit list the cached init doesn't know about and playback stalled or desynced. Fixed by caching the first generation's init bytes in `HlsProducer._canonical_init_bytes` and serving those bytes on every Kodi fetch regardless of what's on disk.
 - **fmp4 ffmpeg probe pair could block indefinitely** on a stuck ffmpeg (slow upstream, analysis hang). Initially fixed by the shared `_probe_ffmpeg_stderr` helper (daemon reader thread + wall-clock deadline, killing the ffmpeg on match, byte budget, OR deadline expiry). Later in the same pre-release cycle the DV-profile probe was retired entirely in favour of a pure-Python source-RPU parser that does HTTP range requests instead of spawning ffmpeg, removing this class of stuck-subprocess failure from the DV path altogether.
 - **`MagicMock/` directory leak** in unit test runs: `_archive_ffmpeg_log` was passing a mocked `xbmcvfs.translatePath()` return value straight to `os.makedirs`, creating a literal `"MagicMock"` directory in cwd. Now isinstance-checks the candidate before accepting it.
-- **fmp4 segments could be served before fully written** — the old `_segment_complete` could mistake a stale prior-generation `seg_n+1` for a current-generation completeness signal and return True while the new `seg_n` was still being written. Fixed by the per-generation mtime check (see Changed).
-- **`_clear_kodi_playback_state` no longer runs during active playback** — avoids contention with Kodi's own `MyVideos131.db` / `Textures13.db` vacuum, which was occasionally freezing the decoder during database-heavy sessions.
+- **fmp4 segments could be served before fully written**—the old `_segment_complete` could mistake a stale prior-generation `seg_n+1` for a current-generation completeness signal and return True while the new `seg_n` was still being written. Fixed by the per-generation mtime check (see Changed).
+- **`_clear_kodi_playback_state` no longer runs during active playback**—avoids contention with Kodi's own `MyVideos131.db` / `Textures13.db` vacuum, which was occasionally freezing the decoder during database-heavy sessions.
 
 **Security**
 - Bumped `pytest` dev dependency to `>=9.0.3,<10` for [CVE-2025-71176](https://github.com/advisories/GHSA-6w46-j5rx-g56g) (insecure permissions on `/tmp/pytest-of-<user>` allowing local DoS or privilege escalation on shared UNIX hosts). Dev-only dependency; no runtime impact on Kodi installations.
@@ -1096,8 +1096,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Two `submit_nzb` lifecycle fixes.** The addon now tells nzbdav to cancel an in-flight job when it gives up on a download, so re-submitting the same NZB doesn't get blocked by stale duplicates. And when nzbdav rejects a submit, the dialog now shows the actual server message instead of a generic "check your settings" string.
 
 **Fixed**
-- Stale jobs in nzbdav's queue after the addon aborts. When `_poll_until_ready` gave up — download timeout, user-cancelled the resolve dialog, max poll iterations, or Kodi shutdown — it left the job sitting in nzbdav's queue indefinitely. The next attempt to play the same NZB would then hit nzbdav's duplicate-rejection path with HTTP 500. The addon now calls a new `cancel_job(nzo_id)` helper on every Group A abort path that issues a SABnzbd-compatible `mode=queue&name=delete` with a 3-second timeout, so the next submit lands on a clean queue. Group B paths (nzbdav itself reporting Failed/Completed) and any race where the job moves to history between polls deliberately leave history entries alone so users can still inspect what nzbdav reported in the web UI. (Audit finding L1.)
-- Generic dialog on submit failures hiding nzbdav's real error message. `submit_nzb` used to catch every error class (HTTPError, URLError, JSONDecodeError, anything else) the same way and return a bare `None`; the resolver's retry loop then attempted 3 submits before showing a generic "check nzbdav URL and API key" dialog. The function now catches `HTTPError` specifically, captures the response body via `e.read()` (HTML-stripped and whitespace-collapsed), and returns a `(None, {"status", "message"})` tuple. The retry loop classifies the error: HTTP 408/502/503/504 still retry as before (they're classically transient gateway issues — 408 is RFC 9110's "request timeout, please retry"), but HTTP 4xx and HTTP 500/501 short-circuit immediately and surface nzbdav's actual response message — retrying nzbdav's "duplicate" rejection won't make it not a duplicate. Connection errors and JSON decode failures continue to retry exactly as before.
+- Stale jobs in nzbdav's queue after the addon gives up. When `_poll_until_ready` gave up—download timeout, user-cancelled the resolve dialog, max poll iterations, or Kodi shutdown—it left the job sitting in nzbdav's queue indefinitely. The next attempt to play the same NZB would then hit nzbdav's duplicate-rejection path with HTTP 500. The addon now calls a new `cancel_job(nzo_id)` helper on every Group A exit path that issues a SABnzbd-compatible `mode=queue&name=delete` with a 3-second timeout, so the next submit lands on a clean queue. Group B paths (nzbdav itself reporting Failed/Completed) and any race where the job moves to history between polls deliberately leave history entries alone so users can still inspect what nzbdav reported in the web UI. (Audit finding L1.)
+- Generic dialog on submit failures hiding nzbdav's real error message. `submit_nzb` used to catch every error class (HTTPError, URLError, JSONDecodeError, anything else) the same way and return a bare `None`; the resolver's retry loop then attempted 3 submits before showing a generic "check nzbdav URL and API key" dialog. The function now catches `HTTPError` specifically, captures the response body via `e.read()` (HTML-stripped and whitespace-collapsed), and returns a `(None, {"status", "message"})` tuple. The retry loop classifies the error: HTTP 408/502/503/504 still retry as before (they're classically transient gateway issues—408 is RFC 9110's "request timeout, please retry"), but HTTP 4xx and HTTP 500/501 short-circuit immediately and surface nzbdav's actual response message—retrying nzbdav's "duplicate" rejection won't make it not a duplicate. Connection errors and JSON decode failures continue to retry exactly as before.
 
 ---
 
@@ -1107,7 +1107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Fixed**
 - Brief UI freeze during resolve polling. The WebDAV retry delay used `time.sleep()` on Kodi's main thread, locking the UI and delaying shutdown. It now uses `xbmc.Monitor().waitForAbort()`, which yields to the Kodi event loop and unwinds immediately on shutdown. (Audit finding C4.)
-- Silent retry loop when WebDAV credentials are wrong. When nzbdav's queue and history APIs both returned no data, the addon probed the WebDAV server using the movie's human-readable title as a filename — which always returned 404, so an invalid-credentials failure never surfaced as the "Authentication failed" dialog and the resolve spinner would just run until the download timeout. The probe now HEADs the WebDAV content root, so a bad password produces the auth dialog within one poll iteration. Server 5xx and network-outage probes also now return accurate error codes in the logs, though those paths remain log-only in the resolver — adding dialogs for them is a separate follow-up. (Audit finding C3.)
+- Silent retry loop when WebDAV credentials are wrong. When nzbdav's queue and history APIs both returned no data, the addon probed the WebDAV server using the movie's human-readable title as a filename—which always returned 404, so an invalid-credentials failure never surfaced as the "Authentication failed" dialog and the resolve spinner would just run until the download timeout. The probe now HEADs the WebDAV content root, so a bad password produces the auth dialog within one poll iteration. Server 5xx and network-outage probes also now return accurate error codes in the logs, though those paths remain log-only in the resolver—adding dialogs for them is a separate follow-up. (Audit finding C3.)
 
 ---
 
@@ -1125,7 +1125,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.18][] — 2026-04-12
 
-> **Big MKVs now play, seek, and recover from bad Usenet articles — without ffmpeg in the loop.** Pass-through is finally the default on 32-bit Kodi, which gives you native scrubbing through the source file's real Cues plus v0.6.15's zero-fill recovery on missing articles. If huge remuxes ever felt fragile, this is the release you want.
+> **Big MKVs now play, seek, and recover from bad Usenet articles—without ffmpeg in the loop.** Pass-through is finally the default on 32-bit Kodi, which gives you native scrubbing through the source file's real Cues plus v0.6.15's zero-fill recovery on missing articles. If huge remuxes ever felt fragile, this is the release you want.
 
 **Changed**
 - **`force_remux_threshold_mb` default flipped from `4096` to `0`.** Live testing on 32-bit CoreELEC confirmed the pass-through path handles 12+ GB MKVs fine and gives strictly more features than force-remux: native user seeking via real MKV Cues, zero-fill recovery on missing Usenet articles, and zero ffmpeg CPU overhead. Set the threshold to a non-zero MB value to restore v0.6.16 behaviour if you need it.
@@ -1139,22 +1139,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.17][] — 2026-04-12
 
-> **Kill the zombie.** Fixes a nasty bug where a stalled playback would leave an ffmpeg remux process behind, so the next time you hit Play the addon hung with "Playback never started after 70 s". Restarts just work again.
+> **Kill the zombie.** Fixes a nasty bug where a stalled playback would leave an ffmpeg remux process behind, so the next time you hit Play the addon hung with `Playback never started after 70 s`. Restarts just work again.
 
 **Fixed**
-- Zombie ffmpeg remux lingering after a Kodi playback stall (e.g. when Kodi's automatic DB vacuum froze the decoder for 10+ seconds). Kodi would stop consuming bytes without firing `onPlayBackStopped`, so ffmpeg kept writing into a dead TCP socket forever.
-- Prior stream sessions are now torn down on every new `prepare_stream` call, and the remux socket has a 60 s write timeout so stuck writes always unwind and kill ffmpeg.
+- Zombie ffmpeg remux lingering after a Kodi playback stall (for example, when Kodi's automatic DB vacuum froze the decoder for 10+ seconds). Kodi would stop consuming bytes without firing `onPlayBackStopped`, so ffmpeg kept writing into a dead TCP socket forever.
+- Prior stream sessions are now torn down on every new `prepare_stream` call, and the remux socket has a 60 s write timeout so stuck writes always unwind and stop ffmpeg.
 - `NzbdavPlayer.onPlayBackStopped` / `onPlayBackEnded` hooks clear active proxy sessions immediately on clean stops.
 
 ---
 
 ## [0.6.16][] — 2026-04-12
 
-> **First attempt at fixing huge MKVs on 32-bit Kodi.** Force-remuxes anything over 4 GB through ffmpeg so Kodi never sees an overflowing Content-Length. **Superseded by v0.6.18** — the real root cause turned out to be elsewhere (already fixed in v0.6.14). The setting is still available if your platform needs it.
+> **First attempt at fixing huge MKVs on 32-bit Kodi.** Force-remuxes anything over 4 GB through ffmpeg so Kodi never sees an overflowing Content-Length. **Superseded by v0.6.18**—the real root cause turned out to be elsewhere (already fixed in v0.6.14). The setting is still available if your platform needs it.
 
 **Added**
-- New setting **"Force ffmpeg remux above (MB)"** (default `4096`, `0` disables) to force-remux large non-MP4 files through ffmpeg.
-- Subtitles are now copied verbatim when remuxing MKV sources, so PGS/DVD/HDMV bitmap subs (which can't be re-encoded to SRT) no longer abort the remux.
+- New setting **"Force ffmpeg remux above (MB)"** (default `4096`, `0` turns it off) to force-remux large non-MP4 files through ffmpeg.
+- Subtitles are now copied verbatim when remuxing MKV sources, so PGS/DVD/HDMV bitmap subs (which can't be re-encoded to SRT) no longer make the remux fail.
 
 **Fixed**
 - "Open - Unhandled exception" on >4 GB MKV files on 32-bit Kodi builds (Amlogic CoreELEC and similar).
@@ -1176,7 +1176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Fixes "Playback failed to start" on MKV files** by routing every format through the local stream proxy. Kodi no longer pokes the WebDAV server directly, which was triggering a PROPFIND cascade that broke playback on some setups.
 
 **Fixed**
-- MKV playback failing with "Playback failed to start" / "Unhandled exception". All file types now route through the local stream proxy so Kodi never talks to the WebDAV server directly, avoiding a PROPFIND parent-directory scan that cascaded into an Open failure.
+- MKV playback failing with `Playback failed to start` / `Unhandled exception`. All file types now route through the local stream proxy so Kodi never talks to the WebDAV server directly, avoiding a PROPFIND parent-directory scan that cascaded into an Open failure.
 - `tmdb_id` is now forwarded in the TMDBHelper `play_movie` template so the replay-bookmark cleanup actually matches movie entries.
 
 ---
@@ -1195,7 +1195,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > **Fixes "Playback failed to start" when you replay the same NZB.** Kodi was auto-resuming from stale bookmarks on plugin URLs; those are now wiped before each play.
 
 **Fixed**
-- Replay of the same NZB failing with "Playback failed to start". Kodi's stale bookmarks, settings, and streamdetails are now cleared before each play so auto-resume doesn't misfire on plugin URLs.
+- Replay of the same NZB failing with `Playback failed to start`. Kodi's stale bookmarks, settings, and streamdetails are now cleared before each play so auto-resume doesn't misfire on plugin URLs.
 
 ---
 
@@ -1227,7 +1227,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.9][] — 2026-04-12
 
-> **Duplicate results from multiple indexers collapse into one row.** Also, the **Max results** setting actually limits NZBHydra2 queries now — it was previously hardcoded to 100.
+> **Duplicate results from multiple indexers collapse into one row.** Also, the **Max results** setting actually limits NZBHydra2 queries now—it was previously hardcoded to 100.
 
 **Added**
 - Identical NZBs from multiple indexers (same title + size) are deduplicated and shown with **"Multiple"** as the indexer label.
@@ -1280,7 +1280,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.6.5][] — 2026-04-10
 
-> **The addon actually tells you when something goes wrong.** Download failures, missing video files, stream errors — all surfaced to the user instead of silently eaten. Also fixes a playback freeze when ffmpeg's stderr buffer filled up.
+> **The addon actually tells you when something goes wrong.** Download failures, missing video files, stream errors—all surfaced to the user instead of silently eaten. Also fixes a playback freeze when ffmpeg's stderr buffer filled up.
 
 **Added**
 - Show nzbdav failure reason to the user when a download fails.
@@ -1307,13 +1307,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Changed**
 - Narrowed broad `except` handlers to specific exception types in the stream proxy.
-- Removed an unnecessary pylint disable comment in the MP4 parser.
+- Removed an unnecessary `pylint: disable` comment in the MP4 parser.
 
 ---
 
 ## [0.6.0][] — 2026-04-07
 
-> **A huge one.** MP4 files now get native Kodi seeking, pause, and Dolby Vision support via a **pure-Python proxy that rewrites the MP4's internal chunk offsets on the fly** — no ffmpeg re-encode. Files over 4 GB work too. There's a three-tier fallback if the fast path fails, and a new "container" column in the results list makes MP4 vs MKV obvious at a glance.
+> **A huge one.** MP4 files now get native Kodi seeking, pause, and Dolby Vision support via a **pure-Python proxy that rewrites the MP4's internal chunk offsets on the fly**—no ffmpeg re-encode. Files over 4 GB work too. There's a three-tier fallback if the fast path fails, and a new "container" column in the results list makes MP4 vs MKV obvious at a glance.
 
 **Added**
 - **Pure-Python MP4 moov-relocation proxy** for native seeking, pause, and Dolby Vision support.
@@ -1338,7 +1338,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.5.0][] — 2026-04-06
 
-> **Settings are simpler.** The WebDAV URL field is gone (it defaults to the nzbdav URL automatically), and release-group fields became proper multi-select dialogs with 93 known groups pre-loaded. The TMDBHelper installer no longer prompts — it just installs.
+> **Settings are simpler.** The WebDAV URL field is gone (it defaults to the nzbdav URL automatically), and release-group fields became proper multi-select dialogs with 93 known groups pre-loaded. The TMDBHelper installer no longer prompts—it just installs.
 
 **Added**
 - 93 known release groups with curated preferred / excluded defaults.
@@ -1441,7 +1441,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.1.0][] — 2026-04-05
 
-> **Initial release.** Search NZBHydra2, submit to nzbdav, stream via WebDAV — all wrapped in a TMDBHelper player.
+> **Initial release.** Search NZBHydra2, submit to nzbdav, stream via WebDAV—all wrapped in a TMDBHelper player.
 
 **Added**
 - NZBHydra2 search integration (movie + TV).

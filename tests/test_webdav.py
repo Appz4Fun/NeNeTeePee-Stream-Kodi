@@ -97,7 +97,7 @@ def test_probe_reachable_success_on_207(mock_head, mock_settings):
 @patch("resources.lib.webdav._http_head")
 def test_probe_reachable_treats_404_as_reachable(mock_head, mock_settings):
     """Key behavior change from C3: a 404 on HEAD /content/ means the
-    server is up but doesn't route HEAD to the collection handler — it
+    server is up but doesn't route HEAD to the collection handler—it
     must NOT be classified as an error."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     mock_head.return_value = 404
@@ -198,7 +198,7 @@ def test_probe_reachable_waits_via_monitor(mock_head, mock_settings):
 @patch("resources.lib.webdav._http_head")
 def test_probe_reachable_aborts_on_shutdown_signal(mock_head, mock_settings):
     """If waitForAbort returns True mid-retry, bail out immediately
-    instead of re-probing. This is the other half of the C4 fix —
+    instead of re-probing. This is the other half of the C4 fix—
     cooperative shutdown."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     mock_head.side_effect = Exception("conn refused")
@@ -217,7 +217,7 @@ def test_probe_reachable_aborts_on_shutdown_signal(mock_head, mock_settings):
 @patch("resources.lib.webdav._get_settings")
 @patch("resources.lib.webdav._http_head")
 def test_probe_reachable_hits_content_root(mock_head, mock_settings):
-    """The probe URL must be {nzbdav_url}/content/ — the nzbdav content root.
+    """The probe URL must be {nzbdav_url}/content/—the nzbdav content root.
     Verifies the URL construction and the defense-in-depth rstrip."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     mock_head.return_value = 200
@@ -511,8 +511,8 @@ def test_folder_video_total_bytes_incomplete_propagates_from_subdir(
 @patch("resources.lib.webdav._get_settings")
 @patch("resources.lib.webdav.urlopen")
 def test_folder_video_total_bytes_skips_dot_subdirs(mock_urlopen, mock_settings):
-    """Dot-prefixed admin subfolders (e.g. nzbdav's own .meta dirs) are not
-    recursed -- mirrors find_video_file's dot-prefix skip."""
+    """Dot-prefixed administrative subfolders (for example, nzbdav's own .meta dirs) are
+    not recursed -- mirrors find_video_file's dot-prefix skip."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     xml = """<?xml version="1.0" encoding="utf-8"?>
 <D:multistatus xmlns:D="DAV:">
@@ -1559,7 +1559,7 @@ def test_find_video_file_parallelizes_sibling_subfolders_for_post_picker_start(
     path = find_video_file("/content/uncategorized/Serial/")
 
     assert path == "/content/uncategorized/Serial/C/Movie.mkv"
-    # Structural overlap proof: the two equally-slow siblings B and C must be
+    # Structural overlap proof: the two equally slow siblings B and C must be
     # in-flight at the same time (parallel fan-out). Serial probing would make
     # B finish before C starts (B_end <= C_start) -> no overlap -> failure.
     b, c = spans["B"], spans["C"]
@@ -1575,8 +1575,8 @@ def test_find_video_file_overlaps_first_sibling_probe_for_post_picker_start(
 ):
     """Sibling probes run concurrently; a size tie keeps the earliest sibling.
 
-    We now scan every sibling (no early-exit) to pick the largest, so total
-    time tracks the SLOWEST sibling — but probes still overlap, so it stays
+    The resolver now scans every sibling (no early exit) to pick the largest, so total
+    time tracks the SLOWEST sibling—but probes still overlap, so it stays
     near max(sibling) rather than the serial sum. B and C are the same size,
     so the tie resolves to the earlier-listed B.
     """
@@ -1705,8 +1705,8 @@ def test_find_video_file_waits_for_larger_slower_later_sibling(
     """A larger video in a slower, later-listed sibling must still win.
 
     The old code returned the first sibling with any video (here B) and never
-    waited for the slower C. Now we scan all siblings and pick the largest, so
-    the bigger C wins even though it is listed later and responds slower —
+    waited for the slower C. Now the resolver scans all siblings and picks the largest,
+    so the bigger C wins even though it is listed later and responds slower—
     exactly what prevents a smaller early release from hijacking the real one.
     """
     mock_settings.return_value = _SETTINGS_WITH_AUTH
@@ -1872,10 +1872,10 @@ _PROPFIND_CROSS_ORIGIN_HREFS = """<?xml version="1.0" encoding="utf-8"?>
 @patch("resources.lib.webdav._get_settings")
 @patch("resources.lib.webdav.urlopen")
 def test_find_video_file_accepts_cross_origin_href_path(mock_urlopen, mock_settings):
-    """nzbdav legitimately returns its INTERNAL hostname (e.g. localhost:8080)
+    """nzbdav legitimately returns its INTERNAL hostname (for example, localhost:8080)
     in PROPFIND hrefs even when the client addresses it via a different public
-    endpoint (e.g. 192.168.1.93:3000). The client must trust the href's PATH
-    portion while ignoring the host — follow-up requests still go to the
+    endpoint (for example, 192.168.1.93:3000). The client must trust the href's PATH
+    portion while ignoring the host—follow-up requests still go to the
     configured WebDAV host, so there's no off-server redirect risk.
 
     Regression guard for the Greyhound 2026-04-23 incident where v1.0.0-pre-
@@ -2469,7 +2469,7 @@ def test_episode_tags_expands_episode_ranges():
 def test_episode_tags_expands_nxn_ranges():
     from resources.lib.webdav import _episode_tags
 
-    # NxN range notation ("1x01-03", "1x01-1x03") covers the middle episode,
+    # NxN range notation (``1x01-03``, ``1x01-1x03``) covers the middle episode,
     # mirroring the SxxExx range expansion.
     assert _episode_tags("Show.1x01-03.mkv") == frozenset({(1, 1), (1, 2), (1, 3)})
     assert _episode_tags("Show.1x01-1x03.mkv") == frozenset({(1, 1), (1, 2), (1, 3)})
@@ -2482,7 +2482,7 @@ def test_episode_tags_expands_nxn_ranges():
     assert _episode_tags("Movie.1280x720.x264.mkv") == frozenset()
     assert _episode_tags("Movie.3840x2160.mkv") == frozenset()
     # Adjacent dot-separated NxN tags must NOT collapse into a range (the
-    # range regex requires a literal '-').
+    # range regular expression requires a literal '-').
     assert _episode_tags("Doctor.Who.2x05.2x06.mkv") == frozenset({(2, 5), (2, 6)})
     # Reversed / cross-season spans: literal endpoints survive via the
     # standalone NxN loop, no explosion.
@@ -2553,7 +2553,7 @@ def test_find_video_file_matches_nxnn_episode_notation(mock_urlopen, mock_settin
 def test_find_video_file_matches_nxnn_multi_episode_pack(mock_urlopen, mock_settings):
     """A folder whose only/largest file is an adjacent-NxNN multi-episode pack
     (2x05.2x06) must be returned for a hint covering one of its episodes,
-    guarding the +1000 scoring short-circuit (not just the regex)."""
+    guarding the +1000 scoring short-circuit (not just the regular expression)."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     listing = _propfind_listing(
         [
@@ -2765,7 +2765,7 @@ def test_find_video_file_movie_hint_keeps_largest_across_sibling_subfolders(
 
 
 def test_episode_tags_ignores_aspect_ratio_nxn_tokens():
-    """Aspect-ratio NxN tokens (16x9, 4x3, 21x9, ...) must NOT register as
+    """Aspect-ratio NxN tokens (16x9, 4x3, 21x9, and so on) must NOT register as
     episodes, while real un-padded NxN episodes (2x3, 1x9) still do."""
     from resources.lib.webdav import _episode_tags
 
@@ -2975,7 +2975,7 @@ def test_find_video_file_recurses_past_root_stub_to_subfolder_real_file(
 def test_find_video_file_falls_back_to_root_stub_when_no_real_file(
     mock_urlopen, mock_settings
 ):
-    """When no above-floor file exists anywhere (pure stub, the real body is
+    """When no over-floor file exists anywhere (pure stub, the real body is
     still in flight), discovery must still RETURN the root stub -- not None.
     Returning None would make the resolver consume its symlink-visibility retry
     budget; the resolver's own stub guard rejects the stub WITHOUT consuming
@@ -3041,7 +3041,7 @@ def test_find_video_file_without_floor_returns_root_file_without_recursing(
 @patch("resources.lib.webdav._get_settings")
 @patch("resources.lib.webdav.urlopen")
 def test_find_video_file_floor_keeps_above_floor_root_file(mock_urlopen, mock_settings):
-    """A current-level file at or above the floor is the real feature; the floor
+    """A current-level file at or over the floor is the real feature; the floor
     must not defer it into a needless subfolder scan (no recursion happens)."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     root = _propfind_listing(
@@ -3118,12 +3118,12 @@ def test_find_video_file_floor_prefers_real_episode_over_root_episode_stub(
 def test_find_video_file_floor_prefers_real_file_over_episode_tagged_stub(
     mock_urlopen, mock_settings
 ):
-    """An episode-tagged ROOT stub must not outrank a generically-named
-    above-floor real file in a subfolder. The stub scores ep=1000 on identity
+    """An episode-tagged ROOT stub must not outrank a generically named
+    over-floor real file in a subfolder. The stub scores ep=1000 on identity
     while the real file (no tag in its own name) scores ep=0, so on the
     episode-first ordering the stub's key would win and the real file would be
     discarded back to the stub -- a re-rejection loop (CodeRabbit #340). When the
-    deferred current-level file is itself a stub, an above-floor, non-wrong
+    deferred current-level file is itself a stub, an over-floor, non-wrong
     sibling must always be adopted over it."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     root = _propfind_listing(
@@ -3164,10 +3164,10 @@ def test_find_video_file_floor_prefers_real_file_over_episode_tagged_stub(
 def test_find_video_file_floor_demotes_same_level_episode_stub(
     mock_urlopen, mock_settings
 ):
-    """An episode-tagged stub and a generically-named above-floor real file in
+    """An episode-tagged stub and a generically named over-floor real file in
     the SAME folder (no subdir to defer into): the stub scores ep=1000 and would
     win the current-level ranking, be returned, and re-rejected every poll. The
-    floor must demote the below-floor stub beneath the above-floor real file
+    floor must demote the below-floor stub beneath the over-floor real file
     during ranking, so the real file is selected here (Codex #340)."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     root = _propfind_listing(
@@ -3244,9 +3244,9 @@ def test_find_video_file_floor_adopts_size_unknown_exact_episode_child(
 def test_find_video_file_floor_keeps_requested_stub_over_same_level_wrong_episode(
     mock_urlopen, mock_settings
 ):
-    """#340 (Codex): same level, no subdir — the requested-episode stub (S01E05)
-    sits below the floor while a WRONG episode (S01E04) sits above it. The
-    above-floor boost must NOT promote the wrong episode over the requested-ep
+    """#340 (Codex): same level, no subdir—the requested-episode stub (S01E05)
+    sits below the floor while a WRONG episode (S01E04) sits over it. The
+    over-floor boost must NOT promote the wrong episode over the requested-ep
     stub: its real size would pass the resolver's stub guard and Kodi would
     stream the wrong episode. Keep the requested-ep stub as best_file so the
     resolver rejects it and the poll loop keeps waiting for S01E05."""
@@ -3281,9 +3281,9 @@ def test_find_video_file_floor_keeps_requested_stub_over_same_level_wrong_episod
 def test_find_video_file_floor_keeps_requested_stub_over_sibling_wrong_episode(
     mock_urlopen, mock_settings
 ):
-    """#340 (Codex): sibling-folder version — one sibling holds the requested
-    below-floor S01E05 stub, the other an above-floor WRONG episode (S01E04).
-    The sibling ranking must apply the same above-floor + not-wrong dimensions
+    """#340 (Codex): sibling-folder version—one sibling holds the requested
+    below-floor S01E05 stub, the other an over-floor WRONG episode (S01E04).
+    The sibling ranking must apply the same over-floor + not-wrong dimensions
     so the wrong episode never outranks the requested-ep stub, which is kept so
     the resolver re-waits."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
@@ -3333,9 +3333,9 @@ def test_find_video_file_floor_keeps_requested_stub_over_sibling_wrong_episode(
 def test_find_video_file_floor_prefers_generic_real_over_sibling_episode_stub(
     mock_urlopen, mock_settings
 ):
-    """#340: re-confirm the floor goal across siblings — a requested-episode stub
-    (S01E05, below floor) must still LOSE to a generically-named above-floor real
-    file in another sibling. Neither is wrong, so the above-floor flag decides
+    """#340: re-confirm the floor goal across siblings—a requested-episode stub
+    (S01E05, below floor) must still LOSE to a generically named over-floor real
+    file in another sibling. Neither is wrong, so the over-floor flag decides
     and the streamable real file wins."""
     mock_settings.return_value = _SETTINGS_WITH_AUTH
     root = _propfind_listing(

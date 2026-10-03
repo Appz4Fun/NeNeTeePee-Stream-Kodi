@@ -17,17 +17,17 @@ This writes a small `nzbdav.json` player file into TMDBHelper's players folder
 (`addon_data/plugin.video.themoviedb.helper/players/`) and registers
 **NeNeTeePee-Stream-Kodi** as a selectable playback source. It also turns on TMDBHelper's
 `only_resolve_strm` setting. Without that setting, TMDBHelper doesn't run
-NeNeTeePee-Stream-Kodi's script action directly (see [below](#why-neneteepee-stream-kodi-uses-a-script-player)).
+NeNeTeePee-Stream-Kodi's script action directly (see [Why NeNeTeePee-Stream-Kodi uses a script player](#why-neneteepee-stream-kodi-uses-a-script-player)).
 You get a **Player installed to: TMDBHelper** notification.
 
 NeNeTeePee-Stream-Kodi protects your data while doing this:
 
 - It refuses to write anywhere outside Kodi's add-on data folder.
-- If a player file with the same schema version is already present, it's kept
-  as is, so your manual edits survive. A file from an older schema version is
-  backed up to `nzbdav.bak` and then replaced. If the backup can't be written,
-  the install stops and your existing file stays in place.
-- If the write fails, you get a **Failed to install to: …** message rather than
+- If a player file with the same schema version is already present, NeNeTeePee-Stream-Kodi
+  keeps it as is, so your manual edits survive. NeNeTeePee-Stream-Kodi backs up a file from an
+  older schema version to `nzbdav.bak` and then replaces it. If it can't write
+  the backup, the install stops and your existing file stays in place.
+- If the write fails, you get a **Failed to install to: …** message instead of
   a false success.
 
 !!! tip "Re-run the install after updating NeNeTeePee-Stream-Kodi"

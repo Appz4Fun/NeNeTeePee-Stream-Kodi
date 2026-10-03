@@ -57,18 +57,18 @@ of CI.
 - **CI** (`ci.yml`) runs on every push to `main` and on pull requests against
   `main`: `just lint` and `just test` on Python 3.14, plus a `compat-3-8` job
   that byte-compiles the add-on on Python 3.8.
-- **Releases** are built by the `Release` workflow when a `v*` tag is pushed. It
-  runs the tests, verifies the version in `addon.xml` matches the tag, builds
-  the zip, and creates a GitHub Release. Tags with a hyphen (for example
-  `v2.0.0-beta.2`) are marked **pre-release**.
+- **Releases**: the `Release` workflow builds a release when you push a `v*`
+  tag. It runs the tests, verifies that the version in `addon.xml` matches the
+  tag, builds the zip, and creates a GitHub Release. The workflow marks tags
+  with a hyphen (for example `v2.0.0-beta.2`) as **pre-release**.
 - **Distribution** happens in the external
   [Appz4Fun Kodi repository](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo),
-  which rebuilds from each project's GitHub Releases: pre-releases go to the
-  Beta channel only, other releases to Stable and Beta. The `Release` workflow
+  which rebuilds from each project's GitHub Releases. Pre-releases go to the
+  Beta channel only, and other releases go to both Stable and Beta. The `Release` workflow
   notifies it so updates appear quickly; otherwise it rebuilds on its daily
   schedule.
-- **This site** is built and deployed to GitHub Pages by the `Docs` workflow on
-  every push to `main` that changes `docs-site/`, `mkdocs.yml`,
+- **This site**: the `Docs` workflow builds and deploys this site to GitHub
+  Pages on every push to `main` that changes `docs-site/`, `mkdocs.yml`,
   `requirements-docs.txt`, the README, or the workflow itself. Pull requests
   that change those paths get a strict build-only check.
 
@@ -77,7 +77,7 @@ of CI.
 The test suite mocks Kodi's `xbmc*` modules in `tests/conftest.py` (via
 `tests/kodi_mocks.py`) before the add-on modules import them. Individual tests
 usually patch module-bound Kodi imports. Add focused tests near the behavior
-you change. especially around the resolve, poll, proxy, and fallback paths.
+you change, especially around the resolve, poll, proxy, and fallback paths.
 
 ## Where to start reading
 

@@ -26,8 +26,8 @@ def _kodi_time_to_seconds(t: dict) -> float:
 class PlayerPoller(threading.Thread):
     """Polls Kodi JSON-RPC Player.GetProperties on a daemon thread.
 
-    Each tick is appended to output_path as one JSON line:
-    {"t_wall": float, "t_run": float, "speed": int, "time_sec": float, ...}
+    Each tick is appended to output_path as one JSON line, possibly with extra keys:
+    {"t_wall": float, "t_run": float, "speed": int, "time_sec": float}
     """
 
     def __init__(
@@ -80,7 +80,7 @@ class PlayerPoller(threading.Thread):
                     players = self._rpc("Player.GetActivePlayers", request_id=1)
                     result = players.get("result", [])
                     if not result:
-                        # No active player yet — write a sentinel tick.
+                        # No active player yet—write a sentinel tick.
                         fh.write(
                             json.dumps(
                                 {
@@ -180,7 +180,7 @@ def correlate(timeline: list[dict], fault_events: list[dict]) -> list[dict]:
         # State at fault: last tick at or before f_t
         before = [t for t in playable_ticks if t["t_wall"] <= f_t]
         state_at_fault = before[-1] if before else None
-        # Window for resume detection: [f_t, f_t + 30s]
+        # Window for resume detection: [f_t, f_t + 30 s]
         window = [t for t in playable_ticks if f_t <= t["t_wall"] <= f_t + 30.0]
         resume_t_wall = None
         if state_at_fault is not None and window:
@@ -192,7 +192,7 @@ def correlate(timeline: list[dict], fault_events: list[dict]) -> list[dict]:
                 time_delta = cur["time_sec"] - prev["time_sec"]
                 # A tick "advances" if wall-delta is reasonable, media advanced,
                 # speed=1, and the rate is at least half real-time (not buffering
-                # catch-up of <0.05s).
+                # catch-up of <0.05 s).
                 # NOTE: The 0.5x rate threshold deviates from the spec's 1.0x
                 # requirement; it is intentionally lenient to handle brief
                 # catch-up bursts immediately after buffering completes.
@@ -210,7 +210,7 @@ def correlate(timeline: list[dict], fault_events: list[dict]) -> list[dict]:
                 if advancing:
                     consecutive_advancing += 1
                     # Require 2 consecutive advancing ticks to debounce single-tick
-                    # stutters falsely registering as "resumed".
+                    # stutters falsely registering as "resumed."
                     if consecutive_advancing >= 2:
                         resume_t_wall = cur["t_wall"]
                         break

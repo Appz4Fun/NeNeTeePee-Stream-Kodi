@@ -270,7 +270,7 @@ def _exact_cached_smb_mapping(smb_root, native_folder, completed_base, category=
 
 def _nzbget_folder_for_record(record, settings_getter=None):
     # Cached reuse must prove the server-native completed folder maps under
-    # NZBGet's configured completed base.  The ordinary first-play resolver may
+    # NZBGet's configured completed base. The ordinary first-play resolver may
     # use its heuristic fallback, but applying that here could map an unrelated
     # same-tail folder to a remembered job.
     getter = _bound_setting_getter(settings_getter)
@@ -313,7 +313,7 @@ def _smb_selection_readable(path, monitor=None):
     """
     import xbmc
 
-    # Same cycle-safe import direction as _smb_inventory above.
+    # Same cycle-safe import direction as _smb_inventory earlier.
     from resources.lib.nzbget_resolver import (
         _smb_video_is_readable,
         _warn_unreadable_smb_video,

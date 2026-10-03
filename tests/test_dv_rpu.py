@@ -39,7 +39,7 @@ def test_parse_unspec62_nalu_accepts_prefixed_payload():
 
 
 def test_parse_rejects_truncated_rpu():
-    """RPU under the 7-byte minimum raises ValueError — size guard is the
+    """RPU under the 7-byte minimum raises ValueError—size guard is the
     first line of defence before bit-stream parsing begins."""
 
     with pytest.raises(ValueError):
@@ -69,7 +69,7 @@ def test_emulation_prevention_strips_mid_payload_escape():
     ``_clear_emulation_prevention_bytes`` before the bit reader sees it.
     Without stripping, the 0x03 shifts every subsequent bit by 8 and the
     parser reads garbage. This targets the MEL fixture's internal 00 00 03
-    pattern specifically — the scenario that surfaced during development."""
+    pattern specifically—the scenario that surfaced during development."""
     info = parse_rpu_payload(_fixture("mel_orig.bin"))
     # If EP stripping were broken, this would either raise or return a
     # garbage profile. The fixture contains 0x03 preceded by two 0x00s.
@@ -81,8 +81,8 @@ def test_parse_rpu_payload_degrades_gracefully_on_polynomial_linear_interp():
     """The polynomial linear-interpolation branch is unimplemented in both
     dovi_tool and this port. Production DV content never hits it, but if it
     did, profile detection should still succeed and el_type should be
-    None — not a propagated NotImplementedError."""
-    # Real fixtures don't have linear_interp=True so we can't exercise the
+    None—not a propagated NotImplementedError."""
+    # Real fixtures don't have linear_interp=True so the test can't exercise the
     # branch end-to-end with a fixture. Instead assert the regression guard:
     # parse_rpu_payload catches NotImplementedError from _parse_mapping
     # internally (see dv_rpu.py try/except around _parse_mapping).

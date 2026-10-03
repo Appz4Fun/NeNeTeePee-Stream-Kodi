@@ -137,7 +137,7 @@ class _MgrSessionsMixin:  # pylint: disable=too-few-public-methods
             self._server.stream_context = ctx
             self._server.stream_sessions[session_id] = ctx
             evicted = self._prune_sessions_locked(keep_session=session_id)
-        # Cleanup outside the lock — `_cleanup_session` does proc.kill +
+        # Cleanup outside the lock—`_cleanup_session` does proc.kill +
         # proc.wait, which on a stuck ffmpeg can block other lock waiters.
         for evicted_ctx in evicted:
             self._cleanup_session_or_defer(evicted_ctx)
@@ -202,7 +202,7 @@ class _MgrSessionsMixin:  # pylint: disable=too-few-public-methods
             if added:
                 ctx["fallback_sources"] = existing
         if added:
-            # Warm the freshly-pushed fallbacks in the background (resolve
+            # Warm the freshly pushed fallbacks in the background (resolve
             # nzo-only standbys + fingerprint) so a later primary failure cuts
             # over instantly instead of cold-resolving under Kodi's timeout.
             self._start_fallback_prevalidation(ctx)

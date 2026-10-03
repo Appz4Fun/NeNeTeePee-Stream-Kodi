@@ -6,8 +6,8 @@
 
 ``route()`` (the entry point the suite patches around) stays in ``router`` and
 calls these. The self-resolving and action route tables reference handlers and
-connection-tests that live in (or are patched via) ``router`` —
-``_handle_play``, ``_test_hydra_connection``, ``_addon_instance``, … — so they
+connection-tests that live in (or are patched via) ``router``—
+``_handle_play``, ``_test_hydra_connection``, ``_addon_instance``, …—so they
 are reached at call time through ``import resources.lib.router as _router``,
 preserving every ``@patch("resources.lib.router.<name>")`` and avoiding a
 top-level import cycle.
@@ -22,7 +22,7 @@ def _parse_route_argv(argv):
     argv length and the handle's numericness are both contractually provided by
     Kodi, but a misconfigured shortcut / external launcher could violate that
     and the unhandled IndexError / ValueError used to escape ``route()`` with no
-    setResolvedUrl, hanging Kodi. Surface both as a logged early-return (``None``)
+    setResolvedUrl, hanging Kodi. Surface both as a logged early return (``None``)
     instead. Closes TODO.md §H.3.
     """
     if len(argv) < 2:
@@ -49,7 +49,7 @@ def _parse_route_argv(argv):
 
 
 def _redact_route_params(params):
-    """Mask url/api/key-bearing param values before they reach the debug log."""
+    """Mask URL, API, and key-bearing param values before they reach the debug log."""
     redacted = {}
     for key, value in params.items():
         lowered = key.lower()

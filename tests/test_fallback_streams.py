@@ -178,7 +178,7 @@ def test_configured_stream_bases_tolerates_trailing_space_in_url():
     """A stray trailing space in nzbdav_url must not empty the probe-base
     allow-list. _split_http_url rejects whitespace in the netloc (an SSRF/
     homograph guard), so an un-stripped config value silently drops the only
-    allowed origin — which makes fallback content-length probes return 0 and
+    allowed origin—which makes fallback content-length probes return 0 and
     every byte-identical fallback get rejected at cutover.
     """
     from resources.lib import fallback_streams
@@ -1466,14 +1466,14 @@ def test_selection_fallback_skips_candidate_wait_after_unusable_selected_manifes
             # until a candidate fetch has actually started. Candidates are in the
             # initial fetch window (submitted without needing selected_ready), so
             # this cannot deadlock -- candidate_started is set before the scan
-            # aborts at realistic load. The 30s is a hang-safety bound only (a
+            # aborts at realistic load. The 30 s is a hang-safety bound only (a
             # normally scheduled daemon thread starts in ms).
             candidate_started.wait(30)
             return manifests[url]
         candidate_started.set()
         # No self-timeout: a candidate fetch stays in flight until the finally
         # below releases it (after the snapshot), so it can never complete before
-        # we record whether the scan consumed it. The generous 3s only bounds a
+        # the test records whether the scan consumed it. The generous 3 s only bounds a
         # regression where the scan wrongly waits for this fetch (then it completes
         # -> candidate_completions -> caught below).
         release_candidates.wait(timeout=3)
@@ -1489,12 +1489,12 @@ def test_selection_fallback_skips_candidate_wait_after_unusable_selected_manifes
     finally:
         release_candidates.set()
 
-    # Deterministic via the selected-manifest gate above: candidate_started is
+    # Deterministic via the earlier selected-manifest gate: candidate_started is
     # guaranteed set before the scan aborts, so this assert is load-independent.
     assert candidate_started.is_set()
     # Structural proof (load-independent): the unusable selected manifest must
-    # abort the scan before any blocked candidate fetch is released (only the
-    # finally above releases it, after the snapshot). If the scan wrongly kept
+    # stop the scan before any blocked candidate fetch is released (only the
+    # preceding finally releases it, after the snapshot). If the scan wrongly kept
     # waiting, a candidate fetch would complete and be consumed -> count > 0.
     assert candidate_completions_at_return == 0
     assert selected["_fallback_candidates"] == []
@@ -2172,8 +2172,8 @@ def test_selection_fallback_uses_later_completed_candidate_instead_of_slow_gap(
             slow_started.set()
             # No self-timeout: the slow gap candidate stays in flight until the
             # finally below releases it (after the snapshot), so it can never
-            # complete before we record whether the scan waited for it. The
-            # generous 3s only bounds a regression where the scan blocks on this
+            # complete before the test records whether the scan waited for it. The
+            # generous 3 s only bounds a regression where the scan blocks on this
             # fetch (then it completes -> slow_completed -> caught below).
             release_slow.wait(timeout=3)
             slow_completed.set()
@@ -2182,7 +2182,7 @@ def test_selection_fallback_uses_later_completed_candidate_instead_of_slow_gap(
             # return, until selected_ready. Block the selected manifest until the
             # slow gap candidate's daemon thread has actually started, so
             # slow_started is provably set before the scan returns -- removing the
-            # thread-start race at realistic load. The 30s is a hang-safety bound
+            # thread-start race at realistic load. The 30 s is a hang-safety bound
             # only (a normally scheduled daemon thread starts in ms; the slow
             # candidate is in the initial window, so it is always submitted).
             slow_started.wait(30)
@@ -2195,11 +2195,11 @@ def test_selection_fallback_uses_later_completed_candidate_instead_of_slow_gap(
     finally:
         release_slow.set()
 
-    # Deterministic via the selected-manifest gate above: slow_started is
+    # Deterministic via the earlier selected-manifest gate: slow_started is
     # guaranteed set before the scan returns, so this assert is load-independent.
     assert slow_started.is_set()
     # Structural proof (load-independent): the slow gap candidate (GAP02) is left
-    # in flight and never released here, so a healthy early-return that uses the
+    # in flight and never released here, so a healthy early return that uses the
     # faster candidate[2] (GAP03) must NOT have waited for it. A
     # "waits-but-same-result" regression (drain the slow in-flight fetch, then
     # discard it) would block until it completed -> slow_completed set.
@@ -2459,8 +2459,8 @@ def test_selection_fallback_does_not_wait_for_optional_tail_after_max_filled(
             slow_started.set()
             # No self-timeout: the optional-tail fetch stays in flight until the
             # finally below releases it (after the snapshot), so it cannot complete
-            # before we record whether the scan waited for it. The generous 3s only
-            # bounds a regression where the scan blocks on this fetch (then it
+            # before the test records whether the scan waited for it. The generous
+            # 3 s only bounds a regression where the scan blocks on this fetch (then it
             # completes -> tail_completed -> caught below).
             release_slow.wait(timeout=3)
             tail_completed[0] = True
@@ -2477,13 +2477,13 @@ def test_selection_fallback_does_not_wait_for_optional_tail_after_max_filled(
     # (candidates[6]) is beyond max_candidates, so the rolling window submits it
     # only AFTER the selected manifest is ready -- it cannot be gated on the
     # selected fetch without deadlocking the scan (Codex P2). Confirm it started
-    # with a generous 10s bound (a normally scheduled daemon thread starts in
+    # with a generous 10 s bound (a normally scheduled daemon thread starts in
     # ms); the not-completed-at-return snapshot below is the real structural
     # proof and does not depend on this.
     assert slow_started.wait(10)
     # Structural proof (load-independent): with max_candidates already filled,
     # the scan must return before the optional-tail fetch (candidates[6]) is
-    # released (only the finally above releases it, after the snapshot). If it
+    # released (only the preceding finally releases it, after the snapshot). If it
     # wrongly waited, that fetch would complete -> tail_completed_at_return True.
     assert tail_completed_at_return is False
     assert selected["_fallback_candidates"] == candidates[:4] + [candidates[5]]
@@ -2543,8 +2543,8 @@ def test_selection_fallback_does_not_wait_for_optional_tail_after_partial_match(
             slow_started.set()
             # No self-timeout: the slow optional-tail candidate stays in flight
             # until the finally below releases it (after the snapshot), so it can
-            # never complete before we record whether the scan waited for it. The
-            # generous 3s only bounds a regression where the scan blocks on this
+            # never complete before the test records whether the scan waited for it. The
+            # generous 3 s only bounds a regression where the scan blocks on this
             # fetch (then it completes -> slow_completed -> caught below).
             release_slow.wait(timeout=3)
             slow_completed.set()
@@ -2553,7 +2553,7 @@ def test_selection_fallback_does_not_wait_for_optional_tail_after_partial_match(
             # return, until selected_ready. Block the selected manifest until the
             # slow optional-tail candidate's daemon thread has actually started, so
             # slow_started is provably set before the scan returns -- removing the
-            # thread-start race at realistic load. The 30s is a hang-safety bound
+            # thread-start race at realistic load. The 30 s is a hang-safety bound
             # only (a normally scheduled daemon thread starts in ms; the slow
             # candidate is in the initial window, so it is always submitted).
             slow_started.wait(30)
@@ -2566,7 +2566,7 @@ def test_selection_fallback_does_not_wait_for_optional_tail_after_partial_match(
     finally:
         release_slow.set()
 
-    # Deterministic via the selected-manifest gate above: slow_started is
+    # Deterministic via the earlier selected-manifest gate: slow_started is
     # guaranteed set before the scan returns, so this assert is load-independent.
     assert slow_started.is_set()
     # Structural proof (load-independent): the slow optional-tail candidate is
@@ -2579,8 +2579,8 @@ def test_selection_fallback_does_not_wait_for_optional_tail_after_partial_match(
     assert selected["_fallback_candidates"] == [candidates[0]]
     # Premise pin (load-independent): the structural slow_completed guard proves
     # the scan does not BLOCK on the optional tail, but it cannot see drift in the
-    # bounded wait the scan grants before giving up. Widening that wait (e.g. to
-    # 0.2s) would keep this test green yet slow every real partial-match path.
+    # bounded wait the scan grants before giving up. Widening that wait (for example, to
+    # 0.2 s) would keep this test green yet slow every real partial-match path.
     # Pin the documented optional-tail wait so such a drift goes red here.
     from resources.lib import fallback_streams
 
@@ -3548,10 +3548,10 @@ def test_video_manifest_peer_match_accepts_size_within_10_percent_tolerance(
     mock_settings, mock_fetch
 ):
     """Different uploads of the same source MKV use different yEnc segment sizes,
-    so two video manifests for the same release will report different group_bytes.
+    so two video manifests for the same release report different group_bytes.
     Accept matches when the bytes are within the +/-10% Tier-1 band as long as the
     content-identity gate already passed. (Tightened from the old +/-20% band so a
-    differently-encoded release can no longer slip through on size alone.)
+    differently encoded release can no longer slip through on size alone.)
     """
     mock_settings.return_value = (True, 5)
     primary = _result(
@@ -3707,7 +3707,7 @@ def test_archive_peer_does_not_match_video_peer_outside_20_percent(
 ):
     """An archive RAR for one release should not peer with a video MKV whose
     group_bytes are more than 20% off, even when titles and profiles agree.
-    A 67% gap (e.g., Theatrical-UHD vs Extended-UHD) reflects different
+    A 67% gap (for example, Theatrical-UHD vs Extended-UHD) reflects different
     runtime, not yEnc segmentation noise.
     """
     mock_settings.return_value = (True, 5)
@@ -3868,7 +3868,7 @@ def test_archive_peers_with_shared_archive_base_match_via_group_key_short_circui
 ):
     """Archive manifests that share a non-empty archive_base produce identical
     group keys (archive group keys exclude bytes by design), so they peer via
-    the early-return short-circuit even when their group_bytes diverge widely.
+    the early return short-circuit even when their group_bytes diverge widely.
     Pin that contract so a future change to the size gate does not silently
     drop legitimate same-archive-base peers.
     """
@@ -4076,10 +4076,10 @@ def test_same_content_rejects_part_one_vs_part_two():
 
 
 def test_normalize_title_collapses_conjunction_spellings():
-    """ "&", the literal word "and", and an omitted conjunction are one identity.
+    """The ``&`` symbol, the word ``and``, and an omitted conjunction are one identity.
 
-    "Your Friends & Neighbors", "Your.Friends.and.Neighbors", and
-    "Your.Friends.Neighbors" all name the same work; normalization must
+    ``Your Friends & Neighbors``, ``Your.Friends.and.Neighbors``, and
+    ``Your.Friends.Neighbors`` all name the same work; normalization must
     collapse all three spellings to a single token sequence so they peer.
     """
     from resources.lib import fallback_streams as fs
@@ -4092,11 +4092,11 @@ def test_normalize_title_collapses_conjunction_spellings():
 
 
 def test_normalize_title_preserves_part_ordinals():
-    """REGRESSION GUARD: dropping "and" must not weaken part/chapter discrimination.
+    """REGRESSION GUARD: dropping ``and`` must not weaken ``part``/``chapter`` checks.
 
     The conjunction collapse strips only a standalone "and"; ordinal words that
     distinguish "Part One" from "Part Two" must survive intact, and a substring
-    like "and" inside a real word (e.g. "Andromeda") must not be touched.
+    like "and" inside a real word (for example, "Andromeda") must not be touched.
     """
     from resources.lib import fallback_streams as fs
 
@@ -4107,7 +4107,7 @@ def test_normalize_title_preserves_part_ordinals():
 
 
 def test_same_content_peers_conjunction_variants():
-    """A yearless/episode-less title peers across "&", "and", and omitted forms.
+    """A yearless/episode-less title peers across ``&``, ``and``, and omitted forms.
 
     Without a year or episode to corroborate identity, the title comparison must
     stand on its own. Before the conjunction collapse, only "&"-vs-omitted
@@ -4140,7 +4140,7 @@ def test_same_content_peers_conjunction_variants():
 
 
 def test_normalize_title_collapses_foreign_conjunctions():
-    """French "et" and German "und" are conjunctions too, like "and"/"&".
+    """French ``et`` and German ``und`` are conjunctions too, like ``and`` and ``&``.
 
     "Jules et Jim" / "Jules and Jim" / "Jules Jim" name the same work, as do the
     "und" spellings, so every variant must normalize to one shared identity.
@@ -4162,12 +4162,12 @@ def test_normalize_title_collapses_foreign_conjunctions():
 
 
 def test_normalize_title_collapses_double_escaped_ampersand():
-    """A literal "&amp;" (from a double-escaped feed) collapses like a bare "&".
+    """A literal ``&amp;`` (from a double-escaped feed) collapses like a bare ``&``.
 
-    XML parsing normally decodes "&amp;" to "&", but double-escaped feeds
-    ("&amp;amp;") leave the literal entity in the title. It must collapse to the
-    same identity as "&", "and", and the omitted form -- not leave a stray
-    "amp" token. A real "amp" WORD must be left untouched.
+    XML parsing normally decodes ``&amp;`` to ``&``, but double-escaped feeds
+    (``&amp;amp;``) leave the literal entity in the title. It must collapse to the
+    same identity as ``&``, ``and``, and the omitted form -- not leave a stray
+    ``amp`` token. A real ``amp`` WORD must be left untouched.
     """
     from resources.lib import fallback_streams as fs
 
@@ -4202,7 +4202,7 @@ def test_normalize_title_keeps_leading_conjunction_word():
 
 
 def test_normalize_title_keeps_lone_conjunction_token():
-    """A title that is ONLY a conjunction token (e.g. "ET") is never folded away.
+    """A title that is ONLY a conjunction token (for example, "ET") is never dropped.
 
     Folding a lone token to an empty title is dangerous: an empty core title
     matches any release in the corroborated paths. Interior-only folding keeps
@@ -4264,9 +4264,9 @@ def test_same_content_rejects_lone_acronym_vs_other_same_year():
 def test_normalize_title_only_drops_whole_conjunction_words():
     """REGRESSION GUARD: only standalone conjunction WORDS are dropped.
 
-    A conjunction spelled as a substring of a real word (e.g. "et" in "Planet",
-    "und" in "Underworld", "and" in "Andromeda") must survive untouched -- the
-    collapse is whole-token only.
+    A conjunction spelled as a substring of a real word (for example,
+    ``et`` in ``Planet``, ``und`` in ``Underworld``, ``and`` in ``Andromeda``)
+    must survive untouched -- the collapse is whole-token only.
     """
     from resources.lib import fallback_streams as fs
 
@@ -4302,12 +4302,12 @@ def test_same_content_peers_foreign_conjunction_variants():
 
 
 def test_same_episode_with_part_token_matches_bare_repost():
-    """An episode that carries an episode-title Part/Chapter token must still
+    """An episode that carries an episode-title ``Part``/``Chapter`` token must still
     peer with the same SxxExx posted without that token.
 
-    PTT leaves words like "Chapter One" inside an episode title, so the
+    PTT leaves words like ``Chapter One`` inside an episode title, so the
     part-vs-bare xor (the 'Dune Part Two' vs 'Dune' movie discriminator) must
-    NOT fire for episodes — both sides are the same episode, one just spelled
+    NOT fire for episodes—both sides are the same episode, one just spelled
     out its episode title.
     """
     from resources.lib import fallback_streams as fs
@@ -4504,7 +4504,7 @@ def test_same_content_rejects_numeric_sequel_suffix_without_year():
 
 def test_same_content_rejects_roman_ordinal_sequel_suffix_without_year():
     """FS-M: a lone MULTI-CHARACTER Roman-numeral or ordinal-word sequel tail
-    ("Rocky IV", "Rambo III", "Iron Man Three") is a content discriminator, not
+    (``Rocky IV``, ``Rambo III``, ``Iron Man Three``) is a content discriminator, not
     a junk suffix, and must be rejected when neither side parses a year (PTT
     keeps the sequel discriminator inside the title)."""
     from resources.lib import fallback_streams as fs
@@ -4627,7 +4627,7 @@ def test_titles_core_related_sequel_tail_predicate_matrix():
     assert fs._titles_core_related("saw x", "saw", corroborated=False) is True
     # "one" exclusion.
     assert fs._titles_core_related("show one", "show", corroborated=False) is True
-    # The new constant excludes single-letter romans and "one"/"eleven".
+    # The new constant excludes single-letter romans and ``one``/``eleven``.
     assert "ii" in fs._SEQUEL_TAIL_TOKENS
     assert "three" in fs._SEQUEL_TAIL_TOKENS
     assert "ten" in fs._SEQUEL_TAIL_TOKENS
@@ -4661,7 +4661,7 @@ def test_same_content_rescues_roman_sequel_with_matching_year():
 
 def test_part_number_from_title_roman_sequel_tails_are_not_parts():
     """FS-M regression guard: a bare Roman/ordinal sequel tail is NOT a
-    labeled part, but an explicit Part/Chapter label still parses."""
+    labeled part, but an explicit ``Part``/``Chapter`` label still parses."""
     from resources.lib import fallback_streams as fs
 
     assert fs._part_number_from_title("Rocky IV") == 0
@@ -4671,7 +4671,7 @@ def test_part_number_from_title_roman_sequel_tails_are_not_parts():
 
 
 def test_same_content_ignores_phantom_season_for_movie_peer():
-    """FS: a movie whose release-group suffix mis-parses as a season (e.g.
+    """FS: a movie whose release-group suffix mis-parses as a season (for example,
     REMUX-ALT01 -> seasons=[1]) must still peer with the same movie posted by a
     normal group (seasons=[]) when both carry the same parsed year.
 
@@ -4710,7 +4710,7 @@ def test_same_content_keeps_distinct_seasons_apart_despite_phantom_collapse():
     """REGRESSION GUARD: the phantom-season collapse must NOT relax genuinely
     different seasons. Fargo S01 and S02 both carry a season AND the same year,
     so the season-presence parity holds and they stay subject to season
-    equality — they must remain different content.
+    equality—they must remain different content.
     """
     from resources.lib import fallback_streams as fs
 
@@ -4961,7 +4961,7 @@ def test_attach_fallback_candidates_prefers_exact_filename_over_tier(
 ):
     """Through the production attach path, an exact-same-filename repost (a
     different upload of the byte-identical file) must rank ahead of a closer
-    tier/size peer — the user requirement to try exact filenames first."""
+    tier/size peer—the user requirement to try exact filenames first."""
     mock_settings.return_value = (True, 5)
     primary = _result(
         "Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HEVC-GROUP",
@@ -4969,7 +4969,7 @@ def test_attach_fallback_candidates_prefers_exact_filename_over_tier(
         60000000000,
         meta=_movie_meta(resolution="2160p", codec="x265/HEVC", group="GROUP"),
     )
-    # Tier 0 (size within 3%) but a DIFFERENT filename — listed first to prove
+    # Tier 0 (size within 3%) but a DIFFERENT filename—listed first to prove
     # the exact-filename key re-orders ahead of the better tier.
     closer = _result(
         "Dune.Part.Two.2024.2160p.UHD.BluRay.REMUX.DV.HEVC-GROUP",
@@ -4999,7 +4999,7 @@ def test_attach_fallback_candidates_prefers_exact_filename_over_tier(
 
 def test_metadata_profiles_match_fails_closed_on_unknown_resolution_same_group():
     """When same-group backups are required, a candidate whose resolution PTT
-    could not parse must be REJECTED — the user requires the backup share the
+    could not parse must be REJECTED—the user requires the backup share the
     primary's resolution, so the gate fails closed like the group gate."""
     from resources.lib import fallback_streams
 
@@ -5062,7 +5062,7 @@ def test_metadata_profiles_match_accepts_same_resolution_same_group():
 
 def test_rank_fallback_candidates_prefers_exact_same_filename():
     """An exact-same-filename repost (different upload) must be ranked ahead of a
-    closer-by-tier/size peer — the user wants exact filenames preferred first."""
+    closer-by-tier/size peer—the user wants exact filenames preferred first."""
     from resources.lib import fallback_streams
 
     meta = _movie_meta(resolution="2160p", codec="x265/HEVC", group="GROUP")
@@ -5133,7 +5133,7 @@ def test_dedupe_pubdate_is_anchor_based_not_transitive():
     result = fallback_streams._dedupe_candidates_by_pubdate(target, [a, b, c])
     links = {item[3]["link"] for item in result}
 
-    # a & b (50 min) collapse to one; c is >1h from the a-anchor -> distinct.
+    # a & b (50 min) collapse to one; c is more than 1 h from the a-anchor -> distinct.
     assert len(result) == 2
     assert "https://c/nzb" in links
     assert "https://a/nzb" in links  # equal tier -> order_index tie-break keeps first
@@ -5145,7 +5145,7 @@ def test_dedupe_pubdate_boundary_exactly_one_hour_collapses():
 
     target = {"pubdate": ""}
     first = _dated(1, "Mon, 01 Jan 2024 00:00:00 +0000", "https://a/nzb")
-    # Exactly 3600s later -> inclusive window -> same article -> collapse.
+    # Exactly 3600 s later -> inclusive window -> same article -> collapse.
     second = _dated(1, "Mon, 01 Jan 2024 01:00:00 +0000", "https://b/nzb")
 
     result = fallback_streams._dedupe_candidates_by_pubdate(target, [first, second])

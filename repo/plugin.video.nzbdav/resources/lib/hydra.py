@@ -33,7 +33,7 @@ NEWZNAB_NS = "http://www.newznab.com/DTD/2010/feeds/attributes/"
 # settings.xml schema default. Injected settings getters (_get_script_setting
 # and the main-thread snapshots the NZBGet dupe loader is built with) read the
 # raw profile XML, where a setting left at its DISPLAYED default is simply
-# absent -- they return the fallback we pass. The live-Kodi branch returns the
+# absent -- they return the fallback the caller passes. The live-Kodi branch returns the
 # schema default, so mirror it here (same pattern as nzbget_api._DEFAULT_URL)
 # or a default-URL Hydra setup silently loses every hydra_url-gated feature
 # when read through a getter.
@@ -54,15 +54,15 @@ def _addon():
 
     ``router_search`` imports this module at module scope (for
     ``_DEFAULT_HYDRA_URL``), so importing hydra must be side-effect free: a
-    module-scope ``xbmcaddon.Addon(...)`` would hit the Kodi settings API
-    during import in RunScript/early-GUI contexts that deliberately defer it
+    module-scope ``xbmcaddon.Addon()`` would hit the Kodi settings API
+    during import in RunScript and early GUI contexts that deliberately defer it
     until a safe getter path is chosen.
     """
     return xbmcaddon.Addon("plugin.video.nzbdav")
 
 
 # _format_request_error, _get_text, _calculate_age imported from
-# resources.lib.http_util above; definitions removed to eliminate
+# resources.lib.http_util (imported earlier); definitions removed to eliminate
 # hydra.py ↔ prowlarr.py duplication.
 
 
@@ -149,7 +149,7 @@ def _fetch_hydra_xml(request_url, error_prefix):
         # URLError falls under OSError in _HYDRA_REQUEST_ERRORS.
         # HTTPError/URLError str() can echo the failing URL (which embeds
         # the indexer's apikey query param) back into the log. Redact
-        # before logging — same defense as the prowlarr fallback path.
+        # before logging—same defense as the prowlarr fallback path.
         # TODO.md §H.2-H2e / §H.3.
         from resources.lib.http_util import redact_text
 
@@ -184,7 +184,7 @@ def _legacy_hydra_title_fallback(primary, title):
         return None
 
     fallback = dict(primary)
-    # Strip BOTH ids — a title-broadening retry that keeps the failing
+    # Strip BOTH ids—a title-broadening retry that keeps the failing
     # tvdbid/imdbid stays just as constrained and returns the same empty
     # result (issue #318). Mirrors the Prowlarr fallback.
     fallback.pop("tvdbid", None)
@@ -192,7 +192,7 @@ def _legacy_hydra_title_fallback(primary, title):
     # Clean the raw caller title here too (#294): this fallback is built in
     # hydra (not via plan_newznab_search), so it bypasses the planner-level
     # clean_search_query and would otherwise re-send a literal '&' the primary
-    # query already stripped — a term no release name carries.
+    # query already stripped—a term no release name carries.
     fallback["q"] = _clean_search_query(title)
     return fallback
 
@@ -203,7 +203,7 @@ def _resolve_max_results(settings_getter):
     `max_results` is exposed via Kodi's number input but the addon also
     ships with old user profiles that may have the setting as a non-
     numeric string (legacy text input, hand-edited XML). Guard the int
-    conversion + clamp to a sensible range — TODO.md §H.2-M20 / §H.3.
+    conversion + clamp to a sensible range—TODO.md §H.2-M20 / §H.3.
     """
     if settings_getter is not None:
         raw_max = settings_getter("max_results", "25")
@@ -485,7 +485,7 @@ def fetch_release_duplicate_uploads(picked, settings_getter=None):
 
 
 def _source_url_hostname(source_url):
-    """Extract a hostname from a Hydra <source url=\"...\"> fallback."""
+    """Extract a hostname from the URL attribute of a Hydra ``<source>`` element."""
     if not source_url:
         return ""
     if "/" not in source_url:
@@ -509,7 +509,7 @@ def _parse_newznab_attrs(item):
     indexer = ""
     for attr in item.iter():
         # `tag` is either ``"{ns}local"`` (namespaced) or ``"local"``
-        # (unqualified). We only care about the local-name == "attr".
+        # (unqualified). Only the local-name == `attr` matters.
         tag = attr.tag
         if not isinstance(tag, str):
             continue
@@ -590,7 +590,7 @@ def _parse_results_checked(xml_text):
         return [], "NZBHydra returned an invalid response: expected RSS feed"
 
     # Scope to <channel><item> rather than `root.iter("item")` so a
-    # nested <item> inside e.g. an <atom:link> extension element doesn't
+    # nested <item> inside, for example, an <atom:link> extension element doesn't
     # get picked up as a search result. Newznab feeds put <item>s in
     # <channel> by spec; falling back to root.iter for malformed feeds
     # used to silently include junk results. TODO.md §H.2-M21.

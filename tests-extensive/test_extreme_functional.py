@@ -19,16 +19,16 @@ Import notes (adjusted from plan):
 DEVIATIONS from the spec/plan:
 
 - Spec line 230 says "XBMC.RunScript(plugin.video.themoviedb.helper, mode=play,
-  type=movie, tmdb_id=...)".
+  type=movie, tmdb_id=<id>)."
   Implementation uses JSON-RPC `Addons.ExecuteAddon` with `info=play` (TMDBHelper's
   actual routing param). XBMC.RunScript is a Kodi builtin, not a JSON-RPC method
-  in Kodi 21 — Addons.ExecuteAddon with the addon's plugin params is the correct
+  in Kodi 21—Addons.ExecuteAddon with the addon's plugin params is the correct
   JSON-RPC invocation.
 
-- Spec/plan implies `tmdb_id` parameter; we use `imdb_id` because IMDB_TOP_50_MOVIES
-  has imdb tt-IDs (no tmdb_ids). TMDBHelper accepts both.
+- Spec/plan implies `tmdb_id` parameter; this test uses `imdb_id`
+  because IMDB_TOP_50_MOVIES has imdb tt-IDs (no tmdb_ids). TMDBHelper accepts both.
 
-- _most_duplicated_group_pool returns a 2-tuple (group_str, pool_list) — plan
+- _most_duplicated_group_pool returns a 2-tuple (group_str, pool_list)—plan
   treated it as a flat list. Adjusted unpacking accordingly.
 
 - Plan's LIVE_FALLBACK_REQUIRED_COUNT env var doesn't exist in the helpers; the
@@ -37,7 +37,7 @@ DEVIATIONS from the spec/plan:
 
 # wrong-import-order: the test_functional_fallback_playback import is deliberately
 # late (after the os.environ setup it depends on), which pylint's global import-order
-# model can't reconcile with the first-party tests.extreme_harness import above.
+# model can't reconcile with the first-party tests.extreme_harness import at the top.
 # pylint: disable=inconsistent-return-statements,no-name-in-module,wrong-import-order
 
 from __future__ import annotations
@@ -80,8 +80,8 @@ os.environ.setdefault("FUNCTIONAL_MIN_FALLBACK_CANDIDATES", "2")
 
 # _live_env() (imported below) requires NZBDAV_URL, WEBDAV_URL, WEBDAV_API_KEY
 # in addition to HYDRA_*/WEBDAV_USERNAME/WEBDAV_PASSWORD. The extreme test
-# brings up its own nzbdav-rs in docker-compose with a fixed host port, so we
-# point the live-env helpers at that host-mapped port instead of asking the
+# brings up its own nzbdav-rs in docker-compose with a fixed host port, so it
+# points the live-env helpers at that host-mapped port instead of asking the
 # user to put it in .env. NZBDAV_API_KEY is the same secret as WEBDAV_API_KEY
 # in this stack (both come from the .env's NZBDAV_API_KEY).
 _NZBDAV_HOST_URL = f"http://localhost:{NZBDAV_HOST_PORT}"
@@ -180,7 +180,7 @@ def _kodi_rpc(method: str, params: dict | None = None, request_id: int = 1) -> d
 
 
 def _generate_fault_schedule(rng: random.Random) -> list[dict]:
-    """5 random times in [60, 1140], min 60s apart, with shuffled fault types."""
+    """5 random times in [60, 1140], min 60 s apart, with shuffled fault types."""
     while True:
         candidates = sorted(rng.sample(range(60, 1140), 5))
         if all(b - a >= 60 for a, b in zip(candidates, candidates[1:])):
@@ -195,12 +195,12 @@ def _generate_fault_schedule(rng: random.Random) -> list[dict]:
 def _pick_movie_with_fallback_pool(rng: random.Random, settings):
     """Try up to 3 random movies; return (movie, primary_pair, fallback_pairs).
 
-    _most_duplicated_group_pool returns (group_str, pool_list); we unpack it
-    and check the pool list length, not the 2-tuple length.
+    _most_duplicated_group_pool returns (group_str, pool_list); the test unpacks it
+    and checks the pool list length, not the 2-tuple length.
 
     Honour ``EXTREME_TEST_IMDB_ID`` to pin the candidate to a specific title
-    when set — otherwise we get a random movie via the seeded RNG and any
-    nzbdav-rs release-pattern issues (e.g. the "no importable video file
+    when set—otherwise it picks a random movie via the seeded RNG and any
+    nzbdav-rs release-pattern issues (for example, the "no importable video file
     found" rejection on certain BluRay rips) make the test flaky.
     """
     pinned_imdb = os.environ.get("EXTREME_TEST_IMDB_ID", "").strip()
@@ -217,7 +217,7 @@ def _pick_movie_with_fallback_pool(rng: random.Random, settings):
     # nzbdav-rs's deobfuscator handles cleanly), then fall back to the
     # most-duplicated release group. The original extreme-test pool used
     # only the latter, which often picked WEB-DL rips that nzbdav-rs
-    # rejects with "no importable video file found".
+    # rejects with "no importable video file found."
     for movie in pool_movies[:3]:
         try:
             _profile, pairs = _movie_selections_with_fallbacks(settings, movie)
@@ -252,7 +252,7 @@ def _dismiss_tmdbhelper_player_choosers():
     actual current Kodi window before each ``Input.Select``. The earlier
     fixed-timing implementation sent the two Selects on a sleep(4),
     sleep(2) cadence; under bridge networking + software GL the first
-    chooser doesn't appear until ~5-10s after ExecuteAddon, so the
+    chooser doesn't appear until ~5-10 s after ExecuteAddon, so the
     Selects fired into thin air and TMDBHelper's own ~10-minute
     wait-for-user timeout exhausted the test's ``_wait_for_player``
     window. Polling for window id 12000 (DialogSelect) keeps the
@@ -266,7 +266,7 @@ def _dismiss_tmdbhelper_player_choosers():
         except Exception:  # noqa: BLE001
             pass
         # The second chooser ("Play with NeNeTeePee-Stream-Kodi" / Cancel) replaces the
-        # first so window id stays 12000 — give it a beat to actually
+        # first so window id stays 12000, so give it a beat to actually
         # transition before re-polling.
         time.sleep(0.8)
         if _wait_for_dialog_select(timeout=10):
@@ -280,8 +280,8 @@ def _wait_for_player(timeout=30):
     """Poll Player.GetActivePlayers passively. Caller is responsible for
     dismissing TMDBHelper's player choosers via
     _dismiss_tmdbhelper_player_choosers before calling this; sending
-    Input.Select inside the poll loop will Cancel nzbdav's
-    DialogProgress and abort resolve.
+    Input.Select inside the poll loop cancels nzbdav's
+    DialogProgress and stops resolve.
     """
     deadline = time.time() + timeout
     while time.time() < deadline:
@@ -337,7 +337,7 @@ def test_extreme_fallback_run(stack_ready, run_dir):
     # TMDBHelper accepts imdb_id; use it so the test actually exercises the
     # TMDBHelper -> player JSON -> nzbdav resolver path (per spec). The
     # IMDB_TOP_50_MOVIES list pinned in test_functional_fallback_playback.py
-    # carries imdb tt-IDs, not tmdb_ids, so we route via imdb_id.
+    # carries imdb tt-IDs, not tmdb_ids, so the test routes via imdb_id.
     imdb_id = movie["imdb"]  # tt-format id like "tt0111161"
     rpc_resp = _kodi_rpc(
         "Addons.ExecuteAddon",
@@ -359,7 +359,7 @@ def test_extreme_fallback_run(stack_ready, run_dir):
     def _capture_diagnostics():
         """Pull Kodi + addon logs out of the container before teardown.
 
-        Called on any orchestrator failure so we can debug why playback
+        Called on any orchestrator failure so you can debug why playback
         didn't start (crash, hang, timeout, dialog lockup) after the
         compose_up finalizer wipes the volumes.
         """
@@ -412,9 +412,9 @@ def test_extreme_fallback_run(stack_ready, run_dir):
         # nzbdav's resolver polls until the NZB download completes before
         # invoking the player (see repo/plugin.video.nzbdav/resources/lib/
         # resolver.py:_poll_until_ready). For a 1080p release that's
-        # multiple GB over NNTP the wait can be several minutes; 60s is
+        # multiple GB over NNTP the wait can be several minutes; 60 s is
         # too tight. The 20-min test body tolerates most of that wait
-        # since faults start at t=60s into playback, not into the test.
+        # since faults start at t=60 s into playback, not into the test.
         pid = _wait_for_player(timeout=600)
     except Exception:  # noqa: BLE001
         # Connection reset / refused while polling = Kodi crashed mid-test.
@@ -426,7 +426,7 @@ def test_extreme_fallback_run(stack_ready, run_dir):
         raise
 
     if pid is None:
-        # Save what we have and bail.
+        # Save what exists and bail.
         measurement.write_manifest(
             run_dir / "manifest.json",
             {"seed": seed_value, "playback_started": False},

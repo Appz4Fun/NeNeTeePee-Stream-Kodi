@@ -17,7 +17,7 @@ def _make_result(title, link, indexer="TestIndexer"):
     Parameters:
         title (str): Item title shown to the user.
         link (str): Unique download or detail URL for the item.
-        indexer (str): Name of the provider/indexer; defaults to "TestIndexer".
+        indexer (str): Name of the provider/indexer; defaults to "TestIndexer."
 
     Returns:
         dict: A provider search item with keys:
@@ -58,7 +58,7 @@ DUPLICATE_RESULT = _make_result(
 def _mock_addon(nzbhydra_enabled="true", prowlarr_enabled="false"):
     """
     Create a MagicMock addon whose `getSetting` returns configured
-    enabled/disabled values for NZBHydra and Prowlarr.
+    true/false values for NZBHydra and Prowlarr.
 
     Parameters:
         nzbhydra_enabled (str): Value returned for the "nzbhydra_enabled"
@@ -68,8 +68,8 @@ def _mock_addon(nzbhydra_enabled="true", prowlarr_enabled="false"):
 
     Returns:
         MagicMock: A mock addon with `getSetting(key)` returning the
-            corresponding configured value for "nzbhydra_enabled" and
-            "prowlarr_enabled", and an empty string for any other keys.
+            corresponding configured value for ``nzbhydra_enabled`` and
+            ``prowlarr_enabled``, and an empty string for any other keys.
     """
     addon = MagicMock()
     addon.getSetting.side_effect = lambda k: {

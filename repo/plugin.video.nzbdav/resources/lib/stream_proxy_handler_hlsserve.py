@@ -20,11 +20,11 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
     # ------------------------------------------------------------------
     # HLS playlist/segment handlers
     #
-    # For the force-remux-huge-file path we expose the remuxed output as
+    # For huge files in force-remux mode the proxy exposes the remuxed output as
     # an HLS VOD playlist (``/hls/<session>/playlist.m3u8``) with fixed-
     # duration MPEG-TS segments (``/hls/<session>/seg_<N>.ts``). Kodi's
     # HLS demuxer reads the ``#EXTINF`` values to compute the timeline
-    # and translates a user seek into a segment request — no tail probe,
+    # and translates a user seek into a segment request—no tail probe,
     # no in-file index needed, and each segment is an independent fresh
     # ffmpeg invocation with ``-ss <segment_start> -t <segment_length>``
     # so playback resumes correctly at any point in a multi-GB source.
@@ -38,7 +38,7 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
         recommendation for fMP4) and adds an EXT-X-MAP tag pointing at
         init.mp4. Segment URIs use the right extension for the session's
         segment_format (m4s vs ts), unpadded so they're readable in
-        Kodi's logs — the URL parser absorbs leading zeros either way.
+        Kodi's logs—the URL parser absorbs leading zeros either way.
         """
         producer = ctx.get("hls_producer")
         if producer is not None:
@@ -136,7 +136,7 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
         # and keep it cached, so Kodi would be playing later segments
         # against an ``elst`` that referenced a different base time.
         # The canonical-bytes cache guarantees every Kodi fetch returns
-        # the first init's bytes regardless of respawn state — which
+        # the first init's bytes regardless of respawn state—which
         # makes the init compatible with every segment the producer
         # emits.
         body = getattr(producer, "_canonical_init_bytes", None)
@@ -174,12 +174,12 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
 
         The producer runs ONE ffmpeg per session using ffmpeg's
         segment muxer, so linear playback doesn't pay a cold-start
-        per segment — ffmpeg keeps producing segments at ~5× real
+        per segment—ffmpeg keeps producing segments at ~5× real
         time as long as Kodi drains them. The only cold start is on
         session open and on seek.
 
         Seeks land here as a segment request whose index is far from
-        the currently-producing segment; ``HlsProducer.wait_for_segment``
+        the currently producing segment; ``HlsProducer.wait_for_segment``
         detects that and kills/restarts ffmpeg at the new position.
         """
         producer = ctx.get("hls_producer")
@@ -239,8 +239,8 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
         window: a respawn-driven unlink between getsize() and open()
         would leave the handler advertising a size that no longer
         exists. Holding the fd pins the inode even if the dir entry is
-        later unlinked, so Content-Length stays in sync with what we
-        read.
+        later unlinked, so Content-Length stays in sync with what the handler
+        reads.
         """
         try:
             seg_file = open(

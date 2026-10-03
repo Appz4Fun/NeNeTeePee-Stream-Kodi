@@ -362,7 +362,7 @@ def test_get_cached_falls_back_to_60s_when_ttl_setting_unparseable(
         addon.getSetting.return_value = "absolute nonsense"
         mock_addon_mod.Addon.return_value = addon
 
-        # Write a fresh cache entry by hand so we can observe whether
+        # Write a fresh cache entry by hand to observe whether
         # the fallback TTL (60 s) treats it as live.
         fresh = {
             "timestamp": time.time() - 30,  # 30 seconds old
@@ -413,7 +413,7 @@ def test_get_cached_falls_back_to_60s_when_ttl_setting_raises_runtime(
 def test_set_cached_falls_back_to_60s_when_ttl_setting_raises_runtime(
     mock_addon_mod, mock_cache_dir
 ):
-    """A transient Kodi getSetting RuntimeError must not abort cache writes."""
+    """A transient Kodi getSetting RuntimeError must not break cache writes."""
     with tempfile.TemporaryDirectory() as tmpdir:
         mock_cache_dir.return_value = tmpdir
         addon = MagicMock()
@@ -441,7 +441,7 @@ def test_clear_cache_swallows_per_file_oserror(mock_cache_dir):
                 f.write("{}")
 
         # Force the first os.remove call to raise; the second must
-        # still land so b.json is deleted even though a.json "failed".
+        # still land so b.json is deleted even though a.json "failed."
         real_remove = os.remove
         calls = {"n": 0}
 

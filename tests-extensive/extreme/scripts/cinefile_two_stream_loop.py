@@ -5,7 +5,7 @@ body, then loops 20 iterations × 2 min apart. Each iteration plays A,
 sleeps 60 s, plays B, sleeps 60 s. Records the timeline and a per-
 iteration summary so you can confirm both URLs play end-to-end (and
 without fault-proxy interference, since the goal here is just baseline
-streamability — not the cutover yet).
+streamability—not the cutover yet).
 
 Routes through fault-proxy on port 8280 so the URLs match what the
 addon's stream_proxy would consume; fault-proxy with no schedule
@@ -116,8 +116,8 @@ def _verify_streamable(mkv_path: str) -> bool:
     """Check the .mkv exposes both video AND audio.
 
     nzbdav-rs occasionally reports a job as Completed when its
-    deobfuscator reconstructed an audio-only stub — the user-visible
-    failure mode is "file plays as music in Kodi". Open the URL in
+    deobfuscator reconstructed an audio-only stub—the user-visible
+    failure mode is "file plays as music in Kodi." Open the URL in
     Kodi briefly, ask for ``streamdetails``, and reject any file with
     an empty ``video`` array."""
     safe = urllib.parse.quote(mkv_path, safe="/")
@@ -200,7 +200,7 @@ def find_two_streamable_urls() -> list[str]:
             continue
         # Dedup by full storage path, NOT mkv basename. nzbdav-rs writes
         # the same UUID basename for byte-equivalent uploads from
-        # different indexers — that's exactly the "multiple peers
+        # different indexers—that's exactly the "multiple peers
         # serving identical bytes" case the cutover test relies on.
         # Same storage path appearing twice (a re-pull of the same
         # release) is the only true duplicate worth skipping.
@@ -266,7 +266,7 @@ def play(url: str):
 
 
 def play_window(url: str, label: str, log: Path, iteration: int) -> dict:
-    """Play url for PER_STREAM_PLAY_SECONDS and return its progress metrics."""
+    """Play the URL for PER_STREAM_PLAY_SECONDS and return its progress metrics."""
     play_resp = play(url)
     started_at = time.time()
     deadline = started_at + PER_STREAM_PLAY_SECONDS

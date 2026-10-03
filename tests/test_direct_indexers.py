@@ -734,11 +734,11 @@ def test_search_direct_indexers_fans_out_concurrently(mock_xbmcaddon, mock_confi
     # plus error is None / len == 2 prove the fan-out ran in parallel.
     assert both_started.is_set()
     # Return-latency guard (Codex P2): once both workers are in flight they each
-    # finish ~0.2s later, so the fan-out must return shortly after -- it must NOT
+    # finish ~0.2 s later, so the fan-out must return shortly after -- it must NOT
     # perform an extra bounded wait or serial cleanup first (which the removed
     # total-elapsed bound caught). Measured from both-in-flight so it excludes
-    # worker-start latency; a generous 2s bound (~10x the 0.2s worker body)
-    # tolerates heavy CPU load yet stays red on a >~1.5s extra-wait regression.
+    # worker-start latency; a generous 2 s bound (~10x the 0.2 s worker body)
+    # tolerates heavy CPU load yet stays red on a >~1.5 s extra-wait regression.
     assert both_started_at[0] is not None
     return_latency = returned_at - both_started_at[0]
     assert return_latency < 2.0, (
@@ -766,9 +766,9 @@ def test_search_direct_indexers_marks_incomplete_futures_timed_out(
     mock_xbmcaddon.Addon.return_value = _addon_with_settings({"max_results": "25"})
 
     def slow_search(*_args, **_kwargs):
-        # Sleep far longer than the 0.05s fan-out timeout so a regression that
-        # waits on the worker (e.g. executor.shutdown(wait=True)) is ~1.0s --
-        # dramatically over the bound -- while the timeout path stays ~0.05s.
+        # Sleep far longer than the 0.05 s fan-out timeout so a regression that
+        # waits on the worker (for example, executor.shutdown(wait=True)) is ~1.0 s --
+        # dramatically over the bound -- while the timeout path stays ~0.05 s.
         time.sleep(1.0)
         return ([{"title": "late", "link": "late"}], None)
 
@@ -834,9 +834,9 @@ def test_test_configured_indexers_marks_incomplete_futures_timed_out(
 
     def slow_caps(*_args, **_kwargs):
         # Released only in the finally below (AFTER the snapshot), with no early
-        # timer, so the caps worker can never complete before we record whether
-        # the fan-out joined it -- the snapshot is load-independent. The 2s cap
-        # only bounds a regression where the fan-out waits on the worker (e.g.
+        # timer, so the caps worker can never complete before the test records whether
+        # the fan-out joined it -- the snapshot is load-independent. The 2 s cap
+        # only bounds a regression where the fan-out waits on the worker (for example,
         # executor.shutdown(wait=True)).
         release_caps.wait(timeout=2)
         with completions_lock:
@@ -856,7 +856,7 @@ def test_test_configured_indexers_marks_incomplete_futures_timed_out(
             release_caps.set()
 
     # Do not require the caps worker to have started (Codex P2): with the fan-out
-    # timeout patched to 0.05s, a loaded runner can legitimately hit the timeout
+    # timeout patched to 0.05 s, a loaded runner can legitimately hit the timeout
     # before the executor schedules the worker -- and timing out an unscheduled
     # worker is itself the behavior under test. The caps-not-completed snapshot
     # below holds whether the worker blocked in-flight or never ran.
@@ -867,7 +867,7 @@ def test_test_configured_indexers_marks_incomplete_futures_timed_out(
     assert "timed out" in errors[0]
     # Structural proof (load-independent): the fan-out must return at
     # _DIRECT_FANOUT_TIMEOUT without joining the still-blocked caps worker.
-    # Only the finally above releases it, after the snapshot -- so if the
+    # Only the finally block releases it, after the snapshot -- so if the
     # fan-out wrongly waited, the worker would complete -> count > 0.
     assert caps_completions_at_return == 0
 

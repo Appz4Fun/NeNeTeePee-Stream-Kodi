@@ -80,9 +80,9 @@ def _direct_play_prepare_and_serve(
 
 
 def _direct_play_split_auth(url):
-    """Return (clean_url, auth_header) — Python urllib's name
+    """Return (clean_url, auth_header)—Python urllib's name
     resolver mis-parses ``user:pass@host`` and raises gaierror,
-    so we have to peel off the inline auth and pass it via header."""
+    so the code has to peel off the inline auth and pass it via header."""
     try:
         parsed = urlsplit(url)
     except (ValueError, TypeError):
@@ -124,7 +124,7 @@ def _head_content_length(resp):
 
 
 def _direct_play_head_length(url, auth_header):
-    """HEAD ``url`` and return (content_length, error). error is "" on success."""
+    """HEAD the URL and return (content_length, error). error is "" on success."""
     from urllib import request as urllib_request
     from urllib.error import HTTPError, URLError
     from urllib.request import Request
@@ -153,7 +153,7 @@ def _direct_play_head_length(url, auth_header):
 def _direct_play_fallback_sources(fallback_urls, validate_url):
     """Build validated, HEAD-probed fallback source dicts for direct playback.
 
-    Skips non-string/empty entries, non-http(s) URLs, and unstreamable peers
+    Skips non-string/empty entries, non-HTTP/HTTPS URLs, and unstreamable peers
     (HEAD error or non-positive length), logging each skip exactly as before.
     """
     from resources.lib.http_util import redact_text, redact_url

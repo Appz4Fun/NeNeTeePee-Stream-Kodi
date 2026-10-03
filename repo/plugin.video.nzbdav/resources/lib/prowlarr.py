@@ -5,11 +5,11 @@
 
 Prowlarr's native ``/api/v1/search`` endpoint (the one this client calls,
 with the Prowlarr API key + ``indexerIds``) returns a **JSON** array of
-release objects — not Newznab RSS/XML. Historically this module parsed the
+release objects—not Newznab RSS/XML. Historically this module parsed the
 response as XML, which crashed with ``syntax error: line 1, column 0`` the
 moment Prowlarr answered (issue #313). The parser now sniffs the payload and
 routes JSON to ``_parse_json_results`` while still understanding Newznab XML
-(e.g. a reverse-proxied per-indexer ``/{id}/api`` feed) via the legacy path.
+(for example, a reverse-proxied per-indexer ``/{id}/api`` feed) via the legacy path.
 """
 
 import json
@@ -46,7 +46,7 @@ NEWZNAB_NS = "http://www.newznab.com/DTD/2010/feeds/attributes/"
 
 
 # _format_request_error, _get_text, _calculate_age imported from
-# resources.lib.http_util above; definitions removed to eliminate
+# resources.lib.http_util (imported earlier); definitions removed to eliminate
 # hydra.py ↔ prowlarr.py duplication.
 
 
@@ -56,7 +56,7 @@ def _prowlarr_unavailable_error(error):
 
     Parameters:
         error (Exception|object): The error or response failure to report;
-            its message or reason will be included.
+            its message or reason is included.
 
     Returns:
         str: A message starting with "Prowlarr unavailable: " followed by
@@ -94,7 +94,7 @@ def _get_settings(settings_getter=None):
 def _build_search_url(base_url, params, indexer_ids):
     """Build a Prowlarr /api/v1/search URL with encoded params and indexer IDs.
 
-    All values — including each repeated ``indexerIds`` — go through
+    All values—including each repeated ``indexerIds``—go through
     ``urlencode(doseq=True)`` so indexer IDs with URL-special characters
     (``&``, ``=``, ``%``, space) can't corrupt the query string.
     """
@@ -143,7 +143,8 @@ def _build_prowlarr_query(search_type, title, imdb="", tvdb="", season="", episo
     """Compose Prowlarr's ``query`` value using its ``{token:value}`` syntax.
 
     Prowlarr's native ``/api/v1/search`` binds only Query/Type/IndexerIds/
-    Categories/Limit/Offset. It extracts ids/season/episode by regex-parsing
+    Categories/Limit/Offset. It extracts ids/season/episode by parsing with regular
+    expressions
     ``{tvdbid:..}`` / ``{imdbid:..}`` / ``{season:..}`` / ``{episode:..}``
     tokens out of the query TEXT (``NewznabRequest.QueryToParams``), and only
     when ``type`` is ``tvsearch``/``movie``. It does NOT bind ``imdbid=`` /
@@ -271,7 +272,7 @@ def _build_initial_params(
     """Build the primary Prowlarr search params dict.
 
     Prowlarr's native /api/v1/search binds only Query/Type/IndexerIds/
-    Categories/Limit/Offset. ids/season/episode are NOT query params here —
+    Categories/Limit/Offset. ids/season/episode are NOT query params here—
     they must be embedded as {token:value} inside ``query``, and Prowlarr only
     parses them when ``type`` is tvsearch/movie (see ``_build_prowlarr_query``).
     """
@@ -313,16 +314,16 @@ def search_prowlarr(
     Search Prowlarr for NZB results matching a movie or TV episode.
 
     Parameters:
-        search_type (str): "movie" or "episode".
+        search_type (str): `movie` or `episode`.
         title (str): Movie or show title used when `imdb` is not provided.
         year (str, optional): Release year; kept for API symmetry and not
             used by Prowlarr.
-        imdb (str, optional): IMDb ID (e.g., "tt0133093"); used in preference
+        imdb (str, optional): IMDb ID (for example, "tt0133093"); used in preference
             to `title` when present.
         season (str, optional): Season number for TV searches.
         episode (str, optional): Episode number for TV searches.
         tvdb (str, optional): TheTVDB series id. For episode searches it is
-            preferred over `imdb` (many indexers key TV on tvdbid) — issue
+            preferred over `imdb` (many indexers key TV on tvdbid)—issue
             #318.
 
     Returns:
@@ -370,7 +371,7 @@ def _apply_title_fallback(results, base_url, params, indexer_ids, search_args):
 
     ``search_args`` is ``(search_type, title, imdb, tvdb, season, episode)``.
     Returns ``(results, error)`` unchanged when the fallback does not apply
-    (results already present, no id, or no title) — the id may be wrong or the
+    (results already present, no id, or no title)—the id may be wrong or the
     indexer may not map it.
     """
     search_type, title, imdb, tvdb, season, episode = search_args
@@ -413,8 +414,8 @@ def parse_results(xml_text):
             - size (str): Size in bytes as a string or empty string.
             - indexer (str): Name of the indexer/source or empty string.
             - pubdate (str): Original pubDate string or empty string.
-            - age (str): Human-readable age (e.g., "today", "1 day",
-                "3 months") or empty string.
+            - age (str): Human-readable age (for example, `today`, `1 day`,
+                `3 months`) or empty string.
     """
     results, _ = _parse_results_checked(xml_text)
     return results
@@ -428,7 +429,7 @@ def _parse_results_checked(text):
     first non-whitespace character and dispatch accordingly so both shapes
     work and a server that switches formats can't silently break search.
 
-    Returns ``(results, error_message)`` — ``error_message`` is ``None`` on
+    Returns ``(results, error_message)``—``error_message`` is ``None`` on
     success or a short human-readable string on a malformed/unexpected body.
     """
     stripped = (text or "").lstrip()
@@ -469,7 +470,7 @@ def _json_entry_to_result(entry):
 def _json_payload_error(data):
     """Return an error message for a non-list JSON payload, logging it.
 
-    Prowlarr error bodies are JSON objects (``{"error": ...}``), not arrays.
+    Prowlarr error bodies are JSON objects (``{"error": <message>}``), not arrays.
     The payload can echo the indexer apikey, so the message is redacted before
     it lands in the log line or the returned error string.
     """
@@ -494,7 +495,7 @@ def _parse_json_results(text):
     """Parse a Prowlarr native ``/api/v1/search`` JSON array into result dicts.
 
     Each element is a Prowlarr ``ReleaseResource``. Torrent releases are
-    skipped — nzbdav only consumes NZB/usenet downloads — and the remaining
+    skipped—nzbdav only consumes NZB/usenet downloads—and the remaining
     fields are mapped onto the same ``{title, link, size, indexer, pubdate,
     age}`` shape the XML path produces, so downstream consumers don't care
     which transport answered.
@@ -517,7 +518,7 @@ def _parse_json_results(text):
     for entry in data:
         if not isinstance(entry, dict):
             continue
-        # nzbdav is usenet-only: keep strictly protocol == "usenet", dropping
+        # nzbdav is usenet-only: keep strictly protocol == `usenet`, dropping
         # torrents and any release with a missing/unknown protocol. Prowlarr's
         # ReleaseResource always sets protocol, so this only excludes torrent
         # indexers a user added to their Prowlarr id list (and malformed rows).
@@ -532,7 +533,7 @@ def _parse_json_results(text):
 def _xml_item_attrs(item):
     """Read size + indexer from an item's Newznab ``<attr>`` elements.
 
-    Returns ``(size, indexer)`` — either may be ``""`` when absent. The first
+    Returns ``(size, indexer)``—either may be ``""`` when absent. The first
     indexer-like attr wins, matching the original first-write-only behavior.
     """
     size = ""
@@ -550,7 +551,7 @@ def _xml_item_attrs(item):
 def _xml_source_hostname(item):
     """Resolve an item's indexer from its ``<source>`` element.
 
-    Falls back to ``<source>`` text, then to the host of the ``url`` attr.
+    Falls back to ``<source>`` text, then to the host in the source's URL attribute.
     """
     indexer = _get_text(item, "source")
     if indexer:
@@ -563,7 +564,7 @@ def _xml_source_hostname(item):
         try:
             indexer = urlparse(indexer).hostname or ""
         except (ValueError, AttributeError):
-            # Narrow from bare Exception — urlparse only raises these for
+            # Narrow from bare Exception—urlparse only raises these for
             # shape-mismatch input. A broader catch would hide real bugs in
             # callers that pass unexpected types.
             indexer = ""
@@ -626,8 +627,8 @@ def _parse_xml_results(xml_text):
             - size (str): Size in bytes as reported or empty string.
             - indexer (str): Indexer/source name or hostname, or empty string.
             - pubdate (str): Original pubDate text or empty string.
-            - age (str): Human-readable age (e.g., "today", "3 days",
-                "2 months") or empty string.
+            - age (str): Human-readable age (for example, `today`, `3 days`,
+                `2 months`) or empty string.
         error_message (str or None): Error description when the XML is
             invalid or not an RSS feed; `None` on success.
     """

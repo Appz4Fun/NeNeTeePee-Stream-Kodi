@@ -144,7 +144,7 @@ def _poll_until_ready(
     poll_ctx = poll_ctx or PollContext()
     # Completed rows the body probe rejects (Completed but mid-file body
     # unavailable) are collected here so neither the submit/adoption path nor
-    # the poll-loop by-name fallback re-adopts the very row we just rejected
+    # the poll-loop by-name fallback re-adopts the very row just rejected
     # and bypasses the intended re-download. The caller may pass a shared set
     # so a picker-probe rejection (recorded before this call) is honored too.
     if poll_ctx.rejected_completed_ids is None:
@@ -181,10 +181,10 @@ def _poll_until_ready(
         ).format(nzo_id, poll_interval, download_timeout),
         _resolver.xbmc.LOGINFO,
     )
-    # Monotonic clock for elapsed-time tracking — wall-clock NTP jumps
-    # would otherwise either prematurely abort the poll loop (backward
+    # Monotonic clock for elapsed-time tracking—wall-clock NTP jumps
+    # would otherwise either prematurely end the poll loop (backward
     # jump) or stretch the configured download_timeout indefinitely
-    # (forward jump). Initial submit timestamp stays on time.time() above
+    # (forward jump). Initial submit timestamp stays on time.time() earlier on
     # since it's logged for human consumption, not arithmetic.
     start_time = _resolver.time.monotonic()
     last_status = None
@@ -249,7 +249,7 @@ def _poll_until_ready(
             # failure is an addon-side observation problem (the addon
             # can't read the file the job produced), not a job-side
             # problem. The job is presumably running fine on nzbdav and
-            # cancelling it would be destructive — the user's nzbdav UI
+            # cancelling it would be destructive—the user's nzbdav UI
             # would show a vanished download for no apparent reason.
             return None, None
 

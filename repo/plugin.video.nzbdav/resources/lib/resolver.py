@@ -109,9 +109,9 @@ _STREAM_CONTENT_LENGTH_HINTS_LOCK = threading.Lock()
 # retrying. RFC 9110 explicitly calls 408 retry-friendly ("client may
 # assume the server closed the connection due to inactivity and retry").
 # 502/503/504 are classic gateway/service-layer transients. 429 is
-# deliberately excluded because the current 2s retry spacing would just
-# stack rate-limit violations — if 429 ever becomes a real failure mode
-# we'll need backoff first.
+# deliberately excluded because the current 2 seconds retry spacing would just
+# stack rate-limit violations—if 429 ever becomes a real failure mode
+# backoff would be needed first.
 _TRANSIENT_HTTP_STATUSES = (408, 502, 503, 504)
 
 _DB_DISCOVERY_ERRORS = (
@@ -124,7 +124,7 @@ _DB_DISCOVERY_ERRORS = (
 )
 
 _RESOLVE_RUNTIME_ERRORS = (
-    # Network-layer exceptions that escaped earlier helpers — `socket.timeout`
+    # Network-layer exceptions that escaped earlier helpers—`socket.timeout`
     # is a `TimeoutError` subclass on 3.10+ but a separate type on 3.8/3.9,
     # `URLError` wraps DNS / connection-refused / unreachable, `HTTPException`
     # covers `BadStatusLine` and friends. All three could otherwise bypass
@@ -139,7 +139,7 @@ _RESOLVE_RUNTIME_ERRORS = (
     ValueError,
 )
 
-# Per-setting warn suppression: we log the out-of-range clamp exactly once
+# Per-setting warn suppression: the code logs the out-of-range clamp exactly once
 # per (setting_id, value) so a user with a typo'd setting doesn't see the
 # same warning spam on every play.
 _CLAMP_LOGGED = set()
@@ -198,7 +198,7 @@ _COMPLETED_NO_VIDEO_RECHECK_DELAYS_SECONDS = (0.025, 0.075, 0.1)
 
 # #282: nzbdav writes a small placeholder .mp4 at job start; the completed
 # WebDAV scan can pick it up seconds after submit and stream it instead of the
-# feature (playing ~30s of a stub). A completed folder whose TOTAL video content
+# feature (playing ~30 seconds of a stub). A completed folder whose TOTAL video content
 # is smaller than this fraction of the indexer-advertised size is treated as that
 # stub and rejected so the poll loop keeps waiting for the real download.
 # Conservatively low: a genuine release's real files sum to ~0.85-0.95 of its
@@ -214,7 +214,7 @@ _STUB_VIDEO_MIN_ADVERTISED_FRACTION = 0.5
 # sibling can lift the total over the floor while the requested file is still a
 # placeholder). Reject when the picked file is a tiny fraction of the folder's
 # largest video. The job-start stub is ~0.4% of the advertised size (the original
-# #282 datum), i.e. <=~3% of a single pack episode; real short content (recaps,
+# #282 datum), that is, <=~3% of a single pack episode; real short content (recaps,
 # OVAs, specials) runs >=~5% of a full episode. 0.05 sits between them: it catches
 # the stub while NOT rejecting a legitimately short pack item (#355 Codex review).
 # Only applied when picked < floor AND total >= floor. Note this conflict is
@@ -223,8 +223,8 @@ _STUB_VIDEO_MIN_ADVERTISED_FRACTION = 0.5
 _STUB_VS_LARGEST_VIDEO_FRACTION = 0.05
 
 # After a submit timeout, how many times to poll nzbdav before giving up
-# on adoption and retrying the submit. 6 polls * 2 s = 12 s of total wait
-# — enough headroom for nzbdav to finish fetching/parsing a moderately
+# on adoption and retrying the submit. 6 polls * 2 s = 12 s of total wait—
+# enough headroom for nzbdav to finish fetching/parsing a moderately
 # large NZB, short enough not to double the user's wait on a genuine
 # network failure.
 _SUBMIT_ADOPT_POLL_COUNT = 6
@@ -233,7 +233,7 @@ _SUBMIT_ADOPT_POLL_INTERVAL_SECONDS = 2
 
 _CLEAR_QUEUE_ON_SUBMIT_MODES = {"0": "ask", "1": "always", "2": "never"}
 
-# Short, best-effort timeout for the pre-submit queue operations — both the
+# Short, best-effort timeout for the pre-submit queue operations—both the
 # probe (mode=queue) and EACH per-slot delete. They run on the resolver thread
 # before the threaded submit/dialog pump, so a slow/unreachable nzbdav must
 # fail fast rather than freezing playback for minutes across several deletes.
@@ -255,7 +255,7 @@ _FALLBACK_PLAYBACK_WAIT_POLL_SECONDS = 1.0
 _FALLBACK_PLAYBACK_WAIT_CAP_SECONDS = 300.0
 
 # Short interval the prewarm wait wakes on to re-check whether playback went
-# inactive cross-process. Small enough to abort promptly, big enough to avoid
+# inactive cross-process. Small enough to stop promptly, big enough to avoid
 # busy-spinning. Module-level so tests can patch it to run fast.
 _FALLBACK_PREWARM_POLL_SECONDS = 1.0
 

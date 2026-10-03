@@ -143,7 +143,7 @@ def _delegated_find_video_stream_for_folder(
     Returns the ``(video_path, stream_url, stream_headers)`` tuple when the
     module-level webdav helpers are un-patched (so the single-call path is
     authoritative); ``None`` when delegation does not apply and the caller must
-    fall back to the explicit find/url steps.
+    fall back to the explicit find/URL steps.
     """
     try:
         from resources.lib import webdav as _webdav
@@ -191,7 +191,7 @@ def _find_video_stream_for_folder(
 ):
     """Return video path, URL, and headers for a completed WebDAV folder.
 
-    ``title_hint`` is the requested release/episode title (e.g. the submitted
+    ``title_hint`` is the requested release/episode title (for example, the submitted
     scene name). It is threaded into webdav discovery so a multi-episode pack
     returns the requested SxxExx episode rather than whichever sibling file is
     largest. When ``None`` (movie / no identifiable episode) the historical
@@ -242,7 +242,7 @@ def _find_video_stream_for_folder(
 
 def _record_rejected_completed_id(completed_job, rejected_completed_ids):
     """Record a rejected Completed row's ``nzo_id`` so the submit / poll-loop
-    by-name paths skip re-adopting the very row we just rejected.
+    by-name paths skip re-adopting the very row just rejected.
 
     No-op when no set was provided or the row has no ``nzo_id``. Shared by the
     pre-submit shortcut's stub guard and its mid-file body probe so both
@@ -303,7 +303,7 @@ def _completed_job_stream(
 
     When the mid-file body probe rejects a row and ``rejected_completed_ids``
     is provided, the row's ``nzo_id`` is recorded into that set so the submit
-    path that follows does not re-adopt the very row we just rejected.
+    path that follows does not re-adopt the very row just rejected.
 
     ``download_size`` is the indexer-advertised release size (bytes), threaded
     in from ``params['_download_size']``. It powers the same #282 job-start-stub
@@ -459,7 +459,7 @@ def _picker_completed_stream(
     """Return a picker-provided completed stream before opening progress UI.
 
     Shares ``rejected_completed_ids`` with the caller so a picker row the body
-    probe rejects here is recorded for the submit/poll paths that follow — the
+    probe rejects here is recorded for the submit/poll paths that follow—the
     picker hint is not re-probed inside ``_poll_until_ready`` once the picker
     has done the completed-history lookup.
     """

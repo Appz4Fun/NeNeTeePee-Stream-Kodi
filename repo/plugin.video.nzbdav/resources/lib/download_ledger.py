@@ -29,7 +29,7 @@ from resources.lib.http_util import pubdate_to_epoch
 
 # Resolve the profile dir via the special:// path rather than
 # ``xbmcaddon.Addon().getAddonInfo("profile")``: the file-path RunScript
-# context must never touch ``xbmcaddon.Addon`` (it can crash CoreELEC inside
+# context must never call ``xbmcaddon.Addon`` (it can crash CoreELEC inside
 # the profile lookup), and ``translatePath`` of a special:// path needs no
 # Addon handle. Both forms resolve to the same addon_data directory.
 _PROFILE_SPECIAL_PATH = "special://profile/addon_data/plugin.video.nzbdav"
@@ -93,10 +93,10 @@ def record_download(name, pubdate, size=None):
     """Record that the NZB ``name`` posted at ``pubdate`` was downloaded.
 
     ``size`` is accepted for call-site symmetry with the picker's size
-    gate but is not currently stored — the post-date alone disambiguates
+    gate but is not currently stored—the post-date alone disambiguates
     same-name reposts, and size is already gated separately against the
     completed job's bytes. No-op when ``name`` is empty or ``pubdate``
-    cannot be parsed (we simply have nothing to disambiguate by).
+    cannot be parsed (there is nothing to disambiguate by).
     """
     del size  # reserved for future use; see docstring
     if not name:
@@ -120,7 +120,7 @@ def record_download(name, pubdate, size=None):
         _save(data)
     except Exception as error:  # pylint: disable=broad-except
         # Best-effort bookkeeping must never break a download. Any storage
-        # surprise (unwritable profile, odd path) degrades to "not recorded".
+        # surprise (unwritable profile, odd path) degrades to `not recorded`.
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: download-ledger record skipped: {}".format(error),
             xbmc.LOGDEBUG,

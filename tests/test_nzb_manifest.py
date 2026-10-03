@@ -963,7 +963,7 @@ def test_extracts_obfuscated_dominant_file_as_video_manifest():
 
 
 def test_obfuscated_blob_below_threshold_stays_unsupported_when_uniform_count_low():
-    """A handful of similarly-sized files are not enough to infer the payload.
+    """A handful of similarly sized files are not enough to infer the payload.
     Real split-payload obfuscation runs into many dozens of pieces; reject
     short uniform-size collections as ambiguous.
     """
@@ -1021,7 +1021,7 @@ def test_extracts_split_payload_obfuscation_as_video_manifest():
 
 def test_synthetic_video_manifest_rejects_tiny_stub_nzb():
     """Stub uploads with kilobyte-scale payloads should not classify as video.
-    A 4K REMUX peer band built from a stub will mismatch every real release.
+    A 4K REMUX peer band built from a stub mismatches every real release.
     """
     xml = _nzb_xml(
         [
@@ -1042,7 +1042,7 @@ def test_synthetic_video_manifest_rejects_tiny_stub_nzb():
 
 def test_split_payload_detection_rejects_high_size_variance():
     """Releases where payload-file sizes vary wildly are not the obfuscation
-    pattern we are inferring — could be a multi-file pack with extras. Stay
+    pattern being inferred; could be a multi-file pack with extras. Stay
     unsupported instead of guessing a single grouped payload.
     """
     sizes = [10000000, 50000000, 200000000, 1000000000, 5000000000] * 3

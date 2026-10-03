@@ -223,7 +223,7 @@ def _submit_nzb_with_ui_pump(
        dialog progress bar, and checks ``dialog.iscanceled`` every tick.
     2. Daemon probe threads concurrently watch nzbdav's queue/history via
        ``find_queued_by_name`` / ``find_completed_by_name`` and short-circuit
-       as soon as the job for ``title`` appears — usually well before
+       as soon as the job for ``title`` appears—usually well before
        ``addurl`` replies.
 
     Returns ``(nzo_id, None)`` on success (either by worker completion or
@@ -490,7 +490,7 @@ def _submit_nzb_with_ui_pump(
             # A successful addurl response is authoritative. The adoption
             # probe may still be blocked in a read-only queue/history API
             # call, so do not keep the post-picker submit path waiting on
-            # cleanup after we already have the nzo_id or submitted result.
+            # cleanup once the nzo_id or submitted result already exists.
             # A terminal submit error is just as authoritative for the
             # immediate UI path; retries/adoption happen in the caller.
             return True
@@ -498,9 +498,9 @@ def _submit_nzb_with_ui_pump(
 
     def _join_started_threads():
         # Signal the probe worker to exit its wait loop, then give cleanup a
-        # brief bounded window. If we already adopted while addurl is still
+        # brief bounded window. If a job was already adopted while addurl is still
         # blocked, waiting on that uninterruptible HTTP worker only adds
-        # latency; it is daemon=True and will die with the plugin interpreter.
+        # latency; it is daemon=True and dies with the plugin interpreter.
         queue_stop.set()
         for t in started_threads:
             if _skip_thread_join(t):
@@ -536,9 +536,9 @@ def _get_submit_timeout_seconds(settings_getter=None):
         return int(raw) if raw else 300
     except Exception:  # pylint: disable=broad-except
         # xbmcaddon import failures, unexpected setting shapes, int() on
-        # a MagicMock in tests — all funnel to the documented default.
+        # a MagicMock in tests—all funnel to the documented default.
         # ``Exception`` on its own (the previous ``(ValueError, TypeError,
-        # Exception)`` tuple was dead code — Exception subsumes the other
+        # Exception)`` tuple was dead code—Exception subsumes the other
         # two) keeps the safety net without the misleading tuple.
         return 300
 
@@ -546,8 +546,8 @@ def _get_submit_timeout_seconds(settings_getter=None):
 def _adopt_queued_or_completed_job(
     title, monitor, settings_getter=None, rejected_completed_ids=None
 ):
-    """Return an existing nzbdav nzo_id for ``title`` if the submit we
-    just timed out on actually reached nzbdav.
+    """Return an existing nzbdav nzo_id for ``title`` if the submit that
+    just timed out actually reached nzbdav.
 
     After a client-side submit timeout, nzbdav may be:
     - Still fetching/parsing the NZB (no queue entry yet)

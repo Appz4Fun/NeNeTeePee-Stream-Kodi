@@ -99,8 +99,8 @@ def _supported_caps_with_tvdbid():
 
 
 def test_episode_prefers_tvdbid_when_supported_and_present():
-    """When the indexer advertises tvdbid and we have a TVDB id, prefer it
-    over imdbid — many indexers index TV by TheTVDB id (issue #318)."""
+    """When the indexer advertises tvdbid and the request has a TVDB id, prefer it
+    over imdbid—many indexers index TV by TheTVDB id (issue #318)."""
     plan = plan_newznab_search(
         provider_kind="direct",
         host="https://api.example.test",

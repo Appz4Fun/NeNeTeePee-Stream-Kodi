@@ -119,7 +119,7 @@ class _FallbackStandbyMixin:  # pylint: disable=too-few-public-methods
     def _finalize_refreshed_standby_source(
         self, ctx, source, stream_url, stream_headers, auth_header, content_length
     ):
-        """Store a freshly-resolved standby URL + seed selector hints.
+        """Store a freshly resolved standby URL + seed selector hints.
 
         Rejects a provable positive-length mismatch; otherwise records the
         selector hints and reports whether a usable stream URL was stored.

@@ -1,8 +1,8 @@
 # AGENTS.md
 
-Orientation for agents (Claude, Copilot, Codex, etc.) working in this repo. A short install/setup summary lives in [README.md](README.md); the full user and technical documentation lives in `docs-site/` and is published to GitHub Pages at <https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/>. Outstanding work lives in [TODO.md](TODO.md).
+Orientation for agents (Claude, Copilot, Codex, and others) working in this repo. A short install/setup summary lives in [README.md](README.md); the full user and technical documentation lives in `docs-site/` and is published to GitHub Pages at <https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/>. Outstanding work lives in [TODO.md](TODO.md).
 
-## TL;DR
+## Summary
 
 - Runtime addon code must stay Python 3.8 compatible and pure Python.
 - Preserve `setResolvedUrl` (resolvable plugin routes), `waitForAbort`, and HTTP Range behavior.
@@ -10,7 +10,7 @@ Orientation for agents (Claude, Copilot, Codex, etc.) working in this repo. A sh
 - Run `just lint` and `just test` before commit or push.
 - For releases, bump only `repo/plugin.video.nzbdav/addon.xml`; the Release workflow builds the zip and the external Appz4Fun Kodi repository republishes it. The Pages workflow publishes documentation, not add-on metadata.
 
-## Agent Contract
+## Agent contract
 
 Follow these rules before making code, release, or deployment changes:
 
@@ -24,7 +24,7 @@ Follow these rules before making code, release, or deployment changes:
 - Do not hand-edit the generated docs site under `site/`. The documentation source lives in `docs-site/` and is published to GitHub Pages by the Docs workflow.
 - Do not commit real API keys, WebDAV credentials, Kodi logs, copied crash logs, or local device artifacts.
 
-## Critical Invariants
+## Critical invariants
 
 These must stay true or Kodi playback, shutdown, or updates can break:
 
@@ -43,7 +43,7 @@ These must stay true or Kodi playback, shutdown, or updates can break:
 - Non-MP4 pass-through is the default unless settings explicitly choose a force-remux path.
 - Test imports depend on `tests/conftest.py` pre-mocking `xbmc*` modules before `resources.lib.*` imports.
 
-## Fast Commands
+## Fast commands
 
 ```bash
 just test          # Run all tests
@@ -62,7 +62,7 @@ just clean         # Remove __pycache__, .pytest_cache, zip
 just dist-clean    # clean + remove the generated docs site
 ```
 
-## PR Review Helper Scripts
+## PR review helper scripts
 
 For agent PR review workflows:
 
@@ -73,7 +73,7 @@ For agent PR review workflows:
 Use `fetch_comments.py` directly when a skill or workflow expects that helper by name.
 Use `pr_agent_context.py` when starting a PR review or addressing comments from scratch.
 
-## Repository Map
+## Repository map
 
 - `repo/plugin.video.nzbdav/` -- Kodi addon installed via zip
 - `repo/plugin.video.nzbdav/resources/lib/` -- addon runtime Python modules
@@ -86,7 +86,7 @@ Use `pr_agent_context.py` when starting a PR review or addressing comments from 
 - `tests/` -- pytest suite with Kodi module mocks in `conftest.py`
 - `.github/workflows/` -- CI, release, and docs (Pages) workflows
 
-## Where To Start
+## Where to start
 
 - Entry routing: `repo/plugin.video.nzbdav/addon.py` -> `resources/lib/router.py` (plugin:// routes, table in `router_dispatch.py`) or `resources/lib/script_player.py` -> `router._handle_script_play` (TMDBHelper `tmdb_play`)
 - NZBHydra2 search: `repo/plugin.video.nzbdav/resources/lib/hydra.py`
@@ -100,7 +100,7 @@ Use `pr_agent_context.py` when starting a PR review or addressing comments from 
 - TMDBHelper player install: `repo/plugin.video.nzbdav/resources/lib/player_installer.py`
 - Kodi test mocks: `tests/conftest.py`
 
-## Architecture Snapshot
+## Architecture snapshot
 
 An NZB (Usenet download manifest) file lists the posts that make up a release.
 
@@ -142,50 +142,50 @@ The resolvable `plugin://` `/play` route runs the same pipeline. It finishes wit
 
 The background service (`service.py`) runs `StreamProxy`. MP4 sources may be rewritten or remuxed to avoid Kodi/CoreELEC cache and moov-atom issues. MKV and other formats are proxied directly with Range request support unless the user enables force-remux settings.
 
-## Key Patterns
+## Key patterns
 
 - Module-level Kodi imports are normal. Tests work because `tests/conftest.py` installs MagicMocks into `sys.modules["xbmc"]`, `sys.modules["xbmcgui"]`, etc. before addon modules import them.
 - Individual tests usually patch module-bound Kodi imports, for example `@patch("resources.lib.<mod>.xbmc")`.
 - Lazy Kodi imports inside functions are exceptions, usually for Kodi-runtime-only paths or slow imports.
 - `http_util.py` owns shared `http_get()` and `notify()` helpers.
 - PTT is vendored with `regex` replaced by `re` and `arrow` replaced by `datetime`.
-- Some PTT regex patterns can trigger `FutureWarning` on newer Python. Escape `[` inside character classes when fixing them.
-- Test and lint tooling runs on Python 3.14 via uv, with exact pins in `requirements-dev.txt` (pytest, pytest-cov, pylint, ruff, black, vermin). Addon runtime code still targets Python 3.8; see the Agent Contract.
+- Some PTT regular expression patterns can trigger `FutureWarning` on newer Python. Escape `[` inside character classes when fixing them.
+- Test and lint tooling runs on Python 3.14 via uv, with exact pins in `requirements-dev.txt` (pytest, pytest-cov, pylint, ruff, black, vermin). Addon runtime code still targets Python 3.8; see [Agent contract](#agent-contract).
 
-## When In Doubt
+## When in doubt
 
 - Prefer existing local patterns over new abstractions.
 - Add focused tests near the behavior being changed.
 - Preserve Kodi shutdown behavior, playback failure paths, and proxy seeking.
 - Read `TODO.md` before changing stream proxy, fallback, or release architecture.
 
-## Change Recipes
+## Change recipes
 
-### Adding Settings
+### Adding settings
 
 1. Add the setting to `repo/plugin.video.nzbdav/resources/settings.xml`.
 2. Read it via `xbmcaddon.Addon().getSetting("setting_id")`.
 3. Add tests that mock the setting value.
 4. Run `just test` and `just lint`.
 
-### Player Installation
+### Player installation
 
 `player_installer.py` installs the `nzbdav.json` TMDBHelper player file. Two routes exist:
 
 - `install_player` targets TMDBHelper's `players/` directory.
 - `install_player_other` calls `discover_other_player_targets()`, which scans `special://profile/addon_data/*/players/` at runtime and offers any existing player folder in a select dialog. There is no static `PLAYER_TARGETS` map and no per-target boolean setting.
 
-When changing player behavior, keep the profile-containment guard (writes stay under `addon_data`) and the schema-version preserve/backup logic, unless a change deliberately revises them — in which case update the tests to match.
+When changing player behavior, keep the profile-containment guard (writes stay under `addon_data`) and the schema-version preserve/backup logic, unless a change deliberately revises them. In that case, update the tests to match.
 
-### Playback / Resolver Changes
+### Playback / resolver changes
 
-- On resolvable plugin routes, preserve `setResolvedUrl` on every success, cancellation, timeout, and failure path. On handle-less paths (TMDBHelper `tmdb_play`, `/resolve`, `/resolve-v2`, `/search`), keep the user notification and cleanup on every failure path.
+- On resolvable plugin routes, preserve `setResolvedUrl` on every success, cancellation, timeout, and failure path. On handle-less paths (TMDBHelper `tmdb_play`, `/resolve`, `/resolve-v2`, and `/search`), keep the user notification and cleanup on every failure path.
 - Use `xbmc.Monitor.waitForAbort()` for polling loops.
 - Check fallback behavior when changing submit, poll, WebDAV discovery, or proxy handoff logic.
 - Keep settings reads safe for Kodi's threading constraints; avoid unsafe service-thread Kodi setting reads.
 - Add focused tests around success, failure, cancellation, and timeout paths.
 
-### Stream Proxy Changes
+### Stream proxy changes
 
 - Preserve HTTP Range support and status handling.
 - Preserve pass-through as the default for MKV and other non-MP4 containers.
@@ -193,13 +193,13 @@ When changing player behavior, keep the profile-containment guard (writes stay u
 - Be careful with MP4 faststart/moov rewrite behavior, large-file offsets, subtitle conversion, and seeking.
 - When touching fallback streams, preserve strict validation before switching sources.
 
-### Search / Filter Changes
+### Search / filter changes
 
 - Keep NZBHydra2, Prowlarr, and direct-indexer behavior aligned where practical.
 - Preserve PTT parsing compatibility and avoid adding non-stdlib dependencies.
 - Add tests for ranking, filtering, and edge-case titles.
 
-## Live CoreELEC / Kodi Debugging
+## Live CoreELEC / Kodi debugging
 
 Agents may SSH to `root@coreelec.local` and restart Kodi when Kodi is crashed, hung, wedged in a core dump, or a deployment/debugging change needs a fresh Kodi process. Preserve useful log/crash evidence first when practical, then restart without waiting for separate approval.
 
@@ -221,7 +221,7 @@ Prefer evidence first, restart second. If Kodi is actively wedged and logs are a
 - Add-on distribution lives in the external multi-channel Kodi repository at `https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo` (served from its own Pages site). This repo no longer self-hosts a Kodi repository.
 - The Docs workflow (`pages.yml`) builds the MkDocs site from `docs-site/` and deploys it to GitHub Pages at `https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/`.
 
-## Release Checklist
+## Release checklist
 
 Before cutting a new versioned release:
 
@@ -239,8 +239,8 @@ Tags containing a hyphen (for example `v2.0.0-beta.3`) are marked pre-release an
 go to the Beta channel only.
 
 Version ordering caveat: Kodi's `CAddonVersion` splits a version at the first
-`-` and ranks any suffix above none, so Kodi considers `2.0.0-beta.2` newer than
-`2.0.0`. Beta-channel users will not be auto-updated from a `X.Y.Z-beta.N` build
+`-` and ranks any suffix higher than none, so Kodi considers `2.0.0-beta.2` newer than
+`2.0.0`. Kodi doesn't auto-update Beta-channel users from a `X.Y.Z-beta.N` build
 to a final `X.Y.Z`; they only auto-update to a higher base version (for example
 `X.Y.Z+1`). Git tags cannot contain `~`, so Kodi's `X.Y.Z~beta` pre-release form
 is not usable with the tag == `addon.xml` version check.

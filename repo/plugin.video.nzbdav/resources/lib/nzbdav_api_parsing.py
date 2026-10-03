@@ -82,7 +82,7 @@ def _is_timeout_error(exc):
     can raise: a bare ``socket.timeout`` (which is an alias for
     ``TimeoutError`` on Python 3.10+) and a ``URLError`` whose
     ``reason`` attribute is a timeout. Either counts as "client gave
-    up before the server responded" — we want those routed to the
+    up before the server responded"—route those to the
     queue-adoption path, not the generic retry path.
     """
     if isinstance(exc, socket.timeout):
@@ -245,7 +245,7 @@ def _job_status_from_slots(slots, nzo_id):
 def _submit_http_error_result(e):
     """Build submit_nzb's (None, error) result from an HTTPError.
 
-    nzbdav returned a structured HTTP error (e.g. 500 on duplicate submit,
+    nzbdav returned a structured HTTP error (for example, 500 on duplicate submit,
     502/503/504 from upstream issues). Capture the body so the caller can
     either surface it or classify retries based on status code. Redact
     apikey-style tokens: nzbdav's error pages sometimes echo the failing URL
@@ -298,11 +298,11 @@ def _submit_request_error_result(e, timeout, nzb_name):
 
 
 def _submit_parse_result(response):
-    """Build submit_nzb's result from a successfully-parsed response dict.
+    """Build submit_nzb's result from a successfully parsed response dict.
 
-    Returns (nzo_id, None) on success, or (None, {"status": "rejected", ...})
+    Returns (nzo_id, None) on success, or (None, a dict whose ``status`` is "rejected")
     when nzbdav saw the request but rejected the NZB (a 200 with status=false,
-    e.g. empty / truncated / password-only NZB), which is NOT retryable.
+    for example, empty / truncated / password-only NZB), which is NOT retryable.
     """
     nzo_ids = response.get("nzo_ids")
     if response.get("status") and isinstance(nzo_ids, list) and nzo_ids and nzo_ids[0]:
@@ -318,7 +318,7 @@ def _submit_parse_result(response):
     # non-dict JSON to ``{}``), so ``.get`` is safe.
     error_msg = response.get("error")
     # Redact: nzbdav can echo back the failing indexer URL (with apikey)
-    # inside its rejection payload (e.g. "Failed to fetch <url>"), which
+    # inside its rejection payload (for example, "Failed to fetch <URL>"), which
     # would otherwise land in the Kodi log.
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: Submit NZB rejected by nzbdav: {}".format(
@@ -336,9 +336,9 @@ def _submit_parse_result(response):
 
 def _cancel_job_outcome(response, nzo_id):
     """Return whether nzbdav reported the queue DELETE succeeded."""
-    # Truthy match (not `is True` identity) — submit_nzb's success branch
+    # Truthy match (not `is True` identity)—submit_nzb's success branch
     # uses the same loose check, and at least one nzbdav build returns
-    # status="ok" (string) instead of the documented JSON `true`. Closes
+    # `status="ok"` (string) instead of the documented JSON `true`. Closes
     # the §H.3 cancel/submit-asymmetric finding.
     if response.get("status"):
         xbmc.log(

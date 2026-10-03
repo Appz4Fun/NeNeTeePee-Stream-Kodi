@@ -74,7 +74,7 @@ __all__ = [
 
 # The complete set of keys produced by ``parse_title_metadata``. A cached
 # ``_meta`` dict is only safe to reuse (skipping a reparse) when it satisfies
-# this FULL contract — downstream consumers such as
+# this FULL contract—downstream consumers such as
 # ``fallback_streams_identity`` trust any dict found in ``_meta`` and never
 # reparse, so a partial dict would silently drop quality/edition/year/
 # upscaled/container/etc. from the fallback pipeline.
@@ -146,7 +146,7 @@ def _int_setting(addon, key, default):
     """Read an integer Kodi setting with a safe fallback.
 
     Tries plain ``int()`` first so a clean integer string like "500"
-    parses without floating-point noise; on failure (e.g. user typed
+    parses without floating-point noise; on failure (for example, user typed
     "1.5" because the size field accepts decimals on some Kodi
     skins), falls through to ``int(float(raw))`` so the caller sees
     a clear truncated value (1) instead of the silent default (0).
@@ -251,10 +251,10 @@ def parse_title_metadata(title):
 
     # The normalization assumes PTT returned typed data matching its
     # documented contract. If the vendored PTT drifts from that contract
-    # (or a custom transformer returns e.g. a dict for hdr), the
+    # (or a custom transformer returns, for example, a dict for hdr), the
     # comprehensions explode with TypeError. Catch that so a single bad
-    # release name doesn't kill the whole search; fall back to the
-    # regex-only metadata extractor.
+    # release name doesn't stop the whole search; fall back to the
+    # regular-expression-only metadata extractor.
     try:
         return supplement_metadata(title, _normalize_parsed_meta(parsed))
     except (TypeError, AttributeError, KeyError) as e:
@@ -281,8 +281,8 @@ def matches_filters(result, meta, settings):
 
     Returns:
         ``True`` when the result satisfies every enabled filter,
-        ``False`` the first time any filter excludes it. Pure function
-        — does not mutate any input.
+        ``False`` the first time any filter excludes it. Pure function—
+    does not mutate any input.
     """
     return first_rejecting_filter(result, meta, settings) is None
 
@@ -477,7 +477,7 @@ def filter_results(results, settings_getter=None):
     Side effect: mutates each input dict by attaching ``_meta``
     (parsed-title metadata) and ``_filter_reject`` (the first rejecting
     filter's name, or ``None`` when the row passed). Callers that iterate
-    ``results`` after this call will see the extra fields. ``all_parsed`` is the
+    ``results`` after this call see the extra fields. ``all_parsed`` is the
     same list of dicts (with ``_meta`` populated) in sorted order;
     ``filtered`` is the subset that passed every filter, truncated
     to ``settings["max_results"]`` if that is non-zero.
@@ -521,7 +521,7 @@ def _pubdate_sort_key(result):
     """Return a sortable datetime-derived key for RFC-822 pubdate.
 
     Sorting results by raw ``r.get("pubdate", "")`` gives LEXICOGRAPHIC
-    order over strings like ``"Mon, 02 Jan 2006 15:04:05 GMT"`` — which
+    order over strings like ``"Mon, 02 Jan 2006 15:04:05 GMT"``—which
     puts "Fri" < "Mon" < "Sun" < "Tue" chronologically wrong. Parse to
     a timestamp instead. Unparseable values sort at the epoch so
     malformed entries don't crash and don't jump to the top under
@@ -541,8 +541,8 @@ def _pubdate_sort_key(result):
 def _size_sort_key(result):
     """Return an int-valued size key, tolerating malformed size fields.
 
-    Indexers occasionally return non-numeric ``size`` values (e.g. when
-    the NZB's file list omitted byte totals). Previously ``int(...)``
+    Indexers occasionally return non-numeric ``size`` values (for example, when
+    the NZB's file list omitted byte totals). Previously a bare ``int()`` call
     would crash the entire sort on a single bad entry. Return 0 for
     anything non-parseable so the rest of the list still sorts cleanly.
     """

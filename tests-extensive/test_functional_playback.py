@@ -110,7 +110,7 @@ def test_addon_settings_are_configured(kodi_client):
 def test_playback_workflow_simulation(kodi_client):
     """Simulate the addon playback workflow."""
     # This test simulates what would happen during playback
-    # In a real scenario, we'd have an NZB URL and would trigger playback
+    # A real scenario would have an NZB URL and trigger playback
 
     # Step 1: Verify Kodi is ready
     result = kodi_client.call("Application.GetProperties", {"properties": ["version"]})

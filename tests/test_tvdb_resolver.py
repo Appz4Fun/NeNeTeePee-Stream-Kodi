@@ -135,7 +135,7 @@ def test_resolve_stores_result_in_cache():
 
 def test_resolve_redacts_api_key_in_error_log():
     """A URL-bearing TMDB error must not leak the api_key into the Kodi log
-    (the request URL embeds api_key=...) — Codex P2."""
+    (the request URL embeds api_key=<key>)—Codex P2."""
     secret_url = "https://api.themoviedb.org/3/tv/1396/external_ids?api_key=SECRET123"
 
     def fake_http_get(url, timeout=15):
@@ -251,7 +251,7 @@ def test_cache_path_avoids_xbmcaddon_and_uses_special_protocol():
 
 
 def test_get_tmdb_api_key_empty_without_own_setting_and_never_uses_addon():
-    """With no nzbdav tmdb_api_key set, return "" — and NEVER construct
+    """With no nzbdav tmdb_api_key set, return ""—and NEVER construct
     xbmcaddon.Addon. The TMDBHelper key-borrow was dropped: the Addon binding
     can SIGSEGV CoreELEC on the script-play path, and current TMDBHelper has no
     borrowable tmdb_apikey anyway (CodeRabbit)."""

@@ -23,9 +23,9 @@ def _no_real_network():
 
     prepare_stream spawns daemon threads (byte-0 prefetch, tail prewarm, fallback
     prevalidation). Mode-selection tests neither mock nor await them, so a daemon
-    would otherwise open a REAL socket to a fake host: a ~1.5s connect that both
+    would otherwise open a REAL socket to a fake host: a ~1.5 s connect that both
     slows the suite AND lets the daemon linger into a SIBLING test, where it calls
-    that test's class/module-level patches (urlopen, _fallback_probe_bases, ...)
+    that test's class/module-level patches (urlopen, _fallback_probe_bases, and so on)
     with its own identity and flakes assert_not_called / call-count guards (a real
     ~1-in-17 cross-test race).
 
@@ -51,11 +51,11 @@ def _no_real_network():
             "nzbdav tests: real network disabled for {!r}".format(host),
         )
 
-    # getproxies() on macOS calls SystemConfiguration and can take ~1.5s; the
+    # getproxies() on macOS calls SystemConfiguration and can take ~1.5 s; the
     # daemons build an opener per un-mocked urlopen, so stub it to a no-proxy
     # result. Combined with the DNS guard, an un-mocked daemon urlopen now both
     # builds its opener and fails its connect instantly. The tail-prewarm daemon
-    # also defers ~1.5s on Monitor.waitForAbort (which REALLY sleeps in this
+    # also defers ~1.5 s on Monitor.waitForAbort (which REALLY sleeps in this
     # harness); shrink that defer to 1 ms (never 0: real Kodi's waitForAbort(0)
     # waits forever) so the daemon reaches (and fast-fails) its read at once.
     # The dedicated defer tests override waitForAbort themselves and assert
@@ -162,7 +162,7 @@ def test_parallel_fallback_fingerprint_shutdown_works_on_python38_executor():
 
 
 # ---------------------------------------------------------------------------
-# _StreamHandler._is_safe_ffmpeg_cmd — argv shape + CR/LF gating
+# _StreamHandler._is_safe_ffmpeg_cmd—argv shape + CR/LF gating
 # ---------------------------------------------------------------------------
 
 
@@ -170,8 +170,8 @@ def test_is_safe_ffmpeg_cmd_accepts_crlf_in_headers_value():
     """The -headers argument LEGITIMATELY contains \\r\\n as the HTTP header
     separator required by ffmpeg's HTTP demuxer. A blanket CR/LF ban across
     all argv elements (as in v1.0.0-pre-alpha through v1.0.2) would 500 every
-    Authorization-carrying force-remux stream with "Refusing to start unsafe
-    ffmpeg command". Regression guard for the True Detective 2026-04-23
+    Authorization-carrying force-remux stream with `Refusing to start unsafe
+    ffmpeg command`. Regression guard for the True Detective 2026-04-23
     incident."""
     cmd = [
         "/usr/bin/ffmpeg",
@@ -190,7 +190,7 @@ def test_is_safe_ffmpeg_cmd_accepts_crlf_in_headers_value():
 
 def test_is_safe_ffmpeg_cmd_rejects_crlf_in_url():
     """CR/LF in a URL (or any non-``-headers`` argv element) is still an
-    injection attempt — the exemption is narrowly scoped to the single argv
+    injection attempt—the exemption is narrowly scoped to the single argv
     position that follows ``-headers``."""
     cmd = [
         "/usr/bin/ffmpeg",
@@ -204,7 +204,7 @@ def test_is_safe_ffmpeg_cmd_rejects_crlf_in_url():
 
 
 def test_is_safe_ffmpeg_cmd_rejects_null_byte_everywhere():
-    """NUL in any argv element is always rejected — execve-level hazard."""
+    """NUL in any argv element is always rejected—execve-level hazard."""
     cmd = ["/usr/bin/ffmpeg", "-headers", "Authorization: Basic \x00\r\n"]
     assert _StreamHandler._is_safe_ffmpeg_cmd(cmd) is False
 
@@ -573,7 +573,7 @@ def test_merge_session_fallbacks_preserves_existing_source_identity():
 def test_merge_session_fallbacks_dedups_by_nzo_after_cutover_resolves_url():
     """In production every pushed source has stream_url="" (jobs carry only
     nzo_id); the live cutover then resolves it in place to a real URL. A
-    re-push of the same nzo (still url="") must NOT be re-added as a duplicate
+    re-push of the same nzo (still `url=""`) must NOT be re-added as a duplicate
     that un-fails the source the cutover already marked failed.
     """
     from resources.lib.stream_proxy import StreamProxy
@@ -934,7 +934,7 @@ def test_get_content_length_ignores_malformed_matching_hint_validation(
 
 
 # ---------------------------------------------------------------------------
-# StreamProxy.prepare_stream — remux vs proxy
+# StreamProxy.prepare_stream—remux vs proxy
 # ---------------------------------------------------------------------------
 
 
@@ -1043,7 +1043,7 @@ def test_prepare_stream_uses_content_length_hint_for_passthrough_start():
 
 
 def test_prepare_stream_matroska_mode_forces_remux_for_large_mkv():
-    """Large MKV above threshold routes through ffmpeg in Matroska mode.
+    """Large MKV over threshold routes through ffmpeg in Matroska mode.
 
     Output is piped Matroska via the standard remux path, the same
     shape used by the MP4 Tier 3 fallback. An earlier iteration routed
@@ -1100,8 +1100,8 @@ def test_prepare_stream_matroska_mode_forces_remux_for_large_mkv():
 
 
 def test_prepare_stream_large_mkv_falls_back_without_ffmpeg():
-    """If ffmpeg is missing we can't force remux; fall back to pass-through
-    and let the user know why their large file will fail."""
+    """If ffmpeg is missing the proxy can't force remux; fall back to pass-through
+    and let the user know why their large file fails."""
     from resources.lib.stream_proxy import StreamProxy
 
     sp = StreamProxy.__new__(StreamProxy)
@@ -1238,7 +1238,7 @@ def test_prepare_stream_uses_settings_snapshot_without_kodi_setting_reads():
 
 def test_settings_snapshot_carries_passthrough_stall_wait():
     """Regression (id 3365909882): passthrough_stall_wait must be serialized into
-    the /prepare settings snapshot so a user-tuned (or 0-to-disable) value is
+    the /prepare settings snapshot so a user-tuned value (or 0 to turn it off) is
     honored on the service-proxied path instead of silently defaulting to 120."""
     import resources.lib.stream_proxy as sp
 
@@ -1249,7 +1249,7 @@ def test_settings_snapshot_carries_passthrough_stall_wait():
 
     snap = sp.build_settings_snapshot(settings_getter=getter)
     assert snap["passthrough_stall_wait"] == "0"
-    # 0 disables the patient stall wait — and now actually reaches the consumer.
+    # 0 disables the patient stall wait—and now actually reaches the consumer.
     runtime = sp._passthrough_runtime_settings_from_snapshot(snap)
     assert runtime["passthrough_stall_wait_seconds"] == 0
 
@@ -1305,7 +1305,7 @@ def test_prepare_stream_unknown_length_mp4_without_ffmpeg_raises():
 
 def test_prepare_stream_respects_disabled_threshold():
     """Setting the threshold to 0 disables force remux entirely even for
-    huge files — escape hatch for users who know their platform is fine."""
+    huge files—escape hatch for users who know their platform is fine."""
     import sys
 
     from resources.lib.stream_proxy import StreamProxy
@@ -1355,11 +1355,11 @@ def test_force_remux_threshold_default_is_nonzero():
     finally:
         sys.modules["xbmcaddon"].Addon.return_value = original
 
-    # 12 GB: pass-through tested clean on CoreELEC — must NOT be remuxed.
+    # 12 GB: pass-through tested clean on CoreELEC—must NOT be remuxed.
     assert (
         threshold > 12 * 1024 * 1024 * 1024
     ), "Default threshold must not remux 12 GB MKVs (pass-through works)"
-    # 58 GB: known-bad on 32-bit Kodi — must be remuxed.
+    # 58 GB: known-bad on 32-bit Kodi—must be remuxed.
     assert (
         threshold < 58 * 1024 * 1024 * 1024
     ), "Default threshold must remux 58 GB files (pass-through crashes)"
@@ -1393,10 +1393,10 @@ def test_get_force_remux_threshold_clamps_typo_high_and_logs(mock_xbmc):
         _get_force_remux_threshold_bytes,
     )
 
-    # Use a value above the JSON-safe-int ceiling so the clamp+log fires.
+    # Use a value over the JSON-safe-int ceiling so the clamp+log fires.
     # The cap was raised to (1 << 53) - 1 so realistic "effectively unlimited"
-    # inputs (e.g. 20 TB = 20_000_000 MB) no longer get clamped on every
-    # play — only obviously-bogus values trigger the warning.
+    # inputs (for example, 20 TB = 20_000_000 MB) no longer get clamped on every
+    # play—only obviously bogus values trigger the warning.
     typo = (1 << 53) + 1
     mock_addon = MagicMock()
     mock_addon.getSetting.return_value = str(typo)
@@ -1546,7 +1546,7 @@ def test_prepare_stream_large_mkv_defaults_to_passthrough_without_cache_zero():
     huge = 58 * 1024 * 1024 * 1024  # 58 GB, matches Shawshank REMUX
 
     mock_addon = MagicMock()
-    # Empty string — user left the setting at its default.
+    # Empty string—user left the setting at its default.
     mock_addon.getSetting.return_value = ""
     original = sys.modules["xbmcaddon"].Addon.return_value
     sys.modules["xbmcaddon"].Addon.return_value = mock_addon
@@ -1757,7 +1757,7 @@ def test_prepare_stream_force_remux_hls_fmp4_setting_produces_hls_ctx():
     """With force_remux_mode=1 and a duration probe that succeeds,
     prepare_stream builds an HLS fmp4 ctx instead of the matroska
     ctx. Producer creation happens in _register_session (not tested
-    here) — this test only asserts the ctx shape that prepare_stream
+    here)—this test only asserts the ctx shape that prepare_stream
     hands to _register_session."""
     import sys
 
@@ -1836,7 +1836,7 @@ def test_prepare_stream_force_remux_hls_fmp4_falls_back_when_duration_probe_fail
 
     huge = 58 * 1024 * 1024 * 1024
     mock_proc = MagicMock()
-    # No "Duration:" line in stderr — _probe_duration returns None.
+    # No "Duration:" line in stderr—_probe_duration returns None.
     mock_proc.stderr = iter([b"  Stream #0:0: Video: hevc\n"])
 
     mock_addon = MagicMock()
@@ -2255,7 +2255,7 @@ def test_prepare_stream_prefetches_initial_passthrough_bytes_before_first_get():
     # is served directly, so the duplicate upstream range GET must never run. A
     # regression that ignored the prefetch and reopened the range would call
     # urlopen here and fail deterministically, instead of slipping under a
-    # wall-clock ceiling that exceeds the mocked 0.08s GET delay.
+    # wall-clock ceiling that exceeds the mocked 0.08 s GET delay.
     slow_open.assert_not_called()
     assert prefetch_started.is_set()
     assert prefetch_finished.is_set()
@@ -2416,8 +2416,8 @@ def test_initial_prefetch_skips_probe_base_settings_before_first_get():
     # probe_bases / fallback_fetch / urlopen are patched class/module-wide, so a
     # leaked sibling prevalidation daemon (its own ctx, URL and auth) can call them
     # during this test's patch window and corrupt these guards. Scope each to THIS
-    # test's identity — the prepared ctx object, and the "Basic primary" auth /
-    # movie.mkv URL — so a foreign background call cannot flake them. Mirrors
+    # test's identity—the prepared ctx object, and the "Basic primary" auth /
+    # movie.mkv URL—so a foreign background call cannot flake them. Mirrors
     # test_prevalidated_fallback_reuses_current_probe's auth-scoped hardening.
     our_probe_calls = [
         call for call in probe_bases.call_args_list if call.args and call.args[0] is ctx
@@ -2773,7 +2773,7 @@ def test_prefetch_tail_prewarms_nzbdav_cues_cache():
 
     Kodi reads the MKV SeekHead/Cues at the file tail BEFORE playback. For a
     usenet-backed file nzbdav fetches those end-of-file articles on demand, so
-    the first tail read stalls 1-4s mid-startup and can wedge the CoreELEC audio
+    the first tail read stalls 1-4 s mid-startup and can wedge the CoreELEC audio
     clock (permanent black screen). A throwaway read of the tail during the
     prepare gap warms nzbdav so Kodi's real cues read is fast. Regression for the
     live Ballerina/Casino black-screen freezes (2026-05-31).
@@ -2785,7 +2785,7 @@ def test_prefetch_tail_prewarms_nzbdav_cues_cache():
     )
 
     sp = StreamProxy.__new__(StreamProxy)
-    content_length = 50 * 1024 * 1024  # 50 MiB — large enough for a distinct tail
+    content_length = 50 * 1024 * 1024  # 50 MiB—large enough for a distinct tail
     ctx = {
         "remote_url": "http://host/movie.mkv",
         "auth_header": "Basic primary",
@@ -2808,7 +2808,7 @@ def test_prefetch_tail_prewarms_nzbdav_cues_cache():
 
 
 def test_tail_prewarm_skipped_when_file_smaller_than_tail_window():
-    """Tiny files have no distinct tail to warm — skip the read (the byte-0
+    """Tiny files have no distinct tail to warm—skip the read (the byte-0
     prefetch already covers the whole file)."""
     from resources.lib.stream_proxy import StreamProxy, _StreamHandler
 
@@ -2975,7 +2975,7 @@ def test_prevalidated_fallback_reuses_current_probe_for_first_fallback_bytes():
     # this test's unique fallback auth header (not just the URL): a leaked sibling
     # daemon read-ahead also targets a "/fallback.mkv" URL through the same patched
     # module-level urlopen, but carries a different Authorization, so a bare URL
-    # filter miscounts it as our open.
+    # filter miscounts it as the proxy's own open.
     fallback_stream_opens = sum(
         1
         for call in stream_open.call_args_list
@@ -3110,8 +3110,8 @@ def test_stream_upstream_range_404_after_written_prefix_is_recoverable():
     tail is then nzbdav reporting "not downloaded yet" (past its high-water),
     NOT a missing path. The prefix advances ``start`` past 0, so the 404 lands
     on the established-stream branch and is reported as a RECOVERABLE short
-    read carrying the prefix bytes — distinct from the network-error
-    ConnectionRefused path above, which never reaches the 404 branch."""
+    read carrying the prefix bytes—distinct from the network-error
+    ConnectionRefused path earlier in this file, which never reaches the 404 branch."""
     from resources.lib.stream_proxy import (
         _FALLBACK_CURRENT_RANGE_CACHE_KEY,
         _UPSTREAM_RANGE_SHORT_READ_RECOVERABLE,
@@ -3134,7 +3134,7 @@ def test_stream_upstream_range_404_after_written_prefix_is_recoverable():
         },
     }
     handler = _make_handler_with_server(ctx)
-    # nzbdav 404s the tail (bytes 4096-8191) it has not downloaded yet.
+    # nzbdav returns 404 for the tail (bytes 4096-8191) it has not downloaded yet.
     err = HTTPError("http://webdav/content/fallback.mkv", 404, "Not Found", {}, None)
 
     with patch("resources.lib.stream_proxy.urlopen", side_effect=err):
@@ -3147,10 +3147,10 @@ def test_stream_upstream_range_404_after_written_prefix_is_recoverable():
 
 def test_stream_upstream_range_midstream_404_is_awaiting_not_terminal():
     """A 404 on an ESTABLISHED read (start > 0) means nzbdav has not yet
-    downloaded this byte range (it 404s past its download high-water), NOT a
+    downloaded this byte range (it returns 404 past its download high-water), NOT a
     permanent path error. It must be reported as AWAITING_DOWNLOAD so the
     retry ladder + patient wait + fallback cutover engage, instead of a hard
-    CLIENT_ERROR abort that kills playback the instant playback catches the
+    CLIENT_ERROR exit that kills playback the instant playback catches the
     download high-water (the "Dune died on a 404" incident)."""
     from resources.lib.stream_proxy import (
         _UPSTREAM_RANGE_SHORT_READ_AWAITING_DOWNLOAD,
@@ -3163,7 +3163,7 @@ def test_stream_upstream_range_midstream_404_is_awaiting_not_terminal():
         "content_length": 68867978518,
     }
     handler = _make_handler_with_server(ctx)
-    # nzbdav 404s the range past its download high-water mid-file.
+    # nzbdav returns 404 for the range past its download high-water mid-file.
     err = HTTPError("http://host/movie.mkv", 404, "Not Found", {}, None)
 
     with patch("resources.lib.stream_proxy.urlopen", side_effect=err):
@@ -3175,8 +3175,8 @@ def test_stream_upstream_range_midstream_404_is_awaiting_not_terminal():
 
 
 def test_stream_upstream_range_byte_zero_404_stays_terminal():
-    """A 404 on the INITIAL open (start == 0) is a genuine missing path —
-    byte 0 must exist if the path is valid — so it stays a terminal
+    """A 404 on the INITIAL open (start == 0) is a genuine missing path:
+    byte 0 must exist if the path is valid—so it stays a terminal
     CLIENT_ERROR and must NOT wait the full patient-wait budget."""
     from resources.lib.stream_proxy import _UPSTREAM_RANGE_CLIENT_ERROR
 
@@ -3197,7 +3197,7 @@ def test_stream_upstream_range_byte_zero_404_stays_terminal():
 
 
 def test_stream_upstream_range_midstream_401_stays_terminal():
-    """Auth failures (401/403) are always terminal even mid-stream — waiting
+    """Auth failures (401/403) are always terminal even mid-stream—waiting
     cannot fix bad credentials, and they must not be disguised as a
     still-downloading range."""
     from resources.lib.stream_proxy import _UPSTREAM_RANGE_CLIENT_ERROR
@@ -3239,7 +3239,7 @@ def test_prepare_stream_falls_back_to_proxy_without_ffmpeg():
 
 
 # ---------------------------------------------------------------------------
-# _probe_duration — parse duration from ffmpeg stderr
+# _probe_duration—parse duration from ffmpeg stderr
 # ---------------------------------------------------------------------------
 
 
@@ -3278,7 +3278,7 @@ def test_probe_duration_returns_none_on_n_a():
 
 
 # ---------------------------------------------------------------------------
-# StreamProxy.prepare_stream — DV source-RPU gating for fmp4 HLS.
+# StreamProxy.prepare_stream—DV source-RPU gating for fmp4 HLS.
 # The old _parse_ffmpeg_dv_profile / _probe_dv_profile pair has been
 # retired in favour of the structured dv_source.probe_dolby_vision_source
 # result, which parses real RPU data to classify non-DV, non-P7 DV,
@@ -3400,7 +3400,7 @@ def test_prepare_stream_profile8_falls_back_to_matroska():
     3.0+1.0 UHD (DV P8) proved the Amlogic CAMLCodec hangs at onAVStarted
     when fed fmp4 HLS segments from a DV source, even though ffmpeg produces
     the segments cleanly. Differs from the plan's 2026-04-21 proposal,
-    which would have routed p8 through fmp4 — the plan pre-dated the
+    which would have routed p8 through fmp4—the plan pre-dated the
     3dce841 broadening fix and would have regressed production."""
     ctx = _run_prepare_with_dv(
         _dv_result("dv_allowed_for_fmp4", "non_p7_dv_profile", profile=8),
@@ -3413,10 +3413,10 @@ def test_prepare_stream_profile8_falls_back_to_matroska():
 def test_prepare_stream_profile8_stays_off_hls_even_if_hls_setup_would_succeed():
     """Profile 8 must be rejected BEFORE HlsProducer setup.
 
-    The plain profile8 test above can false-green if a bad routing change still
-    builds an HLS ctx but HlsProducer.prepare() happens to fail and rewrite the
-    session back to matroska. Patch HlsProducer to succeed so this test pins the
-    actual routing decision, not the fallback path.
+    The plain profile8 test earlier in this file can false-green if a bad routing
+    change still builds an HLS ctx but HlsProducer.prepare() happens to fail and
+    rewrite the session back to matroska. Patch HlsProducer to succeed so this
+    test pins the actual routing decision, not the fallback path.
     """
     import sys
 
@@ -3456,7 +3456,7 @@ def test_prepare_stream_profile8_stays_off_hls_even_if_hls_setup_would_succeed()
 
 def test_prepare_stream_profile5_falls_back_to_matroska():
     """Profile 5 (single-layer IPTPQc2) is conservatively grouped with
-    profile 8 — the 2026-04-15 CAMLCodec hang was observed on a single-
+    profile 8—the 2026-04-15 CAMLCodec hang was observed on a single-
     layer DV source, so other single-layer DV profiles are assumed to
     share the defect until proven otherwise on the real device."""
     ctx = _run_prepare_with_dv(
@@ -3518,11 +3518,11 @@ def test_prepare_stream_non_dv_stays_on_fmp4():
 
 
 def test_prepare_stream_dv_unknown_falls_back_to_matroska():
-    """When the probe can't read the source — truncated header, unsupported
-    container, parse failure — fail safe to matroska. This is stricter than
+    """When the probe can't read the source—truncated header, unsupported
+    container, parse failure—fail safe to matroska. This is stricter than
     the old ffmpeg-stderr probe (which treated None/unknown as 'assume non-
     DV and proceed'); with source-data parsing now available, an unknown
-    result genuinely means we can't read the file and shouldn't gamble on
+    result genuinely means the proxy can't read the file and shouldn't gamble on
     the fmp4 path."""
     ctx = _run_prepare_with_dv(
         _dv_result("dv_unknown", "mkv_sample_extraction_failed"),
@@ -3533,10 +3533,10 @@ def test_prepare_stream_dv_unknown_falls_back_to_matroska():
 
 
 def test_prepare_stream_probe_crash_falls_back_to_matroska():
-    """An unexpected exception from ``probe_dolby_vision_source`` (e.g.
-    http.client.InvalidURL, ssl.SSLError, UnicodeEncodeError) must be
-    caught at the integration point and degrade to matroska — it must NOT
-    kill prepare_stream, since that would leave Kodi without a resolved URL
+    """An unexpected exception from ``probe_dolby_vision_source`` (for example,
+    ``http.client.InvalidURL``, ``ssl.SSLError``, UnicodeEncodeError) must be
+    caught at the integration point and degrade to matroska—it must NOT
+    stop prepare_stream, since that would leave Kodi without a resolved URL
     and freeze playback startup."""
     import sys
 
@@ -3564,7 +3564,7 @@ def test_prepare_stream_probe_crash_falls_back_to_matroska():
 
 
 # ---------------------------------------------------------------------------
-# HlsProducer._build_cmd — fmp4 must emit -tag:v hvc1 for DV compatibility
+# HlsProducer._build_cmd—fmp4 must emit -tag:v hvc1 for DV compatibility
 # ---------------------------------------------------------------------------
 
 
@@ -3608,7 +3608,7 @@ def test_hls_producer_mpegts_cmd_omits_hvc1_tag():
 
 
 # ---------------------------------------------------------------------------
-# StreamProxy.prepare_stream — duration probe for MP4
+# StreamProxy.prepare_stream—duration probe for MP4
 # ---------------------------------------------------------------------------
 
 
@@ -3652,7 +3652,7 @@ def test_prepare_stream_probes_duration_for_mp4():
 
 def test_probe_duration_prefers_ffprobe_when_available():
     """When ffprobe is on the system, _probe_duration must use it instead of
-    parsing ffmpeg stderr — ffmpeg's per-stream warnings can push Duration
+    parsing ffmpeg stderr—ffmpeg's per-stream warnings can push Duration
     past any reasonable stderr budget on files with many subtitle streams."""
     from resources.lib.stream_proxy import StreamProxy
 
@@ -3673,7 +3673,7 @@ def test_probe_duration_prefers_ffprobe_when_available():
         )
 
     assert duration == 8552.576
-    # ffprobe must have been invoked — check the argv passed to Popen.
+    # ffprobe must have been invoked—check the argv passed to Popen.
     assert mock_popen.called
     argv = mock_popen.call_args[0][0]
     assert argv[0] == "/usr/bin/ffprobe"
@@ -3764,7 +3764,7 @@ def test_probe_duration_ffmpeg_fallback_budget_handles_subtitle_wall():
 
     # Build a realistic ffmpeg stderr stream: banner + 60 subtitle warnings
     # + the Duration line. Each subtitle warning is ~221 bytes (matches the
-    # Shawshank probe output seen live), so 60 × 221 ≈ 13 KB — well above
+    # Shawshank probe output seen live), so 60 × 221 ≈ 13 KB—well over
     # the original 8 KB budget, forcing the larger budget path to be taken.
     banner = (
         b"ffmpeg version 6.0.1 Copyright (c) 2000-2023 the FFmpeg developers\n"
@@ -3945,7 +3945,7 @@ def test_prepare_stream_falls_back_to_non_seekable_on_probe_failure():
 
 
 # ---------------------------------------------------------------------------
-# Seek detection — is_seek_request
+# Seek detection—is_seek_request
 # ---------------------------------------------------------------------------
 
 
@@ -3978,7 +3978,7 @@ def test_seek_detection_from_zero():
 
 
 # ---------------------------------------------------------------------------
-# _build_ffmpeg_cmd — subtitle flag toggling
+# _build_ffmpeg_cmd—subtitle flag toggling
 # ---------------------------------------------------------------------------
 
 
@@ -3999,7 +3999,7 @@ def test_build_ffmpeg_cmd_includes_subs_by_default():
 
 def test_build_ffmpeg_cmd_copies_subs_for_mkv_input():
     """For MKV inputs the subtitle codec must be `copy`, not `srt`.
-    PGS/DVD/HDMV bitmap subs can't be re-encoded to SRT and would abort
+    PGS/DVD/HDMV bitmap subs can't be re-encoded to SRT and would stop
     the entire remux; `copy` handles every subtitle codec losslessly."""
     handler = _make_handler()
     ctx = {
@@ -4057,7 +4057,7 @@ def test_build_ffmpeg_cmd_mpegts_output_format():
     """output_format='mpegts' emits MPEG-TS with subs dropped.
 
     Regression test for the Shawshank seek bug. Piped MKV has no Cues;
-    MPEG-TS is the format we switched to so Kodi can do real seeks via
+    MPEG-TS is the format the proxy switched to so Kodi can do real seeks via
     byte-range restart of ffmpeg with `-ss`.
     """
     handler = _make_handler()
@@ -4072,13 +4072,13 @@ def test_build_ffmpeg_cmd_mpegts_output_format():
     f_idx = cmd.index("-f")
     assert cmd[f_idx + 1] == "mpegts"
     assert "matroska" not in cmd
-    # Subtitles explicitly dropped — MPEG-TS can't carry PGS/HDMV, and
+    # Subtitles explicitly dropped—MPEG-TS can't carry PGS/HDMV, and
     # ffmpeg can't transcode those, so `-sn` is the only safe choice.
     assert "-sn" in cmd
     # No subtitle mapping or -c:s for the TS path.
     assert "0:s?" not in cmd
     assert "-c:s" not in cmd
-    # No -metadata DURATION — MPEG-TS has no container-level duration
+    # No -metadata DURATION—MPEG-TS has no container-level duration
     # field for ffmpeg to write, so don't bother.
     assert "-metadata" not in cmd
 
@@ -4151,7 +4151,7 @@ def test_build_ffmpeg_cmd_keeps_url_clean_with_reserved_char_credentials():
 
 
 # ---------------------------------------------------------------------------
-# _serve_remux — handler-level tests
+# _serve_remux—handler-level tests
 # ---------------------------------------------------------------------------
 
 
@@ -4167,7 +4167,7 @@ def test_serve_remux_continuation_does_not_map_output_byte_to_time():
         "remux": True,
     }
 
-    # 5 MB ahead of current — within 10 MB threshold, classified as continuation
+    # 5 MB ahead of current—within 10 MB threshold, classified as continuation
     handler = _make_handler_with_server(
         ctx, range_header="bytes=500000000-", current_byte_pos=495000000
     )
@@ -4275,7 +4275,7 @@ def test_serve_remux_duplicate_does_not_finish_winner():
 def test_serve_remux_write_timeout_exits_loop():
     """If wfile.write raises socket.timeout (Kodi stopped consuming without
     closing the TCP connection) the loop must break and the finally block
-    must kill ffmpeg. Otherwise a DB-vacuum-style stall leaves a zombie
+    must stop ffmpeg. Otherwise a DB-vacuum-style stall leaves a zombie
     ffmpeg writing into a dead socket forever."""
     import socket
 
@@ -4290,7 +4290,7 @@ def test_serve_remux_write_timeout_exits_loop():
     }
 
     handler = _make_handler_with_server(ctx)
-    # First write returns normally, second raises — simulates the socket
+    # First write returns normally, second raises—simulates the socket
     # send buffer filling up and the timeout firing on the second chunk.
     handler.wfile.write.side_effect = [None, socket.timeout("timed out")]
 
@@ -4301,7 +4301,7 @@ def test_serve_remux_write_timeout_exits_loop():
     with patch("resources.lib.stream_proxy.subprocess.Popen", return_value=mock_proc):
         handler._serve_remux(ctx)
 
-    # ffmpeg MUST be killed on timeout — otherwise it leaks
+    # ffmpeg MUST be killed on timeout—otherwise it leaks
     mock_proc.kill.assert_called()
     mock_proc.wait.assert_called()
 
@@ -4392,14 +4392,14 @@ def test_prepare_stream_clears_previous_sessions():
     sp._context_lock = __import__("threading").Lock()
     sp.port = 9999
 
-    # First play — set up a session with a fake-running ffmpeg attached.
+    # First play—set up a session with a fake-running ffmpeg attached.
     with patch.object(sp, "_get_content_length", return_value=100000):
         sp.prepare_stream("http://host/one.mkv")
     old_session = next(iter(sp._server.stream_sessions.values()))
     old_proc = MagicMock()
     old_session["active_ffmpeg"] = old_proc
 
-    # Second play — the old ffmpeg must be killed, the old session dropped.
+    # Second play—the old ffmpeg must be killed, the old session dropped.
     with patch.object(sp, "_get_content_length", return_value=200000):
         sp.prepare_stream("http://host/two.mkv")
 
@@ -4499,7 +4499,7 @@ def test_prepare_stream_does_not_block_new_url_on_old_hls_close():
 
 
 def test_clear_sessions_kills_all_ffmpegs():
-    """StreamProxy.clear_sessions must kill every registered ffmpeg."""
+    """StreamProxy.clear_sessions must stop every registered ffmpeg."""
     from resources.lib.stream_proxy import StreamProxy
 
     sp = StreamProxy.__new__(StreamProxy)
@@ -4633,7 +4633,7 @@ def test_parse_hls_resource_segment_ts_returns_extension():
 
 def test_parse_hls_resource_segment_padded_index_still_parses():
     """Zero-padded segment indices still parse to the bare int plus
-    the extension — regression guard for the URL→int→disk path
+    the extension—regression guard for the URL→int→disk path
     lookup."""
     from resources.lib.stream_proxy import _StreamHandler
 
@@ -4642,7 +4642,7 @@ def test_parse_hls_resource_segment_padded_index_still_parses():
 
 
 def test_parse_hls_resource_rejects_wrong_init_filename():
-    """Anything other than exactly 'init.mp4' (e.g. 'not-init.mp4')
+    """Anything other than exactly 'init.mp4' (for example, 'not-init.mp4')
     returns None."""
     from resources.lib.stream_proxy import _StreamHandler
 
@@ -4700,7 +4700,7 @@ def _make_handler_for(path, ctx):
     """Build a minimal _StreamHandler with an injected path and ctx.
 
     Wires ``handler.server.stream_sessions`` so that
-    ``_get_stream_context`` resolves the ``/hls/<session_id>/...``
+    ``_get_stream_context`` resolves the ``/hls/<session_id>/<file>``
     path back to ``ctx``. Assumes ``path`` is of the form
     ``/hls/<session_id>/<resource>``.
     """
@@ -4710,7 +4710,7 @@ def _make_handler_for(path, ctx):
     handler.path = path
     handler.server = MagicMock()
     handler.server.stream_context = ctx
-    # Extract session id from /hls/<session>/... so _get_stream_context
+    # Extract session id from /hls/<session>/<file> so _get_stream_context
     # finds ctx in stream_sessions.
     parts = path[len("/hls/") :].split("/", 1)
     session_id = parts[0] if parts else "abc"
@@ -5095,7 +5095,7 @@ def test_serve_hls_playlist_mpegts_uses_ts_extension():
 
 def test_serve_hls_segment_reads_from_producer_file(tmp_path):
     """The segment handler reads ``hls_producer.wait_for_segment``'s
-    returned file path and streams it back with ``Content-Length``,
+    returned path and streams it back with ``Content-Length``,
     not chunked. The producer owns ffmpeg; the handler is just a file
     server for already-produced .ts files.
     """
@@ -5157,7 +5157,7 @@ def test_serve_hls_segment_504_on_producer_timeout():
 
 def test_serve_hls_init_serves_canonical_cached_bytes(tmp_path):
     """_serve_hls_init serves the producer's canonical init bytes
-    cache — NOT the bytes currently on disk. On a seek respawn ffmpeg
+    cache—NOT the bytes currently on disk. On a seek respawn ffmpeg
     rewrites init.mp4 with a different edit list; the canonical cache
     guarantees every Kodi fetch returns the first generation's init
     so the cached init stays compatible with later segments."""
@@ -5207,7 +5207,7 @@ def test_serve_hls_init_falls_back_to_disk_when_cache_missing(tmp_path):
     """If the canonical cache hasn't been populated yet (very early
     fetch before wait_for_init has actually observed a complete init),
     the handler falls back to reading the on-disk init file. This is
-    a defensive path — in practice wait_for_init populates the cache
+    a defensive path—in practice wait_for_init populates the cache
     before returning a path, so the handler should always hit the
     cache. Regression guard for the legacy behavior just in case."""
     import os as _os
@@ -5282,7 +5282,7 @@ def test_serve_hls_segment_fmp4_ctx_uses_video_mp4_content_type(tmp_path):
     """Regression guard: when ctx is fmp4, _serve_hls_segment must
     set Content-Type: video/mp4 (NOT the legacy mpegts video/mp2t).
     Without this, HEAD and GET would disagree on Content-Type for
-    fmp4 segments — flagged by the code reviewer of Tasks 9+10."""
+    fmp4 segments—flagged by the code reviewer of Tasks 9+10."""
     import os as _os
 
     from resources.lib.stream_proxy import _StreamHandler
@@ -5327,7 +5327,7 @@ def test_build_hls_segment_cmd_includes_cold_start_flags():
     they are input options.
 
     ``-probesize`` must be large enough to enumerate every subtitle
-    track — 32 KB was too small on files with 32 sub tracks, which
+    track—32 KB was too small on files with 32 sub tracks, which
     made Kodi's subtitle menu empty.
     """
     from resources.lib.stream_proxy import _StreamHandler
@@ -5389,7 +5389,7 @@ def test_build_hls_segment_cmd_drops_subtitles():
     as a ``private data stream`` that Kodi's MPEG-TS demuxer
     rejects on probe (``Playback failed``). PGS codec parameter
     detection also requires a multi-minute analyze window
-    incompatible with the tight probe budget we need for fast
+    incompatible with the tight probe budget needed for fast
     segment cold start. Regression test for the ``Playback failed``
     dialog on Shawshank after the subs-pass-through attempt.
     """
@@ -5451,7 +5451,7 @@ def test_hls_segment_seconds_is_in_reasonable_range():
 
 
 def test_serve_hls_segment_out_of_range_404s():
-    """Requesting a segment past the end returns 404 — producer is
+    """Requesting a segment past the end returns 404—producer is
     never consulted for a segment that doesn't exist in the playlist."""
     producer = MagicMock()
 
@@ -5475,7 +5475,7 @@ def test_serve_hls_segment_out_of_range_404s():
 
 
 def test_do_get_routes_hls_paths():
-    """do_GET must route /hls/<session>/... through _handle_hls rather
+    """do_GET must route /hls/<session>/<file> through _handle_hls rather
     than the default /stream/ handler."""
     ctx = {
         "session_id": "xyz789",
@@ -5536,7 +5536,7 @@ def _make_producer(tmp_path, duration=600.0, seg_dur=30.0):
 def test_hls_producer_serves_existing_complete_segment(tmp_path):
     """If seg_N.ts AND seg_N+1.ts both already exist on disk,
     wait_for_segment returns immediately without touching ffmpeg.
-    Regression guard for "seek back to an already-produced segment"."""
+    Regression guard for seeking back to an already-produced segment."""
     producer = _make_producer(tmp_path)
     seg_dir = producer.session_dir
     # Simulate ffmpeg having already written segments 5 and 6.
@@ -5632,7 +5632,7 @@ def test_hls_producer_fmp4_build_cmd_contains_hls_segment_type(tmp_path):
 
 
 def test_hls_producer_fmp4_build_cmd_uses_padded_filename_pattern(tmp_path):
-    """fmp4 hls_segment_filename uses the zero-padded seg_%06d.m4s
+    """fmp4 hls_segment_filename uses the zero-padded `seg_%06d.m4s`
     pattern to match the mpegts branch and keep parser lookups
     consistent."""
     from resources.lib.stream_proxy import HlsProducer
@@ -5657,7 +5657,7 @@ def test_hls_producer_fmp4_build_cmd_uses_padded_filename_pattern(tmp_path):
 
 
 def test_hls_producer_fmp4_build_cmd_drops_subtitles(tmp_path):
-    """fmp4 branch uses -sn (subtitles dropped) — documented Non-Goal
+    """fmp4 branch uses -sn (subtitles dropped)—documented Non-Goal
     regression guard."""
     from resources.lib.stream_proxy import HlsProducer
 
@@ -5805,8 +5805,8 @@ def test_hls_producer_starts_ffmpeg_when_no_file_exists(tmp_path):
     with patch(
         "resources.lib.stream_proxy.subprocess.Popen", return_value=mock_proc
     ) as mock_popen:
-        # Short timeout — we expect the timeout to expire because the
-        # mocked ffmpeg never writes files. We're asserting ON the
+        # Short timeout—the test expects it to expire because the
+        # mocked ffmpeg never writes files. The test asserts ON the
         # spawn call, not on the return value.
         producer.wait_for_segment(3, timeout=0.5)
 
@@ -5855,7 +5855,7 @@ def test_hls_producer_restarts_ffmpeg_on_backward_seek(tmp_path):
 
 def test_hls_producer_does_not_restart_on_small_forward_seek(tmp_path):
     """If ffmpeg is running at segment N and seg N+5 is requested
-    (small forward jump), the producer does NOT restart — it waits
+    (small forward jump), the producer does NOT restart—it waits
     for ffmpeg to naturally produce the segment."""
     producer = _make_producer(tmp_path)
 
@@ -5964,7 +5964,7 @@ def test_hls_producer_segment_complete_rejects_stale_prior_generation_segment(
     ``(now - mtime) > 500ms`` check is trivially true for such a
     file, and without the generation guard ``_segment_complete``
     would return True. Kodi would then read that stale segment
-    against the canonical (current-generation) init.mp4 — different
+    against the canonical (current-generation) init.mp4—different
     edit list / timestamp base, decoder glitch or stall.
     """
     import os as _os
@@ -5995,11 +5995,11 @@ def test_hls_producer_segment_complete_rejects_stale_prior_generation_segment(
         # seg_40 yet.
         producer._spawn_time = _time.time()
 
-        # _segment_complete(40) must return False — the stale file
+        # _segment_complete(40) must return False—the stale file
         # belongs to a prior generation and must not be served.
         assert producer._segment_complete(40) is False
 
-        # Sanity check: a freshly-written file that postdates
+        # Sanity check: a freshly written file that postdates
         # spawn_time should be considered complete once the next
         # segment proves ffmpeg moved on. fMP4 live segments no
         # longer trust mtime stability alone.
@@ -6161,12 +6161,12 @@ def test_hls_producer_unlink_does_not_run_for_mpegts_branch(tmp_path):
 
 
 def test_hls_producer_close_kills_ffmpeg_and_removes_dir(tmp_path):
-    """close() must kill ffmpeg and delete the session directory."""
+    """close() must stop ffmpeg and delete the session directory."""
     producer = _make_producer(tmp_path)
     seg_dir = producer.session_dir
     import os as _os
 
-    # Drop a bogus file so we can verify the directory is removed.
+    # Drop a bogus file to verify the directory is removed.
     with open(_os.path.join(seg_dir, "seg_000000.ts"), "wb") as f:
         f.write(b"x")
     assert _os.path.isdir(seg_dir)
@@ -6211,7 +6211,7 @@ def test_hls_producer_close_wait_false_kills_without_waiting(tmp_path):
     # Structural guard (load-independent): the deferred wait() must run on a
     # background thread, NOT the caller of close(wait_for_process=False). A
     # regression to a synchronous wait would run slow_wait on this calling
-    # thread (blocking until the 1s release), which the thread-identity check
+    # thread (blocking until the 1 s release), which the thread-identity check
     # catches without any flake-prone wall-clock bound.
     assert wait_thread, "ffmpeg wait() never ran"
     assert (
@@ -6278,7 +6278,7 @@ def test_hls_producer_close_closes_ffmpeg_log(tmp_path):
 
 def test_hls_producer_spawns_ffmpeg_with_session_log_as_stderr(tmp_path):
     """_ensure_ffmpeg_headed_for spawns ffmpeg with stderr=the
-    session-wide log handle, not subprocess.PIPE. Regression guard
+    session-wide log handle, not `subprocess.PIPE`. Regression guard
     for the deadlock bug."""
     producer = _make_producer(tmp_path, duration=600.0, seg_dur=30.0)
 
@@ -6300,7 +6300,7 @@ def test_hls_producer_spawns_ffmpeg_with_session_log_as_stderr(tmp_path):
 
 
 def test_hls_producer_reuses_same_log_handle_across_restarts(tmp_path):
-    """Both ffmpeg spawns across a kill-and-restart receive the
+    """Both ffmpeg spawns across a stop-and-restart receive the
     same stderr object identity. Regression guard for the
     file-descriptor leak."""
     producer = _make_producer(tmp_path, duration=600.0, seg_dur=30.0)
@@ -6380,7 +6380,7 @@ def test_hls_producer_concurrent_seek_respawn_starts_single_ffmpeg(tmp_path):
 
 
 def test_hls_producer_prepare_is_noop_for_mpegts(tmp_path):
-    """mpegts producers stay lazy — prepare() does not spawn."""
+    """mpegts producers stay lazy—prepare() does not spawn."""
     producer = _make_producer(tmp_path)  # defaults to mpegts
     try:
         with patch("resources.lib.stream_proxy.subprocess.Popen") as mock_popen:
@@ -6395,7 +6395,7 @@ def test_hls_producer_prepare_returns_when_init_and_first_segment_appear(
 ):
     """fmp4 producer; Popen returns a mock whose poll() returns None
     (alive). prepare() must wait for init.mp4 + seg_000000.m4s on
-    disk before returning. We simulate ffmpeg's output by writing
+    disk before returning. The test simulates ffmpeg's output by writing
     those files mid-prepare via a side-effect on Popen."""
     import os as _os
     import threading as _threading
@@ -6469,7 +6469,7 @@ def test_hls_producer_prepare_raises_if_no_output_within_deadline(tmp_path):
         "hls_segment_format": "fmp4",
     }
     producer = HlsProducer(ctx, str(tmp_path))
-    # Shrink the deadline for the test so we don't sit for 30 s.
+    # Shrink the deadline for the test so it doesn't sit for 30 s.
     producer._PREPARE_PRODUCTION_TIMEOUT_SECONDS = 0.5
     try:
         mock_proc = MagicMock()
@@ -6505,7 +6505,7 @@ def test_hls_producer_prepare_raises_if_ffmpeg_dies_during_production_wait(
     producer = HlsProducer(ctx, str(tmp_path))
     try:
         mock_proc = MagicMock()
-        # First few poll() calls return None (alive — passes the
+        # First few poll() calls return None (alive—passes the
         # 500 ms argv-rejection window). Then return 1 (exited).
         mock_proc.poll.side_effect = [None] * 12 + [1] * 100  # ~600 ms alive, then exit
         with patch(
@@ -6543,7 +6543,7 @@ def test_hls_producer_prepare_raises_when_ffmpeg_exits_immediately(tmp_path):
             with pytest.raises(RuntimeError, match="1"):
                 producer.prepare()
     finally:
-        producer._proc = None  # avoid close() trying to kill the mock
+        producer._proc = None  # avoid close() trying to stop the mock
         producer.close()
 
 
@@ -6619,7 +6619,7 @@ def test_hls_producer_init_file_complete_requires_current_generation_segment(tmp
 
 def test_hls_producer_init_ready_ignores_stale_segments_from_prior_generation(tmp_path):
     """Pre-seed init.mp4 + seg_000005.m4s from a prior generation.
-    Set _start_segment=100. _init_file_complete returns False —
+    Set _start_segment=100. _init_file_complete returns False;
     the stale seg_000005 is not the current generation's first
     segment. After creating seg_000100.m4s, it returns True."""
     import os as _os
@@ -6690,7 +6690,7 @@ def test_hls_producer_init_file_complete_does_not_use_mtime_window(tmp_path):
 
 
 def test_hls_producer_init_file_complete_returns_false_for_mpegts_ctx(tmp_path):
-    """mpegts producers never return True from _init_file_complete —
+    """mpegts producers never return True from _init_file_complete;
     the method is fmp4-only."""
     producer = _make_producer(tmp_path)  # mpegts
     try:
@@ -6726,7 +6726,7 @@ def test_hls_producer_wait_for_init_returns_path_when_current_target_segment_exi
         with open(seg_path, "wb") as f:
             f.write(b"SEG0")
 
-        # Patch Popen so no real ffmpeg is started. We expect
+        # Patch Popen so no real ffmpeg is started. The test expects
         # wait_for_init to see the existing files and return
         # without spawning.
         with patch("resources.lib.stream_proxy.subprocess.Popen"):
@@ -6804,10 +6804,10 @@ def test_hls_producer_wait_for_init_does_not_rewind_live_producer(tmp_path):
             producer.wait_for_init(timeout=0.5)
 
         assert not mock_popen.called
-        # start_segment must still be 40 — no rewind
+        # start_segment must still be 40—no rewind
         assert producer._start_segment == 40
     finally:
-        producer._proc = None  # avoid close() trying to kill the mock
+        producer._proc = None  # avoid close() trying to stop the mock
         producer.close()
 
 
@@ -6888,7 +6888,7 @@ def test_hls_producer_wait_for_init_returns_none_on_timeout(tmp_path):
 def test_hls_producer_wait_for_segment_zero_blocks_until_init_ready(tmp_path):
     """In fmp4 mode, wait_for_segment(0) does not return even if
     seg_000000.m4s exists on disk, until init.mp4 is also present
-    AND seg_<start_segment>.m4s exists (i.e. _init_file_complete
+    AND seg_<start_segment>.m4s exists (that is, _init_file_complete
     returns True)."""
     import os as _os
     import threading as _threading
@@ -6919,7 +6919,7 @@ def test_hls_producer_wait_for_segment_zero_blocks_until_init_ready(tmp_path):
         mock_proc.poll.return_value = None
 
         # Create init.mp4 (and re-create seg_000000.m4s, which the
-        # first ensure_ffmpeg_headed_for unlink will have wiped)
+        # first ensure_ffmpeg_headed_for unlink wiped)
         # halfway through the wait so the gate eventually opens.
         def create_init_later():
             _time.sleep(0.5)
@@ -7083,7 +7083,7 @@ def test_register_session_hls_returns_playlist_url(tmp_path):
 def test_register_session_hls_producer_failure_rewrites_to_matroska():
     """When HlsProducer.__init__ raises, _register_session rewrites
     ctx in place to the matroska shape and returns a /stream/ URL
-    (not /hls/...)."""
+    (not an /hls/ path)."""
     from resources.lib.stream_proxy import StreamProxy
 
     sp = StreamProxy.__new__(StreamProxy)
@@ -7239,10 +7239,10 @@ def test_register_session_calls_producer_prepare():
 
 
 def test_register_session_prepare_failure_rewrites_to_matroska():
-    """If producer.prepare() raises (e.g. ffmpeg rejects fmp4 HLS),
+    """If producer.prepare() raises (for example, ffmpeg rejects fmp4 HLS),
     _register_session rewrites ctx in-place to matroska and returns
     a /stream/ URL. Regression guard for the spawn-time-validation
-    safety property — without this, a deployed ffmpeg build that
+    safety property—without this, a deployed ffmpeg build that
     doesn't support fmp4 would surface as a 504 from
     /hls/<sess>/init.mp4 AFTER the URL had already been returned to
     Kodi."""
@@ -7449,7 +7449,7 @@ def test_register_session_init_failure_does_not_call_close_on_undefined_producer
 def test_serve_remux_matroska_keeps_accept_ranges_none():
     """The MP4-fallback matroska path must keep `Accept-Ranges: none`.
 
-    Piped MKV has no Cues, so advertising bytes would disable Kodi's
+    Piped MKV has no Cues, so advertising bytes would turn off Kodi's
     cache-based seek fallback without enabling real seek. Only the
     mpegts path flips to `Accept-Ranges: bytes`.
     """
@@ -7542,7 +7542,7 @@ def test_resolve_seek_does_not_wait_for_old_ffmpeg_before_respawn():
 
 
 # ---------------------------------------------------------------------------
-# do_HEAD — handler-level tests
+# do_HEAD—handler-level tests
 # ---------------------------------------------------------------------------
 
 
@@ -7550,9 +7550,9 @@ def test_head_seekable_remux_returns_accept_ranges_none():
     """HEAD on a seekable remux context currently returns Accept-Ranges:
     none. An experiment in v0.6.18 tried advertising bytes so Kodi would
     HTTP-seek past the cache window, but the pipe-output MKV has no Cues
-    and Kodi's demuxer can't translate user seeks into byte offsets — the
-    flag flip only disabled the working cache fallback. Keeping `none`
-    until we can produce an MKV with a real seek index (Cues or fMP4)."""
+    and Kodi's demuxer can't translate user seeks into byte offsets—the
+    flag flip only turned off the working cache fallback. Keeping `none`
+    until the proxy can produce an MKV with a real seek index (Cues or fMP4)."""
     ctx = {
         "remux": True,
         "seekable": True,
@@ -7588,7 +7588,7 @@ def test_head_no_context_returns_404():
 
 
 # ---------------------------------------------------------------------------
-# prepare_stream — faststart proxy path
+# prepare_stream—faststart proxy path
 # ---------------------------------------------------------------------------
 
 
@@ -7832,7 +7832,7 @@ def test_prepare_stream_mp4_with_fallback_sources_bypasses_mp4_repair_paths():
 
 
 # ---------------------------------------------------------------------------
-# _notify_error — stream error notifications
+# _notify_error—stream error notifications
 # ---------------------------------------------------------------------------
 
 
@@ -7944,7 +7944,7 @@ def test_get_stream_context_updates_last_access_under_context_lock():
 
 
 # ---------------------------------------------------------------------------
-# _serve_proxy — pass-through with zero-fill recovery for missing articles
+# _serve_proxy—pass-through with zero-fill recovery for missing articles
 # ---------------------------------------------------------------------------
 
 
@@ -7975,7 +7975,7 @@ def _collect_written(handler):
 
 
 def test_serve_proxy_streams_happy_path():
-    """Upstream delivers all bytes — client gets them verbatim."""
+    """Upstream delivers all bytes—client gets them verbatim."""
     ctx = {
         "remote_url": "http://host/movie.mkv",
         "auth_header": None,
@@ -8147,8 +8147,8 @@ def test_serve_proxy_notifies_fallback_failure_when_candidate_delivers_no_bytes(
     queue is exhausted is reported as a failure (not a success).
 
     With no validated fallback left, the proxy no longer hard-closes at the
-    selection point — it falls through to the retry ladder / skip-probe (stubbed
-    here to terminate immediately as recovery_exhausted). The pending candidate's
+    selection point—it falls through to the retry ladder / skip-probe (stubbed
+    here to end immediately as recovery_exhausted). The pending candidate's
     failure toast still fires from the finally block on that terminal exit.
     """
     from resources.lib.stream_proxy import _UPSTREAM_RANGE_UPSTREAM_ERROR
@@ -8261,7 +8261,7 @@ def test_serve_proxy_notifies_failure_then_success_across_two_candidates():
 def test_serve_proxy_notifies_success_when_retry_ladder_delivers_fallback():
     """A switched-to candidate whose first read is AWAITING_DOWNLOAD (zero
     bytes) but whose retry ladder then delivers the range must be reported as a
-    SUCCESS — not silently dropped (its bytes arrive via retry_written, which
+    SUCCESS—not silently dropped (its bytes arrive via retry_written, which
     the first-read success check never sees)."""
     import sys
 
@@ -8387,13 +8387,13 @@ def test_serve_proxy_suppresses_pending_failure_toast_on_client_disconnect():
 
     NOTE: an EARLIER (F5) version of this test fed a BrokenPipeError on the
     candidate's FIRST read and asserted suppression on the false premise that
-    "a client abort implies the candidate was serving bytes". The F11/F12 review
+    a client disconnect implies the candidate was serving bytes. The F11/F12 review
     settled this: a zero-fill 'complete' before any byte IS a failure (Case (b),
     test_serve_proxy_fallback_zero_bytes_then_complete_toasts_failure), but a
     BrokenPipe classified as terminal_reason='client_disconnected' before any
     byte is EXEMPTED per 4decdd4 (see
     test_serve_proxy_fallback_zero_bytes_then_disconnect_suppresses_failure_toast).
-    This test now exercises the genuinely-benign case: delivered THEN
+    This test now exercises the genuinely benign case: delivered THEN
     disconnected.
     """
     from resources.lib.stream_proxy import (
@@ -8512,7 +8512,7 @@ def test_serve_proxy_failure_toast_does_not_delay_next_candidate_cutover():
 
     # Structural guard (replaces a wall-clock bound): no failure toast may run to
     # completion between candidate #1's failure and candidate #2's read. A
-    # regression that blocked _serve_proxy on the 0.12s notification records a
+    # regression that blocked _serve_proxy on the 0.12 s notification records a
     # notify that entered at/after the failure and returned before candidate #2
     # started; the correct path defers or backgrounds it, so this stays empty
     # regardless of machine speed.
@@ -8585,7 +8585,7 @@ def test_serve_proxy_starts_fallback_stream_before_slow_switch_notification():
 
     # Structural guard (replaces a wall-clock bound): the first fallback read must
     # begin before the switch notification returns. A regression that blocked
-    # _serve_proxy on the 0.12s notification records a notify that entered at/after
+    # _serve_proxy on the 0.12 s notification records a notify that entered at/after
     # the upstream error and returned before the fallback stream started; the
     # correct path defers or backgrounds it, so this stays empty regardless of
     # machine speed.
@@ -8660,7 +8660,7 @@ def test_live_fallback_selection_probes_failed_range_before_full_fingerprint():
 
     F8-dropout: an empty current-range digest is a TRANSIENT miss (the peer
     just hasn't downloaded this offset yet), so the source is NOT selected
-    this round but is also NOT permanently failed — it stays eligible for the
+    this round but is also NOT permanently failed—it stays eligible for the
     next cutover with a bumped transient_miss_count. The probe-before-
     fingerprint optimisation (one probe, no fingerprint sweep) is preserved.
     """
@@ -9213,7 +9213,7 @@ def test_live_fallback_selection_skips_primary_read_for_unreadable_fallback_samp
     """An unreadable fallback fingerprint sample rejects before primary I/O.
 
     F8-dropout: a missing fallback digest is INCONCLUSIVE (probe couldn't be
-    completed) — the source is not selected but is not permanently failed,
+    completed)—the source is not selected but is not permanently failed,
     and the primary range is never read (the optimisation is preserved).
     """
     from resources.lib.fallback_streams import fingerprint_ranges
@@ -11582,7 +11582,7 @@ def test_fallback_range_probe_failure_reenters_retry_and_zero_fill_recovery():
     """No validated fallback must NOT short-circuit the recovery machinery.
 
     Previously, a fallback-enabled session whose fallback failed to validate
-    closed immediately (retry ladder and zero-fill skipped) — making it more
+    closed immediately (retry ladder and zero-fill skipped)—making it more
     brittle than a stream with no fallbacks at all. Now it falls through to the
     retry ladder and skip-probe exactly as a no-fallback stream would; only the
     existing session zero-fill budget safeguard (1 byte of a 10-byte file is
@@ -11635,7 +11635,7 @@ def test_fallback_range_probe_failure_reenters_retry_and_zero_fill_recovery():
 
     assert ctx["remote_url"] == "http://webdav/primary.mkv"
     # F8-dropout: a probe 5xx/timeout (OSError) is a TRANSIENT miss, so the
-    # fallback is NOT permanently failed on the first hiccup — it stays
+    # fallback is NOT permanently failed on the first hiccup—it stays
     # eligible (under the transient-miss bound) to be reconsidered later.
     assert ctx["fallback_sources"][0].get("failed") is not True
     assert ctx["fallback_sources"][0].get("transient_miss_count", 0) >= 1
@@ -11645,20 +11645,20 @@ def test_fallback_range_probe_failure_reenters_retry_and_zero_fill_recovery():
     retry_original.assert_called()
     find_skip.assert_called()
     # The session zero-fill budget cap (1 byte already exceeds 5% of 10) blocks
-    # the actual zero-fill, so nothing is written — but only AFTER the recovery
+    # the actual zero-fill, so nothing is written—but only AFTER the recovery
     # path ran, not by skipping it.
     write_zeros.assert_not_called()
     assert _collect_written(handler) == b""
 
 
 def test_serve_proxy_byte0_prefetch_keeps_short_first_byte_ladder():
-    """Regression (Interstellar 64KB-then-EOF on a huge pass-through MKV): a
-    byte-0 open serves a ~64KB prefetched prefix, which advances the serve cursor
+    """Regression (Interstellar 64 KB-then-EOF on a huge pass-through MKV): a
+    byte-0 open serves a ~64 KB prefetched prefix, which advances the serve cursor
     to 65536. The retry ladder's first-byte detection must key on the ORIGINAL
     request start (0), not the mutated cursor -- otherwise the player's real first
     content read at byte 65536 takes the long (2,4,8)s wait-on-primary ladder,
-    stalls ~14s past Kodi's first-read patience, and the player disconnects with
-    only the 64KB prefix served (streamed=65536 then 0, client_disconnected).
+    stalls ~14 s past Kodi's first-read patience, and the player disconnects with
+    only the 64 KB prefix served (streamed=65536 then 0, client_disconnected).
     """
     from resources.lib.stream_proxy import (
         _UPSTREAM_RANGE_OK,
@@ -11680,7 +11680,7 @@ def test_serve_proxy_byte0_prefetch_keeps_short_first_byte_ladder():
     prefix = b"P" * 65536
 
     def pop_prefix(_ctx, current, _end):
-        # Serve the cached 64KB prefix only for the genuine byte-0 open.
+        # Serve the cached 64 KB prefix only for the genuine byte-0 open.
         return prefix if current == 0 else b""
 
     with patch.object(
@@ -11779,7 +11779,7 @@ def test_fallback_cutover_parallelizes_fingerprint_probes_before_first_byte():
         handler._serve_proxy(ctx)
 
     # Structural guard (replaces a wall-clock bound): the fingerprint probes must
-    # run concurrently before the first fallback byte. With 20 ranges at 6ms each,
+    # run concurrently before the first fallback byte. With 20 ranges at 6 ms each,
     # serial validation peaks at a concurrency of 1; parallel validation overlaps
     # several digests, so requiring >1 catches a regression that serializes them,
     # independent of machine speed.
@@ -11857,8 +11857,8 @@ def test_serve_proxy_stall_watchdog_aborts_on_low_throughput(mock_xbmc):
     }
     handler = _make_handler_with_server(ctx, range_header="bytes=0-1048575")
 
-    # Two 1KB chunks. With monotonic returning 100, 105, 125 the second
-    # chunk's window check sees 25s of elapsed time and 2048 bytes —
+    # Two 1 KB chunks. With monotonic returning 100, 105, 125 the second
+    # chunk's window check sees 25 s of elapsed time and 2048 bytes,
     # ~82 B/s, well below the 102400 B/s threshold.
     chunks = [b"A" * 1024, b"B" * 1024]
     monotonic_returns = iter([100.0, 105.0, 125.0])
@@ -11880,7 +11880,7 @@ def test_serve_proxy_stall_watchdog_aborts_on_low_throughput(mock_xbmc):
     assert ctx["passthrough_stall_window_seconds"] == pytest.approx(25.0)
     assert ctx["passthrough_stall_bps"] == pytest.approx(2048 / 25.0)
     # Verify the terminal log line names passthrough_stall, not the
-    # generic client_disconnected — operators reading kodi.log need to
+    # generic client_disconnected—operators reading kodi.log need to
     # tell the two failure modes apart.
     logged = "\n".join(call.args[0] for call in mock_xbmc.log.call_args_list)
     assert "reason=passthrough_stall" in logged
@@ -11892,7 +11892,7 @@ def test_serve_proxy_stall_watchdog_resets_after_a_fast_burst():
     """A bursty upstream that catches up before the window closes is fine.
 
     Without the window-reset on a successful sample, even a single slow
-    sample would leave the watchdog primed forever — a genuine 3 MB burst
+    sample would leave the watchdog primed forever—a genuine 3 MB burst
     after a quiet 22 s would still fail the next check 20 s later because
     the rolling counter never zeros out.
     """
@@ -11906,13 +11906,13 @@ def test_serve_proxy_stall_watchdog_resets_after_a_fast_burst():
         ctx, range_header="bytes=0-{}".format(3 * 1048576 - 1)
     )
 
-    # One 3 MB chunk arrives at t=22s. bps = 3 MB / 22 s ≈ 143 KB/s, above
+    # One 3 MB chunk arrives at t=22 s. bps = 3 MB / 22 s ≈ 143 KB/s, over
     # the 100 KB/s threshold → check passes and window resets.
     chunks = [b"X" * (3 * 1048576)]
     # Three monotonic calls:
-    #   100.0 — _serve_proxy init
-    #   122.0 — post-chunk window_elapsed = 22 (check fires, passes)
-    #   122.0 — window reset to "now"
+    #   100.0—_serve_proxy init
+    #   122.0—post-chunk window_elapsed = 22 (check fires, passes)
+    #   122.0—window reset to "now"
     # Pad with extra values in case any uncovered path samples again.
     monotonic_returns = iter([100.0, 122.0, 122.0, 999.0, 999.0])
 
@@ -11934,8 +11934,8 @@ def test_serve_proxy_stall_watchdog_skips_audio_streams():
     """A 64 kbps MP3 (~8 KB/s) sits below the watchdog floor by design.
 
     Without content-type gating, every legitimate audio stream would be
-    rotated every 20 s — a regression from the existing pre-watchdog
-    behaviour. The fix gates on a video/* content type so audio bypasses
+    rotated every 20 s—a regression from the existing pre-watchdog
+    behaviour. The fix gates on a video/* media type so audio bypasses
     the check entirely.
     """
     ctx = {
@@ -11970,7 +11970,7 @@ def test_serve_proxy_stall_watchdog_skips_audio_streams():
 
 def test_passthrough_watchdog_applies_returns_true_only_for_video():
     """Tight assertion on the gate function so policy changes are
-    deliberate — adding image/* or application/octet-stream would need
+    deliberate—adding `image/*` or `application/octet-stream` would need
     an explicit test update instead of slipping in.
     """
     from resources.lib.stream_proxy import _passthrough_watchdog_applies
@@ -11993,7 +11993,7 @@ def test_serve_proxy_arms_explicit_upstream_read_deadline():
     Guarantees a stalled backend surfaces as a recoverable read (which drives
     the live fallback cutover) within the deadline, instead of riding the
     inherited 60 s urlopen timeout and losing the race to the equal 60 s
-    proxy->Kodi write timeout — the wedge that logged as client_disconnected
+    proxy->Kodi write timeout—the wedge that logged as client_disconnected
     with recoveries=0. See issue #214.
     """
     from resources.lib.stream_proxy import _UPSTREAM_READ_TIMEOUT
@@ -12024,7 +12024,7 @@ def test_serve_proxy_trickle_triggers_cutover_when_fallback_attached(mock_xbmc):
     Instead of the blind close/reconnect to the SAME stalled upload
     (terminal_reason=passthrough_stall), the watchdog returns a recoverable
     result so _serve_proxy runs the fallback cutover. Here the fallback can't
-    be validated (patched to None), so it surfaces as fallback_exhausted —
+    be validated (patched to None), so it surfaces as fallback_exhausted,
     proving the cutover path ran rather than a blind reconnect. The
     no-fallback case is covered by
     test_serve_proxy_stall_watchdog_aborts_on_low_throughput. See issue #214.
@@ -12042,13 +12042,13 @@ def test_serve_proxy_trickle_triggers_cutover_when_fallback_attached(mock_xbmc):
     }
     handler = _make_handler_with_server(ctx, range_header="bytes=0-1048575")
 
-    # Same trickle as the abort test: two 1 KB chunks, ~82 B/s over a 25 s
+    # Same trickle as the preceding test: two 1 KB chunks, ~82 B/s over a 25 s
     # window. Monotonic padded so post-return bookkeeping can't exhaust it.
     chunks = [b"A" * 1024, b"B" * 1024]
     monotonic_returns = iter([100.0, 105.0, 125.0] + [125.0] * 30)
 
     # The retry ladder is mocked out (its own coverage lives elsewhere); here
-    # we only care that the cutover ran and handed off to it rather than
+    # the test only checks that the cutover ran and handed off to it rather than
     # blind-reconnecting or hard-closing.
     with patch(
         "resources.lib.stream_proxy.time.monotonic",
@@ -12074,7 +12074,7 @@ def test_serve_proxy_trickle_triggers_cutover_when_fallback_attached(mock_xbmc):
     # The blind-reconnect path (outer handler) must NOT have run.
     assert "Pass-through stall at byte" not in logged
     # The cutover failed to validate a fallback, but that must NOT hard-close
-    # the stream — it now re-enters the retry ladder on the primary (see
+    # the stream—it now re-enters the retry ladder on the primary (see
     # test_serve_proxy_trickle_reenters_retry_ladder_when_no_validated_fallback).
     mock_retry.assert_called()
     assert "reason=fallback_exhausted" not in logged
@@ -12093,7 +12093,7 @@ def test_serve_proxy_trickle_reenters_retry_ladder_when_no_validated_fallback(
     ``_select_live_fallback_source`` validated nothing (the fallbacks were
     themselves still downloading). The old code then set
     ``terminal_reason=fallback_exhausted`` and closed the stream BEFORE the
-    retry ladder / zero-fill rescue ran — making a fallback-enabled stream
+    retry ladder / zero-fill rescue ran—making a fallback-enabled stream
     MORE brittle than a plain one. The fix falls through to the retry ladder
     so the primary gets a chance to recover, exactly as a no-fallback stream
     would. See the dark-screen handoff and issue #214.
@@ -12115,7 +12115,7 @@ def test_serve_proxy_trickle_reenters_retry_ladder_when_no_validated_fallback(
     monotonic_returns = iter([100.0, 105.0, 125.0] + [125.0] * 30)
 
     # The retry ladder stands in for a primary that catches up: it writes the
-    # remaining bytes and reports the range complete. We assert it was CALLED —
+    # remaining bytes and reports the range complete. The test asserts it was CALLED:
     # the regression is that the old code returned fallback_exhausted before
     # ever reaching it.
     def _fake_retry(active_ctx, start, end, contract_mode, first_byte=False):
@@ -12138,7 +12138,7 @@ def test_serve_proxy_trickle_reenters_retry_ladder_when_no_validated_fallback(
 
     # Cutover was attempted (recoverable -> _select_live_fallback_source).
     mock_select.assert_called()
-    # ...and with no validated fallback we re-entered the retry ladder on the
+    # With no validated fallback, the proxy re-entered the retry ladder on the
     # primary at the stalled offset, instead of hard-closing.
     mock_retry.assert_called()
     assert mock_retry.call_args.args[1] == 2048
@@ -12157,7 +12157,7 @@ def test_serve_proxy_high_water_short_read_waits_instead_of_fallback_exhausted()
     download high-water mark (a clean short read). That is distinct from a
     wedged/trickle upstream (#214): the primary is healthy and just hasn't
     fetched this byte yet, so the correct response is to wait for the buffer
-    to fill via the retry ladder — NOT to treat attached-but-unready fallback
+    to fill via the retry ladder—NOT to treat attached-but-unready fallback
     sources as exhausted and close the stream.
 
     Regression for the live bug where Empire stalled at 1:11: a high-water
@@ -12228,7 +12228,7 @@ def test_serve_proxy_high_water_short_read_waits_instead_of_fallback_exhausted()
 def test_stream_upstream_range_fault_forces_primary_failure_past_threshold():
     """Env-gated fault injection: with NZBDAV_FAULT_PRIMARY_FAIL_AFTER_BYTES
     set, the PRIMARY source fails (UPSTREAM_ERROR, no upstream call) once a
-    range at/after the threshold is requested — so the live fallback cutover
+    range at/after the threshold is requested—so the live fallback cutover
     can be exercised end-to-end against a real, already-downloaded fallback.
     """
     import os
@@ -12344,7 +12344,7 @@ def test_stream_upstream_range_fault_spares_tail_for_large_files():
 
 def test_stream_upstream_range_fault_does_not_fail_active_fallback():
     """Once cut over to a fallback (switch_count>0), the fault no longer
-    fires — otherwise the fallback would be killed too and never play.
+    fires—otherwise the fallback would be killed too and never play.
     """
     import os
 
@@ -12372,7 +12372,7 @@ def test_stream_upstream_range_fault_does_not_fail_active_fallback():
 
 def test_stream_upstream_range_fault_fires_mid_stream_crossing_threshold():
     """A single long-lived connection opened BELOW the threshold that streams
-    PAST it must still fault mid-stream — the entry-only check misses Kodi's
+    PAST it must still fault mid-stream—the entry-only check misses Kodi's
     one-connection sequential read (the reason a 2 GiB threshold never tripped
     live until the position-based check was added).
     """
@@ -12428,7 +12428,7 @@ def test_serve_proxy_logs_terminal_summary_on_success(mock_xbmc):
 
 
 def test_serve_proxy_zero_fills_on_upstream_failure():
-    """Upstream cuts out mid-stream — proxy probes, zero-fills, resumes.
+    """Upstream cuts out mid-stream—proxy probes, zero-fills, resumes.
 
     Pins ``retry_ladder_enabled`` OFF because this test was written to
     assert the classic single-retry zero-fill path. Once the global
@@ -12464,7 +12464,7 @@ def test_serve_proxy_zero_fills_on_upstream_failure():
     mock_addon = MagicMock()
     mock_addon.getSetting.side_effect = lambda key: {
         "retry_ladder_enabled": "false",
-        # Disable the patient forward-stall wait so this test stays targeted at
+        # Turn off the patient forward-stall wait so this test stays targeted at
         # the zero-fill recovery branch (the wait is covered separately).
         "passthrough_stall_wait": "0",
     }.get(key, "")
@@ -12551,7 +12551,7 @@ def test_serve_proxy_retries_probes_when_upstream_briefly_down():
     first_chunk = b"X" * 1048576
     initial = _mock_urlopen_response([first_chunk])
     # First two probe attempts raise ConnectionRefusedError (instant fail),
-    # third attempt succeeds — simulates a brief upstream restart.
+    # third attempt succeeds—simulates a brief upstream restart.
     probe_refused_1 = MagicMock()
     probe_refused_1.__enter__ = MagicMock(side_effect=ConnectionRefusedError())
     probe_refused_2 = MagicMock()
@@ -12570,7 +12570,7 @@ def test_serve_proxy_retries_probes_when_upstream_briefly_down():
     #   * zero_fill_budget_enabled=false so the session isn't aborted
     #     by the zero-fill-ratio budget check after the first recovery.
     # Pre-conftest-default the global xbmcaddon MagicMock accidentally
-    # disabled both; making them explicit keeps the test scoped to the
+    # turned off both; making them explicit keeps the test scoped to the
     # probe retry behavior it was written for.
     mock_addon = MagicMock()
     mock_addon.getSetting.side_effect = lambda key: {
@@ -12798,7 +12798,7 @@ def test_serve_proxy_retry_ladder_flag_skips_range_retries():
 
 
 def test_serve_proxy_closes_without_zero_filling_remainder_when_recovery_exhausted():
-    """All skip probes fail — close instead of fabricating the whole response."""
+    """All skip probes fail—close instead of fabricating the whole response."""
     ctx = {
         "remote_url": "http://host/movie.mkv",
         "auth_header": None,
@@ -12823,20 +12823,20 @@ def test_serve_proxy_closes_without_zero_filling_remainder_when_recovery_exhaust
         except StopIteration:
             return _fail_probe()
 
-    # This test drives the REAL recovery-exhausted close path. It took ~120s
+    # This test drives the REAL recovery-exhausted close path. It took ~120 s
     # because conftest's shared Monitor.waitForAbort mock REALLY sleeps its
     # timeout arg (deliberately, so timing-sensitive HLS/probe tests stay
     # realistic), and the recovery path backs off via waitForAbort on every
-    # retry-ladder (2,4,8s), skip-probe (2,4,6,8s) and patient-forward-stall
-    # iteration — the stall loop holding the client for the whole
-    # `passthrough_stall_wait` budget (default 120s) before giving up. Two scoped
-    # changes collapse the wall clock to ~0s without altering the path or its
+    # retry-ladder (2,4,8 s), skip-probe (2,4,6,8 s) and patient-forward-stall
+    # iteration—the stall loop holding the client for the whole
+    # `passthrough_stall_wait` budget (default 120 s) before giving up. Two scoped
+    # changes collapse the wall clock to ~0 s without altering the path or its
     # assertion:
     #   * override ONLY this monitor's waitForAbort to return False instantly (no
-    #     abort, no sleep), restored afterwards. Patching the whole xbmc module
+    #     shutdown, no sleep), restored afterwards. Patching the whole xbmc module
     #     instead breaks the upstream read so the first chunk never lands.
     #   * pin the runtime-settings seam _serve_proxy reads to a tiny POSITIVE
-    #     stall budget so the patient-stall exhausts at once. It MUST be >0 —
+    #     stall budget so the patient-stall exhausts at once. It MUST be >0;
     #     exactly 0 skips the `if stall_wait_budget > 0` block, so
     #     forward_stall_exhausted is never set and the loop never terminates.
     import sys as _sys
@@ -12878,7 +12878,7 @@ def test_serve_proxy_logs_terminal_summary_on_recovery_exhausted(mock_xbmc):
     }
     handler = _make_handler_with_server(ctx, range_header="bytes=0-1023")
 
-    # Pin retry_ladder_enabled OFF — the test targets the skip-probe
+    # Pin retry_ladder_enabled OFF—the test targets the skip-probe
     # exhaustion path, not the retry ladder. With the realistic ""
     # settings defaults from conftest, retry_ladder_enabled defaults
     # to True and _retry_original_range would intercept the upstream
@@ -12952,7 +12952,7 @@ def test_serve_proxy_aborts_when_session_zero_fill_ratio_exceeds_cap(mock_xbmc):
 
     mock_write_zeros.assert_not_called()
     # The recovery summary still fires exactly once; the graceful-starvation
-    # guard adds one clear "can't keep up" toast on this backend-starvation abort.
+    # guard adds one clear "can't keep up" toast on this backend-starvation exit.
     notify_msgs = [call.args[1] for call in mock_notify.call_args_list]
     assert sum("recoveries" in msg for msg in notify_msgs) == 1
     assert any("keep up" in msg.lower() for msg in notify_msgs)
@@ -13085,9 +13085,9 @@ def test_stream_upstream_range_warn_mode_streams_on_soft_contract_mismatch(mock_
 @patch("resources.lib.stream_proxy.xbmc")
 def test_stream_upstream_range_enforce_streams_soft_contract_mismatch(mock_xbmc):
     """Per TODO.md §D.8.1: ENFORCE must respect the hard/soft distinction
-    the classifier already returns. A soft mismatch (e.g. nzbdav's 206
+    the classifier already returns. A soft mismatch (for example, nzbdav's 206
     with a Content-Length covering the full object instead of the requested
-    range) is logged but must not abort the stream — the previous
+    range) is logged but must not stop the stream—the previous
     "ENFORCE rejects everything" behavior killed playback at byte 0.
     """
     import sys
@@ -13136,10 +13136,10 @@ def test_stream_upstream_range_enforce_streams_soft_contract_mismatch(mock_xbmc)
 
 @patch("resources.lib.stream_proxy.xbmc")
 def test_stream_upstream_range_enforce_mode_rejects_hard_contract_mismatch(mock_xbmc):
-    """Companion to the soft-mismatch test: ENFORCE must still abort on a
-    HARD mismatch (e.g. 206 with a Content-Range that doesn't match the
+    """Companion to the soft-mismatch test: ENFORCE must still stop on a
+    HARD mismatch (for example, 206 with a Content-Range that doesn't match the
     request). hard_mismatch is what `_classify_contract_mismatch` flags
-    for genuine protocol violations, and ENFORCE is the level where we
+    for genuine protocol violations, and ENFORCE is the level where the proxy
     refuse to stream wrong bytes to Kodi.
     """
     import sys
@@ -13160,7 +13160,7 @@ def test_stream_upstream_range_enforce_mode_rejects_hard_contract_mismatch(mock_
     response = _mock_urlopen_response(
         [b"A" * 1024],
         headers={
-            # Hard mismatch: 206 with wrong Content-Range (we asked for 0-1023,
+            # Hard mismatch: 206 with wrong Content-Range (the request asked for 0-1023,
             # upstream reports 256-1279). _classify_contract_mismatch flags
             # this with hard=True at line 462.
             "Content-Range": "bytes 256-1279/2048",
@@ -13537,7 +13537,7 @@ def test_record_upstream_unreachable_fires_notification_once_per_session():
 
 def test_record_upstream_unreachable_swallows_notify_failures():
     """If Kodi's notification system isn't available (running under
-    pytest, service too early, etc.), _notify raises — must be swallowed
+    pytest, service too early, etc.), _notify raises—must be swallowed
     so the proxy keeps serving."""
     from resources.lib.stream_proxy import _record_upstream_unreachable
 
@@ -13579,7 +13579,7 @@ def test_stream_upstream_range_records_unreachable_on_connection_refused():
 
 def test_stream_upstream_range_does_not_notify_on_4xx():
     """HTTPError 404 means nzbdav is UP but the path is wrong. That
-    shouldn't trigger the "nzbdav unreachable" notification — it's a
+    shouldn't trigger the "nzbdav unreachable" notification—it's a
     stream-specific issue, not an outage."""
     ctx = {
         "remote_url": "http://nzbdav/missing.mkv",
@@ -13634,7 +13634,7 @@ def test_record_upstream_recovered_clears_notified_flag():
 
 def test_record_upstream_recovered_is_noop_when_never_notified():
     """If the session never tripped the notification gate, recovered()
-    should do nothing — no log spam, no state churn."""
+    should do nothing—no log spam, no state churn."""
     from resources.lib.stream_proxy import _record_upstream_recovered
 
     ctx = {}
@@ -13648,7 +13648,7 @@ def test_record_upstream_recovered_is_noop_when_never_notified():
 
 def test_stream_upstream_range_resets_flag_on_successful_response():
     """End-to-end self-healing: urlopen fails once (sets the flag), then
-    succeeds — flag must be cleared so a later failure fires a fresh
+    succeeds—flag must be cleared so a later failure fires a fresh
     notification."""
     ctx = {
         "remote_url": "http://nzbdav/movie.mkv",
@@ -13678,7 +13678,7 @@ def test_stream_upstream_range_resets_flag_on_successful_response():
         handler._stream_upstream_range(ctx, 0, 1023)
         assert ctx["upstream_down_notified"] is True
 
-        # Second call succeeds — flag clears.
+        # Second call succeeds—flag clears.
         handler._stream_upstream_range(ctx, 0, 1023)
         assert ctx["upstream_down_notified"] is False
 
@@ -13702,7 +13702,7 @@ def test_find_skip_offset_short_circuits_when_upstream_marked_down():
         result = _StreamHandler._find_skip_offset(ctx, failed_byte=0, range_end=1048575)
 
     assert result is None
-    # Crucial: we didn't burn the probe budget. urlopen was never called
+    # Crucial: the proxy didn't burn the probe budget. urlopen was never called
     # and no sleep-between-retries happened.
     mock_urlopen.assert_not_called()
     mock_sleep.assert_not_called()
@@ -13872,9 +13872,9 @@ def test_prepare_stream_via_service_raises_specific_error_on_url_error():
 
 
 def test_prepare_stream_via_service_passes_through_non_network_errors():
-    """URLError with a non-network .reason (e.g., ValueError from URL
+    """URLError with a non-network .reason (for example, ValueError from URL
     parsing) must propagate as-is so the error-dialog layer can render
-    the specific failure — not mask it as "service unavailable"."""
+    the specific failure—not mask it as `service unavailable`."""
     from urllib.error import URLError
 
     from resources.lib.stream_proxy import prepare_stream_via_service
@@ -14049,7 +14049,7 @@ def test_sequential_ranges_re_notify_when_upstream_flaps():
     pattern. Kodi issues Range A, then Range B as separate HTTP
     requests. Upstream may be UP for A, DOWN for B, UP for C, DOWN
     for D. Both outages must notify the user (self-healing between
-    them) — not stay silent after the first one latched the flag.
+    them)—not stay silent after the first one latched the flag.
     """
     ctx = {
         "remote_url": "http://flaky-nzbdav/movie.mkv",
@@ -14072,9 +14072,9 @@ def test_sequential_ranges_re_notify_when_upstream_flaps():
     )
     responses = iter(
         [
-            healthy_a,  # Range A open succeeds — no notify, clears any stale flag.
+            healthy_a,  # Range A open succeeds—no notify, clears any stale flag.
             ConnectionRefusedError("a-later"),  # Range B open fails → notify #1.
-            healthy_b,  # Range C open succeeds — flag self-heals.
+            healthy_b,  # Range C open succeeds—flag self-heals.
             ConnectionRefusedError("b-later"),  # Range D open fails → notify #2.
         ]
     )
@@ -14136,7 +14136,7 @@ def test_serve_proxy_does_not_notify_when_upstream_always_healthy():
 
     mock_notify.assert_not_called()
     assert _collect_written(handler) == payload
-    # Flag never latched — self-healing path also never needed to fire.
+    # Flag never latched—self-healing path also never needed to fire.
     assert not ctx.get("upstream_down_notified")
     assert ctx.get("upstream_unreachable_count", 0) == 0
 
@@ -14209,7 +14209,7 @@ def test_record_upstream_recovered_drops_stale_success_observations():
         ctx["last_upstream_unreachable_at"] = 200.0
         assert ctx["upstream_down_notified"] is True
 
-        # Thread A's stale t=100 success observation arrives — must NOT
+        # Thread A's stale t=100 success observation arrives—must NOT
         # clear the flag.
         _record_upstream_recovered(server, ctx, observed_at=100.0)
         assert ctx["upstream_down_notified"] is True
@@ -14229,8 +14229,8 @@ def test_serve_proxy_first_byte_uses_short_retry_schedule():
 
     When nothing has streamed yet and the first upstream read returns a clean
     download-high-water short read (AWAITING_DOWNLOAD with zero bytes), the
-    proxy must NOT sleep through the full (2, 4, 8) = ~14s ladder before
-    delivering byte 0 — that exceeds the player's first-read patience, so Kodi
+    proxy must NOT sleep through the full (2, 4, 8) = ~14 s ladder before
+    delivering byte 0—that exceeds the player's first-read patience, so Kodi
     disconnects at byte 0 (the live ``streamed=0 reason=client_disconnected``
     regression). The pre-first-byte wait must be short.
     """
@@ -14286,7 +14286,7 @@ def test_serve_proxy_first_byte_uses_short_retry_schedule():
         sys.modules["xbmcaddon"].Addon.return_value = original_addon
         monitor.waitForAbort.side_effect = original_wait
 
-    # Byte 0 was delivered after a SHORT wait, not the 2s first rung of the
+    # Byte 0 was delivered after a SHORT wait, not the 2 s first rung of the
     # long ladder.
     assert waited, "retry ladder did not run for the first byte"
     assert waited[0] <= 1.0, "first-byte wait used the long ladder: {!r}".format(waited)
@@ -14354,7 +14354,7 @@ def test_serve_proxy_midstream_keeps_long_retry_schedule():
         monitor.waitForAbort.side_effect = original_wait
 
     assert _collect_written(handler) == b"A" * 1024 + b"B" * 3072
-    # Mid-stream rebuffer still uses the long ladder (first rung == 2s).
+    # Mid-stream rebuffer still uses the long ladder (first rung == 2 s).
     assert waited, "retry ladder did not run"
     assert waited[0] == 2.0, "mid-stream wait was shortened: {!r}".format(waited)
 
@@ -14366,9 +14366,9 @@ def test_serve_proxy_midfile_awaiting_download_keeps_long_retry_schedule():
     Kodi forces Connection: close, so every seek is a new _serve_proxy request
     with total_streamed reset to 0. The short first-byte schedule must therefore
     key on the absolute file offset (current == 0), NOT on the per-request
-    counter — otherwise a mid-file seek to a byte at the download high-water mark
+    counter—otherwise a mid-file seek to a byte at the download high-water mark
     (first read returns AWAITING_DOWNLOAD with zero bytes) would wrongly use the
-    short ladder and close after ~1.75s instead of waiting ~14s for the
+    short ladder and close after ~1.75 s instead of waiting ~14 s for the
     still-downloading primary to catch up (the "Empire stalled at 1:11" fix).
     """
     import sys
@@ -14432,7 +14432,7 @@ def test_serve_proxy_midfile_awaiting_download_keeps_long_retry_schedule():
 
     assert _collect_written(handler) == b"B" * 3072
     # A mid-file AWAITING_DOWNLOAD waits on the primary via the LONG ladder
-    # (first rung 2s), NOT the short first-byte schedule.
+    # (first rung 2 s), NOT the short first-byte schedule.
     assert waited, "retry ladder did not run"
     assert waited[0] == 2.0, "mid-file seek used the short schedule: {!r}".format(
         waited
@@ -14541,7 +14541,7 @@ def test_prepare_stream_via_service_retries_remote_disconnect():
 
 def test_prepare_stream_via_service_raises_after_retries_exhausted():
     """A persistently reset connection still raises ServiceProxyUnavailableError
-    — after exhausting the retry budget, not on the first attempt.
+    after exhausting the retry budget, not on the first attempt.
     """
     from resources.lib.stream_proxy import (
         ServiceProxyUnavailableError,
@@ -14562,7 +14562,7 @@ def test_prepare_stream_via_service_raises_after_retries_exhausted():
 def test_prepare_stream_via_service_timeout_surfaces_without_retry():
     """A genuine timeout means the proxy accepted but is wedged (not starved),
     so retrying another full budget won't help and would multiply the wait. It
-    surfaces immediately as 'unreachable' — one attempt, same worst case as
+    surfaces immediately as 'unreachable'—one attempt, same worst case as
     before the retry loop existed.
     """
     import socket
@@ -14607,7 +14607,7 @@ def sys_modules_monitor():
 
 
 # ---------------------------------------------------------------------------
-# F5 — pending fallback-candidate failure must not be silently swallowed when
+# F5—pending fallback-candidate failure must not be silently swallowed when
 # terminal_reason was never explicitly set (default sentinel, not "complete").
 # ---------------------------------------------------------------------------
 
@@ -14615,7 +14615,7 @@ def sys_modules_monitor():
 def test_serve_proxy_default_terminal_reason_is_unknown_not_complete():
     """An exit that never sets terminal_reason must surface as a genuine
     failure (toast the pending candidate), NOT be silently treated as a
-    benign "complete". Force an unexpected exception out of the streaming
+    benign `complete`. Force an unexpected exception out of the streaming
     loop after a fallback switch so terminal_reason stays at its default; the
     finally block must report the pending candidate as a failure.
     """
@@ -14691,15 +14691,15 @@ def test_serve_proxy_complete_terminal_reason_set_explicitly_no_toast():
 
 
 # ---------------------------------------------------------------------------
-# F11 — a candidate that switched in but delivered ZERO bytes must be reported
+# F11—a candidate that switched in but delivered ZERO bytes must be reported
 # as a FAILURE even when the stream ends on terminal_reason="complete" (a full
-# zero-fill to EOF). An explicit ``candidate_delivered`` flag — set only where
-# real bytes were written — drives the finally-block failure toast.
-# F12 (4decdd4) — but a benign client disconnect
+# zero-fill to EOF). An explicit ``candidate_delivered`` flag—set only where
+# real bytes were written—drives the finally block failure toast.
+# F12 (4decdd4)—but a benign client disconnect
 # (terminal_reason="client_disconnected") must NOT blame a still-pending
 # candidate: a BrokenPipeError can only raise at the client body write AFTER a
 # non-empty upstream read, so the candidate WAS serving bytes and the CLIENT
-# went away. That genuinely-benign exit is exempted from the failure toast.
+# went away. That genuinely benign exit is exempted from the failure toast.
 # ---------------------------------------------------------------------------
 
 
@@ -14753,7 +14753,7 @@ def test_serve_proxy_fallback_delivered_then_complete_toasts_success_once():
 
 
 def test_serve_proxy_fallback_zero_bytes_then_complete_toasts_failure():
-    """Case (b) — the F11 hole: a candidate switched in, delivered ZERO bytes,
+    """Case (b)—the F11 hole: a candidate switched in, delivered ZERO bytes,
     and the loop reached EOF via zero-fill (terminal_reason="complete"). The
     benign terminal reason must NOT swallow the failure: the candidate never
     delivered, so it is reported as a failure."""
@@ -14780,7 +14780,7 @@ def test_serve_proxy_fallback_zero_bytes_then_complete_toasts_failure():
 
     # Budget/density guards OFF so a full zero-fill to EOF exits the loop on the
     # BENIGN reason="complete" path (current > end) rather than tripping one of
-    # the non-benign budget breakers — that is precisely the F11 hole where a
+    # the non-benign budget breakers—that is precisely the F11 hole where a
     # never-delivering candidate would otherwise be swallowed.
     runtime_settings = {
         "contract_mode": "lenient",
@@ -14799,7 +14799,7 @@ def test_serve_proxy_fallback_zero_bytes_then_complete_toasts_failure():
     ), patch.object(
         handler,
         "_select_live_fallback_source",
-        # switch to #1 first, then no further candidate so we fall through to
+        # switch to #1 first, then no further candidate so the proxy falls through to
         # the skip-probe / zero-fill recovery on the dead candidate.
         side_effect=[ctx["fallback_sources"][0], None],
     ), patch.object(
@@ -14826,17 +14826,17 @@ def test_serve_proxy_fallback_zero_bytes_then_complete_toasts_failure():
 
 
 def test_serve_proxy_fallback_zero_bytes_then_disconnect_suppresses_failure_toast():
-    """Case (c) — 4decdd4's invariant: a client disconnect right after a
+    """Case (c)—4decdd4's invariant: a client disconnect right after a
     fallback switch (terminal_reason="client_disconnected") must NOT toast the
     still-pending candidate as a failure. A BrokenPipeError yielding
     terminal_reason="client_disconnected" can only originate at the CLIENT body
-    write ``self.wfile.write(chunk)`` — reached only AFTER ``resp.read()``
+    write ``self.wfile.write(chunk)``—reached only AFTER ``resp.read()``
     returned a non-empty chunk. So the candidate's upstream WAS serving bytes
     and the CLIENT went away (a Kodi demuxer probe/seek abandoning the range, or
     a user stop). ``candidate_delivered`` stays False because the BrokenPipeError
     raises before ``_stream_upstream_range`` returns, so without the
     client_disconnect exemption a live/working candidate would be falsely
-    toasted as failed — a regression of 4decdd4's deliberate suppression.
+    toasted as failed—a regression of 4decdd4's deliberate suppression.
     """
     from resources.lib.stream_proxy import _UPSTREAM_RANGE_UPSTREAM_ERROR
 
@@ -14908,7 +14908,7 @@ def test_serve_proxy_no_fallback_pending_emits_no_fallback_toast():
 def test_serve_proxy_fallback_delivered_then_disconnect_toasts_success_only():
     """Case (e): a candidate that delivered real bytes and was then cut by a
     client disconnect must toast success only (its delivery already cleared the
-    pending state) — never a spurious failure."""
+    pending state)—never a spurious failure."""
     from resources.lib.stream_proxy import (
         _UPSTREAM_RANGE_OK,
         _UPSTREAM_RANGE_UPSTREAM_ERROR,
@@ -14958,7 +14958,7 @@ def test_serve_proxy_fallback_delivered_then_disconnect_toasts_success_only():
 
 @patch("resources.lib.stream_proxy.xbmc")
 def test_serve_proxy_logs_complete_reason_on_natural_loop_exit(mock_xbmc):
-    """The pass-through summary on a fully-streamed range must read
+    """The pass-through summary on a fully streamed range must read
     reason=complete (the success sentinel), not the default sentinel."""
     ctx = {
         "remote_url": "http://host/movie.mkv",
@@ -14980,7 +14980,7 @@ def test_serve_proxy_logs_complete_reason_on_natural_loop_exit(mock_xbmc):
 
 
 # ---------------------------------------------------------------------------
-# F4 — exhausted fallback chain must hit a BOUNDED stop (fallback_exhausted)
+# F4—exhausted fallback chain must hit a BOUNDED stop (fallback_exhausted)
 # instead of spinning the retry ladder forever, while a TRANSIENT failure
 # still re-enters the ladder and recovers (preserving e3a74a1).
 # ---------------------------------------------------------------------------
@@ -14989,7 +14989,7 @@ def test_serve_proxy_logs_complete_reason_on_natural_loop_exit(mock_xbmc):
 @patch("resources.lib.stream_proxy.xbmc")
 def test_serve_proxy_transient_trickle_still_recovers_via_ladder(mock_xbmc):
     """e3a74a1 preserved: a single transient trickle with no validated
-    fallback re-enters the retry ladder and recovers — it must NOT trip the
+    fallback re-enters the retry ladder and recovers—it must NOT trip the
     bounded exhaustion stop on the first miss.
     """
     from resources.lib.stream_proxy import _UPSTREAM_RANGE_OK
@@ -15093,7 +15093,7 @@ def test_serve_proxy_fallback_primary_recovers_on_final_retry_ladder(mock_xbmc):
     """F4 cap symmetry: the cap-fire check runs AFTER the retry ladder, so a
     primary with no validated fallback gets its FINAL retry-ladder attempt
     spent before fallback_exhausted is declared. A primary that recovers on
-    the cap-th (3rd) retry ladder must complete the range with reason=complete
+    the cap-th (third) retry ladder must complete the range with reason=complete
     rather than being aborted with fallback_exhausted (matching the
     no-fallback path, which always runs the ladder)."""
     from resources.lib.stream_proxy import (
@@ -15148,7 +15148,7 @@ def test_serve_proxy_fallback_primary_recovers_on_final_retry_ladder(mock_xbmc):
     ):
         handler._serve_proxy(ctx)
 
-    # The primary got its FINAL (3rd) retry ladder before exhaustion.
+    # The primary got its FINAL (third) retry ladder before exhaustion.
     assert retry_calls["n"] == 3
     written = _collect_written(handler)
     # The full range was delivered via the recovering ladder.
@@ -15189,7 +15189,7 @@ def test_serve_proxy_surfaces_client_error_from_final_retry_ladder_not_fallback_
     # The primary read always short-reads with zero bytes, driving the
     # fall-through counter up via the L4546 gate while the fallback never
     # validates. The retry ladder makes no progress on attempts 1 and 2, then
-    # on the cap-th (3rd) attempt the upstream returns a terminal CLIENT_ERROR
+    # on the cap-th (third) attempt the upstream returns a terminal CLIENT_ERROR
     # (a 401/403). Without the guard the cap would fire first and report
     # fallback_exhausted; with it, the terminal result is surfaced.
     def _stream(active_ctx, start, end, contract_mode=None):
@@ -15231,7 +15231,7 @@ def test_serve_proxy_cutover_resets_fallthrough_exhaustion_counter(mock_xbmc):
     with no validated source), a successful live cutover that delivers real
     bytes resets the counter. A LATER single fruitless read must therefore NOT
     immediately trip reason=fallback_exhausted off the stale primary-driven
-    count — otherwise a freshly-switched-but-dead source would be condemned
+    count—otherwise a freshly switched-but-dead source would be condemned
     after roughly one read instead of getting the full bounded budget.
     """
     from resources.lib.stream_proxy import (
@@ -15273,7 +15273,7 @@ def test_serve_proxy_cutover_resets_fallthrough_exhaustion_counter(mock_xbmc):
     # delivering bytes would still be fine here, but had it needed one more
     # fruitless read the stale 2 would trip the cap after a single miss. To prove
     # the reset, the activated source first MISSES once more (a fresh fall-through
-    # — count 1 WITH reset, but the fatal 3 WITHOUT it) and only THEN delivers.
+    # giving—count 1 WITH reset, but the fatal 3 WITHOUT it) and only THEN delivers.
     state = {"cut": False, "post_cut_misses": 0}
 
     def _stream(active_ctx, start, end, contract_mode=None):
@@ -15336,7 +15336,7 @@ def test_serve_proxy_cutover_resets_fallthrough_exhaustion_counter(mock_xbmc):
 
 
 # ---------------------------------------------------------------------------
-# F6/F7 — tail prewarm (MKV cues) must YIELD to startup playback: it must not
+# F6/F7—tail prewarm (MKV cues) must YIELD to startup playback: it must not
 # fire its upstream tail read until after a short defer (abortable), so it
 # cannot starve the byte-0 prefetch / initial first-byte range request.
 # ---------------------------------------------------------------------------
@@ -15396,7 +15396,7 @@ def test_tail_prewarm_defers_before_fetching_to_yield_startup():
 
 def test_tail_prewarm_aborts_during_defer_without_fetching():
     """If Kodi shuts down (or the session aborts) during the prewarm defer, the
-    tail read must be skipped entirely — no wasted upstream connection."""
+    tail read must be skipped entirely—no wasted upstream connection."""
     from resources.lib.stream_proxy import StreamProxy, _StreamHandler
 
     sp = StreamProxy.__new__(StreamProxy)
@@ -15411,7 +15411,7 @@ def test_tail_prewarm_aborts_during_defer_without_fetching():
 
     monitor = sys_modules_monitor()
     original_wait = monitor.waitForAbort.side_effect
-    monitor.waitForAbort.side_effect = lambda timeout=0.0: True  # abort signalled
+    monitor.waitForAbort.side_effect = lambda timeout=0.0: True  # shutdown signalled
 
     try:
         with patch.object(
@@ -15427,7 +15427,7 @@ def test_tail_prewarm_aborts_during_defer_without_fetching():
 
 
 # ---------------------------------------------------------------------------
-# F8-dropout — tri-state fallback match: MATCH / MISMATCH / INCONCLUSIVE
+# F8-dropout—tri-state fallback match: MATCH / MISMATCH / INCONCLUSIVE
 #
 # A correct same-release fallback that is momentarily a few bytes short, or
 # hiccups on one probe (5xx/timeout/empty digest), must NOT be permanently
@@ -15559,7 +15559,7 @@ def test_fallback_match_returns_true_on_full_fingerprint_agreement():
 
 def test_inconclusive_fallback_is_not_permanently_failed_and_retried():
     """A transient (INCONCLUSIVE) miss must keep the source eligible for the
-    NEXT cutover — never set failed=True on the first transient hiccup."""
+    NEXT cutover—never set failed=True on the first transient hiccup."""
     from resources.lib import stream_proxy as sp
 
     handler = _make_handler()
@@ -15736,7 +15736,7 @@ def test_fallback_source_matches_validated_resets_transient_streak():
 
 
 # ---------------------------------------------------------------------------
-# F-route — bounded failover from a STUCK no-progress AWAITING_DOWNLOAD
+# F-route—bounded failover from a STUCK no-progress AWAITING_DOWNLOAD
 #
 # 58f3d4f routed the clean high-water "still downloading" short read to the
 # retry ladder (NOT fallback) to avoid premature fallback_exhausted. But a DEAD
@@ -15906,7 +15906,7 @@ def test_stuck_awaiting_fails_over_on_cap_th_read():
     no-progress AWAITING_DOWNLOAD read (the `>=` boundary), not the cap+1-th.
     A dead primary that returns a clean no-progress AWAITING read on every GET
     must therefore cut over after _AWAITING_DOWNLOAD_NO_PROGRESS_MAX serve
-    passes — proving the cap-th-read boundary AND no first-request failover.
+    passes—proving the cap-th-read boundary AND no first-request failover.
     Under the old `>` this would have been cap+1 (off-by-one)."""
     import sys
 
@@ -16040,7 +16040,7 @@ def test_awaiting_streak_scoped_to_failing_byte_offset():
     assert count == 1
     count = handler._bump_awaiting_no_progress(ctx, awaiting, count, 100)
     assert count == 2
-    # A read at a DIFFERENT offset (e.g. a seek / tail probe) must reset the
+    # A read at a DIFFERENT offset (for example, a seek / tail probe) must reset the
     # streak to a fresh 1, NOT advance to 3 and trip a false "stuck" failover.
     count = handler._bump_awaiting_no_progress(ctx, awaiting, count, 999999)
     assert count == 1
@@ -16057,7 +16057,7 @@ def test_awaiting_streak_scoped_to_failing_byte_offset():
         count = handler._bump_awaiting_no_progress(ctx2, awaiting, count, last)
         assert count == 1
     # The Nth CONSECUTIVE no-progress read of the SAME offset DOES reach the cap
-    # (the genuinely-dead-region case that must fail over).
+    # (the genuinely dead-region case that must fail over).
     count = 0
     ctx3 = {}
     for _ in range(_AWAITING_DOWNLOAD_NO_PROGRESS_MAX):
@@ -16222,7 +16222,7 @@ def test_storage_to_webdav_path_mnt_data_no_category():
 
     # No-category /mnt/data row must strip the mount prefix, not fall
     # through to last-two-components (which yields a bogus
-    # /content/completed-symlinks/... folder).
+    # /content/completed-symlinks/ folder).
     assert (
         _storage_to_webdav_path("/mnt/data/completed-symlinks/The Matrix 1999")
         == "/content/The Matrix 1999/"
@@ -16266,7 +16266,7 @@ def test_storage_to_webdav_path_content_passthrough_unchanged():
 
 def test_maybe_notify_stream_starvation_fires_on_recent_outage_disconnect():
     """The live Shawshank incident: client_disconnected, a RECENT upstream
-    outage (nzbdav blipped back ~9s before Kodi gave up), only ~140MB of a 57GB
+    outage (nzbdav blipped back ~9 s before Kodi gave up), only ~140 MB of a 57 GB
     file delivered. Must fire ONE clear 'can't keep up' toast, not a silent
     black screen."""
     from resources.lib import stream_proxy
@@ -16298,7 +16298,7 @@ def test_maybe_notify_stream_starvation_fires_when_upstream_still_down():
 
 def test_maybe_notify_stream_starvation_silent_on_long_recovered_outage():
     """FP-1/FP-2: a stream that had an EARLY transient outage, recovered, played,
-    then was stopped (healthy client_disconnected) must NOT fire — the sticky
+    then was stopped (healthy client_disconnected) must NOT fire—the sticky
     upstream_unreachable_count is gated on recency."""
     from resources.lib import stream_proxy
 
@@ -16373,7 +16373,7 @@ def test_serve_proxy_established_forward_stall_waits_then_completes_on_recovery(
     """An ESTABLISHED forward stream (real bytes already streamed) that hits a
     transient backend outage with the session circuit breaker tripped must KEEP
     the client connection open and keep retrying (with abortable backoff) until
-    the backend recovers — instead of giving up in milliseconds and closing (the
+    the backend recovers—instead of giving up in milliseconds and closing (the
     live 4K-REMUX mid-stream black screen). Recovery then completes the range;
     no zero-fill, no skip-probe."""
     import sys
@@ -16392,7 +16392,7 @@ def test_serve_proxy_established_forward_stall_waits_then_completes_on_recovery(
         "auth_header": None,
         "content_type": "video/x-matroska",
         "content_length": 100_000,
-        # Breaker already tripped by an earlier 5xx — the exact live condition
+        # Breaker already tripped by an earlier 5xx—the exact live condition
         # that made the loop give up in ~ms.
         "upstream_down_notified": True,
         "upstream_unreachable_count": 1,
@@ -16430,7 +16430,7 @@ def test_serve_proxy_established_forward_stall_waits_then_completes_on_recovery(
     def _counting_wait(timeout=0.0):
         del timeout
         wait_calls["n"] += 1
-        return False  # never abort, never really sleep
+        return False  # never signal shutdown, never really sleep
 
     monitor = sys.modules["xbmc"].Monitor.return_value
     original_wait = monitor.waitForAbort.side_effect
@@ -16452,9 +16452,9 @@ def test_serve_proxy_established_forward_stall_waits_then_completes_on_recovery(
     # Kept retrying across the outage rather than closing after the stall.
     assert mock_stream.call_count >= 4
     # The forward-stall gate backed off (waited) at least once; with the ladder
-    # disabled, no other loop site calls waitForAbort.
+    # turned off, no other loop site calls waitForAbort.
     assert wait_calls["n"] >= 1
-    # It WAITED for the primary — never zero-filled / skip-probed past the gap.
+    # It WAITED for the primary—never zero-filled / skip-probed past the gap.
     mock_skip.assert_not_called()
     mock_zeros.assert_not_called()
     # On recovery the full requested range was delivered (40 + 60 bytes).
@@ -16464,7 +16464,7 @@ def test_serve_proxy_established_forward_stall_waits_then_completes_on_recovery(
 def test_serve_proxy_pre_bytes_stall_does_not_engage_long_wait():
     """A stall BEFORE any real bytes streamed (byte-0 first read / fresh seek)
     must keep the issue-#214 fast-fail: the patient wait must NOT engage, so a
-    genuinely-dead open closes promptly instead of holding Kodi's initial open."""
+    genuinely dead open closes promptly instead of holding Kodi's initial open."""
     import sys
 
     from resources.lib.stream_proxy import (
@@ -16524,9 +16524,9 @@ def test_serve_proxy_pre_bytes_stall_does_not_engage_long_wait():
     finally:
         monitor.waitForAbort.side_effect = original_wait
 
-    # Fast-fail preserved: did not spin extra reads on a dead pre-bytes open...
+    # Fast-fail preserved: did not spin extra reads on a dead pre-bytes open;
     assert mock_stream.call_count == 1
-    # ...and the patient gate never backed off (no patience before any bytes).
+    # the patient gate never backed off (no patience before any bytes).
     assert wait_calls["n"] == 0
     mock_zeros.assert_not_called()
     assert _collect_written(handler) == b""
@@ -16535,7 +16535,7 @@ def test_serve_proxy_pre_bytes_stall_does_not_engage_long_wait():
 def test_serve_proxy_forward_stall_gives_up_after_budget_exhausted():
     """A TRULY-stuck established forward stream (no progress, backend never
     recovers) must EXHAUST the patient-wait budget and then give up via the
-    existing path — it must not wait forever. Drives monotonic past the budget
+    existing path—it must not wait forever. Drives monotonic past the budget
     so the gate stops waiting after the first backoff and falls through to the
     recovery_exhausted close (skip-probe returns None)."""
     import sys
@@ -16576,8 +16576,8 @@ def test_serve_proxy_forward_stall_gives_up_after_budget_exhausted():
             return _UPSTREAM_RANGE_SHORT_READ_AWAITING_DOWNLOAD, 40
         return _UPSTREAM_RANGE_SHORT_READ_AWAITING_DOWNLOAD, 0
 
-    # monotonic jumps 1000s per call, so the second gate pass is far past the
-    # 120s budget regardless of incidental monotonic calls -> budget exhausts.
+    # monotonic jumps 1000 s per call, so the second gate pass is far past the
+    # 120 s budget regardless of incidental monotonic calls -> budget exhausts.
     mono = {"t": 0}
 
     def fake_monotonic():
@@ -16590,7 +16590,7 @@ def test_serve_proxy_forward_stall_gives_up_after_budget_exhausted():
     def _counting_wait(timeout=0.0):
         del timeout
         wait_calls["n"] += 1
-        return False  # never abort, never really sleep
+        return False  # never signal shutdown, never really sleep
 
     monitor = sys.modules["xbmc"].Monitor.return_value
     original_wait = monitor.waitForAbort.side_effect
@@ -16624,7 +16624,7 @@ def test_serve_proxy_forward_stall_kodi_shutdown_is_benign_exit():
     (reason=client_disconnected), not the default reason=unknown. Leaving it
     'unknown' makes the finally block treat a clean teardown as a genuine
     failure: WARNING-level summary log and a spurious pending-fallback failure
-    toast. The abort IS Kodi closing the session — client-side, never an
+    toast. The disconnect IS Kodi closing the session—client-side, never an
     upstream error."""
     import sys
 
@@ -16696,8 +16696,8 @@ def test_serve_proxy_forward_stall_kodi_shutdown_is_benign_exit():
 
 
 def test_maybe_notify_stream_starvation_fires_on_forward_stall_exhaustion():
-    """A pure slow-backend give-up — the patient forward-stall wait exhausted
-    with NO 5xx outage recorded (download-lag only) — must still tell the user,
+    """A pure slow-backend give-up—the patient forward-stall wait exhausted
+    with NO 5xx outage recorded (download-lag only)—must still tell the user,
     not fail silently. CFS-2: ctx['forward_stall_exhausted'] is the signal."""
     from resources.lib import stream_proxy
 

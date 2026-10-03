@@ -45,8 +45,8 @@ Resolution aliases share their filters: `2560x1440` is 1440p, `8K` and
 
 Language abbreviations such as `fr` select French, and Latino/Latin American
 Spanish select Spanish. A multilingual release passes when any selected
-language matches. Cantonese and Urdu have their own toggles, but with
-**Chinese** enabled, releases tagged Cantonese or Urdu also pass.
+language matches. Cantonese and Urdu have their own toggles. If **Chinese** is
+on, releases tagged Cantonese or Urdu also pass.
 
 ## Keyword and group filters
 
@@ -56,15 +56,15 @@ On the **Keyword filters** tab:
 |---------|--------|
 | **Exclude keywords** | Comma-separated. A release is removed if any keyword appears anywhere in its title. |
 | **Required keywords** | Comma-separated. A release is removed unless every keyword appears in its title. |
-| **Min size** / **Max size** | In MB, `0` = no limit. A release outside the range is removed. If a release's size can't be read, it's treated as 0 MB, so a non-zero minimum removes size-less placeholder rows. If you set a maximum below the minimum, the size filter is turned off and a warning is logged. |
+| **Min size** / **Max size** | In MB, `0` = no limit. A release outside the range is removed. If a release's size can't be read, it's treated as 0 MB, so a non-zero minimum removes size-less placeholder rows. If you set a maximum below the minimum, the add-on turns the size filter off and logs a warning. |
 | **Preferred groups: Tier 1 / 2 / 3** | Comma-separated preferred groups, ranked in that order under Relevance. Defaults come from the TRaSH remux tiers. |
 | **Configure Excluded Groups...** | Opens a multi-select of 94 known release groups. Checked groups are **removed**. Empty means no exclusions. |
 
 !!! warning "Preferred and excluded groups behave differently"
-    - **Excluded groups** are a hard filter: matching releases are removed.
+    - **Excluded groups** are a hard filter that removes matching releases.
     - **Preferred groups** are **not** a filter. They only **boost ranking**
       under the Relevance sort. Choosing a preferred group never hides other
-      groups. if you want only certain groups, use required keywords or
+      groups. If you want only certain groups, use required keywords or
       excluded groups instead.
 
 <!--
@@ -88,26 +88,26 @@ On the **Sorting** tab:
 
 When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this priority order:
 
-1. **Resolution**. highest resolution first, from 8K down to 240p; unknown
+1. **Resolution:** highest resolution first, from 8K down to 240p; unknown
    resolution last. A 2160p release always ranks higher than a 1080p release,
    regardless of HDR or REMUX.
-2. **HDR**. Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR and other tags,
+2. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR and other tags,
    then releases with no HDR tag. A release with several tags ranks by its best.
-3. **Release type**. filenames containing both REMUX and HYBRID first,
+3. **Release type:** filenames containing both REMUX and HYBRID first,
    then other REMUX releases, then everything else.
-4. **Preferred group** — **Tier 1**, then **Tier 2**, then **Tier 3**, then
+4. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
-5. **Audio**. TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
+5. **Audio:** TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
    DTS-HD MA/FLAC/PCM/ALAC, then DTS-HD High Resolution/DTS, DD+, DD, AAC,
    other formats, and finally no audio tag.
-6. **Size**. larger files win the final tie-break.
+6. **Size:** larger files win the final tie-break.
 
 The three editable, comma-separated preferred group lists default to the
 [TRaSH tier 1](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-01.json),
 [tier 2](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-02.json), and
 [tier 3](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-03.json)
-definitions retrieved on September 5, 2026. Their published group expressions
-are bundled locally; a search does not fetch the guides. Clearing a tier leaves
+definitions retrieved on September 5, 2026. NeNeTeePee-Stream-Kodi bundles their published
+group expressions locally, so a search doesn't fetch the guides. Clearing a tier leaves
 it empty. Group preferences affect ranking, never whether a release is kept.
 The Size and Age modes sort only by that property. Age uses the release's post
 date; a missing or unreadable date sorts as the oldest, and an unreadable size
@@ -118,7 +118,7 @@ as 0.
 **Max results** applies in two places: it caps how many results each provider is
 asked for, and it truncates the filtered list you see. The picker's show-all
 view (below) is not truncated. With **Auto-select best match** on, NeNeTeePee-Stream-Kodi
-plays the first release that passed your filters after ranking. So "best"
+plays the first release that passed your filters after ranking, so "best"
 always means "the top item under your current sort order." If nothing passed
 your filters, the picker opens instead.
 

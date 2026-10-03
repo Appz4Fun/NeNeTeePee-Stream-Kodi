@@ -77,7 +77,7 @@ class _DispatchMixin:  # pylint: disable=too-few-public-methods
             self.end_headers()
             self.wfile.write(resp)
         except (BrokenPipeError, ConnectionResetError, OSError) as e:
-            # Plugin client gave up before we finished — most likely the
+            # Plugin client gave up before the handler finished—most likely the
             # 60 s urlopen timeout in ``prepare_stream_via_service``
             # firing while a slow ``_prepare_tempfile_faststart`` remux
             # was still running server-side. The session is now an
@@ -194,7 +194,7 @@ class _DispatchMixin:  # pylint: disable=too-few-public-methods
         """Merge late-adopted fallback sources into a live session (auth'd).
 
         The fallback submit worker keeps adopting alternate copies for ~tens of
-        seconds after playback starts — after the one-shot /prepare snapshot.
+        seconds after playback starts—after the one-shot /prepare snapshot.
         This sibling endpoint lets the resolver push those late arrivals into
         the live session so the cutover has something to switch to. Mirrors the
         /prepare auth + body validation exactly.
@@ -345,7 +345,7 @@ class _DispatchMixin:  # pylint: disable=too-few-public-methods
             self._release_stream_context(ctx)
 
     def _handle_hls(self, path):
-        """Dispatch an /hls/<session>/... GET to playlist, init, or
+        """Dispatch an /hls/<session>/<resource> GET to playlist, init, or
         segment. Enforces strict extension↔ctx-mode validation so a
         request with the wrong extension for the session's segment
         format returns 404 rather than being silently served.

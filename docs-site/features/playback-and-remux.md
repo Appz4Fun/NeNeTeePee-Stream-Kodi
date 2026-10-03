@@ -53,14 +53,14 @@ flowchart TD
 
 ## Settings that control playback
 
-These are in the **Proxy** group on the **Advanced** tab. The defaults are safe,
+These settings are in the **Proxy** group on the **Advanced** tab. The defaults are safe,
 so only change them if you have a specific reason.
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
-| **Large non-MP4 stream mode** | Direct pass-through (default) | Chooses how large non-MP4 files are served: **Direct pass-through** (no ffmpeg), **fMP4 HLS (compatibility, experimental)** (full random seek), or **Matroska remux (compatibility)**. |
+| **Large non-MP4 stream mode** | Direct pass-through (default) | Chooses how NeNeTeePee-Stream-Kodi serves large non-MP4 files: **Direct pass-through** (no ffmpeg), **fMP4 HLS (compatibility, experimental)** (full random seek), or **Matroska remux (compatibility)**. |
 | **Force ffmpeg remux above (MB, 0=off)** | 15000 (~15 GB) | The size where the selected remux mode takes over for non-MP4 files. `0` turns the size-based remux off, so those files always stream pass-through. It has no effect while the mode is Direct pass-through. |
-| **Convert MP4 subtitles to SRT** | On | During a Matroska remux, converts subtitles from non-MKV sources (MP4 `mov_text`) to SRT so embedded subs survive. MKV subtitle tracks are copied unchanged. |
+| **Convert MP4 subtitles to SRT** | On | During a Matroska remux, converts subtitles from non-MKV sources (MP4 `mov_text`) to SRT so embedded subtitles survive. The remux copies MKV subtitle tracks unchanged. |
 
 With a remux mode selected, NeNeTeePee-Stream-Kodi also remuxes any non-MP4 file whose size
 it can't determine. That's safer than serving an unsized pass-through.
@@ -129,7 +129,7 @@ pass-through path recovers:
 | **Send 200 for no-range pass-through** | Off |
 
 When a stream stops because the backend fell behind, NeNeTeePee-Stream-Kodi shows a
-"nzbdav can't keep up. playback stalled" notification instead of leaving you
+`nzbdav can't keep up — playback stalled` notification instead of leaving you
 at a silent black screen.
 
 !!! info "Beta feature"
@@ -137,6 +137,7 @@ at a silent black screen.
     were added in 2.0.0-beta.1. They're available on the
     [Beta channel](../getting-started/beta-channel.md).
 
-Each setting is documented in the
-[Settings reference](../reference/settings.md#pass-through-validation) and
-explained in [How it works → Stream proxy](../how-it-works/stream-proxy.md).
+The [Settings reference](../reference/settings.md#pass-through-validation)
+documents each setting, and
+[How it works → Stream proxy](../how-it-works/stream-proxy.md) explains how
+they work.

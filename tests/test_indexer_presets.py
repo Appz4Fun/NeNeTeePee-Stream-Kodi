@@ -60,12 +60,12 @@ def test_host_contains_matches_mixed_case_needles():
 
 
 # ---------------------------------------------------------------------------
-# Dev-S5 Fix #1 / Fix #2 — preset URL hygiene
+# Dev-S5 Fix #1 / Fix #2—preset URL hygiene
 # ---------------------------------------------------------------------------
 
 
 def test_all_preset_urls_use_https_scheme():
-    """Every preset must use https — http leaks the apikey on caps fetch."""
+    """Every preset must use https—http leaks the apikey on caps fetch."""
     presets = list_newznab_presets()
     bad = [p for p in presets if not p["api_url"].lower().startswith("https://")]
     assert (

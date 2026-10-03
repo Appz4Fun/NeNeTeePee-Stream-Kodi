@@ -3,7 +3,7 @@
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 # ^ 9-12-arg test signatures come from stacked @patch decorators; scheduled for
 #   fixture consolidation in the complexity-reduction Phase C1 wave, after
-#   which this module-level disable comes off.
+#   which this module-level suppression comes off.
 
 import itertools
 import threading
@@ -695,7 +695,7 @@ def test_route_root_opens_settings_and_resolves_handle(mock_resolved):
 @patch("xbmcplugin.setResolvedUrl")
 @patch("resources.lib.router._handle_play")
 def test_route_play_does_not_call_safe_resolve(mock_play, mock_resolved):
-    """/play handles its own resolution — _safe_resolve_handle must not fire."""
+    """/play handles its own resolution—_safe_resolve_handle must not fire."""
     route(["plugin://plugin.video.nzbdav/play", "1", "?type=movie&title=X"])
     mock_play.assert_called_once()
     mock_resolved.assert_not_called()
@@ -704,7 +704,7 @@ def test_route_play_does_not_call_safe_resolve(mock_play, mock_resolved):
 @patch("xbmcplugin.setResolvedUrl")
 @patch("resources.lib.router._handle_search")
 def test_route_search_does_not_call_safe_resolve(mock_search, mock_resolved):
-    """/search handles its own resolution — _safe_resolve_handle must not fire."""
+    """/search handles its own resolution—_safe_resolve_handle must not fire."""
     route(["plugin://plugin.video.nzbdav/search", "1", "?type=movie&title=X"])
     mock_search.assert_called_once()
     mock_resolved.assert_not_called()
@@ -1080,7 +1080,7 @@ def test_handle_search_shows_hydra_errors_in_modal_dialog(
 @patch("xbmcgui.ListItem")
 def test_safe_resolve_handle_resolves_zero_handle(mock_listitem, mock_resolved):
     """Handle 0 is a valid Kodi handle (first plugin invocation in a
-    session) — must resolve, not be skipped like -1."""
+    session)—must resolve, not be skipped like -1."""
     mock_listitem.return_value = "fake_listitem"
     _safe_resolve_handle(0)
     mock_resolved.assert_called_once_with(0, False, "fake_listitem")
@@ -1119,7 +1119,7 @@ def _stub_setting(value):
 
     Used inside ``@patch("xbmcaddon.Addon")`` blocks to give the addon a
     predictable getSetting payload without mutating the global xbmcaddon
-    MagicMock (which would leak into later tests — notably
+    MagicMock (which would leak into later tests—notably
     ``test_stream_proxy`` reads many settings with different expected
     shapes and can't tolerate a one-size-fits-all override)."""
     return lambda *args, **kwargs: value
@@ -2280,7 +2280,7 @@ def test_handle_play_resolves_handle_when_user_cancels_picker(
     """User cancels the results picker dialog → return selected=None.
     _handle_play must call setResolvedUrl(False) so Kodi unblocks."""
     _install_progress_dialog_that_wont_cancel()
-    # auto_select_best must be falsy so we land in the picker branch.
+    # auto_select_best must be falsy so the flow lands in the picker branch.
     mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
 
     mock_listitem.return_value = "li"
@@ -2317,7 +2317,7 @@ def test_handle_play_does_not_open_modal_progress_before_picker(
     """TMDBHelper /play should go straight to the picker without DialogProgress.
 
     On CoreELEC/Arctic Fuse, the modal progress dialog can native-crash Kodi
-    while the label still reads "Searching NZBHydra", even though Hydra has
+    while the label still reads "Searching NZBHydra," even though Hydra has
     already returned.
     """
     mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
@@ -2591,7 +2591,7 @@ def test_handle_search_notifies_and_ends_directory_when_no_results(
     mock_cache, mock_search, mock_notify, mock_end
 ):
     """_handle_search with empty results must both notify AND close the
-    directory listing via endOfDirectory — leaving it open hangs Kodi's
+    directory listing via endOfDirectory—leaving it open hangs Kodi's
     spinner indefinitely."""
     _install_progress_dialog_that_wont_cancel()
 
@@ -2911,8 +2911,8 @@ def test_handle_script_play_uses_picker_without_plugin_handle_resolution(
     }
     # The non-modal loading dialog reads localized text via i18n, which may
     # construct xbmcaddon.Addon. Addon is patched to raise here, i18n falls
-    # back, and the RunScript flow still completes (asserted above) — so we no
-    # longer assert Addon is untouched, only that no plugin handle is resolved.
+    # back, and the RunScript flow still completes (asserted earlier), so the test no
+    # longer asserts Addon is untouched, only that no plugin handle is resolved.
     mock_end.assert_not_called()
     mock_set_resolved.assert_not_called()
 
@@ -3065,7 +3065,7 @@ def test_handle_script_play_listitem_labels_are_atomic_per_source(
 ):
     """Each InfoLabel root is an atomic (show, season, episode) candidate. A
     stale show title in the bare ListItem root (with no numbers) must not be
-    paired with the real numbers from the Container root — otherwise the
+    paired with the real numbers from the Container root—otherwise the
     same-show guard rejects the recovered episode and the search broadens."""
     from resources.lib.router import _handle_script_play
 
@@ -3716,8 +3716,8 @@ def test_test_connection_reports_unexpected_when_condition_false(
 
 @patch("resources.lib.http_util.notify")
 def test_test_connection_bails_early_when_url_empty(mock_notify):
-    """Empty url should short-circuit to a 'not configured' notification
-    — never issue an HTTP request."""
+    """An empty URL should short-circuit to a 'not configured' notification
+    and never issue an HTTP request."""
     _test_connection("Prowlarr", "", "http://example/api", lambda _r: True)
     msgs = [c.args[1] for c in mock_notify.call_args_list]
     assert any("not configured" in m for m in msgs), msgs
@@ -3984,7 +3984,7 @@ def test_get_tmdb_poster_returns_image_url_from_suggestion_api(mock_urlopen):
 
 @patch("urllib.request.urlopen")
 def test_get_tmdb_poster_returns_empty_on_api_error(mock_urlopen):
-    """Network failure must be swallowed and return '' — this runs on a
+    """Network failure must be swallowed and return ''—this runs on a
     UI thread in settings and must never raise."""
     mock_urlopen.side_effect = OSError("connection refused")
     assert _get_tmdb_poster("tt0133093") == ""
@@ -4127,8 +4127,8 @@ def test_attach_selected_result_metadata_threads_nzbget_completed_job():
 @patch("resources.lib.router.downloaded_pubdate_epochs")
 @patch("resources.lib.router.get_completed_jobs")
 def test_tag_available_requires_pubdate_match(mock_completed, mock_epochs):
-    """Same name AND same size still isn't enough when we have recorded the
-    pubdate of what we actually downloaded: a same-name repost posted on a
+    """Same name AND same size still isn't enough once the download's
+    pubdate has been recorded: a same-name repost posted on a
     different day is a DIFFERENT file and must not be marked DL / reused."""
     from resources.lib.router import _tag_available
 
@@ -4140,7 +4140,7 @@ def test_tag_available_requires_pubdate_match(mock_completed, mock_epochs):
             "bytes": 60_000_000_000,
         },
     }
-    # We downloaded the release posted at PUBDATE_A.
+    # The recorded download is the release posted at PUBDATE_A.
     mock_epochs.return_value = [1639569600]
 
     same_age = {"title": "Movie.mkv", "size": "60000000000", "pubdate": _PUBDATE_A}
@@ -4182,7 +4182,7 @@ def test_tag_available_pubdate_match_within_tolerance(mock_completed, mock_epoch
 @patch("resources.lib.router.downloaded_pubdate_epochs")
 @patch("resources.lib.router.get_completed_jobs")
 def test_tag_available_fails_open_when_no_recorded_pubdate(mock_completed, mock_epochs):
-    """No recorded pubdate for this name (e.g. downloaded before this feature,
+    """No recorded pubdate for this name (for example, downloaded before this feature,
     or via an external invocation) -> keep prior name+size behavior."""
     from resources.lib.router import _tag_available
 
@@ -4200,7 +4200,7 @@ def test_tag_available_fails_open_when_no_recorded_pubdate(mock_completed, mock_
 def test_tag_available_fails_open_when_result_pubdate_missing(
     mock_completed, mock_epochs
 ):
-    """Recorded pubdates exist but the result advertises none -> we can't
+    """Recorded pubdates exist but the result advertises none -> the code can't
     compare, so fail open rather than hide a real cache hit."""
     from resources.lib.router import _tag_available
 
@@ -4231,8 +4231,8 @@ def test_tag_available_nzbget_mode_tags_from_nzbget_history(
     mock_nzbget_history, mock_nzbdav_completed
 ):
     """In NZBGet mode the DL tag must come from NZBGet's SUCCESS history (the
-    backend that answers 'will picking this re-download?'), never from nzbdav
-    history — and it must NOT attach the nzbdav ``_completed_job`` cached-stream
+    backend that answers 'does picking this re-download?'), never from nzbdav
+    history—and it must NOT attach the nzbdav ``_completed_job`` cached-stream
     hint, because the NZBGet path always re-submits."""
     from resources.lib.router import _tag_available
 
@@ -4251,9 +4251,9 @@ def test_tag_available_nzbget_mode_tags_from_nzbget_history(
 
     assert cached.get("_available") is True
     # The corroborated match is attached for selection-time reuse (play the
-    # completed files instead of re-submitting into NZBGet's dupe check)...
+    # completed files instead of re-submitting into NZBGet's dupe check).
     assert cached.get("_nzbget_completed_job") == job
-    # ...but never as the nzbdav cached-stream hint.
+    # It is never attached as the nzbdav cached-stream hint.
     assert "_completed_job" not in cached
     assert "_available" not in other
     assert "_nzbget_completed_job" not in other
@@ -4271,7 +4271,7 @@ def test_tag_available_nzbget_mode_requires_size_match(
     mock_nzbget_history, mock_nzbdav_completed
 ):
     """NZBGet history is name-keyed like nzbdav's, so the same size gate must
-    keep a clearly-different same-name release from being marked DL."""
+    keep a clearly different same-name release from being marked DL."""
     from resources.lib.router import _tag_available
 
     mock_nzbget_history.return_value = _NzbgetDoneHistory(
@@ -4326,7 +4326,7 @@ def test_tag_available_nzbget_mode_requires_pubdate_match(
 def test_tag_available_nzbget_mode_marks_lookup_done_even_on_rpc_failure(
     mock_nzbget_history, mock_nzbdav_completed
 ):
-    """When the NZBGet history RPC fails, no result can be tagged — but the
+    """When the NZBGet history RPC fails, no result can be tagged—but the
     return value must still read as 'lookup done' so selection skips the
     per-name nzbdav history fallback, which is meaningless on the NZBGet
     path (the resolver always re-submits to NZBGet)."""
@@ -4485,7 +4485,7 @@ def _nzbget_smb_addon(smb_root):
 def test_test_nzbget_smb_reports_unreachable_when_exists_false():
     # xbmcvfs.listdir() does NOT raise for a bogus/unreachable SMB path;
     # success must be gated on a positive exists() signal, so an
-    # unreachable share reports "not reachable" (30227), not "reachable".
+    # unreachable share reports "not reachable" (30227), not "reachable."
     import sys
 
     xbmcvfs = sys.modules["xbmcvfs"]
@@ -4523,7 +4523,7 @@ def test_test_nzbget_smb_reports_reachable_when_exists_true():
         "resources.lib.http_util.notify", side_effect=fake_notify
     ):
         _test_nzbget_smb()
-    # 30226 == "SMB share reachable". Lowercase + exclude the negated phrase so
+    # 30226 == "SMB share reachable." Lowercase + exclude the negated phrase so
     # "not reachable" can't satisfy a bare "reachable" substring check.
     msg = str(notified["message"]).lower()
     assert notified["message"] == 30226 or "reachable" in msg
@@ -4702,7 +4702,7 @@ def test_xml_root_name_rejects_internal_entity_expansion():
 
 def test_xml_root_name_rejects_internal_entity_on_stdlib_fallback(monkeypatch):
     """Billion-laughs rejection must also hold on the no-defusedxml path that
-    packaged Kodi installs take — the gap the previous guard left open."""
+    packaged Kodi installs take—the gap the previous guard left open."""
     import xml.etree.ElementTree as stdlib_et
 
     from resources.lib import xml_safety
@@ -4790,7 +4790,7 @@ def test_nzbget_dupe_submission_scores_pick_highest_and_backups_descending():
     # Release-scoped key: content id prefix + the pick's normalized release name.
     assert dupe["key"] == "imdb=42|the-movie-2024-1080p"
     assert [b["link"] for b in dupe["backups"]] == ["http://i/a.nzb", "http://i/b.nzb"]
-    # Pick strictly highest; backups strictly-lower descending.
+    # Pick strictly highest; backups strictly lower descending.
     assert all(b["score"] < dupe["pick_score"] for b in dupe["backups"])
     assert [b["score"] for b in dupe["backups"]] == sorted(
         [b["score"] for b in dupe["backups"]], reverse=True
@@ -4983,7 +4983,7 @@ def test_nzbget_dupe_submission_reports_standby_max_for_extras_bound():
 
 def test_nzbget_dupe_submission_honors_fallback_streams_max_above_five():
     # No code-level ceiling: fallback_streams_max is honored as configured,
-    # even above the old hard-coded cap of 5.
+    # even over the old hard-coded cap of 5.
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
     selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
@@ -5077,7 +5077,7 @@ def test_nzbget_dupe_scores_ride_on_the_wall_clock_base():
     assert [b["score"] for b in dupe["backups"]] == [100000 - 1]  # below it
     # The real base is wall-clock derived: strictly positive, inside NZBGet's
     # 32-bit int score range, and different across nearby submissions -- a
-    # replay 30s after a SUCCESS must OUTRANK it, not tie it (equal is not
+    # replay 30 s after a SUCCESS must OUTRANK it, not tie it (equal is not
     # higher, so a tie would suppress the re-download).
     from resources.lib.router_play import _dupe_score_base
 

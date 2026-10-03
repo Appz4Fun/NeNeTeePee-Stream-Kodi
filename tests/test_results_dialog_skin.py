@@ -61,7 +61,7 @@ def _accent_bars(layout):
 
 def test_results_dialog_focused_row_has_high_contrast_focus_indicator():
     """The selected row must carry a bright left accent bar so focus is
-    unmistakable on a TV — the recurring Palette accessibility ask. It lives
+    unmistakable on a TV—the recurring Palette accessibility ask. It lives
     only in the focused layout, so it does not paint every row."""
     root = ET.parse(_DIALOG_XML_PATH).getroot()
     results_list = _control(root, "list", "50")
@@ -75,7 +75,7 @@ def test_results_dialog_focused_row_has_high_contrast_focus_indicator():
 
 
 def _perceived_luminance(argb):
-    """Rec.601 luma (0-255) of an 8-char ``AARRGGBB`` Kodi colour."""
+    """Rec.601 luma (0-255) of an 8-char ``AARRGGBB`` Kodi color."""
     if argb.startswith("$INFO["):
         raise ValueError("dynamic skin info labels must be resolved first")
     r, g, b = int(argb[2:4], 16), int(argb[4:6], 16), int(argb[6:8], 16)
@@ -113,8 +113,8 @@ def test_results_dialog_unfocused_row_uses_controller_zebra_palette():
 
 def test_focus_indicator_appearance_is_high_contrast_and_correctly_placed():
     """Verify the indicator's *appearance*, not just its presence: a single
-    thin, full-height bar pinned to the left edge, in an accent colour that
-    is visibly brighter than — and distinct from — both the focused and
+    thin, full-height bar pinned to the left edge, in an accent color that
+    is visibly brighter than—and distinct from—both the focused and
     unfocused row fills, and painted on top of the focused background."""
     root = ET.parse(_DIALOG_XML_PATH).getroot()
     results_list = _control(root, "list", "50")

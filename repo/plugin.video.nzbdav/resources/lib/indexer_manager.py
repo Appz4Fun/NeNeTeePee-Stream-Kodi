@@ -24,7 +24,7 @@ _DELETE = "Delete"
 _NOT_FOUND = "Indexer not found"
 _KEEP_CURRENT = "<keep current>"
 # Unique identity sentinel: distinguishes "user accepted the displayed
-# default unchanged" from "user typed the literal placeholder string".
+# default unchanged" from "user typed the literal placeholder string."
 # Compared via ``is`` so a user whose actual api_key happens to equal
 # ``"<keep current>"`` is not silently overwritten with the prior value.
 _KEEP_CURRENT_SENTINEL = object()
@@ -50,7 +50,7 @@ def _invalid_url_char_reason(text):
 
 
 def _validate_indexer_url(url):
-    """Return ``(True, "")`` if ``url`` is acceptable, else ``(False, reason)``.
+    """Return ``(True, "")`` if the URL is acceptable, else ``(False, reason)``.
 
     Reject scheme not in {http, https}, missing hostname, control chars
     (``ord(c) < 0x20``), or any whitespace anywhere in the string. UI-
@@ -89,7 +89,7 @@ def _active_indexers(indexers):
 def _indexer_label(indexer):
     name = str(indexer.get("name") or "").strip()
     base = name or _indexer_id(indexer)
-    # Visual disabled-state marker so the user can spot disabled
+    # Visual marker so the user can spot indexers that are turned off
     # indexers in the manage list at a glance instead of having to
     # drill into each entry. ``enabled`` defaults to True for legacy
     # entries that pre-date the flag.
@@ -168,10 +168,10 @@ def _entry_version(entry):
 
     `indexer_store.normalize_indexer` strips unknown fields, so an
     integer counter persisted on the dict wouldn't survive a save
-    roundtrip. We instead derive a stable-but-mutation-sensitive
+    roundtrip. Instead, derive a stable-but-mutation-sensitive
     "version" from the user-editable fields. Two concurrent edits
-    against the same starting state will see the *original* fingerprint
-    on first load; the second writer will see a *different* fingerprint
+    against the same starting state see the *original* fingerprint
+    on first load; the second writer sees a *different* fingerprint
     on its pre-save re-load, triggering the conflict path.
     """
     if not isinstance(entry, dict):
@@ -383,7 +383,7 @@ def update_indexer(
     updated = _apply_indexer_field_edits(indexer, name, api_url, api_key)
 
     # Validate the *effective* URL on the updated entry. Edits that don't
-    # touch api_url still get re-validated so a previously-stored bad URL
+    # change api_url still get re-validated so a previously stored bad URL
     # cannot escape new policy on first edit.
     valid, reason = _validate_indexer_url(updated.get("api_url"))
     if not valid:
@@ -492,7 +492,7 @@ def _add_custom_flow(dialog):
 
 def _refresh_hydra_flow(dialog):
     _caps, error = refresh_hydra_provider_caps()
-    # ``refresh_hydra_caps`` can surface the request URL (with apikey=...)
+    # ``refresh_hydra_caps`` can surface the request URL (with the API key)
     # via urllib's HTTPError; redact before rendering to a Kodi dialog.
     _show_result(
         dialog, "NZBHydra2 caps refreshed", redact_text(error) if error else None
@@ -516,7 +516,7 @@ def _input_or_cancel(dialog, heading, current, hidden=False):
 
 
 def _prompt_indexer_edits(dialog, indexer):
-    """Prompt for name/url/key edits; return a kwargs dict or ``None`` on cancel."""
+    """Prompt for name, URL, and key edits; return kwargs or ``None`` on cancel."""
     current_key = str(indexer.get("api_key") or "")
     name = _input_or_cancel(dialog, "Display name", str(indexer.get("name") or ""))
     if name is None:
@@ -576,7 +576,7 @@ def _delete_indexer_flow(dialog, indexer):
     if not dialog.yesno(addon_name(), "Delete {}?".format(_indexer_label(indexer))):
         return
     # If this is the last enabled indexer, warn the user before
-    # delete: search will fail with no enabled indexers configured.
+    # delete: search fails with no enabled indexers configured.
     enabled_count = sum(1 for entry in load_indexers() if bool(entry.get("enabled")))
     if enabled_count == 1 and bool(indexer.get("enabled")):
         if not dialog.yesno(_LAST_INDEXER_HEADING, _LAST_INDEXER_PROMPT):

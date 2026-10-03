@@ -18,9 +18,9 @@ The authoritative rules for code changes are in [AGENTS.md](AGENTS.md).
 3. Run `just lint` and `just test` (or `just ci`, which also runs the Python 3.8
    compile check that CI runs). If `just lint` reports formatting issues, run
    `just lint-fix` and re-run `just lint`.
-4. If you touch Kodi UI or playback flows, test in Kodi 21 as well.
+4. If you change Kodi UI or playback flows, test in Kodi 21 as well.
 5. When user-facing behavior changes, update `README.md`, `CHANGELOG.md`, and
-   the matching pages under `docs-site/`. Only touch
+   the matching pages under `docs-site/`. Only edit
    `repo/plugin.video.nzbdav/changelog.txt` and the version in
    `repo/plugin.video.nzbdav/addon.xml` when cutting a release.
 

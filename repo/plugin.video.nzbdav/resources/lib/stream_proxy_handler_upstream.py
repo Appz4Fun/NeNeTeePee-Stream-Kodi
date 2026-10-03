@@ -69,7 +69,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         # Capture the observation timestamp BEFORE urlopen for the
         # flag-clearing path below. A post-urlopen time.time() would race a
         # concurrent thread that recorded a failure between socket-open and
-        # response-processing — the earlier timestamp is conservative.
+        # response-processing—the earlier timestamp is conservative.
         observed_at = _sp.time.time()
         try:
             # nosemgrep
@@ -81,7 +81,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
 
         # urlopen returned without raising → nzbdav gave a 2xx/3xx. Clear the
         # session "upstream down" flag so a later outage can re-notify (4xx/5xx
-        # never reaches here — HTTPError is caught above). ``server`` may be
+        # never reaches here—HTTPError is caught earlier). ``server`` may be
         # absent when a test builds __new__ directly; tolerate that. observed_at
         # lets the helper drop this signal if a concurrent thread recorded a
         # more-recent failure (notifier-flap race from the concurrency audit).
@@ -104,7 +104,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             # downloaded yet" (past its download high-water), NOT a permanent
             # path error: treat as a still-downloading short read so the retry
             # ladder + forward-stall wait + fallback cutover engage instead of a
-            # hard CLIENT_ERROR abort (the "Dune died on a 404" incident). A 404
+            # hard CLIENT_ERROR stop (the "Dune died on a 404" incident). A 404
             # on the INITIAL open (start == 0, byte 0 must exist) is a genuine
             # missing path and stays terminal; 401/403 are always terminal
             # (waiting can't fix bad creds). An already-written prefix is real
@@ -181,13 +181,13 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
                     mismatch_detail,
                 )
                 if hard_mismatch:
-                    # Hard mismatch (e.g. 206 with wrong Content-Range)
-                    # would feed wrong bytes to Kodi at wrong offsets —
+                    # Hard mismatch (for example, 206 with wrong Content-Range)
+                    # would feed wrong bytes to Kodi at wrong offsets—
                     # silent corruption. Reject regardless of mode.
                     # Soft mismatches (status 200 + valid range covering
                     # the full object, which nzbdav legitimately produces
                     # for `Range: bytes=0-`) fall through and stream so
-                    # ENFORCE doesn't kill playback at byte 0.
+                    # ENFORCE doesn't end playback at byte 0.
                     # Per TODO.md §D.8.1.
                     return None, (_sp._UPSTREAM_RANGE_PROTOCOL_MISMATCH, 0)
         headers = (
@@ -209,7 +209,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         """
         status, content_range, content_length = headers[0], headers[1], headers[2]
         try:
-            # 64 KB chunks — on 32-bit Kodi the whole process has
+            # 64 KB chunks—on 32-bit Kodi the whole process has
             # ~3 GB of address space, and Kodi's CFileCache alone can
             # reserve up to 1.5 GB (cachemembuffersize * readbufferfactor).
             # A 1 MB read buffer used to hit MemoryError when a second
@@ -286,9 +286,9 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         if not _sp._passthrough_watchdog_applies(ctx):
             return None
         # Self-initialize (tests call this directly; _serve_proxy resets per
-        # request). Explicit `in` check rather than ctx.setdefault(...,
+        # request). Explicit `in` check rather than ctx.setdefault(key,
         # time.monotonic()) which would evaluate time.monotonic() every
-        # iteration even when the key exists — wasted clock reads on the hot
+        # iteration even when the key exists—wasted clock reads on the hot
         # per-chunk path AND non-deterministic for finite mocked side_effects.
         if "passthrough_window_t0" not in ctx:
             ctx["passthrough_window_t0"] = _sp.time.monotonic()
@@ -398,7 +398,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             return written, (_sp._UPSTREAM_RANGE_UPSTREAM_ERROR, written)
         # Throughput watchdog: only sampled inside the read loop because that's
         # where bytes-in-flight match what Kodi sees (a _serve_proxy-level check
-        # would mis-attribute zero-fill bytes as real progress). Video-only —
+        # would mis-attribute zero-fill bytes as real progress). Video-only—
         # audio bit rates legitimately fall below the 100 KB/s floor.
         early = self._passthrough_throughput_watchdog(ctx, start, written, len(chunk))
         return written, early
@@ -436,7 +436,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         Returns ``(result_enum, written_bytes)`` where ``result_enum`` is one
         of OK / SHORT_READ_RECOVERABLE / PROTOCOL_MISMATCH / UPSTREAM_ERROR.
         BrokenPipeError / ConnectionResetError propagate out so the caller can
-        abort cleanly.
+        stop cleanly.
         """
         if _sp._fault_forced_primary_failure(ctx, start):
             _sp.xbmc.log(
@@ -485,8 +485,8 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
 
         Tries progressively larger skips and confirms upstream can serve a
         small range starting at the new offset. Each skip size is retried
-        with backoff so a briefly-unavailable upstream (restart, transient
-        network blip) has a chance to come back before we declare the
+        with backoff so a briefly unavailable upstream (restart, transient
+        network blip) has a chance to come back before the proxy declares the
         region unrecoverable. Returns the skip in bytes or None if the
         recovery budget is exhausted.
 
@@ -496,10 +496,10 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         until a subsequent successful urlopen clears it via
         ``_record_upstream_recovered``. While the flag is set, every
         probe in this function would hit the same DNS/TCP failure and
-        burn the full 30 s recovery budget per byte-range request —
+        burn the full 30 s recovery budget per byte-range request—
         turning a single outage into 30 s of stall on every seek.
         Short-circuit to None so the caller zero-fills immediately and
-        Kodi can abort cleanly instead of grinding through probes.
+        Kodi can stop cleanly instead of grinding through probes.
         """
         if ctx.get("upstream_down_notified"):
             _sp.xbmc.log(
@@ -513,8 +513,8 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             )
             return None
 
-        # Use monotonic for elapsed-time tracking — wall-clock NTP jumps
-        # would otherwise either prematurely abort recovery (backward
+        # Use monotonic for elapsed-time tracking—wall-clock NTP jumps
+        # would otherwise either prematurely stop recovery (backward
         # jump) or stretch the deadline indefinitely (forward jump).
         start_time = _sp.time.monotonic()
         for skip in _sp._SKIP_PROBE_SIZES:

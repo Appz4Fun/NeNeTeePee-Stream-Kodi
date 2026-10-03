@@ -23,8 +23,8 @@ as `v2.0.0-beta.2`.
 
 !!! warning "Beta means beta"
     The 2.0.0 line changes a lot at once: a new download backend, a rewritten
-    settings screen, and reworked fallback and recovery. It's used daily, but
-    expect rough edges. If something breaks, please
+    settings screen, and reworked fallback and recovery. It gets daily use, but
+    expect rough edges. If something breaks,
     [report it](#reporting-beta-problems).
 
 ## What's in the beta
@@ -52,14 +52,14 @@ These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
 - **Fallback streams** match alternate releases in tiers and search more
   widely for same-content peers. For files of 1 GiB or more, the byte-fingerprint
   check samples 100 points instead of 20. See [Fallback streams](../features/fallback-streams.md).
-- **SMB playback is checked before it starts** (beta.2). A file that lists over
-  SMB but can't be read yet is retried until it can. If it never becomes
+- **SMB playback is checked before it starts** (beta.2). NeNeTeePee-Stream-Kodi retries a file
+  that lists over SMB but isn't readable yet until it can read it. If it never becomes
   readable, you get a "restart Kodi" hint instead of a failed player.
 - **The results dialog** scrolls long labels on the focused row, has
   zebra-striped rows, and keeps remote focus inside the list.
 - **Large MKVs start faster.** The proxy pre-reads the end of the file, where
   Matroska keeps its seek index, before playback starts.
-- **Prowlarr** results are read from Prowlarr's native search API.
+- **Prowlarr results** come from Prowlarr's native search API.
 - **Security:** every XML parser that reads network data now goes through one
   hardened parser.
 

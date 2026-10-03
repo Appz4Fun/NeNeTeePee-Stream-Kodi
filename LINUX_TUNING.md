@@ -1,4 +1,4 @@
-# Linux Kernel & System Tuning — CoreELEC (Amlogic S922X)
+# Linux kernel and system tuning for CoreELEC (Amlogic S922X)
 
 Configuration for a CoreELEC media center running Kodi with 4K Dolby Vision
 playback concurrent with TMDBHelper cache warming services. Target hardware:
@@ -19,24 +19,24 @@ squashfs root, so persistent files must live under `/storage/`.
 
 ---
 
-## 1. USB Storage — UAS Driver (queue_depth 1 → 30)
+## 1. USB storage with the UAS driver (queue_depth 1 → 30)
 
-**Problem:** The kernel's `usb-storage` driver uses Bulk-Only Transport (BOT)
-with `queue_depth=1` — one SCSI command at a time. The Samsung T5 supports USB
+**Problem.** The kernel's `usb-storage` driver uses Bulk-Only Transport (BOT)
+with `queue_depth=1` (one SCSI command at a time). The Samsung T5 supports USB
 Attached SCSI (UAS) with `queue_depth=30`, but CoreELEC's kernel 4.9.269 was
 built with `CONFIG_USB_UAS=n`.
 
-**Solution:** Cross-compiled `uas.ko` from the kernel source and created a
+**Solution.** Cross-compiled `uas.ko` from the kernel source and created a
 boot-time rebind service. The `usb-storage` driver is built-in and claims the
 device during kernel init; the rebind script loads UAS, unbinds from
 usb-storage, and lets UAS claim the device with parallel SCSI command queuing.
 
 **Files:**
-- `/storage/uas.ko` — compiled UAS module (vermagic must match kernel exactly)
-- `/storage/.config/uas-rebind.sh` — load module, unbind, rebind, fallback
-- `/storage/.config/system.d/uas-rebind.service` — runs at `sysinit.target`
+- `/storage/uas.ko`: compiled UAS module (vermagic must match the kernel exactly)
+- `/storage/.config/uas-rebind.sh`: load module, unbind, rebind, fallback
+- `/storage/.config/system.d/uas-rebind.service`: runs at `sysinit.target`
 
-**Impact:** Write latency 10 ms → 6 ms. SQLite checkpoint flushes run in
+**Impact.** Write latency 10 ms → 6 ms. SQLite checkpoint flushes run in
 parallel across SSD NAND channels instead of serialized.
 
 **Verification:**
@@ -48,7 +48,7 @@ lsmod | grep uas                        # expect loaded, refcount 1
 
 ---
 
-## 2. SSD I/O Hints
+## 2. SSD I/O hints
 
 ```bash
 # Tell kernel this is an SSD (USB bridge hides TRIM/rotational info)
@@ -60,7 +60,7 @@ and oversized readahead that add latency on SSDs.
 
 ---
 
-## 3. VM Dirty Page Tuning
+## 3. VM dirty page tuning
 
 ```bash
 sysctl -w vm.dirty_background_bytes=67108864   # 64 MB: start background flush
@@ -69,15 +69,15 @@ sysctl -w vm.dirty_expire_centisecs=1000       # 10s max dirty page age
 sysctl -w vm.dirty_writeback_centisecs=100     # 1s writeback thread wakeup
 ```
 
-**Why:** Default percentage-based `dirty_ratio=20` allows 760 MB of dirty pages
-on a 3.8 GB system — during heavy image downloads this caused write stalls when
+**Why.** The default percentage-based `dirty_ratio=20` allows 760 MB of dirty
+pages on a 3.8 GB system. During heavy image downloads, this caused write stalls when
 the kernel hit the ratio and blocked all writers. Absolute byte limits give
-predictable behavior. The aggressive writeback (1s interval, 10s expiry) keeps
+predictable behavior. The aggressive writeback (1 s interval, 10 s expiry) keeps
 the dirty page count shallow so SQLite `fsync()` completes quickly.
 
 ---
 
-## 4. Receive Packet Steering (RPS)
+## 4. Receive packet steering (RPS)
 
 ```bash
 echo 3f > /sys/class/net/eth0/queues/rx-0/rps_cpus
@@ -85,9 +85,9 @@ echo 4096 > /sys/class/net/eth0/queues/rx-0/rps_flow_cnt
 sysctl -w net.core.rps_sock_flow_entries=4096
 ```
 
-**Why:** The Amlogic ethernet driver (`meson6-dwmac`) has a single RX queue
+**Why.** The Amlogic Ethernet driver (`meson6-dwmac`) has a single RX queue
 with no hardware RSS. Under audit, 99.99% of NET_RX softirqs landed on CPU2
-(3.76M vs 4-11K on other cores). With 90+ concurrent HTTP connections for TMDB
+(3.76M versus 4-11K on other cores). With 90+ concurrent HTTP connections for TMDB
 API and CDN image downloads, single-core packet processing was a throughput
 ceiling.
 
@@ -97,7 +97,7 @@ pinned to a consistent core via the flow table to avoid cache-line bouncing.
 
 ---
 
-## 5. TCP Stack Tuning
+## 5. TCP stack tuning
 
 ```bash
 sysctl -w net.ipv4.tcp_tw_reuse=1              # recycle TIME_WAIT for outbound
@@ -105,10 +105,10 @@ sysctl -w net.ipv4.tcp_fin_timeout=30           # 30s half-close (default 60)
 sysctl -w net.ipv4.ip_local_port_range="1024 65535"  # 64K ports (default 28K)
 ```
 
-**Why:** The warmup services make hundreds of short-lived HTTP connections per
+**Why.** The warmup services make hundreds of short-lived HTTP connections per
 second. Each closed connection holds an ephemeral port in TIME_WAIT for
-`tcp_fin_timeout` seconds. At 90+ conn/s with 60s timeout, that's 5,400 ports
-in TIME_WAIT — 19% of the default 28K range. `tcp_tw_reuse` allows outbound
+`tcp_fin_timeout` seconds. At 90+ conn/s with a 60 s timeout, that's 5,400 ports
+in TIME_WAIT, which is 19% of the default 28K range. `tcp_tw_reuse` allows outbound
 connections to reuse TIME_WAIT sockets, and the expanded port range provides
 headroom.
 
@@ -117,13 +117,13 @@ well-tuned for high-throughput streaming and don't need changes.
 
 ---
 
-## 6. Memory Safety Margin
+## 6. Memory safety margin
 
 ```bash
 sysctl -w vm.min_free_kbytes=32768   # 32 MB (default was 16 MB)
 ```
 
-**Why:** Kodi's `VmPeak` reaches 3.8 GB during 4K Dolby Vision (64% of RAM for
+**Why.** Kodi's `VmPeak` reaches 3.8 GB during 4K Dolby Vision (64% of RAM for
 the process alone, plus 610 MB CMA for the hardware video decoder). With warmup
 services adding ~800 MB, the working set approaches physical RAM. The default
 16 MB `min_free_kbytes` left almost no margin before the kernel entered
@@ -131,7 +131,7 @@ emergency direct reclaim. 32 MB gives the allocator breathing room.
 
 ---
 
-## 7. Compressed Swap (zram)
+## 7. Compressed swap (zram)
 
 **File:** `/storage/.config/system.d/zram.service`
 
@@ -139,29 +139,29 @@ emergency direct reclaim. 32 MB gives the allocator breathing room.
 2 GB zram device, lz4 compression, swap priority 100
 ```
 
-**Why:** The S922X has no disk swap partition. Under peak load (4K DV + warmup
+**Why.** The S922X has no disk swap partition. Under peak load (4K DV + warmup
 at c=100), Kodi alone uses 2.4 GB RSS. Without swap, the OOM killer would
-terminate warmup or Kodi. zram provides 2 GB of compressed swap in RAM — at
+stop warmup or Kodi. zram provides 2 GB of compressed swap in RAM. At
 lz4's typical 2.9:1 ratio, 2 GB of swap only costs ~700 MB of physical RAM.
 This turns OOM scenarios into manageable swap pressure.
 
 ---
 
-## 8. Page Cache Warmup
+## 8. Page cache warmup
 
 ```bash
 cat /var/media/CACHE_DRIVE/tmdb/Textures13.db > /dev/null 2>&1 &
 ```
 
-**Why:** Kodi's texture loader queries Textures13.db (545 MB, 2.2M rows) for
-every image on screen. After a reboot, the DB is cold — each `SELECT` reads
+**Why.** Kodi's texture loader queries Textures13.db (545 MB, 2.2M rows) for
+every image on screen. After a reboot, the DB is cold: each `SELECT` reads
 B-tree pages from SSD at ~0.5 ms each. Reading the entire DB into page cache at
-boot makes those queries hit RAM (~0.001 ms) — a 500x per-lookup speedup. The
+boot makes those queries hit RAM (~0.001 ms), a 500x per-lookup speedup. The
 `&` backgrounds it so Kodi startup isn't delayed.
 
 ---
 
-## 9. Process Priorities
+## 9. Process priorities
 
 Set via systemd unit files for the warmup services:
 
@@ -173,21 +173,21 @@ IOSchedulingPriority=7   # lowest I/O priority within best-effort
 
 Combined with UAS `queue_depth=30`, Kodi's I/O requests are served in parallel
 with warmup writes. The kernel's CFS scheduler and I/O priority ensure Kodi
-always gets resources first. No SIGSTOP throttling needed — the scheduler
-handles contention naturally.
+always gets resources first. SIGSTOP throttling isn't needed; the
+scheduler handles contention naturally.
 
 ---
 
-## 10. CPU Governor
+## 10. CPU governor
 
 CoreELEC ships with `governor=performance` on all 6 cores (1.8 GHz LITTLE,
-2.208 GHz big). This is correct for a media center — eliminates frequency
+2.208 GHz big). This is correct for a media center: it eliminates frequency
 scaling latency when Kodi needs burst compute for HDR tone mapping or UI
 rendering. Power consumption is irrelevant for a plugged-in device.
 
 ---
 
-## Quick Reference — All Files
+## Quick reference: all files
 
 | File | Purpose |
 |------|---------|
@@ -197,7 +197,7 @@ rendering. Power consumption is irrelevant for a plugged-in device.
 | `/storage/.config/system.d/zram.service` | 2 GB lz4 compressed swap |
 | `/storage/uas.ko` | compiled UAS kernel module |
 
-## Verification Commands
+## Verification commands
 
 ```bash
 # UAS active

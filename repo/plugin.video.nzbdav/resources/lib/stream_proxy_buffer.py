@@ -131,13 +131,13 @@ class ReadAheadBuffer:
 
         ``read_prefix`` only serves when ``start == base_offset``, so an
         in-window FORWARD seek must advance ``base_offset`` to the seek target
-        or the buffered lead is missed and refetched. We therefore TRIM the
+        or the buffered lead is missed and refetched. It therefore TRIMS the
         now-behind prefix ``[base_offset, new_start)`` and keep the still-ahead
         bytes ``[new_start, window_end)``, so a skip forward into the buffered
         lead is served from memory. An out-of-window seek (forward past the
         lead or any backward seek before ``base_offset``) discards the data and
         sets ``base_offset`` to the seek target so the prefetch thread refills
-        forward. Never blocks the seek — a cheap lock-protected pointer reset."""
+        forward. Never blocks the seek—a cheap lock-protected pointer reset."""
         if not isinstance(new_start, int) or new_start < 0:
             return
         with self._lock:

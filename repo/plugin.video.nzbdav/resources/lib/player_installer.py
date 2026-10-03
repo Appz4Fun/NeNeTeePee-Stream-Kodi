@@ -30,8 +30,8 @@ def _player_path_for(addon_id):
 TMDBHELPER_PLAYER_PATH = _player_path_for(TMDBHELPER_ADDON_ID)
 
 # Bump this when PLAYER_JSON's shape changes in a way that requires the
-# installer to overwrite an older generation. We ignore the user's manual
-# edits only when the stored schema_version differs from ours.
+# installer to overwrite an older generation. The installer ignores the user's
+# manual edits only when the stored schema_version differs from this value.
 _PLAYER_SCHEMA_VERSION = 9
 
 PLAYER_JSON = {
@@ -111,11 +111,11 @@ def _player_path_inside_profile(real_path):
     """Return True iff ``real_path`` resolves inside the addon_data profile.
 
     Defensive check: if special:// resolution is ever hijacked (symlink,
-    environment override, Kodi mis-config) we'd otherwise happily write
+    environment override, Kodi mis-config) the installer would otherwise happily write
     nzbdav.json anywhere on disk.
     """
     profile_root = xbmcvfs.translatePath(ADDON_DATA_ROOT)
-    # Use os.path.commonpath so a sibling like `/.../addon_data_evil/...`
+    # Use os.path.commonpath so a sibling like `<root>/addon_data_evil/<path>`
     # doesn't pass the prefix check just because its name happens to start
     # with `addon_data`. Closes TODO.md §H.3.
     real_resolved = os.path.realpath(real_path)
@@ -123,7 +123,7 @@ def _player_path_inside_profile(real_path):
     try:
         common = os.path.commonpath([real_resolved, profile_resolved])
     except ValueError:
-        # Different drive on Windows — definitely not inside profile_root.
+        # Different drive on Windows—definitely not inside profile_root.
         common = ""
     return common == profile_resolved
 
@@ -143,7 +143,7 @@ def _existing_player_is_current(file_path, target_name):
         existing = json.loads(existing_text)
     except (OSError, ValueError, TypeError):
         # Unreadable or malformed existing file (including the
-        # MagicMock-returns-MagicMock case in tests) — just overwrite.
+        # MagicMock-returns-MagicMock case in tests)—just overwrite.
         return False
 
     if existing.get("schema_version") == _PLAYER_SCHEMA_VERSION:
@@ -155,7 +155,7 @@ def _existing_player_is_current(file_path, target_name):
         _notify(_addon_name(), _fmt(30094, target_name))
         return True
 
-    # Schema change — back up the old file before overwriting. If the backup
+    # Schema change—back up the old file before overwriting. If the backup
     # cannot be written, re-raise so the caller's handler aborts the install
     # (LOGERROR + "Failed" toast) and the user's existing file is preserved
     # rather than silently overwritten without a backup.
@@ -210,7 +210,7 @@ def _install_player_to_path(target_name, target_path):
         file_path = os.path.join(real_path, PLAYER_FILENAME)
 
         # If an existing nzbdav.json is present with the SAME schema_version,
-        # skip the overwrite so a user who edited the file (e.g. customized
+        # skip the overwrite so a user who edited the file (for example, customized
         # priority, added extra fields) doesn't lose those edits on every
         # addon upgrade. Different schema_version → overwrite with a backup.
         if xbmcvfs.exists(file_path) and _existing_player_is_current(

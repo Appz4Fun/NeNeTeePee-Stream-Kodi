@@ -1,6 +1,6 @@
-# Code of Conduct
+# Code of conduct
 
-## Our standards
+## Standards
 
 - Be direct, respectful, and technical.
 - Assume good intent and focus feedback on code and behavior.

@@ -62,7 +62,7 @@ def _queue_slot_is_title(slot, title):
     """True if a queue slot is THIS playback title's own job (exact name match).
 
     nzbdav echoes the submitted name verbatim into the queue slot, so an exact
-    match identifies the job the submit path would adopt and resume — it must be
+    match identifies the job the submit path would adopt and resume—it must be
     excluded from the clear so the user's own in-flight download is not
     cancelled and restarted. Checks the SAME slot fields, in the same order, as
     the adoption path (``find_queued_by_names``): ``filename``, ``nzo_id_name``,
@@ -89,14 +89,14 @@ def _completed_copy_blocks_clear(title, settings_getter):
     The probe (``_existing_completed_stream`` -> completed-history GET + WebDAV
     body probe) carries its own multi-second socket timeouts. This guard runs
     BEFORE the progress dialog, so an unbounded wait would freeze playback with
-    no UI and no abort path on a slow/unreachable nzbdav. Running it on a daemon
+    no UI and no cancel path on a slow/unreachable nzbdav. Running it on a daemon
     worker with a join deadline caps that wait. The authoritative, full-timeout
     probe inside ``_poll_until_ready`` (which runs with the dialog visible and
     abortable) still makes the real adopt-or-submit decision, so a timeout here
-    never forces a wrong outcome -- only a conservative "leave the queue intact".
+    never forces a wrong outcome -- only a conservative "leave the queue intact."
     A timeout/error therefore returns True (skip clear): never cancel the user's
-    other downloads on an adoption we could not rule out. ``on_existing_completed``
-    is left None so the worker has no side effects.
+    other downloads on an adoption that could not be ruled out.
+    ``on_existing_completed`` is left None so the worker has no side effects.
     """
     result = {}
 
@@ -123,7 +123,7 @@ def _completed_copy_blocks_clear(title, settings_getter):
         # Thread creation can fail during Kodi shutdown / interpreter
         # teardown. This guard is best-effort; fail soft like a probe timeout:
         # leave the queue intact (return True = SKIP the clear) rather than
-        # letting the RuntimeError escape and abort the submit path.
+        # letting the RuntimeError escape and break the submit path.
         _resolver.xbmc.log(
             "NeNeTeePee-Stream-Kodi: completed-adopt probe thread did not start before "
             "clearing the queue; leaving queue intact: {}".format(
@@ -223,8 +223,8 @@ def _maybe_clear_queue_before_submit(
       * ``ask``    - show a yes/no dialog listing the queued jobs and clear
         only on confirmation.
 
-    "Clear" cancels the OTHER queued jobs — not this title's own in-flight job
-    (the submit path adopts and resumes that one) — and leaves completed/failed
+    "Clear" cancels the OTHER queued jobs—not this title's own in-flight job
+    (the submit path adopts and resumes that one)—and leaves completed/failed
     history intact (see ``clear_queue``). Defensive: a queue-probe or dialog
     failure leaves the queue untouched and never blocks the submit.
     """
@@ -248,8 +248,8 @@ def _adoptable_copy_suppresses_clear(title, settings_getter, completed_lookup_do
     adopts the completed copy (no new download is submitted), so cancelling other
     active jobs would be wrong. Validate with the SAME body probe the adopt path
     uses (_existing_completed_stream) so a STALE Completed row whose storage is
-    missing or fails the probe does NOT suppress the clear: _poll_until_ready will
-    reject that row and submit a new download, which is exactly when the clear
+    missing or fails the probe does NOT suppress the clear: _poll_until_ready
+    rejects that row and submits a new download, which is exactly when the clear
     should run. That probe carries multi-second socket timeouts and this guard
     runs BEFORE the progress dialog, so it is hard-bounded to the queue-probe
     budget (_completed_copy_blocks_clear): on a slow/unreachable nzbdav the guard
@@ -261,7 +261,7 @@ def _adoptable_copy_suppresses_clear(title, settings_getter, completed_lookup_do
     re-download on a slow-but-working nzbdav, so the (cheap, bounded) re-check is
     intentional. Only the no-picker-hint paths (/resolve, auto-select) need it:
     gated on completed_lookup_done, so when the picker already validated completed
-    and we still reached the submit path (submit certain) it is skipped. It runs
+    and the flow still reached the submit path (submit certain) it is skipped. It runs
     only after the queue probe confirmed there ARE other jobs to clear, so an
     empty queue never pays for it.
     """
@@ -273,7 +273,7 @@ def _adoptable_copy_suppresses_clear(title, settings_getter, completed_lookup_do
 def _clear_queue_slots(title, slots, settings_getter):
     """Cancel exactly the probed/shown slots and log the count.
 
-    Cancels exactly the slots we probed/showed -- not a fresh fetch -- so a job
+    Cancels exactly the slots probed/shown -- not a fresh fetch -- so a job
     that appeared between the prompt and now is never cancelled unseen. Each
     delete is bound with the same short timeout as the probe so a stalled nzbdav
     can't freeze the resolver for minutes across several deletes.

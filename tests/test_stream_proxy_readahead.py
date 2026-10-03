@@ -124,11 +124,11 @@ def test_note_seek_in_window_trims_prefix_and_serves_lead():
     buf = ReadAheadBuffer(cap_bytes=1024, content_length=10_000)
     buf.append(0, b"ABCDEFGHIJ")
     buf.note_seek(3)  # inside [0, 10): forward seek into the buffered lead
-    # The lead from the seek target is served straight from memory...
+    # The lead from the seek target is served straight from memory;
     assert buf.read_prefix(3, 9) == b"DEFGHIJ"
-    # ...the consumed prefix is gone (read_prefix only serves at base_offset)...
+    # the consumed prefix is gone (read_prefix only serves at base_offset);
     assert buf.read_prefix(0, 9) == b""
-    # ...and the buffered lead was preserved, not discarded for a refetch.
+    # and the buffered lead was preserved, not discarded for a refetch.
     assert buf.next_fetch_offset() == 10
 
 
@@ -356,7 +356,7 @@ def test_stream_upstream_range_no_buffer_unchanged():
         "auth_header": None,
         "content_length": 10_000,
     }
-    # urlopen raising a benign OSError keeps us out of the heavy branches but
+    # urlopen raising a benign OSError keeps the call out of the heavy branches but
     # proves the buffer consult did NOT short-circuit the upstream attempt.
     with patch.object(
         stream_proxy, "urlopen", side_effect=OSError("boom")
@@ -545,7 +545,7 @@ def test_run_readahead_prefetch_bounded_by_cap():
     def fake_fetch(_url, _auth, start, end, _clen):
         return b"Y" * (end - start + 1)
 
-    # Abort quickly so the throttle loop does not spin forever once full.
+    # Stop quickly so the throttle loop does not spin forever once full.
     monitor = _FakeMonitor(abort_after=200)
     with patch("xbmc.Monitor", return_value=monitor), patch.object(
         _StreamHandler, "_fetch_primary_range_bytes", staticmethod(fake_fetch)
@@ -600,7 +600,7 @@ def test_run_readahead_prefetch_swallows_exceptions():
     def boom(*_a, **_k):
         raise RuntimeError("kaboom")
 
-    # Abort after a couple loops so the swallowed exception path returns.
+    # Stop after a couple loops so the swallowed exception path returns.
     monitor = _FakeMonitor(abort_after=3)
     with patch("xbmc.Monitor", return_value=monitor), patch.object(
         _StreamHandler, "_fetch_primary_range_bytes", staticmethod(boom)
@@ -644,7 +644,7 @@ def test_run_readahead_prefetch_aborts_on_waitforabort():
     def fake_fetch(_url, _auth, start, end, _clen):
         return b"Y" * (end - start + 1)
 
-    monitor = _FakeMonitor(abort_after=1)  # abort immediately
+    monitor = _FakeMonitor(abort_after=1)  # stop immediately
     with patch("xbmc.Monitor", return_value=monitor), patch.object(
         _StreamHandler, "_fetch_primary_range_bytes", staticmethod(fake_fetch)
     ):

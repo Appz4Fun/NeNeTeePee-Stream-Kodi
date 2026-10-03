@@ -36,20 +36,20 @@ def _classify_upstream_error(error):
     """Bucket a urlopen exception into a reachability category.
 
     Returns one of:
-      * ``_UPSTREAM_REACHABILITY_UNREACHABLE_NETWORK`` — DNS / TCP-refused /
+      * ``_UPSTREAM_REACHABILITY_UNREACHABLE_NETWORK``—DNS / TCP-refused /
         socket timeout / connection reset. Strong signal that nzbdav (or
         the network path to it) is down, not that the stream itself is
         bad. Worth surfacing to the user.
-      * ``_UPSTREAM_REACHABILITY_HTTP_SERVER_ERROR`` — HTTPError with
+      * ``_UPSTREAM_REACHABILITY_HTTP_SERVER_ERROR``—HTTPError with
         status 5xx. nzbdav is up but stressed/erroring.
-      * ``_UPSTREAM_REACHABILITY_HTTP_CLIENT_ERROR`` — HTTPError with
+      * ``_UPSTREAM_REACHABILITY_HTTP_CLIENT_ERROR``—HTTPError with
         status 4xx. Auth or path issue, not an outage.
-      * ``_UPSTREAM_REACHABILITY_OTHER`` — any other OSError / ValueError
-        that doesn't fit the above.
+      * ``_UPSTREAM_REACHABILITY_OTHER``—any other OSError / ValueError
+        that doesn't fit the preceding categories.
 
     The distinction matters because the stream-proxy's zero-fill /
     skip-probe recovery can disguise a total upstream outage as a
-    "bad stream" to the user. Classifying lets us emit an actionable
+    "bad stream" to the user. Classifying lets the proxy emit an actionable
     notification instead of silently zero-filling the rest of the file.
     """
     if isinstance(error, HTTPError):
@@ -81,7 +81,7 @@ def _clear_upstream_unreachable_flag(ctx, observed_at):
     if not ctx.get("upstream_down_notified"):
         return False
     last_down = float(ctx.get("last_upstream_unreachable_at", 0) or 0)
-    # Drop stale success observations — a newer failure takes
+    # Drop stale success observations—a newer failure takes
     # precedence. When timestamps tie (same millisecond), prefer
     # success since that's the happy-path default.
     if last_down > observed_at:
@@ -105,7 +105,7 @@ def _record_upstream_recovered(server, ctx, observed_at=None):
     urlopen while Thread B is mid-failure on a different range
     request. Without ordering, A's "cleared" update could stomp B's
     "marked down" update (or vice versa), producing a silently-
-    latched or silently-cleared flag that didn't reflect the most
+    latched or silently cleared flag that didn't reflect the most
     recent observation. Callers pass ``observed_at`` (the wall-clock
     time at which they opened the socket); the helper only clears
     the flag when that observation is NEWER than the most recent
@@ -113,7 +113,7 @@ def _record_upstream_recovered(server, ctx, observed_at=None):
     stale.
 
     Preserves ``upstream_unreachable_count`` as a running total for
-    diagnostics — we only reset the one-shot notification gate.
+    diagnostics—only the one-shot notification gate is reset.
     """
     if observed_at is None:
         observed_at = time.time()
@@ -140,7 +140,7 @@ def _record_upstream_unreachable(server, ctx, error):
     """Track an upstream-unreachable event on the session and fire a
     one-shot user notification the first time it happens.
 
-    The handler that decides to zero-fill / retry / abort is unchanged —
+    The handler that decides to zero-fill / retry / give up is unchanged—
     this is purely a visibility layer so the user learns "nzbdav is
     unreachable" instead of watching silent playback glitch through to
     the end. Subsequent failures in the same session bump the counter
@@ -204,11 +204,11 @@ def _stream_starvation_evident(ctx, terminal_reason):
     terminal reason fired, OR the upstream is still flagged down, OR an outage
     happened very recently, OR the patient forward-stall wait exhausted. The
     forward-stall signal covers the pure-SLOW case (a still-downloading region
-    that never caught up: AWAITING with no 5xx, so no outage is recorded) —
+    that never caught up: AWAITING with no 5xx, so no outage is recorded)—
     without it that give-up would be silent, the exact thing this guard exists
     to prevent. The RECENCY window matters because ``upstream_unreachable_count``
     is a sticky running total and ``last_upstream_unreachable_at`` can predate a
-    long healthy stretch the user then stopped — that must NOT fire. It also
+    long healthy stretch the user then stopped—that must NOT fire. It also
     catches the live incident, where the upstream momentarily "recovered" a few
     seconds before Kodi gave up and disconnected (so a recovered-vs-unreachable
     ordering check alone would wrongly stay silent).
@@ -242,12 +242,12 @@ def _maybe_notify_stream_starvation(
     (which warns when an outage STARTS): this explains why playback STOPPED. It
     fires only for an abnormal end that shows backend trouble (see
     ``_stream_starvation_evident``) and never for a clean finish or a healthy
-    stop of a fully-delivered stream. Debounced once per session via
+    stop of a fully delivered stream. Debounced once per session via
     ``starvation_notified``; returns whether the notification fired.
     """
     if not _sp._stream_starvation_evident(ctx, terminal_reason):
         return False
-    # Only when genuinely starved — a fully-delivered range the user happened
+    # Only when genuinely starved—a fully delivered range the user happened
     # to stop is not starvation.
     if 0 < requested_bytes <= total_streamed:
         return False

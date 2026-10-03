@@ -59,7 +59,7 @@ def _preserve_resume_on_cancel(release_id, scrubbed_seconds):
 
     ``_clear_kodi_playback_state`` has already deleted Kodi's bookmark by the
     time the resume menu is shown, so backing out would otherwise lose the only
-    surviving offset (e.g. the first replay after upgrade, before the addon
+    surviving offset (for example, the first replay after upgrade, before the addon
     store has an entry). Save it under the release identity so the next replay
     still offers it. ``save_resume`` itself drops tiny / near-end positions.
     """
@@ -344,7 +344,7 @@ def _play_via_proxy(stream_url, stream_headers, fallback_sources=None):
     """Play a stream for the resolve_and_play (service-side) path.
 
     Routes everything through the service proxy for the same reasons as
-    _play_direct — see that function's docstring.
+    _play_direct—see that function's docstring.
 
     Each play branch also sets ``nzbdav.stream_url`` /
     ``nzbdav.stream_title`` / ``nzbdav.active`` on the Home window

@@ -45,7 +45,7 @@ carries a yellow **FILTERED:** chip naming the first filter that rejected it:
 those rows, and NeNeTeePee-Stream-Kodi plays exactly that release. Press ++c++ again to
 return to the filtered list. Your saved filter settings don't change.
 
-- If every release was filtered out, the picker opens directly in the
+- If your filters removed every release, the picker opens directly in the
   all-results view.
 - On CoreELEC and other Linux devices where NeNeTeePee-Stream-Kodi can read the remote's
   input device, you can also **hold OK for five seconds** to turn filters off.
@@ -58,7 +58,7 @@ filters themselves.
 ## Reuse a completed season pack
 
 !!! info "Beta feature"
-    Added in 2.0.0-beta.2. available on the [Beta channel](beta-channel.md).
+    Added in 2.0.0-beta.2, available on the [Beta channel](beta-channel.md).
 
 When a completed backend job contains several clearly named episodes,
 NeNeTeePee-Stream-Kodi remembers which episodes it holds. When you later play one of them,
@@ -81,7 +81,7 @@ dialog. See [NZBGet backend](../features/nzbget-backend.md).
 
 | Stage | What it means |
 |-------|---------------|
-| Submitting NZB… | The NZB is being sent to nzbdav. |
+| Submitting NZB… | NeNeTeePee-Stream-Kodi is sending the NZB to nzbdav. |
 | Queued… | Accepted, waiting to start. |
 | Fetching NZB… | nzbdav is retrieving and parsing the NZB. |
 | Waiting for propagation… | Waiting for article availability. |
@@ -105,9 +105,9 @@ comment with:  ![Download progress dialog](../images/progress-dialog.png)
 
 If you've watched part of a title before, NeNeTeePee-Stream-Kodi offers Kodi's native
 **Resume from…** / **Start from beginning** prompt when you replay it. The
-prompt follows Kodi's own default play action setting. Resume
-points are tracked per release, so they survive even though the underlying
-stream URL changes each session.
+prompt follows Kodi's own default play action setting. NeNeTeePee-Stream-Kodi tracks resume
+points per release, so they survive even though the underlying stream URL
+changes each session.
 
 ## One-time seeking setup for large files
 
@@ -122,8 +122,8 @@ exact steps.
 
 ## What happens behind the scenes
 
-If you're curious how a pick becomes a playing stream. search, submission,
-polling, the local proxy, and mid-playback recovery. read
+If you're curious how a pick becomes a playing stream (search, submission,
+polling, the local proxy, and mid-playback recovery), read
 [How it works](../how-it-works/architecture.md).
 
 ## Something didn't work?

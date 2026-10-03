@@ -7,8 +7,8 @@ Kodi installs typically ship only the Python standard library. Its
 ``xml.etree.ElementTree`` ignores *external* entities but still expands
 *internal* ones, so a hostile or compromised indexer can hand us a
 "billion laughs" payload (``<!ENTITY b "&a;&a;...">``) and exhaust CPU/memory
-during parsing. Disabling expat's ``ExternalEntityRefHandler`` — the pattern
-several call sites hand-rolled — does **not** stop this: internal entity
+during parsing. Disabling expat's ``ExternalEntityRefHandler``—the pattern
+several call sites hand-rolled—does **not** stop this: internal entity
 expansion has no such handler.
 
 ``defusedxml`` blocks both attack classes but is optional on Kodi. This module
@@ -24,7 +24,7 @@ import re
 
 # This module is the XXE guard itself: the stdlib is the documented defusedxml
 # fallback and the ``ParseError`` source, and entity declarations are refused in
-# ``safe_fromstring`` before any parse — so this import is safe by construction.
+# ``safe_fromstring`` before any parse—so this import is safe by construction.
 # nosemgrep
 import xml.etree.ElementTree as _stdlib_et  # nosec B405
 
@@ -49,9 +49,10 @@ ParseError = _stdlib_et.ParseError
 # too), so existing ``except ValueError`` handlers keep working.
 UnsafeXmlError = _UnsafeXmlError
 
-# A real entity declaration only exists inside a ``<!DOCTYPE ... [ ... ]>``:
+# A real entity declaration only exists inside a
+# ``<!DOCTYPE name [ entity declarations ]>``:
 # billion-laughs and XXE both require the DTD. Scanning the *logical text* for
-# both markers — rather than raw bytes for ``<!ENTITY`` alone — closes two gaps:
+# both markers—rather than raw bytes for ``<!ENTITY`` alone—closes two gaps:
 #   * a multi-byte encoding (UTF-16/UTF-32) can't smuggle the declaration past a
 #     raw ASCII byte scan (the parser would still decode and expand it), and
 #   * a literal ``<!ENTITY`` sitting inertly in a comment or CDATA section (with
@@ -66,7 +67,7 @@ _XML_DECL_ENCODING_RE = re.compile(r'encoding\s*=\s*["\']([\w.\-]+)["\']')
 # an explicit BOM, or the byte pattern of the mandatory ``<`` start character
 # under each UTF-16/32 endianness. Ordered longest-prefix first so a 4-byte
 # UTF-32 marker is never shadowed by its 2-byte UTF-16 prefix. Endianness is
-# explicit — decoding with the wrong one would mangle the ASCII markup tokens.
+# explicit—decoding with the wrong one would mangle the ASCII markup tokens.
 _BOM_CODECS = (
     (b"\x00\x00\xfe\xff", "utf-32-be"),
     (b"\x00\x00\x00<", "utf-32-be"),
@@ -83,10 +84,10 @@ _BOM_CODECS = (
 def _xml_bytes_to_text(payload):
     """Decode XML bytes to logical text for the entity scan.
 
-    Honours a byte-order mark and the ``<?xml encoding=...?>`` declaration so
-    UTF-16/UTF-32 payloads can't hide an entity declaration from the scan.
-    ``errors="replace"`` keeps this best-effort; the real parse still runs on
-    the original bytes.
+    Honours a byte-order mark and the ``encoding`` attribute of the ``<?xml?>``
+    declaration so UTF-16/UTF-32 payloads can't hide an entity declaration from the
+    scan. ``errors="replace"`` keeps this best-effort; the real parse still runs
+    on the original bytes.
     """
     for prefix, codec in _BOM_CODECS:
         if payload[: len(prefix)] == prefix:
@@ -111,8 +112,8 @@ def _entity_scan_texts(payload):
 
     The best-guess decoding (BOM/declared-encoding) plus BOTH UTF-16
     endiannesses. The UTF-16 candidates catch a BOM-less UTF-16 stream the
-    prefix sniffer can't classify — e.g. one that opens with legal XML
-    whitespace so the ``<`` isn't at byte 0 — which stdlib expat still
+    prefix sniffer can't classify—for example, one that opens with legal XML
+    whitespace so the ``<`` isn't at byte 0—which stdlib expat still
     auto-detects and would expand. A valid, null-free UTF-8/single-byte
     document cannot spell the null-interleaved markers under a UTF-16 decode,
     so scanning these extra views adds no false positives.

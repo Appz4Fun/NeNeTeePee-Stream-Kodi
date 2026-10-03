@@ -128,7 +128,7 @@ def _fill_template(template, value):
 
     Kodi 21 core strings use ``str.format`` placeholders ("Resume from
     {0:s}"); older Kodi builds and the bundled fallbacks use printf
-    ("Resume from %s"). Try ``str.format`` first, then printf, then append —
+    ("Resume from %s"). Try ``str.format`` first, then printf, then append—
     so a placeholder-style mismatch can never raise. The printf path was the
     bug that crashed ``resolve_and_play`` with "not all arguments converted
     during string formatting" on Kodi 21's ``{0:s}`` string.

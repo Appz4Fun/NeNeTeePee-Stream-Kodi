@@ -105,7 +105,7 @@ def test_probe_mp4_profile8_from_first_sample():
     from pathlib import Path
 
     rpu = Path("tests/fixtures/dovi/profile8.bin").read_bytes()
-    # Prepend a non-DV NAL (e.g. trailing slice, type=0) so the parser must
+    # Prepend a non-DV NAL (for example, trailing slice, type=0) so the parser must
     # walk past it to find the UNSPEC62 NAL.
     sample = _nal(b"\x02\x01framedata") + _unspec62_nal(rpu)
     mp4 = _minimal_mp4(sample)
@@ -259,7 +259,7 @@ def test_probe_mp4_with_co64_chunk_offsets():
 
 def test_probe_mp4_clamps_unreasonable_first_sample_size():
     """A malicious moov declaring a 4 GiB first sample (uint32 max) must be
-    rejected before we attempt the HTTP Range — otherwise a poisoned feed
+    rejected before the probe attempts the HTTP Range—otherwise a poisoned feed
     could OOM 32-bit Kodi via `resp.read()`."""
     ftyp = _box(b"ftyp", b"isom" + b"\x00\x00\x02\x00" + b"isomiso2")
     stsd = _fullbox(b"stsd", struct.pack(">I", 1) + _sample_entry_with_hvcc())
@@ -316,7 +316,7 @@ def test_probe_mkv_refuses_laced_simpleblock():
 
     # Lacing refusal → no frame data → "no RPU NAL found" → non_dv.
     # Or (if the iter_ebml malformation short-circuits first) dv_unknown.
-    # Either is an acceptable safe answer; what we must NOT see is a
+    # Either is an acceptable safe answer; the outcome to avoid is a
     # misclassified "dv_profile_7_fel" from treating lace metadata as a NAL
     # length prefix.
     assert result.classification in ("non_dv", "dv_unknown")
@@ -331,7 +331,7 @@ def test_probe_mkv_extracts_from_blockgroup_wrapper():
     rpu = Path("tests/fixtures/dovi/mel_orig.bin").read_bytes()
     nal = b"\x7c\x01" + rpu
     sample = struct.pack(">I", len(nal)) + nal
-    # Block (0xA1) has the same on-wire shape as SimpleBlock for our purposes.
+    # Block (0xA1) has the same on-wire shape as SimpleBlock for this test's purposes.
     block = _vint(1) + struct.pack(">hB", 0, 0) + sample
     block_group = _elm(b"\xa0", _elm(b"\xa1", block))
 
@@ -358,7 +358,7 @@ def test_probe_mkv_extracts_from_blockgroup_wrapper():
 
 
 def test_probe_degrades_to_dv_unknown_on_network_error():
-    """urlopen raising URLError must not propagate — probe must return
+    """urlopen raising URLError must not propagate—probe must return
     dv_unknown so the caller can fail safe to matroska."""
     from urllib.error import URLError
 
@@ -376,7 +376,7 @@ def test_probe_degrades_to_dv_unknown_on_network_error():
 
 
 def test_probe_unsupported_extension_returns_dv_unknown():
-    """Extensions we don't know how to probe (webm, ts, avi) return
+    """Extensions the prober can't handle (webm, ts, avi) return
     dv_unknown with a specific reason."""
     result = probe_dolby_vision_source("http://host/unknown.ts", auth_header=None)
     assert result.classification == "dv_unknown"
@@ -384,7 +384,7 @@ def test_probe_unsupported_extension_returns_dv_unknown():
 
 
 def test_http_range_applies_size_cap_via_resp_read_argument():
-    """The size cap is enforced at `resp.read(max_bytes)` — a server that
+    """The size cap is enforced at `resp.read(max_bytes)`—a server that
     ignores the Range header cannot push more than max_bytes into memory."""
     from resources.lib.dv_source import _HTTP_READ_CAP, _http_range
 
@@ -411,8 +411,8 @@ def test_http_range_applies_size_cap_via_resp_read_argument():
 
 
 def test_http_range_strips_crlf_from_auth_header():
-    """Auth header CR/LF bytes are stripped before being passed to urllib —
-    defeats header-injection attempts from a future untrusted caller."""
+    """Auth header CR/LF bytes are stripped before being passed to urllib;
+    this defeats header-injection attempts from a future untrusted caller."""
     captured_headers = {}
 
     def _mock(req, timeout=None):

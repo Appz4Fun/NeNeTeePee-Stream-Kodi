@@ -229,10 +229,10 @@ def parse_params(query_string):
         query_string = query_string[1:]
     if not query_string:
         return {}
-    # keep_blank_values=True so a deliberately-empty parameter (e.g.
-    # `&imdb=`) survives instead of vanishing — older callers used the
+    # keep_blank_values=True so a deliberately empty parameter (for example,
+    # `&imdb=`) survives instead of vanishing—older callers used the
     # presence of a key as a signal regardless of value. TODO.md §H.3
-    # Medium: parse_qs silently drops duplicate params. We still take
+    # Medium: parse_qs silently drops duplicate params. The code still takes
     # only `v[0]` (Kodi's plugin URLs don't repeat keys), but at least
     # the drop is visible if a future handler iterates `parsed.items()`.
     parsed = parse_qs(query_string, keep_blank_values=True)
@@ -263,14 +263,14 @@ def route(argv):
 
     Routes the incoming plugin call (provided as the Kodi `sys.argv` list) to
     handlers such as play, search, resolve, settings, install, cache clearing,
-    provider tests, and the main menu. Action routes with side effects will be
+    provider tests, and the main menu. Action routes with side effects are
     followed by a safe resolution call so Kodi does not hang.
 
     Parameters:
         argv (list): The Kodi argv list for the plugin invocation. Expected
             elements:
-            - argv[0]: base plugin URL (e.g., "plugin://...") used to derive
-              the route path
+            - argv[0]: base plugin URL (for example,
+              `plugin://plugin.video.nzbdav/`) used to derive the route path
             - argv[1]: numeric handle for Kodi plugin operations (int)
             - argv[2] (optional): query string containing route parameters
     """
@@ -410,7 +410,7 @@ def _script_completed_job_for_selection(selected):
     is keyed by NAME, so a name-only match would reuse the wrong cached stream
     for a distinct same-filename upload. Only return the completed job when its
     size matches the selection (fail-open on unknown size) and the selection's
-    pubdate is consistent with what we downloaded under that name (fail-open
+    pubdate is consistent with what was downloaded under that name (fail-open
     when unknown), so a same-name same-size repost from a different day isn't
     reused.
     """
@@ -468,7 +468,7 @@ def _search_all_providers(query, settings_getter=None):
     settings_getter = _settings_getter_or_addon_default(settings_getter)
 
     # Provider defaults mirror settings.xml. Runtime setting read failures still
-    # use the explicit defaults passed through _get_addon_setting above.
+    # use the explicit defaults passed through _get_addon_setting earlier.
     nzbhydra_enabled = settings_getter("nzbhydra_enabled", "false").lower() == "true"
     prowlarr_enabled = settings_getter("prowlarr_enabled", "false").lower() == "true"
     direct_indexers_enabled = (
@@ -584,16 +584,17 @@ def _handle_direct_play(handle, params):
     """Resolve a primary stream URL through stream_proxy and hand
     Kodi the proxy URL via setResolvedUrl.
 
-    Returns a single proxy URL to Kodi — when an article fails on the
+    Returns a single proxy URL to Kodi—when an article fails on the
     primary upstream, stream_proxy validates the fallback (HEAD +
     100×4 KiB SHA256 sweep) and continues serving Kodi the same
     response stream from the new upstream's matching offset, with no
     Player.Stop / no rewind to t=0 / no visible blip.
 
-    Triggered via ``Player.Open({"file": "plugin://plugin.video.nzbdav/direct_play?..."})``
+    Triggered via a ``Player.Open`` call whose ``file`` is a
+    ``plugin://plugin.video.nzbdav/direct_play`` URL
     so the handle is real and setResolvedUrl actually starts playback.
     """
-    # Reject non-http(s) URLs before any HEAD: urlopen will happily
+    # Reject URLs that aren't HTTP or HTTPS before any HEAD: urlopen happily
     # dereference file:// (reading arbitrary local files) and ftp://,
     # and a junk scheme can throw deep inside urllib. _validate_url
     # is shared with stream_proxy so the policy stays consistent.
@@ -650,8 +651,8 @@ def _handle_play(handle, params):
     Parameters:
         handle (int): Kodi plugin handle used to report a resolved URL or to
             end the request.
-        params (dict): Query parameters from the plugin URL (e.g., "type",
-            "title", "year", "imdb", "season", "episode"); TMDBHelper may
+        params (dict): Query parameters from the plugin URL (for example, `type`,
+            `title`, `year`, `imdb`, `season`, `episode`); TMDBHelper may
             provide "_" placeholders which are normalized.
     """
     from resources.lib.http_util import notify
@@ -715,8 +716,8 @@ def _handle_search(handle, params):
 
     Parameters:
         handle (int): Kodi plugin handle provided by the caller (sys.argv[1]).
-        params (dict): Route query parameters (e.g., keys: "type", "title",
-            "year", "imdb", "season", "episode", "tmdb_id").
+        params (dict): Route query parameters (for example, keys: `type`, `title`,
+            `year`, `imdb`, `season`, `episode`, `tmdb_id`).
     """
     from resources.lib.http_util import notify
 
@@ -771,7 +772,7 @@ def _handle_script_play(params):
     Run the TMDBHelper player flow from a RunScript action.
 
     This path intentionally avoids plugin handle APIs. On CoreELEC/Kodi 21,
-    asking Kodi to open plugin://plugin.video.nzbdav/... as a playable URL can
+    asking Kodi to open a ``plugin://plugin.video.nzbdav/`` path as a playable URL can
     crash before this addon's router is invoked. RunScript enters Python
     directly, shows the NZB picker, then starts playback via resolve_and_play().
     """

@@ -45,7 +45,7 @@ def _history_context(max_no_video_retries, context, options):
 def _abort_poll_before_fetch(
     iteration, elapsed, download_timeout, dialog, nzo_id, title
 ):
-    """Handle the early-return poll abort conditions."""
+    """Handle the early return poll stop conditions."""
     if iteration > _resolver.MAX_POLL_ITERATIONS:
         _resolver.xbmc.log(
             (
@@ -54,8 +54,8 @@ def _abort_poll_before_fetch(
             ).format(_resolver.MAX_POLL_ITERATIONS, nzo_id),
             _resolver.xbmc.LOGERROR,
         )
-        # _fmt not _string: 30099 is "Download timed out after {} seconds"
-        # — using _string() would render the literal "{}" to the user.
+        # _fmt not _string: 30099 is "Download timed out after {} seconds"—
+        # using _string() would render the literal "{}" to the user.
         _resolver.xbmcgui.Dialog().ok(
             _resolver._addon_name(), _resolver._fmt(30099, int(elapsed))
         )
@@ -235,7 +235,7 @@ def _advertised_size_bytes(download_size):
         try:
             return max(0, int(float(text)))
         except (TypeError, ValueError, OverflowError):
-            # `inf` / overflowing exponents (e.g. "1e10000") parse as float but
+            # `inf` / overflowing exponents (for example, "1e10000") parse as float but
             # raise OverflowError on int(); treat as unknown (fail OPEN) like
             # every other unparseable size rather than letting it escape the
             # resolver (OverflowError is not in _RESOLVE_RUNTIME_ERRORS).
@@ -275,12 +275,12 @@ def _discovered_video_is_stub(
     stub rather than the real feature/episodes (#282).
 
     nzbdav writes a small placeholder ``.mp4`` when a job starts; the completed
-    WebDAV scan can return it seconds after submit, and streaming it plays ~30s
+    WebDAV scan can return it seconds after submit, and streaming it plays ~30 seconds
     of a stub instead of the feature.
 
     Two-stage, PACK-AGNOSTIC and latency-cheap:
 
-    1. If the PICKED file's own size is already at/above the floor
+    1. If the PICKED file's own size is already at or over the floor
        (``advertised * fraction``) it is plainly the real single feature -- not a
        stub -- so accept WITHOUT any extra network walk (the fast path for the
        common single-movie case).
@@ -291,7 +291,7 @@ def _discovered_video_is_stub(
        episodes sum to ~advertised and pass; a stub-only folder (movie or pack)
        falls far below and is rejected, so the poll loop keeps waiting. This is
        what makes the guard work for packs WITHOUT the old title-based exemption
-       that disabled it for them entirely.
+       that turned it off for them entirely.
     2b. The total clears the floor but may have been lifted over it by a SIBLING
        video while ``video_path`` is still the placeholder (the advertised size
        is the SELECTED result's own size, so one materialised sibling can clear
@@ -321,7 +321,7 @@ def _discovered_video_is_stub(
         picked_size = _webdav.get_video_file_size_hint(video_path)
     except Exception:  # pylint: disable=broad-except
         picked_size = 0
-    # Fast path: a picked file already at/above the floor is plainly the real
+    # Fast path: a picked file already at or over the floor is plainly the real
     # single feature -- accept without the extra folder-total walk (the common
     # single-movie case, where discovery has cached the picked file's size). A
     # SMALL or UNKNOWN picked size falls through to the folder-total walk, which
@@ -341,7 +341,7 @@ def _discovered_video_is_stub(
     except Exception:  # pylint: disable=broad-except
         return False
     # Stage 2b runs BEFORE the incomplete-total fail-open: if the picked file is
-    # a tiny placeholder dwarfed by a real sibling we ALREADY sized, it is the
+    # a tiny placeholder dwarfed by a real sibling ALREADY sized, it is the
     # job-start stub regardless of whether the rest of the folder summed cleanly.
     # So a transient second-PROPFIND glitch, or a sibling missing getcontentlength,
     # can no longer fail-open a KNOWN below-floor stub while a real sibling is
@@ -418,7 +418,7 @@ def _handle_history_result(
 ):
     """Handle history-based completion and failure states.
 
-    Use ``.get(...)`` for ``status`` and ``storage`` instead of bracket
+    Use ``.get()`` for ``status`` and ``storage`` instead of bracket
     access. ``not history`` filters out None and empty dicts, but a
     history row with the keys *omitted* (server bug, partial response)
     would still pass that guard and KeyError on subscript access. The
@@ -490,7 +490,7 @@ def _handle_completed_history(history, title, no_video_retries, context):
         _record_completed_inventory(history, title, storage, context, inventories)
         return True, stream_url, stream_headers, no_video_retries
 
-    # A truthy "unavailable" outcome means the happy-path return above was
+    # A truthy "unavailable" outcome means the happy-path return earlier was
     # skipped *because the body probe rejected a servable file*. Track that so
     # the exhaustion dialog explains the real failure (incomplete articles)
     # instead of misdirecting the user to WebDAV settings.
@@ -596,7 +596,7 @@ def _classify_completed_video(
         return "available", stream_url, stream_headers
     # nzbdav reports Completed and the container resolves, but the mid-file body
     # is unavailable (missing/unretained articles). Handing this to Kodi plays
-    # an empty stream that EOFs the instant the demuxer reaches the body — the
+    # an empty stream that EOFs the instant the demuxer reaches the body—the
     # missing-articles crash this guard prevents, mirroring the pre-submit
     # _completed_job_stream probe. Caller falls through to the retry budget.
     _resolver.xbmc.log(

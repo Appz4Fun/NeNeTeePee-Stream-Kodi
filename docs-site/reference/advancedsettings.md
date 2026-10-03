@@ -9,7 +9,7 @@ NeNeTeePee-Stream-Kodi's default serving mode for large non-MP4 files is **direc
 pass-through**, which offers native HTTP range seeking. Many CoreELEC and
 Amlogic devices run 32-bit Kodi builds, though. According to NeNeTeePee-Stream-Kodi's design
 notes, those builds can fail (`Open - Unhandled exception`) on pass-through
-streams whose advertised size is larger than roughly 4 GB, and disabling Kodi's
+streams whose advertised size is larger than roughly 4 GB, and turning off Kodi's
 in-memory cache avoids it. This is Kodi behavior: NeNeTeePee-Stream-Kodi doesn't detect your
 Kodi build or test for the problem.
 
@@ -22,8 +22,8 @@ There are two ways around this:
   tab) to a remux tier. NeNeTeePee-Stream-Kodi then serves large files through ffmpeg as an
   unsized stream, which hides the true file size from Kodi:
     - **Matroska remux** works, but seeking is **bounded** to what Kodi has
-      already buffered. The pipe has no byte ranges, and ffmpeg isn't
-      restarted at a new position.
+      already buffered. The pipe has no byte ranges, and the proxy doesn't
+      restart ffmpeg at a new position.
     - **fMP4 HLS** gives full random seeking, but it's experimental and gated
       on Dolby Vision profile. See
       [Playback, remux, and seeking](../features/playback-and-remux.md#dolby-vision-handling).

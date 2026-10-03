@@ -6,8 +6,8 @@
 
 These are the non-test-patched internals behind ``_search_all_providers`` and
 ``_tag_available`` (both of which stay in ``router`` because the suite imports /
-patches them). Names that the suite patches via ``resources.lib.router`` —
-``telemetry``, ``downloaded_pubdate_epochs`` — are
+patches them). Names that the suite patches via ``resources.lib.router``—
+``telemetry``, ``downloaded_pubdate_epochs``—are
 reached at call time through ``import resources.lib.router as _router`` so those
 ``@patch`` decorators keep resolving; everything else is imported normally.
 """
@@ -21,7 +21,7 @@ from resources.lib.nzbdav_api import completed_jobs_lookup_done
 
 # Pre-read defaults for the provider-search settings snapshot
 # (router._search_all_providers wraps every getter in _snapshot_settings_getter
-# seeded from this map, so worker threads never touch Kodi settings).
+# seeded from this map, so worker threads never access Kodi settings).
 # ``hydra_url`` seeds the schema default: the snapshot pre-reads every key, so
 # a URL left at its displayed default (absent from the profile XML) would
 # otherwise snapshot to "" and bypass the ``hydra._DEFAULT_HYDRA_URL`` mirror
@@ -212,10 +212,10 @@ def _dedupe_results_by_link(all_results):
 # is keyed by NAME only, so a name match alone collapses distinct uploads that
 # merely share a filename (a different release/resolution, or a repost at a
 # different retention). The tolerance is generous enough to absorb the gap
-# between an indexer's advertised NZB size and the actually-downloaded bytes
+# between an indexer's advertised NZB size and the bytes actually downloaded
 # (yEnc/par2/rar overhead) so a genuine cache hit is never hidden, while still
-# separating clearly-different files (e.g. a 1080p vs a 2160p sharing a generic
-# filename). True per-upload identity is the article list, but that is not
+# separating clearly different files (for example, a 1080p vs a 2160p sharing a
+# generic filename). True per-upload identity is the article list, but that is not
 # available at picker time without fetching every NZB.
 _COMPLETED_SIZE_MATCH_TOLERANCE = 0.15
 
@@ -243,8 +243,8 @@ def _completed_job_matches_result(result, completed_job):
     upload, disambiguating same-filename collisions by size.
 
     Fails OPEN when either size is unknown (keep the prior name-only behavior
-    rather than hide a real cache hit). A clearly-different size means a
-    different file — do not mark it ``DL`` or reuse its cached stream.
+    rather than hide a real cache hit). A clearly different size means a
+    different file—do not mark it ``DL`` or reuse its cached stream.
     """
     result_size = _result_size_bytes(result)
     try:
@@ -261,8 +261,8 @@ def _completed_job_matches_result(result, completed_job):
 
 # A same-name release posted on a *different day* is a different upload, even
 # when the size matches (a repost / re-rip). nzbdav history records only the
-# download time, never the Usenet post date, so we compare the result's
-# pubdate against the post-dates we captured at submit time (download_ledger).
+# download time, never the Usenet post date, so the check compares the result's
+# pubdate against the post-dates captured at submit time (download_ledger).
 # The tolerance absorbs sub-hour indexer/TZ formatting jitter for the SAME
 # post while still separating day-apart reposts cleanly.
 _PUBDATE_MATCH_TOLERANCE_SECONDS = 3600
@@ -270,14 +270,14 @@ _PUBDATE_MATCH_TOLERANCE_SECONDS = 3600
 
 def _result_pubdate_consistent_with_downloads(result):
     """Return whether a name+size-matched result's pubdate is consistent with
-    what we actually downloaded under that name.
+    what was actually downloaded under that name.
 
-    Fails OPEN (returns True) when we have no recorded pubdate for the name
-    (e.g. downloaded before this feature, or via an external invocation) or
-    the result advertises no parseable pubdate -- we'd rather keep the prior
-    name+size behavior than hide a real cache hit. Returns False only when we
-    DO have recorded pubdates and the result's pubdate matches none of them,
-    i.e. it is a same-name repost posted at a different time.
+    Fails OPEN (returns True) when there is no recorded pubdate for the name
+    (for example, downloaded before this feature, or via an external invocation) or
+    the result advertises no parseable pubdate, because keeping the prior
+    name+size behavior is better than hiding a real cache hit. Returns False only
+    when recorded pubdates DO exist and the result's pubdate matches none of them,
+    that is, it is a same-name repost posted at a different time.
     """
     import resources.lib.router as _router
 
@@ -320,11 +320,11 @@ def _tag_available_nzbget(results, settings_getter=None):
     cached-stream tag uses, gated by the same name+size(+recorded pubdate)
     identity checks. The matched row is attached as ``_nzbget_completed_job``
     so the NZBGet resolver plays the row's completed files directly instead
-    of re-submitting — NZBGet's duplicate check (DupeCheck=yes by default)
+    of re-submitting—NZBGet's duplicate check (DupeCheck=yes by default)
     would dupe-delete a re-submission of a SUCCESS item and fail the resolve.
     Deliberately does NOT attach ``_completed_job``: that hint is the nzbdav
-    cached-stream reuse contract. Always returns a lookup-done mapping — even
-    when the history RPC fails — because the per-selection nzbdav history
+    cached-stream reuse contract. Always returns a lookup-done mapping—even
+    when the history RPC fails—because the per-selection nzbdav history
     fallback it would otherwise trigger is meaningless on the NZBGet path.
     """
     from resources.lib import nzbget_api

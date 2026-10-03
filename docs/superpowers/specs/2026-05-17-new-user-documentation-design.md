@@ -1,4 +1,4 @@
-# New User Documentation Design
+# New user documentation design
 
 ## Goal
 
@@ -25,7 +25,7 @@ Secondary audience:
   play request never reaches the NeNeTeePee-Stream-Kodi result dialog.
 - Contributors who need the README to route readers to the right deeper docs.
 
-## Documentation Shape
+## Documentation shape
 
 Use a modest split rather than a large documentation rewrite:
 
@@ -44,7 +44,7 @@ Keep the existing contributor and architecture docs:
 - `CHANGELOG.md`: release history.
 - `CONTRIBUTING.md`, `SUPPORT.md`, and `AGENTS.md`: process docs.
 
-## README Design
+## README design
 
 The README should answer "what is this?" and then route new users into the
 quickstart before presenting advanced internals.
@@ -70,7 +70,7 @@ The TMDBHelper cache warmup material can remain in the README for the first pass
 if moving it would make the documentation change too broad. A later pass should
 move it to a dedicated doc such as `docs/tmdbhelper-cache-warmup.md`.
 
-## Quickstart Design
+## Quickstart design
 
 `docs/quickstart.md` should be a linear golden path:
 
@@ -92,7 +92,7 @@ The quickstart should treat the **Install Player File** button as the normal and
 recommended path. Manual TMDBHelper player file placement should not appear in
 the main flow.
 
-## TMDBHelper Setup Details
+## TMDBHelper setup details
 
 The TMDBHelper section should be verification-oriented:
 
@@ -110,7 +110,7 @@ Manual player-file placement belongs only in troubleshooting as an advanced
 recovery step after the button path, player refresh, and Kodi restart have been
 tried.
 
-## Troubleshooting Design
+## Troubleshooting design
 
 `docs/troubleshooting.md` should start with the most common setup problem and
 then proceed toward playback issues:
@@ -134,7 +134,7 @@ should be:
 5. Check `kodi.log` for player install messages.
 6. Use manual player-file placement only as an advanced recovery path.
 
-## Consistency Fixes
+## Consistency fixes
 
 The documentation pass should also fix known stale references:
 
@@ -147,7 +147,7 @@ The documentation pass should also fix known stale references:
 These are documentation consistency fixes only; they should not change addon
 behavior.
 
-## Out Of Scope
+## Out of scope
 
 This design does not include:
 
@@ -158,7 +158,7 @@ This design does not include:
 - A full rewrite of architecture documentation.
 - A full migration of the TMDBHelper cache warmup material.
 
-## Success Criteria
+## Success criteria
 
 The documentation change succeeds when a new user with running backend services
 can follow one path from README to quickstart and understand:

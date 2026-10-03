@@ -25,7 +25,7 @@ def build_zip(addon_dir="repo/plugin.video.nzbdav", output_dir="."):
 
     # Read version from addon.xml for versioned zip filename. Surface
     # actionable errors instead of letting the raw ET / KeyError stack
-    # trace escape — these are the two failure modes that actually happen
+    # trace escape—these are the two failure modes that actually happen
     # in practice (mistyped path, in-progress addon.xml edit).
     addon_xml_path = os.path.join(addon_dir, "addon.xml")
     if not os.path.isfile(addon_xml_path):

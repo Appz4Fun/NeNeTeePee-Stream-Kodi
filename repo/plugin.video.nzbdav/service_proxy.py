@@ -57,8 +57,8 @@ def _restart_dead_proxy(home, proxy_cls, proxy, player):
     try:
         proxy.stop()
     except Exception as e:  # pylint: disable=broad-except
-        # Logged at LOGWARNING (not LOGERROR) because we're about
-        # to spawn a fresh proxy anyway — the stop failure is
+        # Logged at LOGWARNING (not LOGERROR) because the code is about
+        # to spawn a fresh proxy anyway—the stop failure is
         # diagnostic-only, not user-actionable. Closes §H.3.
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: proxy.stop() raised during restart "
@@ -94,14 +94,14 @@ def _start_proxy(home, proxy_cls, monitor):
     """Start the stream proxy; return it, or None if startup failed.
 
     The proxy lives in this long-lived service process because plugin scripts
-    are short-lived — their daemon threads get killed when Kodi's
+    are short-lived—their daemon threads get killed when Kodi's
     CPythonInvoker destroys the interpreter after the script exits.
 
     On a start failure (socket bind / port in use, permission error, etc) the
-    service must not die silently — every plugin-side /prepare would then hang
+    service must not die silently—every plugin-side /prepare would then hang
     on "connection refused" with no log hint. Surface it, clear the port
-    property so callers fall back fast, then idle until Kodi shuts down (so we
-    aren't restarted every few seconds spamming the same failure) and return
+    property so callers fall back fast, then idle until Kodi shuts down (so the service
+    isn't restarted every few seconds spamming the same failure) and return
     None to signal the caller to exit.
     """
     proxy = proxy_cls()

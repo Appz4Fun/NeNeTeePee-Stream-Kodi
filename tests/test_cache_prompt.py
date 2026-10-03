@@ -242,7 +242,7 @@ def test_maybe_show_handles_none_from_getproperty_and_getsetting(
     after addon-reload races. The bare ``.lower()`` call would raise
     AttributeError, which isn't in _SUPPRESSED_EXCEPTIONS and would
     break playback resolution. The fix coerces with
-    ``(... or "").strip().lower()`` so the dialog still surfaces."""
+    ``(value or "").strip().lower()`` so the dialog still surfaces."""
     mock_has_cache.return_value = False
     addon = MagicMock()
     addon.getSetting.return_value = None  # bug trigger
@@ -267,9 +267,9 @@ def test_maybe_show_handles_none_from_getproperty_and_getsetting(
 def test_maybe_show_clamps_negative_total_bytes(
     mock_has_cache, mock_xbmcaddon, mock_xbmcgui
 ):
-    """Buggy upstream sizers (e.g. Newznab returning -1 for unknown)
-    previously made the dialog body show "-2.3 GB". The clamp via
-    ``max(0, int(...))`` falls negatives through to the size-less
+    """Buggy upstream sizers (for example, Newznab returning -1 for unknown)
+    previously made the dialog body show "-2.3 GB." The clamp via
+    ``max(0, int(size))`` falls negatives through to the size-less
     message (id 30154) instead of formatting -GB into 30153."""
     mock_has_cache.return_value = False
     mock_xbmcaddon.Addon.return_value = _make_addon(dismissed="false")

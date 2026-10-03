@@ -22,8 +22,8 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
 
         Reads the requested range using ``ctx["content_length"]`` /
         ``ctx["content_type"]``, streams whatever upstream can serve, probes
-        forward past unreadable regions, zero-fills the gaps, and — per the
-        runtime pass-through settings — may switch to a validated fallback
+        forward past unreadable regions, zero-fills the gaps, and—per the
+        runtime pass-through settings—may switch to a validated fallback
         source or retry the original range. Updates the session recovery
         counters, emits per-fallback / recovery-summary toasts, sends the final
         HTTP response (headers and body), and returns no value.
@@ -40,7 +40,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             start, end = 0, content_length - 1
 
         # Notify the read-ahead window of the requested start so a SEEK outside
-        # the buffered window discards it (no-op when read-ahead is disabled).
+        # the buffered window discards it (no-op when read-ahead is turned off).
         readahead_buffer = ctx.get(_sp._READAHEAD_BUFFER_KEY)
         if readahead_buffer is not None:
             readahead_buffer.note_seek(start)
@@ -63,7 +63,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             while st.current <= st.end:
                 if self._serve_proxy_loop_body(ctx, st) == "return":
                     return
-            # Normal loop exit means ``current > end`` — every requested byte
+            # Normal loop exit means ``current > end``—every requested byte
             # was delivered (streamed and/or zero-filled): a genuine completion.
             st.terminal_reason = "complete"
         except (BrokenPipeError, ConnectionResetError, _sp._socket.timeout):
@@ -96,18 +96,18 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             self.send_header(
                 "Content-Range", "bytes {}-{}/{}".format(start, end, content_length)
             )
-        # Force Connection: close on pass-through.  Kodi's CCurlFile opens a
+        # Force Connection: close on pass-through. Kodi's CCurlFile opens a
         # fresh TCP connection on every seek / retry, so keep-alive provides
-        # no benefit here.  But when Kodi reconnects after a CCurlFile error,
+        # no benefit here. But when Kodi reconnects after a CCurlFile error,
         # keep-alive left the OLD handler thread holding its upstream HTTP
-        # response + multi-megabyte TCP buffers, doubling our memory footprint
+        # response + multi-megabyte TCP buffers, doubling the process memory footprint
         # and eventually triggering MemoryError in the second handler's 1 MB
-        # chunk read.  Connection: close guarantees the previous handler
+        # chunk read. Connection: close guarantees the previous handler
         # unwinds as soon as Kodi finishes reading its current range.
         #
-        # The response header alone is advisory — BaseHTTPServer decides
+        # The response header alone is advisory—BaseHTTPServer decides
         # close_connection based on the REQUEST's Connection header, not the
-        # response's.  So we also set self.close_connection = True to
+        # response's. So the handler also sets self.close_connection = True to
         # actually tear down the socket after handle() returns.
         self.send_header("Connection", "close")
         self.close_connection = True
@@ -117,8 +117,8 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
     def _serve_proxy_set_write_timeout(self):
         """Apply the per-handler socket write timeout. Verbatim move."""
         # Write timeout so a stalled Kodi (DB vacuum, audio sync error, etc.)
-        # can't block this handler in wfile.write() forever.  Without this,
-        # a 14 s Kodi vacuum recreated the exact zombie pattern we fixed in
+        # can't block this handler in wfile.write() forever. Without this,
+        # a 14 s Kodi vacuum recreated the exact zombie pattern fixed earlier in
         # _serve_remux: first handler stuck writing into a full socket, Kodi
         # opens a second connection, two handlers + two upstream HTTP
         # responses live at once, MemoryError hits the second handler.
@@ -159,8 +159,8 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         ctx["passthrough_window_bytes"] = 0
         ctx["passthrough_stall_detected"] = False
         st.active_ctx = ctx
-        # fallback_pending_candidate: the 1-based candidate we switched to and
-        # await first bytes from. candidate_delivered flips True only at the
+        # fallback_pending_candidate: the 1-based candidate the proxy switched to and
+        # awaits first bytes from. candidate_delivered flips True only at the
         # success-toast sites; fallback_failed_to_notify defers a dead
         # candidate's toast until the successor read starts so a slow Kodi
         # notification never stalls the cutover. The finally block reports a
@@ -220,7 +220,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         # Patient forward-stall clock: monotonic time when an ESTABLISHED
         # stream first stalled with NO forward progress (None while it is
         # advancing; set on the first stalled pass and CLEARED on any genuine
-        # streamed byte below). The budget is consumed only by a truly-stuck
+        # streamed byte below). The budget is consumed only by a truly stuck
         # stream, never by a slow-but-healthy one.
         st.forward_stall_t0 = None
         st.stall_wait_budget = runtime_settings.get(
@@ -234,7 +234,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         Each step reads and mutates ``st`` exactly as the inline loop body did
         and returns a control signal: ``"return"`` (exit ``_serve_proxy``),
         ``"continue"`` (restart the loop), or None (proceed to the next step).
-        The first non-None signal short-circuits the rest of the iteration —
+        The first non-None signal short-circuits the rest of the iteration—
         identical to the original ``return``/``continue`` control flow.
         """
         steps = (
@@ -275,12 +275,12 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         _sp._record_density_window(st.density_window, "progress", written)
         st.current += written
         if st.fallback_failed_to_notify is not None:
-            # The prior candidate failed; emit its toast now — after
-            # this (successor) read has already begun — so it never
+            # The prior candidate failed; emit its toast now—after
+            # this (successor) read has already begun—so it never
             # delays the cutover.
             _sp._notify_fallback_outcome(st.fallback_failed_to_notify, False)
             st.fallback_failed_to_notify = None
-        # The candidate we switched to just delivered playable bytes — the
+        # The candidate the proxy switched to just delivered playable bytes—the
         # cutover worked.
         self._serve_proxy_mark_candidate_delivered(st, written)
         if st.current > st.end:
@@ -318,7 +318,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
 
         Fallback sources are attached but none validated yet, so instead of a
         hard close (which made a fallback-enabled stream MORE brittle than a
-        plain one — the "Silence of the Lambs went dark" regression) we fall
+        plain one—the "Silence of the Lambs went dark" regression) the handler falls
         through to give the primary a fresh retry-ladder chance; the existing
         skip-probe / zero-fill safeguards bound the damage. The pending
         candidate stays set so the finally block still emits its failure toast.
@@ -327,7 +327,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         must NOT reset the bound); any genuine streamed byte resets the count.
         The cap-fire runs AFTER the retry ladder + progress-reset, so the
         primary spends its FINAL ladder attempt before fallback_exhausted is
-        declared — WITHOUT reintroducing e3a74a1's immediate hard-close.
+        declared—WITHOUT reintroducing e3a74a1's immediate hard-close.
         """
         if st.total_streamed == st.last_fallthrough_streamed:
             st.fallback_pending_fallthroughs += 1
@@ -366,7 +366,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
                 # first-read-patient schedule; a mid-stream rebuffer keeps
                 # the long wait-on-primary ladder (58f3d4f). "First read"
                 # = a front-of-file open (start == 0) on which no REAL
-                # upstream bytes have streamed yet. We must NOT key on
+                # upstream bytes have streamed yet. Do NOT key on
                 # ``current`` alone: a byte-0 open serves its cached ~64KB
                 # prefetch prefix first, advancing ``current`` to 65536
                 # before this ladder runs, so ``current == 0`` wrongly
@@ -382,7 +382,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             _sp._update_session_recovery_state(self.server, ctx, streamed=retry_written)
             _sp._record_density_window(st.density_window, "progress", retry_written)
             # The candidate delivered its first bytes via the retry ladder
-            # (its initial read was a download-high-water short read) — the
+            # (its initial read was a download-high-water short read)—the
             # cutover worked.
             self._serve_proxy_mark_candidate_delivered(st, retry_written)
             if retry_written:
@@ -398,7 +398,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         """Reset or bump the no-progress streak after the ladder. Verbatim move."""
         # F-route: the retry ladder has now had its chance to coax the
         # primary forward. If this whole iteration delivered bytes, the
-        # primary IS still downloading — reset the streak and keep
+        # primary IS still downloading—reset the streak and keep
         # waiting on it (58f3d4f's intent). If the result is STILL a
         # clean AWAITING_DOWNLOAD short read with no progress, the
         # primary's needed region is stuck/dead; after a bounded number
@@ -409,11 +409,11 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             st.awaiting_download_no_progress = 0
             ctx["_awaiting_download_no_progress"] = 0
             # SM-1 (F4): genuine streamed progress means the chain is
-            # alive — reset the bounded-exhaustion counters so a later
+            # alive—reset the bounded-exhaustion counters so a later
             # fruitless read starts from a fresh budget, not a stale count.
             st.fallback_pending_fallthroughs = 0
             st.last_fallthrough_streamed = -1
-            # Genuine forward progress — drop the patient-stall clock so a
+            # Genuine forward progress—drop the patient-stall clock so a
             # healthy still-downloading stream never consumes the wait
             # budget (only CONSECUTIVE no-progress time is counted).
             st.forward_stall_t0 = None
@@ -441,7 +441,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         """
         st.awaiting_download_no_progress = 0
         # SM-1 (F4): a successful cutover is genuine progress on the fallback
-        # chain — reset the bounded-exhaustion counters so a freshly-switched
+        # chain—reset the bounded-exhaustion counters so a freshly switched
         # source gets its FULL fruitless-read budget instead of inheriting the
         # stale primary-driven count (which could trip fallback_exhausted after
         # ~one fruitless read).
@@ -449,7 +449,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         st.last_fallthrough_streamed = -1
         st.active_ctx = ctx
         if st.fallback_pending_candidate is not None:
-            # Switching away from a candidate that never delivered a byte — it
+            # Switching away from a candidate that never delivered a byte—it
             # failed. Defer the toast to after the next candidate's read starts
             # (handled at the top of the loop) so a slow notification can't
             # stall the cutover.
@@ -485,7 +485,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         instant give-up that Kodi reads as demuxer EOF (the 4K REMUX black
         screen). Hold the client open and re-read with abortable backoff until
         the budget elapses, then fall through to the existing give-up paths.
-        forward_stall_t0 resets on genuine progress, so only a truly-stuck
+        forward_stall_t0 resets on genuine progress, so only a truly stuck
         stream exhausts the budget. Scope: established only (issue-#214
         fast-fail preserved for fresh seeks) and AWAITING_DOWNLOAD /
         UPSTREAM_ERROR only; runs AFTER the cutover routes so a validated
@@ -511,7 +511,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             # reported through the established taxonomy (no new exit path).
             # Mark the session so the terminal starvation guard fires even
             # on a pure slow-backend give-up (AWAITING with no 5xx outage
-            # recorded) — otherwise that give-up would be silent.
+            # recorded)—otherwise that give-up would be silent.
             ctx["forward_stall_exhausted"] = True
             _sp.xbmc.log(
                 (

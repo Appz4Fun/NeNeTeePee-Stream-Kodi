@@ -94,7 +94,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
         try:
             thread.start()
         except RuntimeError:
-            # Out of thread budget — match the sibling prefetch spawns and fail
+            # Out of thread budget—match the sibling prefetch spawns and fail
             # soft so prevalidation never wedges /prepare.
             ctx.pop("_fallback_prevalidation_thread", None)
 
@@ -237,12 +237,12 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _readahead_defer_start(buf, monitor):
-        """Yield to startup before the first read-ahead fetch; True to abort.
+        """Yield to startup before the first read-ahead fetch; True to stop.
 
         Lets the byte-0 prefetch and Kodi's first range fetch win nzbdav's
         connection budget before the read-ahead issues its first upstream
         read. Abortable so a shutdown during the defer exits cleanly. Returns
-        True when the loop should not start (stop requested or abort).
+        True when the loop should not start (stop requested or Kodi shutting down).
         """
         return buf.should_stop() or monitor.waitForAbort(
             _sp._READAHEAD_START_DEFER_SECONDS
@@ -252,7 +252,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
     def _readahead_prefetch_once(ctx, buf, monitor, content_length):
         """Run one read-ahead fetch iteration; return True to stop the loop.
 
-        Returns True when the lead has reached EOF or an abort was signalled
+        Returns True when the lead has reached EOF or a Kodi shutdown was signalled
         during a backoff wait (the loop should `return`); False to continue
         to the next iteration. Mirrors the original inline body's throttle /
         error-backoff branches exactly.
@@ -288,7 +288,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
         )
         if not body:
             # Best-effort upstream error or awaiting-download: back off and
-            # retry. The real serve path owns recovery; do not touch the
+            # retry. The real serve path owns recovery; do not modify the
             # recovery taxonomy / notifications / counters here.
             return monitor.waitForAbort(_sp._READAHEAD_ERROR_BACKOFF_SECONDS)
         buf.append(fetch_offset, body)
@@ -332,7 +332,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
 
         Kodi reads the MKV cues/SeekHead at the file tail before it can play. For
         a usenet-backed file nzbdav fetches those end-of-file articles on demand,
-        so Kodi's first tail read otherwise stalls 1-4s mid-startup — long enough
+        so Kodi's first tail read otherwise stalls 1-4 s mid-startup—long enough
         to drain its not-yet-full cache and wedge the CoreELEC audio clock
         (permanent black screen). Issue a throwaway read of the last
         _TAIL_PREWARM_BYTES here, during the prepare gap, so nzbdav has the tail
@@ -376,7 +376,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
         """Warm the file tail in parallel with the byte-0 prefetch at prepare.
 
         Runs on its own thread so it neither delays /prepare nor serializes
-        behind the byte-0 prefetch — Kodi reads the tail FIRST, so warming it
+        behind the byte-0 prefetch—Kodi reads the tail FIRST, so warming it
         must start as early as possible. Fails soft when out of thread budget,
         matching the sibling prefetch spawns.
         """

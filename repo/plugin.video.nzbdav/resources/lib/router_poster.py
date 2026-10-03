@@ -20,7 +20,7 @@ def _lookup_episode_info(imdb, tmdb_id=""):
     """Look up show title and episode info from IMDB ID via TMDB API.
 
     Used when TMDBHelper passes only IMDB ID without season/episode
-    (e.g., from calendar widgets).
+    (for example, from calendar widgets).
     """
     import resources.lib.router as _router
 

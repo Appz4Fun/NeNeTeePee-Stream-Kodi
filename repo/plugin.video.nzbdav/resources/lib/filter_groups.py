@@ -14,7 +14,7 @@ import xbmcaddon
 import xbmcgui
 
 # ---------------------------------------------------------------------------
-# Known release groups — master list for multiselect dialogs
+# Known release groups—master list for multiselect dialogs
 # ---------------------------------------------------------------------------
 
 ALL_RELEASE_GROUPS = [

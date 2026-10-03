@@ -53,13 +53,13 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
 
         For fMP4, the "next segment exists" signal is only trusted
         if the next segment was created after the current ffmpeg
-        spawn — otherwise a stale seg_n+1 from a prior generation
+        spawn—otherwise a stale seg_n+1 from a prior generation
         can make this return True while the new seg_n is still
         being written.
         """
         # Snapshot _spawn_time under the lock so a concurrent respawn
-        # can't update it between our two checks below. The atomic
-        # getattr-after-lock pattern guarantees we compare every mtime
+        # can't update it between the two checks below. The atomic
+        # getattr-after-lock pattern guarantees the code compares every mtime
         # against a single consistent generation boundary.
         with self._lock:
             spawn_time = self._spawn_time
@@ -68,7 +68,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
             return False
         if self._next_segment_signals_complete(seg_n, spawn_time):
             return True
-        # Final segment (or ffmpeg briefly mid-transition) — fall back
+        # Final segment (or ffmpeg briefly mid-transition)—fall back
         # to mtime stability.
         try:
             mtime = _sp.os.path.getmtime(path)
@@ -78,7 +78,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
             return self._fmp4_segment_complete(seg_n, mtime, spawn_time)
         if (_sp.time.time() - mtime) * 1000.0 > _sp._HLS_SEGMENT_MTIME_STABLE_MS:
             return True
-        # If this is the terminal segment (no N+1 will ever exist),
+        # If this is the terminal segment (no N+1 ever exists),
         # ffmpeg should have exited by now.
         if seg_n >= self.total_segments - 1:
             return self._terminal_ffmpeg_exited()
@@ -89,7 +89,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
 
         In fMP4 mode the next segment is only trusted if it was created
         after the latest spawn (a stale seg_n+1 from a prior generation
-        must not mark the freshly-written seg_n complete).
+        must not mark the freshly written seg_n complete).
         """
         next_path = self.segment_path(seg_n + 1)
         if not _sp.os.path.exists(next_path):
@@ -108,7 +108,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         Requires THIS segment to be from the current ffmpeg generation
         (mtime >= spawn_time). Without this guard a backward seek can
         read a stale ``seg_n.m4s`` from a prior generation whose mtime
-        is far in the past — the mtime-stability check is trivially
+        is far in the past—the mtime-stability check is trivially
         true for such a file. The bytes are valid but were produced
         against a different edit list / timestamp base, so Kodi's HLS
         demuxer glitches or stalls when splicing them.
@@ -134,11 +134,11 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         spawn. So any init.mp4 on disk post-spawn is from the
         current generation, and any seg_<start_segment>.m4s on
         disk post-spawn was written by the current ffmpeg too
-        (a prior generation cannot have produced a file we just
+        (a prior generation cannot have produced a file that was just
         unlinked).
 
         The "seg_<start_segment>.m4s exists" signal proves ffmpeg
-        has finished the init box — the fMP4 HLS muxer writes
+        has finished the init box—the fMP4 HLS muxer writes
         init.mp4 fully before opening any segment file.
         """
         if self.segment_format != "fmp4":
@@ -155,9 +155,9 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         #   * The caller (``wait_for_init`` / poll loop) tolerates a
         #     stale read: if ``_start_segment`` has just advanced, the
         #     stale value points at a segment path that already exists
-        #     on disk (the previous target) — returning True early is
+        #     on disk (the previous target)—returning True early is
         #     correct because init.mp4 is complete in both generations.
-        #     If we read the stale value and return False, the next
+        #     If the poll reads the stale value and returns False, the next
         #     poll cycle (~50 ms later) reads the fresh value.
         #   * Holding self._lock here would serialize the polling reader
         #     against the respawn writer and defeat the purpose of the
@@ -168,7 +168,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         #     703) or switches to asyncio with thread-pool executors,
         #     the "atomic int read" assumption weakens.
         #   * If ``_start_segment`` ever grows into a tuple / object
-        #     (e.g. (generation_id, seg_n)), the read is no longer
+        #     (for example, (generation_id, seg_n)), the read is no longer
         #     atomic and a reader can see a torn value.
         #   * Drop-in mitigation when that day comes: replace the bare
         #     int with a ``threading.Event`` that the respawn path
@@ -181,7 +181,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         return _sp.os.path.exists(first_seg_path)
 
     def _cache_canonical_init_bytes(self, init_path):
-        """Cache the first init.mp4 we see so later requests (and respawn
+        """Cache the first init.mp4 seen so later requests (and respawn
         generations with different edit lists) serve byte-identical data.
         See the docstring on self._canonical_init_bytes for the full
         rationale. No-op once the cache is populated.
@@ -215,7 +215,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         segment, so a poll-only implementation would deadlock on
         the very first request.
 
-        CRITICAL B: if ffmpeg IS running (e.g. Kodi re-fetches the
+        CRITICAL B: if ffmpeg IS running (for example, Kodi re-fetches the
         init after a forward seek to seg 40), this method must NOT
         rewind the producer back to seg 0. Any running ffmpeg is
         left at its current _start_segment target.
@@ -228,8 +228,8 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
             if self._closed:
                 return None
             # Fast path: files already on disk for the current
-            # generation. The on-disk check IS the truth-source —
-            # _init_ready is just a redundant cached flag we set
+            # generation. The on-disk check IS the truth-source—
+            # _init_ready is just a redundant cached flag set
             # below for any downstream consumer that wants to skip
             # the file syscall on subsequent calls.
             if self._init_file_complete():
@@ -237,17 +237,17 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
                 self._cache_canonical_init_bytes(init_path)
                 return init_path
             self._spawn_for_init_if_dead()
-            # If ffmpeg is alive, leave it alone — it's either
+            # If ffmpeg is alive, leave it alone—it's either
             # already headed toward the right segment, or the init
             # re-fetch is racing a valid seek that's already
-            # produced init.mp4 once and will produce it again
+            # produced init.mp4 once and produces it again
             # after the seek-restart cleans up.
             if self._init_file_complete():
                 self._init_ready = True
                 return init_path
             # Use Monitor.waitForAbort instead of bare time.sleep so a
             # Kodi shutdown during HLS warmup unblocks immediately.
-            # waitForAbort returns True iff Kodi is shutting down — bail
+            # waitForAbort returns True iff Kodi is shutting down—bail
             # out early in that case. TODO.md §H.3.
             if _sp.xbmc.Monitor().waitForAbort(0.25):
                 return None
@@ -257,8 +257,8 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
         """Block until seg_n is complete on disk, or timeout expires.
 
         If ffmpeg is either not running or running in a position that
-        will never produce seg_n, kicks off a restart aimed at seg_n.
-        Returns the segment file path on success, or None on timeout.
+        never produces seg_n, kicks off a restart aimed at seg_n.
+        Returns the segment path on success, or None on timeout.
 
         For fmp4 producers, the loop additionally gates on
         _init_file_complete so a seg_n read can't race a
@@ -275,7 +275,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
                 continue
             if self._segment_complete(seg_n):
                 return self.segment_path(seg_n)
-            # Do we need to (re)start ffmpeg to eventually reach seg_n?
+            # Does ffmpeg need a (re)start to eventually reach seg_n?
             self._ensure_ffmpeg_headed_for(seg_n)
             # Monitor.waitForAbort instead of time.sleep so a Kodi shutdown
             # during HLS segment wait unblocks immediately. TODO.md §H.3.
@@ -288,7 +288,7 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
 
         seg_n cannot be served until the current generation's init is
         on disk AND ffmpeg has moved past the init write phase. For
-        segment requests we DO want to head toward seg_n specifically —
+        segment requests the producer must head toward seg_n specifically—
         the caller asks for a specific segment, so the "seg_n <
         start_segment" restart in _ensure_ffmpeg_headed_for is the right
         call (unlike wait_for_init, which preserves the generation).

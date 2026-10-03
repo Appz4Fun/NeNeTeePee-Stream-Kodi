@@ -38,7 +38,7 @@ def _get_tmdb_api_key(settings_getter):
 
     Reads ONLY through the supplied ``settings_getter`` (which, on the
     RunScript/script-play path, is ``router._get_script_setting`` reading
-    settings.xml off disk). It must never touch ``xbmcaddon.Addon`` — that
+    settings.xml off disk). It must never call ``xbmcaddon.Addon``—that
     binding can SIGSEGV CoreELEC in the script context (see
     ``webdav._get_settings``), and ``resolve_tvdb_id`` runs on that path.
 
@@ -58,9 +58,9 @@ def _cache_path():
     import os
 
     # Resolve the profile dir via special:// rather than
-    # xbmcaddon.Addon(...).getAddonInfo("profile"): resolve_tvdb_id can run in
+    # xbmcaddon.Addon().getAddonInfo("profile"): resolve_tvdb_id can run in
     # the RunScript/script-play path (script_player -> _search_all_providers),
-    # where the codebase deliberately avoids xbmcaddon.Addon — repeated/odd
+    # where the codebase deliberately avoids xbmcaddon.Addon—repeated/odd
     # binding use there can SIGSEGV CoreELEC (see webdav._get_settings and
     # router._get_script_setting). xbmcvfs.translatePath needs no Addon handle.
     profile = xbmcvfs.translatePath("special://profile/addon_data/plugin.video.nzbdav")
@@ -70,7 +70,7 @@ def _cache_path():
 
 
 def _load_file_cache():
-    # A disk cache must never break a search — swallow any path/IO/parse error.
+    # A disk cache must never break a search—swallow any path/IO/parse error.
     try:
         with open(_cache_path(), "r") as handle:
             data = json.load(handle)
@@ -177,7 +177,7 @@ def _resolve_tvdb_via_api(http_get, key, tmdb_id, imdb):
         return _tvdb_from_external_ids(payload)
     except Exception as error:  # pylint: disable=broad-except
         # HTTPError/URLError str() can echo the failing URL, which embeds the
-        # TMDB api_key — redact before logging (same defense as hydra/prowlarr).
+        # TMDB api_key—redact before logging (same defense as hydra/prowlarr).
         from resources.lib.http_util import redact_text
 
         xbmc.log(

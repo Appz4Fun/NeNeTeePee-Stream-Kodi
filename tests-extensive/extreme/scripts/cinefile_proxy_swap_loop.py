@@ -15,7 +15,7 @@ fault hits, stream_proxy:
    keeps shoving bytes back to Kodi over the same TCP connection.
 
 Kodi never sees the upstream change. Player time keeps advancing
-straight through the cutover — no Player.Stop, no rewind to t=0, no
+straight through the cutover—no Player.Stop, no rewind to t=0, no
 visible buffer wait beyond the few hundred ms it takes to validate
 the fallback.
 
@@ -56,7 +56,7 @@ OUT_DIR = Path(os.environ.get("CINEFILE_OUT_DIR", "/tmp/cinefile_proxy")).resolv
 
 # Each iteration assigns one path as primary-via-fault-proxy and the
 # other as fallback-direct so the cutover happens. PATH_A / PATH_B
-# come from runtime PROPFIND (see ``main()``) — they're not hardcoded
+# come from runtime PROPFIND (see ``main()``)—they're not hardcoded
 # any more so a re-seeded run with different UUIDs still works.
 HOST_FAULTPROXY = os.environ.get("FAULT_PROXY_HOST", "nzbdav-extreme-fault-proxy:8280")
 HOST_DIRECT = os.environ.get("NZBDAV_DIRECT_HOST", "nzbdav-extreme-nzbdav:8080")
@@ -145,7 +145,7 @@ def stop_player():
 def trigger_direct_play(primary_url: str, fallback_urls: list[str]):
     """Tell Kodi to Player.Open the addon's /direct_play plugin URL.
 
-    The addon's setResolvedUrl hands Kodi a stream_proxy URL — Kodi
+    The addon's setResolvedUrl hands Kodi a stream_proxy URL—Kodi
     plays bytes from that proxy for the entire session, while the
     proxy swaps upstreams under the hood when the primary fails.
     """
@@ -270,7 +270,7 @@ def _discover_paths() -> tuple[str, str]:
     pairs = discover_cinefile_storages(limit=2)
     if len(pairs) < 2:
         raise SystemExit("FATAL: need 2 CiNEFiLE storages, got {}".format(len(pairs)))
-    # _propfind_mkv_path returns an already-quoted href ("/content/...");
+    # _propfind_mkv_path returns an already-quoted href ("/content/<path>");
     # url_with_auth takes the path component verbatim, so just pass it
     # through.
     return pairs[0][1], pairs[1][1]

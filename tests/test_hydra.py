@@ -153,7 +153,7 @@ def test_search_hydra_episode_prefers_tvdbid(mock_settings):
 @patch("resources.lib.hydra._get_settings")
 def test_search_hydra_no_caps_tvdb_fallback_strips_tvdbid(mock_settings):
     """With no provider caps, the legacy title fallback must drop the failing
-    tvdbid — otherwise the broadened retry stays constrained by it and returns
+    tvdbid—otherwise the broadened retry stays constrained by it and returns
     the same empty result (issue #318 regression)."""
     mock_settings.return_value = ("http://hydra:5076", "testkey")
     empty_rss = (
@@ -714,7 +714,8 @@ def test_parse_results_missing_link():
 
 
 def test_parse_results_html_entities_in_title():
-    """HTML entities (e.g. &amp;) in titles should be decoded by the XML parser."""
+    """HTML entities (such as `&amp;`) in titles should be decoded by the XML
+    parser."""
     xml_text = """<?xml version="1.0" encoding="UTF-8"?>
     <rss version="2.0" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
         <channel>
@@ -884,7 +885,7 @@ def test_source_url_hostname_extracts_host_from_url():
 
 def test_resolve_indexer_prefers_newznab_attr_over_source_element():
     """When a Newznab <attr name="indexer"> was parsed, _resolve_indexer
-    returns it directly — no <source> fallback is consulted."""
+    returns it directly—no <source> fallback is consulted."""
     import xml.etree.ElementTree as ET
 
     from resources.lib.hydra import _resolve_indexer
@@ -949,7 +950,7 @@ def test_get_settings_mirrors_schema_default_url_for_raw_getters():
     # The injected settings_getter (_get_script_setting, and the raw-XML getters
     # the NZBGet dupe loader is built with) reads the profile settings.xml,
     # where a setting left at its DISPLAYED default is simply absent -- the
-    # getter returns the fallback we pass. The live-Kodi branch returns the
+    # getter returns the fallback the caller passes. The live-Kodi branch returns the
     # schema default (http://localhost:5076), so the getter branch must mirror
     # it or a default-URL Hydra setup silently loses every hydra_url-gated
     # feature off the live path (round-3 #372 review finding).
@@ -969,7 +970,7 @@ def test_get_settings_mirrors_schema_default_url_for_raw_getters():
 def test_hydra_import_constructs_no_module_scope_addon():
     # router_search imports hydra at module scope (for _DEFAULT_HYDRA_URL), so
     # importing hydra must be side-effect free: a module-scope
-    # xbmcaddon.Addon(...) would run during import in RunScript/early-GUI
+    # xbmcaddon.Addon() would run during import in RunScript and early GUI
     # contexts that deliberately avoid the Kodi settings API until the safe
     # getter path is reached (review finding: import side effect).
     assert not hasattr(hydra, "addon")

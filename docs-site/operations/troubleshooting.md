@@ -116,7 +116,7 @@ Check the search backend first:
    **Clear Cache**, and search again.
 5. Try a popular movie or episode that you know has a Usenet release.
 
-If results were found but your filters rejected all of them, the picker opens
+If the search found results but your filters rejected all of them, the picker opens
 straight into its show-all view, with the header **Showing all N sources
 (filters off)**. Each rejected row carries a **FILTERED:** tag that names the
 first filter that rejected it (`resolution`, `HDR`, `audio`, `codec`,
@@ -246,7 +246,7 @@ Notifications during playback tell you what the proxy is doing:
 | **nzbdav unreachable — playback may glitch** | The proxy lost its connection to nzbdav. Check that nzbdav is running and reachable. |
 | **nzbdav can't keep up — playback stalled** | nzbdav couldn't deliver data fast enough. Your Usenet provider or nzbdav may be overloaded. |
 | **fall back to candidate #N successful** / **was a failure** | A backup release took over, or failed to. See [Fallback streams](../features/fallback-streams.md). |
-| **Skipped N bytes across N recoveries** | Missing articles were skipped. You may notice a brief glitch. |
+| **Skipped N bytes across N recoveries** | The proxy skipped missing articles. You may notice a brief glitch. |
 | **Stream aborted after repeated zero-fill recovery** | Too much of the file was unreadable. Pick another release. |
 
 For the internals behind these behaviors, see

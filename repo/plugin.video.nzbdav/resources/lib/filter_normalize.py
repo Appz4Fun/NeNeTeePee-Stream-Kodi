@@ -94,7 +94,7 @@ def _normalize_parsed_meta(parsed):
     resolution = _RESOLUTION_MAP.get(raw_res, raw_res)
 
     # Dedup HDR / audio lists. PTT can return duplicates when a release
-    # name mentions the same token twice (e.g. "Atmos.TrueHD.Atmos");
+    # name mentions the same token twice (for example, "Atmos.TrueHD.Atmos");
     # the duplicates broke combo-rank logic that uses set-membership +
     # list-position cues (Atmos+TrueHD combo, language filter). Use a
     # dict-as-ordered-set to preserve PTT's first-occurrence order.
@@ -149,7 +149,7 @@ def _mapped_str_list(parsed, key, mapping):
 
 
 def _normalize_fallback_meta(parsed):
-    """Normalize a regex-fallback parsed dict (string-only filtering)."""
+    """Normalize a regular-expression-fallback parsed dict (string-only filtering)."""
     raw_res = parsed.get("resolution", "") or ""
     resolution = _RESOLUTION_MAP.get(raw_res, raw_res)
     hdr_list = _mapped_str_list(parsed, "hdr", _HDR_MAP)

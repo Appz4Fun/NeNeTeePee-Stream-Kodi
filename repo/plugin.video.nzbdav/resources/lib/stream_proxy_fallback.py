@@ -9,7 +9,7 @@ validation, fallback-source normalization + dedup + merge, content-length hint
 probing, session TTL/LRU bookkeeping, proxy-URL session-id extraction, HLS
 segment-resource parsing, seek detection, and per-handler lease/context touch
 helpers. All names are re-exported by ``stream_proxy`` so existing references
-and test patches (e.g. ``stream_proxy._validate_url``) keep resolving.
+and test patches (for example, ``stream_proxy._validate_url``) keep resolving.
 
 Plain constants are imported from ``stream_proxy``; parent helpers and any
 monkeypatch target (``xbmc``, ``_notify``, ``urlopen``) are reached at call
@@ -36,7 +36,7 @@ def _validate_url(url):
 
     - **Scheme allow-list**: only ``http://`` / ``https://`` accepted.
       Catches ``file://``, ``ftp://``, and the junk a local process
-      might POST to our loopback proxy.
+      might POST to the loopback proxy.
     - **Control-char reject**: any byte below 0x20 (CR, LF, NUL, tab,
       etc.) in the URL string is rejected. Without this, a URL with an
       embedded ``\\r\\n`` could inject an HTTP header into ffmpeg's
@@ -171,7 +171,7 @@ def _expired_session_ids(sessions, keep_session, now):
 
 
 def _least_recently_used_session(sessions, keep_session):
-    """Id of the least-recently-active evictable session, or None."""
+    """Id of the least-recently active evictable session, or None."""
     removable = sorted(
         (_sp._session_last_activity(ctx, 0), session_id)
         for session_id, ctx in sessions.items()
@@ -191,18 +191,18 @@ def _fallback_source_needs_prevalidation(source):
     """Whether a fallback source still has prevalidation work pending."""
     if source.get("failed") or source.get("validated"):
         return False
-    # Either a resolved URL ready to fingerprint, or an nzo-only standby we
-    # can resolve into one.
+    # Either a resolved URL ready to fingerprint, or an nzo-only standby that
+    # can be resolved into one.
     return bool(source.get("stream_url") or source.get("nzo_id"))
 
 
 def _fallback_dedup_key(source):
     # Dedup by nzo_id when present: a pushed source always carries
     # stream_url="" (jobs only know their nzo_id), but the live cutover
-    # resolves stream_url in place — so a (nzo_id, stream_url) tuple key
+    # resolves stream_url in place—so a (nzo_id, stream_url) tuple key
     # would treat a re-push of the same nzo as new once it's resolved,
     # re-adding a duplicate that un-fails the source. Fall back to the
-    # URL only for url-only sources that have no nzo_id.
+    # URL only for sources that have no nzo_id.
     nzo_id = source.get("nzo_id", "")
     if nzo_id:
         return ("nzo", nzo_id)
@@ -250,7 +250,7 @@ def _storage_to_webdav_path(storage):
 
 
 def _extract_session_id_from_proxy_url(proxy_url):
-    """Pull the session id back out of a `/stream/<id>` or `/hls/<id>/...` URL.
+    """Pull the session id back out of a `/stream/<id>` or `/hls/<id>/<resource>` URL.
 
     Used by the orphan-session cleanup path on /prepare write-failure.
     Returns the session id string or None if the URL doesn't match the
@@ -282,7 +282,7 @@ def _notify_error(message):
 def _is_seek_request(current_byte_pos, requested_byte_pos):
     """Determine if a range request is a genuine seek or a continuation.
 
-    Returns True if the request is far from the current position (>10MB
+    Returns True if the request is far from the current position (>10 MB
     gap or backward), meaning ffmpeg should be restarted with -ss.
     """
     delta = requested_byte_pos - current_byte_pos
@@ -292,7 +292,7 @@ def _is_seek_request(current_byte_pos, requested_byte_pos):
 
 
 def _is_segment_resource(resource):
-    """True if a parsed HLS resource is a ("segment", seg_n, ext) tuple."""
+    """True if a parsed HLS resource is a ``("segment", seg_n, ext)`` tuple."""
     return isinstance(resource, tuple) and resource[0] == "segment"
 
 
@@ -346,7 +346,7 @@ def _release_handler_lease(ctx):
 
 
 def _stream_context_session_id(path):
-    """Extract a session id from a /stream/<id> or /hls/<id>/... path.
+    """Extract a session id from a /stream/<id> or /hls/<id>/<resource> path.
 
     Returns the session id string, or None when the path is malformed or
     not a session-scoped stream/HLS path.

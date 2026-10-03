@@ -26,7 +26,7 @@ def install_kodi_mocks() -> None:
         sys.modules[module_name] = MagicMock()
 
     # Install realistic defaults on the xbmcaddon MagicMock. Without these,
-    # ``xbmcaddon.Addon().getSetting("anything")`` returns a MagicMock —
+    # ``xbmcaddon.Addon().getSetting("anything")`` returns a MagicMock,
     # which makes ``getSetting("enabled").lower() == "true"`` produce
     # MagicMock comparisons (always False), hiding bugs in production
     # paths that depend on real string-valued settings.
@@ -34,7 +34,7 @@ def install_kodi_mocks() -> None:
     # Keeping ``Addon`` itself as a MagicMock preserves every test pattern
     # that relies on ``.return_value`` / ``.return_value.getSetting.return_value``
     # (used in test_nzbdav_api, test_stream_proxy, test_router, test_i18n).
-    # We only seed the leaf methods with str defaults so unstubbed code
+    # Seed only the leaf methods with str defaults so unstubbed code
     # sees real-looking values.
     _install_addon_defaults()
 
@@ -43,9 +43,9 @@ def install_kodi_mocks() -> None:
     # Without this, the default MagicMock return is itself a MagicMock,
     # which is truthy when evaluated as a bool. Production code uses
     # ``if xbmc.Monitor().waitForAbort(0.25): return None`` to detect
-    # Kodi shutdown — a truthy MagicMock causes every loop to think Kodi
+    # Kodi shutdown—a truthy MagicMock causes every loop to think Kodi
     # is shutting down and bail out on iteration 1, breaking unrelated
-    # HLS/poll/probe tests. Tests that need to simulate an abort can
+    # HLS/poll/probe tests. Tests that need to simulate a shutdown can
     # override the leaf return per-test.
     _install_monitor_defaults()
 
@@ -93,7 +93,7 @@ def _install_monitor_defaults() -> None:
     xbmc_mod = sys.modules["xbmc"]
     # Side-effect (not just return_value) so the mock actually waits for
     # the requested duration. Production code reads `waitForAbort(0.05)`
-    # as "sleep up to 50 ms", and tests like the HlsProducer prepare
+    # as "sleep up to 50 ms," and tests like the HlsProducer prepare
     # argv-rejection window depend on that timing window for ffmpeg
     # crashes to be detected at the right poll cycle. Without the real
     # sleep, the loop iterates microseconds-fast and the argv window
@@ -149,8 +149,8 @@ class _FakePlayer:
     def play(self, item="", listitem=None, windowed=False, startpos=-1):
         # Kept as a no-op by default. Changing play() to auto-transition
         # into the playing state would break any existing test that
-        # asserts isPlaying()==False after construction — the original
-        # behavior we don't want to silently regress. Tests that need
+        # asserts isPlaying()==False after construction—the original
+        # behavior that must not silently regress. Tests that need
         # the transition call ``_set_is_playing(True)`` explicitly.
         pass
 
@@ -167,7 +167,7 @@ class _FakeWindowXMLDialog:
     ``xbmcgui`` is a bare MagicMock module; subclassing one of its
     attributes makes the subclass ITSELF a MagicMock, so the subclass
     body's methods are unreachable and dialog behavior is untestable
-    (same failure class as the ``xbmc.Player`` note above). Minimal
+    (same failure class as the ``xbmc.Player`` note). Minimal
     real base: a property store, per-id control mocks, and a no-op
     modal lifecycle.
     """

@@ -69,7 +69,7 @@ def _augmented_pool_and_first_peer(
 
     Returns ``(augmented, known_first_peer, disabled)``; ``disabled`` is True
     when the augmented pool provably cannot host a fallback peer. Extracted
-    verbatim — every call is preserved in order.
+    verbatim—every call is preserved in order.
     """
     extra_uploads = _fetch_fallback_extra_uploads(selected, settings_getter)
     augmented = chain(results or [], extra_uploads or [])
@@ -94,10 +94,10 @@ def _fetch_fallback_extra_uploads(selected, settings_getter):
     """Fetch same-title alternate uploads from Hydra's duplicate API (fail-soft).
 
     The picker UX still shows one row per release for clean UI, but the
-    fallback worker needs real same-release/different-upload peers — those are
+    fallback worker needs real same-release/different-upload peers—those are
     exactly what nzbdav-rs needs to swap to without interrupting playback when
     the primary stream's articles fail. Returns ``[]`` when the lookup is
-    disabled or raises.
+    turned off or raises.
     """
     import resources.lib.router as _router
 

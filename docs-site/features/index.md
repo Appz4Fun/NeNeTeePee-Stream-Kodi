@@ -11,8 +11,9 @@ devices.
 
 -   :material-magnify: __[Search and indexers](search-and-indexers.md)__
 
-    Query NZBHydra2, Prowlarr, and direct Newznab indexers. See how queries are
-    built, how id-based TV/movie search works, and how results are merged.
+    Query NZBHydra2, Prowlarr, and direct Newznab indexers. See how NeNeTeePee-Stream-Kodi
+    builds queries, how ID-based TV and movie search works, and how it merges
+    results.
 
 -   :material-filter-variant: __[Quality filtering and sorting](quality-filtering.md)__
 
@@ -51,7 +52,7 @@ flowchart TD
     FB -. verified alternate .-> PLAY
 ```
 
-!!! info "Stable vs Beta"
+!!! info "Stable versus Beta"
     Several features on these pages first shipped in 2.0.0-beta.x and are
     marked **Beta feature**. Stable (1.2.3) doesn't have them yet. See
     [Beta channel and beta features](../getting-started/beta-channel.md).

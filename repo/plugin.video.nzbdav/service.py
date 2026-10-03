@@ -74,7 +74,7 @@ def _coerce_resume_offset(value):
 
 # Bounds for retry settings. Without clamps, a typo of "99999" would
 # wedge the player monitor for ~28 hours between attempts (delay) or
-# never give up retrying a permanently-broken stream (max_retries).
+# never give up retrying a permanently broken stream (max_retries).
 # The accepted ranges below cover every realistic recovery scenario:
 #   * max_retries: 0 disables retries entirely; 10 already takes >1 minute
 #     of cumulative backoff with the default 5 s delay.
@@ -89,7 +89,7 @@ _STREAM_RETRY_DELAY_MAX = 300
 def _clamp_int_setting(setting_id, value, lo, hi):
     """Clamp an integer setting and log when user input was out of range.
 
-    Mirrors the helper in ``stream_proxy.py`` / ``resolver.py`` — kept
+    Mirrors the helper in ``stream_proxy.py`` / ``resolver.py``—kept
     as a private duplicate (rather than imported) so ``service.py``
     stays importable in the early service-startup phase before
     ``resources.lib`` is fully wired into ``sys.path`` for some
@@ -118,8 +118,8 @@ class PlaybackState(Enum):
 
         IDLE -> MONITORING   (new stream signalled via window properties)
         MONITORING -> ERROR  (onPlayBackError fires)
-        ERROR -> MONITORING  (retry succeeds — onAVStarted resets)
-        ERROR -> IDLE        (max retries exceeded, or retries disabled)
+        ERROR -> MONITORING  (retry succeeds—onAVStarted resets)
+        ERROR -> IDLE        (max retries exceeded, or retries turned off)
         MONITORING -> IDLE   (onPlayBackStopped or onPlayBackEnded)
     """
 
@@ -132,7 +132,7 @@ class NzbdavPlayer(xbmc.Player):
     """Persistent playback monitor running inside the background service.
 
     Registered once when the service starts and kept alive for the entire Kodi
-    session.  The plugin (resolver.py) signals a new stream by writing window
+    session. The plugin (resolver.py) signals a new stream by writing window
     properties; ``tick()`` is called every second from the service loop to check
     those properties and handle retries.
     """
@@ -146,7 +146,7 @@ class NzbdavPlayer(xbmc.Player):
         # GIL makes individual attribute writes atomic but does NOT
         # protect "if state == X: state = Y" sequences. Without the lock
         # a callback could flip state between tick's check and tick's
-        # write, e.g. user-stop racing into a retry attempt.
+        # write, for example, user-stop racing into a retry attempt.
         # ``RLock`` so tick → _retry_playback → onAVStarted on the same
         # thread doesn't self-deadlock. Closes TODO.md §H.2-H16.
         self._state_lock = threading.RLock()
@@ -162,7 +162,7 @@ class NzbdavPlayer(xbmc.Player):
         self._proxy = proxy
 
     def _cleanup_proxy_session(self):
-        """Kill any active proxy ffmpeg processes.
+        """Stop any active proxy ffmpeg processes.
 
         Called from onPlayBackStopped / onPlayBackEnded so a clean stop
         immediately tears down the remux chain instead of leaving ffmpeg
@@ -184,7 +184,7 @@ class NzbdavPlayer(xbmc.Player):
         the clamps applied below an unclamped 99999 retry_delay would
         freeze the monitor loop for ~28 h between retries. The clamp
         helper logs the original value at LOGWARNING so users debugging
-        "why didn't my stream retry?" see the cause in kodi.log.
+        "why didn't the stream retry?" see the cause in kodi.log.
         """
         addon = xbmcaddon.Addon("plugin.video.nzbdav")
         enabled = addon.getSetting("stream_auto_retry").lower() == "true"
@@ -245,11 +245,11 @@ class NzbdavPlayer(xbmc.Player):
             # TODO.md §H.2-M35.
             self._play_time = time.monotonic()
             title = self._title
-        # Clear all three properties — not just ACTIVE — so a future
+        # Clear all three properties—not just ACTIVE—so a future
         # second resolver call that fails before re-writing them
         # (network blip, _play_via_proxy crash) doesn't leak the prior
-        # session's URL/title into the next monitor cycle. The values we
-        # need are now snapshotted onto self.* fields. TODO.md §H.2-L29.
+        # session's URL/title into the next monitor cycle. The values the
+        # monitor needs are now snapshotted onto self.* fields. TODO.md §H.2-L29.
         self._clear_props(
             (
                 _PROP_ACTIVE,
@@ -259,8 +259,8 @@ class NzbdavPlayer(xbmc.Player):
                 _PROP_STREAM_TITLE,
             )
         )
-        # Raise the persistent liveness flag now that we are monitoring this
-        # stream. Unlike ``_PROP_ACTIVE`` (consumed above), this stays set until
+        # Raise the persistent liveness flag now that the service is monitoring this
+        # stream. Unlike ``_PROP_ACTIVE`` (consumed earlier), this stays set until
         # onPlayBackStopped/Ended clears it, giving the plugin-process fallback
         # submit worker a reliable cross-process "still playing" signal.
         try:
@@ -300,7 +300,7 @@ class NzbdavPlayer(xbmc.Player):
         the in-process ``state["stop"]`` event the fallback submit worker waits
         on lives in the resolver/plugin process and can't be set from this
         service process. Clearing this shared window property lets that worker
-        abort its prewarm wait when the user stops/ends playback during the
+        cancel its prewarm wait when the user stops/ends playback during the
         standby-submit window. ``nzbdav.active`` is cleared as a belt-and-braces
         measure (it is normally already consumed by ``_check_active``).
         """
@@ -319,7 +319,7 @@ class NzbdavPlayer(xbmc.Player):
         """Transition to IDLE and clear the IPC properties (incl. liveness).
 
         Used by tick()'s terminal failure paths (never-started, retries
-        disabled, max retries reached, retry relaunch failed). Like the
+        turned off, max retries reached, retry relaunch failed). Like the
         onPlayBackStopped/Ended callbacks, this clears ``nzbdav.playing`` so the
         plugin-process fallback submit worker observes the session as dead and
         aborts its standby wait. ERROR is NOT terminal -- a retry that recovers
@@ -363,10 +363,10 @@ class NzbdavPlayer(xbmc.Player):
             resume_key = self._resume_key
             position = self._last_position
             av_started = self._av_started
-        # Cleanup outside the lock — `_cleanup_proxy_session` calls
+        # Cleanup outside the lock—`_cleanup_proxy_session` calls
         # `proxy.clear_sessions()` which kills ffmpeg processes; that
         # must not run while a Kodi callback thread holds the lock or
-        # the service tick will block waiting for ffmpeg to exit.
+        # the service tick blocks waiting for ffmpeg to exit.
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Playback stopped for '{}'".format(title),
             xbmc.LOGINFO,
@@ -394,8 +394,8 @@ class NzbdavPlayer(xbmc.Player):
     def onPlayBackError(self):
         """Transition to ERROR state. Dialogs are shown from tick().
 
-        Kodi player callbacks run on internal threads — showing a modal dialog
-        here could deadlock or freeze the UI. So we only set the state flag
+        Kodi player callbacks run on internal threads—showing a modal dialog
+        here could deadlock or freeze the UI. So this callback only sets the state flag
         and let tick() handle user notification on the service loop thread.
         """
         with self._state_lock:
@@ -492,13 +492,13 @@ class NzbdavPlayer(xbmc.Player):
         return self._await_playback_start()
 
     def _await_playback_start(self):
-        """Poll until the relaunched stream starts, fails, or abort (10s).
+        """Poll until the relaunched stream starts, fails, or the user cancels (10 s).
 
-        Returns True if playback is confirmed live, False on abort. When the
+        Returns True if playback is confirmed live, False on cancel. When the
         poll window elapses without a terminal transition the final state
         decides: anything other than ERROR is treated as a successful retry.
         """
-        # Wait for playback to start or fail (10s timeout)
+        # Wait for playback to start or fail (10 second timeout)
         for _ in range(20):
             with self._state_lock:
                 state = self._state
@@ -521,7 +521,7 @@ class NzbdavPlayer(xbmc.Player):
         State reads are all done under ``_state_lock`` so a Kodi
         callback (player thread) can't flip state mid-tick. The lock
         is released around long-running calls (``_save_position``,
-        ``_retry_playback``) — those re-acquire internally as needed.
+        ``_retry_playback``)—those re-acquire internally as needed.
         Closes TODO.md §H.2-H16.
         """
         self._check_active()
@@ -657,7 +657,7 @@ def _clear_stale_ipc_properties():
 def _run_tick(player, consecutive_failures):
     """Run one player.tick(), absorbing crashes; return the failure streak.
 
-    A crash inside tick() used to kill the whole service, silently breaking
+    A crash inside tick() used to stop the whole service, silently breaking
     all future streams until Kodi restart. Absorb it so the loop keeps
     running. The full trace is rate-limited to the first failure of a streak;
     subsequent failures log a single line with the streak counter so a
@@ -703,7 +703,7 @@ def _shutdown_proxy(proxy):
 
 
 def main():
-    """Service entry point — runs for the lifetime of Kodi."""
+    """Service entry point—runs for the lifetime of Kodi."""
     monitor = xbmc.Monitor()
 
     _clear_stale_ipc_properties()
@@ -721,7 +721,7 @@ def main():
         xbmc.LOGINFO,
     )
 
-    # Track consecutive tick failures so we can escalate a chronic bug
+    # Track consecutive tick failures to escalate a chronic bug
     # from "log once per tick" (flooding the log with the same trace) to
     # a one-shot "service is unhealthy, please file an issue" warning.
     consecutive_tick_failures = 0
