@@ -26,6 +26,8 @@ that run a test or open a dialog.
     have working defaults. Change the **Advanced** tab in particular
     only when you have a specific reason.
 
+See the [illustrated settings guide](../settings/index.md) for real Kodi screenshots, every individual option, and commit-pinned source footnotes.
+
 ## Playback backend
 
 | Setting | Default | Purpose |
@@ -174,7 +176,7 @@ See [Set up TMDBHelper](../getting-started/tmdbhelper.md).
 ## Quality filters
 
 Every format toggle defaults to `true`. **Other / Unknown** independently
-controls missing or unlisted metadata in each category, including HDR.
+controls missing or unlisted metadata in each category, including HDR. If every named switch in a category is off, recognized values become unrestricted in that category.
 See [Quality filtering](../features/quality-filtering.md) for the full options.
 
 | Group | Settings (id) |
@@ -189,7 +191,7 @@ See [Quality filtering](../features/quality-filtering.md) for the full options.
 A separate tab after Quality filters: 48 language toggles, one per language
 (`filter_<language>`, from `filter_arabic` to `filter_vietnamese`), plus **Other / Unknown Language**
 (`filter_unknown_language`). All default to `true`. Spanish includes Latino.
-If **Chinese** is on, releases tagged Cantonese or Urdu also pass.
+If **Chinese** is on, releases tagged Cantonese or Urdu also pass. If every named language is off, recognized languages are unrestricted; Other / Unknown Language still controls unknown metadata.
 
 ## Keyword filters
 
@@ -210,7 +212,7 @@ known release groups. An empty list means no exclusions.
 | Setting | ID | Default | Values |
 |---------|----|---------|--------|
 | Sort by | `sort_order` | `0` (Relevance) | `0` Relevance, `1` Size (largest first), `2` Size (smallest first), `3` Age (newest first), `4` Age (oldest first) |
-| Max results | `max_results` | `25` | Number of results requested from each provider (clamped to 1–10000), and the length of the filtered list in the picker. The picker's show-all view isn't truncated. |
+| Max results | `max_results` | `25` | Provider request limits are clamped to 1–10000. The filtered picker uses the raw positive integer as its limit; 0 or less leaves it unbounded. The picker's show-all view is not truncated. |
 | Auto-select best match (skip result list) | `auto_select_best` | `false` | Play the top-ranked result that passed your filters and skip the picker. If nothing passed, the picker opens instead. |
 
 ## Advanced
@@ -231,7 +233,7 @@ These settings tune polling, caching, stream resilience, fallback streams, and t
 | Poll interval (seconds) | `poll_interval` | `1` | Seconds between download-status checks. Clamped to 1–60. |
 | Download timeout (seconds) | `download_timeout` | `3600` | Give up if the download isn't ready within this time. Clamped to 60–86400. |
 | NZB submit timeout (seconds) | `submit_timeout` | `300` | Max wait for nzbdav to accept the NZB (it fetches and parses the NZB before replying). Clamped to 5–600. |
-| Clear download queue when starting a new download | `clear_queue_on_submit` | `0` (Ask) | `0` Ask, `1` Always clear, `2` Never. Excludes this title's own in-flight job, and never clears a completed copy you're about to reuse. |
+| Clear download queue when starting a new download | `clear_queue_on_submit` | `0` (Ask) | For nzbdav / InfiniDysk only: `0` Ask, `1` Always clear, `2` Never. NZBGet ignores this option. Excludes this title's own in-flight job, and never clears a completed copy you're about to reuse. |
 
 ### Search cache
 
@@ -255,9 +257,9 @@ See [Fallback streams](../features/fallback-streams.md).
 
 | Setting | ID | Default | Description |
 |---------|----|---------|-------------|
-| Enable fallback streams | `fallback_streams_enabled` | `true` | Master switch for mid-playback source switching. |
-| Maximum standby fallback streams | `fallback_streams_max` | `5` | Backups kept ready per title. Hard ceiling 5. |
-| Seconds into playback before submitting fallback backups | `fallback_submit_delay` | `120` | Delay before NeNeTeePee-Stream-Kodi submits backups. `0` submits immediately. |
+| Enable fallback streams | `fallback_streams_enabled` | `true` | Enable nzbdav / InfiniDysk proxy fallback or NZBGet duplicate-backup submission. StreamNZB ignores it. |
+| Maximum standby fallback streams | `fallback_streams_max` | `5` | nzbdav / InfiniDysk clamps the standby limit to 0–5. NZBGet honors the positive duplicate-backup count without that ceiling; 0 or less turns off its duplicate backups. |
+| Seconds into playback before submitting fallback backups | `fallback_submit_delay` | `120` | Delay before backups are submitted. `0` submits immediately. |
 
 ### Proxy
 

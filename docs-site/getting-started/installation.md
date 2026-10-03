@@ -4,6 +4,8 @@ The recommended way to install NeNeTeePee-Stream-Kodi is through the **Appz4Fun 
 repository**, which delivers automatic updates. A manual zip install is also
 available.
 
+For a tested picture walkthrough, see [install through the Beta repository](repositories.md), including File manager, repository ZIP installation, Video add-ons, and Configure.
+
 ## Choose a channel
 
 The [Appz4Fun Kodi repository](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo)

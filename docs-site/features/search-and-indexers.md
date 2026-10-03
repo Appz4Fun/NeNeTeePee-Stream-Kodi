@@ -143,3 +143,13 @@ TMDBHelper player always runs a fresh search.
 
 For the internal mechanics, including the query planner, caps handling, and the exact
 result fields, see [How it works → Search pipeline](../how-it-works/search-pipeline.md).
+
+## Kodi Indexers screenshots
+
+![NZBHydra2 and Prowlarr settings in Kodi](../images/kodi/indexers-01.png)
+
+![Direct and custom indexers and the optional TMDB API key](../images/kodi/indexers-09.png)
+
+These are current-source Kodi screens with example credentials. The [Indexers tab guide](../settings/indexers.md) includes the intervening scrolled screens and explains every provider switch, endpoint, key, indexer ID list, and action. For long values, use [phone copy and paste](../getting-started/phone-remote.md). Follow [TMDB API setup](../getting-started/tmdb-api.md) for the optional identity-lookup key.
+
+StreamNZB manages its indexers on the server. If it uses NZBHydra2 as its only Newznab endpoint, follow the [duplicate age threshold recommendation](streamnzb-backend.md#nzbhydra2-as-the-only-streamnzb-indexer) so Hydra does not hide same-release copies before StreamNZB receives them.

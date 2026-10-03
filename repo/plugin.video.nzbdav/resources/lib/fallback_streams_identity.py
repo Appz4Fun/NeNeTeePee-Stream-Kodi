@@ -621,10 +621,12 @@ _TITLE_STOP_TOKENS = frozenset(
 )
 
 
-_TITLE_TOKEN_CACHE_TITLE_KEY = "_fallback_title_tokens_title"  # nosec B105—cache key
+# These cache keys are re-exported by fallback_streams and read through _fs.
+# They identify cached title data, not credentials.
+_TITLE_TOKEN_CACHE_TITLE_KEY = "_fallback_title_tokens_title"  # nosec B105
 
 
-_TITLE_TOKEN_CACHE_VALUE_KEY = "_fallback_title_tokens"  # nosec B105—cache key
+_TITLE_TOKEN_CACHE_VALUE_KEY = "_fallback_title_tokens"  # nosec B105
 
 
 def _is_content_title_token(token):

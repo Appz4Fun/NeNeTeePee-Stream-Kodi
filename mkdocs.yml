@@ -91,9 +91,12 @@ nav:
   - Get started:
       - Prerequisites: getting-started/prerequisites.md
       - Install the add-on: getting-started/installation.md
+      - Install through the Beta repository: getting-started/repositories.md
       - Beta channel and beta features: getting-started/beta-channel.md
       - Configure connections: getting-started/configuration.md
       - Set up TMDBHelper: getting-started/tmdbhelper.md
+      - Set up the TMDB API key: getting-started/tmdb-api.md
+      - Copy and paste from your phone: getting-started/phone-remote.md
       - Play your first title: getting-started/first-playback.md
   - Backend services:
       - Overview: backends/index.md
@@ -108,7 +111,16 @@ nav:
       - Fallback streams: features/fallback-streams.md
       - NZBGet playback: features/nzbget-backend.md
       - StreamNZB playback: features/streamnzb-backend.md
-      - StreamNZB backend: features/streamnzb-backend.md
+  - Kodi settings guide:
+      - Overview: settings/index.md
+      - Playback backend: settings/backend.md
+      - Indexers: settings/indexers.md
+      - Player Installation: settings/player-installation.md
+      - Quality Filters: settings/quality-filters.md
+      - Languages: settings/language-filters.md
+      - Keyword Filters: settings/keyword-filters.md
+      - Sorting and relevance: settings/sorting.md
+      - Advanced: settings/advanced.md
   - Settings reference:
       - All settings: reference/settings.md
       - advancedsettings.xml and seeking: reference/advancedsettings.md
