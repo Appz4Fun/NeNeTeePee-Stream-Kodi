@@ -1,0 +1,240 @@
+{
+  "captured_on": "2026-10-03",
+  "environment": "OrbStack kodi-ebml, Ubuntu ARM64, Kodi 21.3, Estuary, 1280x720",
+  "addon_source_commit": "db07f61d4090a0c89ec8461ee9b3ca34f9607aa6",
+  "beta_catalog_addon": "NZB-DAV 2.0.0-beta.2",
+  "debug_overlay": false,
+  "credential_values": "synthetic example values for add-on screens; Kodi remote password masked",
+  "screenshots": [
+    {
+      "file": "addon-browser.png",
+      "sha256": "797e8c2f4d5ddac973a830d10689b8805014f99d87aa8b2864c1f6d0faa13ba3",
+      "context": "addon-source"
+    },
+    {
+      "file": "addon-configure.png",
+      "sha256": "1382f8ac3a35bb36fbdc632be7f4c77d7ed7193967d65e99ca01266123408042",
+      "context": "released-beta"
+    },
+    {
+      "file": "advanced-01.png",
+      "sha256": "8e904ffbb3685a6fac95d4a34a54effc175e02b7df6f1568ec2cde17992ccd66",
+      "context": "addon-source"
+    },
+    {
+      "file": "advanced-02.png",
+      "sha256": "9cd8512636fbedc66984bc17fce129ce4df525a19c2b6b8c58a1bd9a4c236bcb",
+      "context": "addon-source"
+    },
+    {
+      "file": "advanced-03.png",
+      "sha256": "9de91fbab752fc457e02f6c98f0a51a25e17d129dd28e78e8beda5d0def131c9",
+      "context": "addon-source"
+    },
+    {
+      "file": "backend-nzbdav.png",
+      "sha256": "9f2340b2d8b1b3e7ad4425300974d42c669822f60c284a91ad9d19e1b69a9bd6",
+      "context": "addon-source"
+    },
+    {
+      "file": "backend-nzbget.png",
+      "sha256": "202cc3548ac5e7e5f56d7d1f59d81fd5c30bf6c5f0498a6a4cbe86da19de02a2",
+      "context": "addon-source"
+    },
+    {
+      "file": "backend-streamnzb.png",
+      "sha256": "80becf432abddb54419dc346b9f36ce4b1b3cd5dabb551d97edb766514b314e3",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-01.png",
+      "sha256": "99f590757908e8102b8a18090a4e10c0b78c326dec10d86807d8b1138aec4c36",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-02.png",
+      "sha256": "a2423a83b10f3b447f2450d1ab654fccde0f5724a26bd472514ae37693f38acb",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-03.png",
+      "sha256": "beb0fa73d20a6b76b4c47ceab17e718b99563e39d78f7d6ac604aaae4ac3fdfe",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-04.png",
+      "sha256": "9021089cce2d6292578c98dbd2963dba0f8d550604d409a5b649e6ae6d494925",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-05.png",
+      "sha256": "b07b85c6eb3a7cbd634d3a57e893e955945e3961e0d25883ed448fae946db5b4",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-06.png",
+      "sha256": "48f630446c2d656b8567b406a8bb95f41c86e1bf2b86603147b1050a12197136",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-07.png",
+      "sha256": "732091bad895cf60d7c50df6753f509e3f334d79b3d6d105de8c47dc569e1dfd",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-08.png",
+      "sha256": "4cbc465586941d20c624a8c11cbd7afa19435e8a3c798ff51c6c209ce6fe8571",
+      "context": "addon-source"
+    },
+    {
+      "file": "indexers-09.png",
+      "sha256": "4bed84010b5fa66251ffa0ad9a85dee9daad77b909f461800cadb11e6956a48d",
+      "context": "addon-source"
+    },
+    {
+      "file": "keyword-filters-01.png",
+      "sha256": "d9ef93084d0c9d5d433a4019c9c4413c0bad965e1294f84f542c135c264748fd",
+      "context": "addon-source"
+    },
+    {
+      "file": "keyword-filters-02.png",
+      "sha256": "e0eac34766104f9ca944686bbf8027f5f7f5f956e0e8f478670b33ed35f6ea83",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-01.png",
+      "sha256": "a0fa316ca3d09ee8b4f39ce505e854add2afe2d00943559d7759378a0e33c789",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-02.png",
+      "sha256": "64c38b585d13cf5301b9f68c5dd278c737ef9ba36e8cf565307842001ad3dace",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-03.png",
+      "sha256": "82f1d462434283e92a4d2e6acf40252d8165f72fa8fe0b9b53dcf6087a23098d",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-04.png",
+      "sha256": "f3cf2468235f668964c3f9bd6613c3d8bb445ff9b04d9f4782b09643719a8b67",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-05.png",
+      "sha256": "3016bdd79cb001b9506e1643511da5cc7d3446f16ef9112177baa574f8c444ab",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-06.png",
+      "sha256": "6ab8638ecec044801c877072dccd0c7140e7112ec0be03cbd904df84146fcee2",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-07.png",
+      "sha256": "e20cf5c3fb3c6bdddda05fb6d699a60db35275586f6b610c52dec2bf9d182baa",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-08.png",
+      "sha256": "3a71bf722ab8135cbb4de3708ca2859a7002c40968af524d54d870490d5b24b2",
+      "context": "addon-source"
+    },
+    {
+      "file": "languages-09.png",
+      "sha256": "4e3fb73c22a4765331b868661e6933a438a8cfb9e01496c590fa620fd4685545",
+      "context": "addon-source"
+    },
+    {
+      "file": "player-installation-01.png",
+      "sha256": "7a6b6d203ef3d0a48703044257d2b5c5d74e25ffbd2275a46f37781300ef99f1",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-01.png",
+      "sha256": "acbb04c63162b9be0235f6f9eb52da43522e266879fd035e2d3fbabb47e9a270",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-02.png",
+      "sha256": "63c0f127797b6063fa024093953d53afca71c07983d8be2237a968e5c0da7237",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-03.png",
+      "sha256": "175bb78f7c46331edd044ad3543becd93648b9ce1a3d8b4b5c207a279eb02d38",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-04.png",
+      "sha256": "ad960ddc8ece2ba567db1fa61be2cc7f4ef630112a3e54c0fe5ea4560af37f8b",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-05.png",
+      "sha256": "b22293e95466424daa384b6cca77c449f240afe4266a73909f861c7ce99f022d",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-06.png",
+      "sha256": "a2304f73b8cafd445dac7d6b4c93f7ca3b7aa3e0529ac5acdf682c68e9dfc4af",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-07.png",
+      "sha256": "5587853da21535872bb4f03e4e402df0339c724ddb712ff08914e4c636f40345",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-08.png",
+      "sha256": "cb254583bdf74a512530dda08bdfcf3d5415221b07fb53ca5a7361d3bb04ce99",
+      "context": "addon-source"
+    },
+    {
+      "file": "quality-filters-09.png",
+      "sha256": "5571b4bdeb6cfaa4cc39aee577674fda29a5e9dcb33d9723230736c87ec0afcf",
+      "context": "addon-source"
+    },
+    {
+      "file": "remote-control.png",
+      "sha256": "f596a59f17b756c2a35dea5bf57b3bc26d8e45349361a17afb281d119a972c70",
+      "context": "kodi-services"
+    },
+    {
+      "file": "repository-addon-install.png",
+      "sha256": "ecb907a840007a5e3adcb4c0d2ac632a2ed80bb5d2931e2dae6fde010d5ec5c7",
+      "context": "released-beta"
+    },
+    {
+      "file": "repository-beta-categories.png",
+      "sha256": "72ddff21debfe8992f05c4a9d6bcb18993b9380b65f62aa2332559a128fead8f",
+      "context": "released-beta"
+    },
+    {
+      "file": "repository-beta-video.png",
+      "sha256": "9805b811a5b145d2546694c7a965cf5992e07b863def494a24e95fede89f7386",
+      "context": "released-beta"
+    },
+    {
+      "file": "repository-list.png",
+      "sha256": "83e18b464cb64f57bd58984a629fa219e4de1e69b86db83bf4c85add11ee8be7",
+      "context": "released-beta"
+    },
+    {
+      "file": "repository-local-source.png",
+      "sha256": "ae44957d388449bcaba0d02419f8991623ef3de3d9cb941b0319166a1b6b5531",
+      "context": "released-beta"
+    },
+    {
+      "file": "repository-zip-file.png",
+      "sha256": "7c59a4ac05d17a98e3b3ca3bb390e0556f969ad80049bc6731ea8cc66f62df6b",
+      "context": "released-beta"
+    },
+    {
+      "file": "sorting-01.png",
+      "sha256": "5165996a544a47d5a9a7f4822749c0f248eb172848e51e34433f4ff5a394e2be",
+      "context": "addon-source"
+    }
+  ]
+}

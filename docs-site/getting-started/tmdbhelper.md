@@ -2,8 +2,8 @@
 
 Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
 
-NeNeTeePee-Stream-Kodi plays titles you choose in **TMDBHelper**. To connect the two, you
-install an NeNeTeePee-Stream-Kodi *player file* into TMDBHelper and set it as your default
+[TMDBHelper](https://github.com/jurialmunkey/plugin.video.themoviedb.helper) is required for this title-browsing workflow. NeNeTeePee-Stream-Kodi plays titles you choose in TMDBHelper. To connect the two, you
+install a NeNeTeePee-Stream-Kodi *player file* into TMDBHelper and set it as your default
 player.
 
 ## Install the player file
@@ -35,12 +35,9 @@ NeNeTeePee-Stream-Kodi protects your data while doing this:
     **Install TMDBHelper Player** again after an update to pick up player file
     changes.
 
-<!--
-Screenshot placeholder. Capture the NeNeTeePee-Stream-Kodi Player Installation settings tab
-and the "Player installed to: TMDBHelper" notification.
-To add: save it as docs-site/images/install-player.png, then replace this
-comment with:  ![Install TMDBHelper Player](../images/install-player.png)
--->
+![Player Installation settings](../images/kodi/player-installation-01.png)
+
+See [every player installation option](../settings/player-installation.md) for commit-pinned installer references.
 
 ### Install into another add-on's player list
 
@@ -59,12 +56,7 @@ route doesn't change any setting in the other add-on.
 2. In TMDBHelper settings, set **Default player (Movies)** and **Default player
    (TV Shows)** to **NeNeTeePee-Stream-Kodi**.
 
-<!--
-Screenshot placeholder. Capture TMDBHelper's player selection or the Default
-player (Movies/TV) dropdown showing NeNeTeePee-Stream-Kodi selected.
-To add: save it as docs-site/images/tmdbhelper-default-player.png, then replace
-this comment with:  ![TMDBHelper default player](../images/tmdbhelper-default-player.png)
--->
+The add-on's [optional TMDB API key](tmdb-api.md) belongs to its Indexers settings. It is separate from the player selection and TMDBHelper's own API settings.
 
 ## Why NeNeTeePee-Stream-Kodi uses a script player
 
@@ -72,7 +64,7 @@ The NeNeTeePee-Stream-Kodi player file launches playback with a `RunScript` acti
 `plugin://` URL. This is deliberate: on CoreELEC and Kodi 21, asking Kodi to
 open a `plugin://` URL as a playable item can crash the player before NeNeTeePee-Stream-Kodi's
 code even runs. `RunScript` enters the add-on directly, shows the source picker,
-and then starts playback. which is stable on those devices. You don't need to
+and then starts playback. You don't need to
 configure anything for this; the installed player file already does it.
 
 ## Verify
