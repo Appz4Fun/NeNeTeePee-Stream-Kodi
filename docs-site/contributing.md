@@ -1,6 +1,6 @@
 # Contributing
 
-NZB-DAV is open source under GPL-3.0-or-later. Contributions are welcome. This
+NeNeTeePee-Stream-Kodi is open source under GPL-3.0-or-later. Contributions are welcome. This
 page is a quick orientation; the authoritative contributor contract lives in
 [`AGENTS.md`](https://github.com/Appz4Fun/nzbdavkodi/blob/main/AGENTS.md) in the
 repository.
@@ -9,7 +9,7 @@ repository.
 
 - **Runtime code stays pure Python and 3.8-compatible.** No walrus operators,
   no `match`, no `str.removeprefix`, and no compiled or C-extension
-  dependencies — CoreELEC/ARM64 installs must remain pure Python.
+  dependencies. CoreELEC/ARM64 installs must remain pure Python.
 - **Preserve the Kodi invariants.** Every resolve path calls `setResolvedUrl`;
   polling loops use `xbmc.Monitor.waitForAbort`; the stream proxy preserves HTTP
   range behavior; ffmpeg stays optional.
@@ -70,14 +70,14 @@ of CI.
 - **This site** is built and deployed to GitHub Pages by the `Docs` workflow on
   every push to `main` that changes `docs-site/`, `mkdocs.yml`,
   `requirements-docs.txt`, the README, or the workflow itself. Pull requests
-  that touch those paths get a strict build-only check.
+  that change those paths get a strict build-only check.
 
 ## Testing notes
 
 The test suite mocks Kodi's `xbmc*` modules in `tests/conftest.py` (via
 `tests/kodi_mocks.py`) before the add-on modules import them. Individual tests
 usually patch module-bound Kodi imports. Add focused tests near the behavior
-you change — especially around the resolve, poll, proxy, and fallback paths.
+you change. especially around the resolve, poll, proxy, and fallback paths.
 
 ## Where to start reading
 

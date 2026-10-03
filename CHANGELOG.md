@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to the **NZB-DAV Kodi addon** are documented in this file.
+All notable changes to the **NeNeTeePee-Stream-Kodi addon** are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -117,7 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Install TMDBHelper Player** to pick it up. (#502)
 
 - **`/resolve-v2` source-manifest route.** External callers (btad) can hand
-  NZB-DAV a JSON manifest URL (`manifest_url`) listing a release's `title`,
+  NeNeTeePee-Stream-Kodi a JSON manifest URL (`manifest_url`) listing a release's `title`,
   `primary_url`, and ordered `source_urls`. The manifest is fetched and
   validated (http/https only, primary must be one of the sources, 128 KiB
   cap); an invalid manifest is logged and ignored. The primary URL plays
@@ -466,7 +466,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.2][] — 2026-05-07
 
-> **Hotfix for Kodi/CoreELEC freezes when opening the NZB-DAV add-on info
+> **Hotfix for Kodi/CoreELEC freezes when opening the NeNeTeePee-Stream-Kodi add-on info
 > dialog.** The published `v1.2.1` release asset still carried the full
 > historical changelog inside Kodi's `<news>` metadata, so clicking the add-on
 > could force Kodi/skin code to load a very large add-on-info payload.

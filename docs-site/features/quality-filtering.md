@@ -1,13 +1,13 @@
 # Quality filtering and sorting
 
-NZB-DAV filters the combined search results down to what you actually want, then
-ranks what's left. Format filters live on **Quality Filters**, followed by a separate
-**Languages** tab. Group preferences, size, and keywords live on **Keyword Filters**;
+NeNeTeePee-Stream-Kodi filters the combined search results down to what you actually want, then
+ranks what's left. Format filters live on **Quality filters**, followed by a separate
+**Languages** tab. Group preferences, size, and keywords live on **Keyword filters**;
 ranking lives on **Sorting**. Filters never lock you out: the picker can always
 [show the releases they removed](#filtered-and-all-results-in-the-picker).
 
 <!--
-Screenshot placeholder — Capture the Quality Filters settings tab showing the
+Screenshot placeholder. Capture the Quality filters settings tab showing the
 resolution, HDR, audio, codec, and language toggle groups.
 To add: save it as docs-site/images/quality-filters.png, then replace this
 comment with:  ![Quality filters](../images/quality-filters.png)
@@ -16,7 +16,7 @@ comment with:  ![Quality filters](../images/quality-filters.png)
 ## Quality filters
 
 Every quality toggle is **on by default**, which means "show everything." Turn
-off the attributes you never want. NZB-DAV reads each release's attributes by
+off the attributes you never want. NeNeTeePee-Stream-Kodi reads each release's attributes by
 parsing its name.
 
 | Group | Options |
@@ -30,7 +30,7 @@ parsing its name.
 Each group also has **Other / Unknown**, enabled by default. It allows
 releases whose attribute is missing or has no dedicated option. Turn it off to
 require a recognized value in that group. It never overrides a known format
-you've unchecked. If you uncheck every known option in a group, known formats
+you've cleared. If you clear every known option in a group, known formats
 are no longer restricted there; **Other / Unknown** still applies on its own.
 
 A release with no HDR tag counts as **Other / Unknown**, not SDR. `HDR` selects HDR/HDR10;
@@ -50,13 +50,13 @@ language matches. Cantonese and Urdu have their own toggles, but with
 
 ## Keyword and group filters
 
-On the **Keyword Filters** tab:
+On the **Keyword filters** tab:
 
 | Setting | Effect |
 |---------|--------|
 | **Exclude keywords** | Comma-separated. A release is removed if any keyword appears anywhere in its title. |
 | **Required keywords** | Comma-separated. A release is removed unless every keyword appears in its title. |
-| **Min size** / **Max size** | In MB, `0` = no limit. A release outside the range is removed. If a release's size can't be read, it's treated as 0 MB — so a non-zero minimum removes size-less placeholder rows. If you set a maximum below the minimum, the size filter is disabled and a warning is logged. |
+| **Min size** / **Max size** | In MB, `0` = no limit. A release outside the range is removed. If a release's size can't be read, it's treated as 0 MB, so a non-zero minimum removes size-less placeholder rows. If you set a maximum below the minimum, the size filter is turned off and a warning is logged. |
 | **Preferred groups: Tier 1 / 2 / 3** | Comma-separated preferred groups, ranked in that order under Relevance. Defaults come from the TRaSH remux tiers. |
 | **Configure Excluded Groups...** | Opens a multi-select of 94 known release groups. Checked groups are **removed**. Empty means no exclusions. |
 
@@ -64,11 +64,11 @@ On the **Keyword Filters** tab:
     - **Excluded groups** are a hard filter: matching releases are removed.
     - **Preferred groups** are **not** a filter. They only **boost ranking**
       under the Relevance sort. Choosing a preferred group never hides other
-      groups — if you want only certain groups, use required keywords or
+      groups. if you want only certain groups, use required keywords or
       excluded groups instead.
 
 <!--
-Screenshot placeholder — Capture the preferred tiers and Configure Excluded
+Screenshot placeholder. Capture the preferred tiers and Configure Excluded
 Groups control.
 To add: save it as docs-site/images/configure-groups.png, then replace this
 comment with:  ![Configure groups dialog](../images/configure-groups.png)
@@ -84,23 +84,23 @@ On the **Sorting** tab:
 | **Max results** | Whole number, clamped to 1–10000 when sent to providers | 25 |
 | **Auto-select best match (skip result list)** | Skip the picker and play the top-ranked result | Off |
 
-### How Relevance ranking works
+### How relevance ranking works
 
-When you sort by **Relevance**, NZB-DAV ranks releases by this priority order:
+When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this priority order:
 
-1. **Resolution** — highest resolution first, from 8K down to 240p; unknown
-   resolution last. A 2160p release always ranks above a 1080p release,
+1. **Resolution**. highest resolution first, from 8K down to 240p; unknown
+   resolution last. A 2160p release always ranks preceding a 1080p release,
    regardless of HDR or REMUX.
-2. **HDR** — Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR and other tags,
+2. **HDR**. Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR and other tags,
    then releases with no HDR tag. A release with several tags ranks by its best.
-3. **Release type** — filenames containing both REMUX and HYBRID first,
+3. **Release type**. filenames containing both REMUX and HYBRID first,
    then other REMUX releases, then everything else.
-4. **Preferred group** — **Tier 1**, then **Tier 2**, then **Tier 3**, then
+4. **Preferred group**. **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
-5. **Audio** — TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
+5. **Audio**. TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
    DTS-HD MA/FLAC/PCM/ALAC, then DTS-HD High Resolution/DTS, DD+, DD, AAC,
    other formats, and finally no audio tag.
-6. **Size** — larger files win the final tie-break.
+6. **Size**. larger files win the final tie-break.
 
 The three editable, comma-separated preferred group lists default to the
 [TRaSH tier 1](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-01.json),
@@ -117,8 +117,8 @@ as 0.
 
 **Max results** applies in two places: it caps how many results each provider is
 asked for, and it truncates the filtered list you see. The picker's show-all
-view (below) is not truncated. With **Auto-select best match** on, NZB-DAV
-plays the first release that passed your filters after ranking — so "best"
+view (below) is not truncated. With **Auto-select best match** on, NeNeTeePee-Stream-Kodi
+plays the first release that passed your filters after ranking. So "best"
 always means "the top item under your current sort order." If nothing passed
 your filters, the picker opens instead.
 
@@ -130,7 +130,7 @@ sources after filters*. To see everything the search returned:
 - Press **C**, or use Kodi's context-menu button (long-press on most
   remotes), to switch to all results. The header changes to *Showing all N
   sources (filters off)*. Press it again to return to the filtered view.
-- On CoreELEC/Linux devices where NZB-DAV can read the remote's input device,
+- On CoreELEC/Linux devices where NeNeTeePee-Stream-Kodi can read the remote's input device,
   you can instead **hold OK for five seconds** to turn filtering off. A short
   press still selects a result. Releasing after the five-second hold doesn't
   select or download anything, and holding again keeps filtering off.

@@ -1,12 +1,12 @@
 # StreamNZB backend
 
 [StreamNZB](https://github.com/Gaisberg/streamnzb) can search and stream releases
-through the existing NZB-DAV TMDBHelper player. No additional Kodi add-on or
+through the existing NeNeTeePee-Stream-Kodi TMDBHelper player. No additional Kodi add-on or
 Jellyfin server is required.
 
 ## Configuration
 
-1. Open NZB-DAV settings and the **Playback backend** tab.
+1. Open NeNeTeePee-Stream-Kodi settings and the **Playback backend** tab.
 2. Select **StreamNZB** in the **Playback backend** dropdown. Its URL and token
    fields appear below the dropdown on the same tab. There is no separate
    Connection tab. The local **Indexers** settings do not apply to StreamNZB;
@@ -17,12 +17,12 @@ Jellyfin server is required.
 4. Enter the **StreamNZB stream token**. In StreamNZB's dashboard, open the
    existing stream's settings and copy its token. You can also extract it from
    that stream's Stremio manifest URL: `http://server:7000/TOKEN/manifest.json`.
-   Use the stream token, not dashboard admin credentials. The field is masked;
-   do not share manifest or playback URLs, which contain the token. NZB-DAV
+   Use the stream token, not dashboard administrator credentials. The field is masked;
+   do not share manifest or playback URLs, which contain the token. NeNeTeePee-Stream-Kodi
    redacts its diagnostics; Kodi itself must receive the credential-bearing URL
    and may include it in native networking/debug logs. Sanitize those before
    sharing them.
-5. Select a movie or episode in TMDBHelper and choose the existing NZB-DAV
+5. Select a movie or episode in TMDBHelper and choose the existing NeNeTeePee-Stream-Kodi
    player. The full NZB picker shows release filenames and parsed metadata,
    using the add-on's configured filters and sorting. Select a release or
    cancel the picker.
@@ -46,16 +46,16 @@ no longer shown.
 ## Search and playback ownership
 
 StreamNZB owns indexer searches, filtering, ranking, NZB retrieval, archive
-handling and server-side failover. NZB-DAV applies its local release filters
+handling and server-side failover. NeNeTeePee-Stream-Kodi applies its local release filters
 and sorting to the returned entries and hands the selected HTTP playback URL
 directly to Kodi, preserving query parameters
 and supplied request headers. It does not submit an NZB, discover WebDAV files,
-run a remux/proxy or start NZB-DAV fallback workers for this backend.
+run a remux/proxy or start NeNeTeePee-Stream-Kodi fallback workers for this backend.
 
-NZBHydra2, Prowlarr, direct indexers, nzbdav, WebDAV, NZBGet and a local TMDB key
-are not required in NZB-DAV's settings for StreamNZB. Configure the needed
-indexers, metadata services and Usenet providers on StreamNZB instead. Local
-NZB-DAV filters and sorting apply to the shared release picker, including its
+NZBHydra2, Prowlarr, direct indexers, nzbdav, WebDAV, NZBGet, and a local TMDB key
+are not required in NeNeTeePee-Stream-Kodi's settings for StreamNZB. Configure the needed
+indexers, metadata services, and Usenet providers on StreamNZB instead. Local
+NeNeTeePee-Stream-Kodi filters and sorting apply to the shared release picker, including its
 show-all option. Auto-selection, completed-download tags, season-pack reuse
 and fallback settings do not apply to StreamNZB playback. Only directly
 playable HTTP/HTTPS entries are listed; informational `externalUrl`, torrent
@@ -67,7 +67,7 @@ components are URL encoded). IDs can be IMDb `tt…`, `tmdb:…` or `tvdb:…`.
 TMDB/TVDB-only support depends on StreamNZB's configured metadata services.
 No title-only search is performed if identifiers are missing.
 
-Episodes use the **show** identifier. NZB-DAV retains TMDBHelper's existing
+Episodes use the **show** identifier. NeNeTeePee-Stream-Kodi retains TMDBHelper's existing
 `season`/`episode` precedence over `ep_season`/`ep_episode` aliases, including
 season-zero specials and episode zero. When numbers are missing, the existing
 focused-item recovery is used only when the show title and every supplied
@@ -77,7 +77,7 @@ show episodes uses those canonical numbers; no local Kitsu mapping or absolute
 number conversion is added. StreamNZB owns its own anime metadata mappings.
 The installed player uses TMDBHelper's `{tmdb}` placeholder for the show ID;
 `{tmdb_id}` can identify the individual episode. Reinstall the TMDBHelper
-player from NZB-DAV after updating to receive that corrected template.
+player from NeNeTeePee-Stream-Kodi after updating to receive that corrected template.
 
 Search requests have a finite 35-second timeout. Kodi shutdown is checked
 before and after the request and before playback. No background request worker
@@ -91,7 +91,7 @@ with a resolved URL or a failure signal.
 Captured Kodi/TMDBHelper resume bookmarks use Kodi's resume-or-restart choice.
 The selected offset is passed on the playable ListItem. Cancelling preserves
 the consumed bookmark under a token-free movie or episode key for the next
-attempt. This does not start NZB-DAV's playback retry monitor.
+attempt. This does not start NeNeTeePee-Stream-Kodi's playback retry monitor.
 
 Supported identity-based paths are TMDBHelper `RunScript(...,tmdb_play,...)`,
 `/play`, `/search`, `/resolve`, and `resolve_and_play` when content identity is

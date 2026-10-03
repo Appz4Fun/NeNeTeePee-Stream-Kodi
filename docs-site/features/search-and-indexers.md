@@ -1,70 +1,70 @@
 # Search and indexers
 
-When you play a title, NZB-DAV searches every enabled provider, merges the
+When you play a title, NeNeTeePee-Stream-Kodi searches every enabled provider, merges the
 results, removes duplicates, and hands the combined list to the
 [filtering and ranking](quality-filtering.md) stage.
 
 ## Provider types
 
 You can enable any combination of three provider types. If none is enabled,
-TMDBHelper playback tells you so instead of searching. NZB-DAV's own search
+TMDBHelper playback tells you so instead of searching. NeNeTeePee-Stream-Kodi's own search
 menu and `plugin://` play URLs always query NZBHydra2, even when **Enable
 NZBHydra2** is off.
 
 !!! tip "Recommended: use NZBHydra2"
-    Rather than adding every indexer's Newznab API key on NZB-DAV's
+    Rather than adding every indexer's Newznab API key on NeNeTeePee-Stream-Kodi's
     **Indexers** tab, run [NZBHydra2](https://github.com/theotherp/nzbhydra2)
-    and point NZB-DAV at it. Hydra gives you a much better interface for
+    and point NeNeTeePee-Stream-Kodi at it. Hydra gives you a much better interface for
     managing indexers and searches, and it's highly configurable: per-indexer
     limits, categories, and priorities, all in one place. You don't lose
-    anything by going through it. NZB-DAV still shows which indexer each result
+    anything by going through it. NeNeTeePee-Stream-Kodi still shows which indexer each result
     came from, in the results list's **Indexer** column. On NZBHydra2,
     [fallback streams](fallback-streams.md) can also find same-release uploads
     that Hydra merged into a single result.
 
 ### NZBHydra2
 
-NZB-DAV queries NZBHydra2's Newznab XML API and shapes each query to the
+NeNeTeePee-Stream-Kodi queries NZBHydra2's Newznab XML API and shapes each query to the
 search capabilities (caps) Hydra advertises. It fetches those caps on first
 search and caches them. After changing Hydra's URL or its indexers, refresh
 them from **Manage Indexers → Refresh NZBHydra2 Caps** on the **Indexers** tab.
 That button stays greyed out until **Enable direct Newznab indexers** is on.
 Until you refresh, a changed URL is searched with a default query shape.
 
-For episodes, NZB-DAV prefers a TVDB id, then an IMDb id; for movies it uses
+For episodes, NeNeTeePee-Stream-Kodi prefers a TVDB id, then an IMDb id; for movies it uses
 the IMDb id. If the first query returns nothing, it retries with a plain title
 search, so a missing or mismatched id doesn't leave you with zero results.
 
 ### Prowlarr
 
-NZB-DAV queries Prowlarr's native search API, which returns JSON. Because
+NeNeTeePee-Stream-Kodi queries Prowlarr's native search API, which returns JSON. Because
 Prowlarr's native search binds ids inside the query text rather than as separate
-parameters, NZB-DAV embeds them as tokens — `{tvdbid:…}`, `{imdbid:…}`,
-`{season:…}`, `{episode:…}` — alongside the cleaned title. For episodes the
+parameters, NeNeTeePee-Stream-Kodi embeds them as tokens. `{tvdbid:…}`, `{imdbid:…}`,
+`{season:…}`, `{episode:…}`. alongside the cleaned title. For episodes the
 TVDB id is preferred over the IMDb id. If an id-keyed query returns nothing,
-NZB-DAV retries by title, keeping the season and episode tokens.
+NeNeTeePee-Stream-Kodi retries by title, keeping the season and episode tokens.
 
 !!! info "Prowlarr contributes Usenet results only"
-    NZB-DAV keeps only releases whose protocol is **usenet**. Torrent results
+    NeNeTeePee-Stream-Kodi keeps only releases whose protocol is **usenet**. Torrent results
     from Prowlarr are silently dropped. A torrent-only indexer in your Prowlarr
     indexer list contributes nothing.
 
 Set **Prowlarr Indexer IDs** to a comma-separated list of the indexers to
-query. It's required: with an empty list, NZB-DAV skips Prowlarr entirely.
+query. It's required: with an empty list, NeNeTeePee-Stream-Kodi skips Prowlarr entirely.
 
 ### Direct Newznab indexers
 
 If you don't run Hydra or Prowlarr, connect directly to individual Newznab
-indexers. NZB-DAV queries them in parallel (up to four at a time, 15 seconds
+indexers. NeNeTeePee-Stream-Kodi queries them in parallel (up to four at a time, 15 seconds
 per request, 20 seconds for the whole batch) and shapes each query to that
 indexer's caps when it has them. An indexer that times out or fails is
 skipped; the others still return results.
 
 Two ways to configure them, both on the **Indexers** tab:
 
-- **Popular indexers** — built-in rows for NZB.su/NZB.life, NZBGeek, NZBFinder,
+- **Popular indexers**. built-in rows for NZB.su/NZB.life, NZBGeek, NZBFinder,
   NZBPlanet, DrunkenSlug, and DOGnzb. Enable one, enter its API key, done.
-- **Manage Indexers** — a dialog for adding any Newznab indexer from a larger
+- **Manage Indexers**. a dialog for adding any Newznab indexer from a larger
   preset catalog (22 well-known indexers) or a fully custom URL, and for
   testing, editing, enabling/disabling, and deleting them.
 
@@ -80,7 +80,7 @@ from then on the managed entry wins over the tab row with the same id.
     [Beta channel](../getting-started/beta-channel.md).
 
 <!--
-Screenshot placeholder — Capture the Manage Indexers dialog showing the
+Screenshot placeholder. Capture the Manage Indexers dialog showing the
 top-level list (Add Newznab Indexer, Refresh NZBHydra2 Caps, and per-indexer
 entries).
 To add: save it as docs-site/images/manage-indexers.png, then replace this
@@ -90,13 +90,13 @@ comment with:  ![Manage Indexers dialog](../images/manage-indexers.png)
 ## TV and movie ids
 
 Id-keyed searches are far more accurate than title searches. TMDBHelper
-normally passes the ids NZB-DAV needs, and they are used directly. When one is
+normally passes the ids NeNeTeePee-Stream-Kodi needs, and they are used directly. When one is
 missing and you've set **TMDB API key (optional, movies and TV)** on the
 **Indexers** tab:
 
-- **Episodes** — NZB-DAV looks up the show's TVDB id from its TMDB or IMDb id,
+- **Episodes**. NeNeTeePee-Stream-Kodi looks up the show's TVDB id from its TMDB or IMDb id,
   because many indexers key TV on TVDB ids. All providers share the one lookup.
-- **Movies** — when only a TMDB id is available, NZB-DAV converts it to the
+- **Movies**. when only a TMDB id is available, NeNeTeePee-Stream-Kodi converts it to the
   movie's IMDb id.
 
 Successful lookups are cached on disk. Without a key, or if a lookup fails,
@@ -126,20 +126,20 @@ flowchart LR
   link, size, indexer name, post date, and age.
 - **De-duplication is by download link.** The first occurrence of a link wins.
   A release that two providers return with *different* download URLs appears
-  twice — this is intentional, because those are genuinely different downloads.
+  twice. This is intentional, because those are genuinely different downloads.
 - A result with no download link is dropped, because it can't be played.
 
 ## Search caching
 
 Searches are cached so that re-opening the same title is instant. The cache
 duration is the **Cache duration** setting on the **Advanced** tab (default 60
-seconds; set to `0` to disable). Only successful, non-empty searches are
+seconds; set to `0` to turn it off). Only successful, non-empty searches are
 cached. The cache stores the raw, pre-filter results, so changing your filter
 or sort settings takes effect immediately without a new search. Clear it any
 time from the add-on's main menu (**Clear Cache**).
 
-The cache applies to NZB-DAV's own plugin search and play routes. The
+The cache applies to NeNeTeePee-Stream-Kodi's own plugin search and play routes. The
 TMDBHelper player always runs a fresh search.
 
-For the internal mechanics — the query planner, caps handling, and the exact
-result fields — see [How it works → Search pipeline](../how-it-works/search-pipeline.md).
+For the internal mechanics. The query planner, caps handling, and the exact
+result fields. see [How it works → Search pipeline](../how-it-works/search-pipeline.md).

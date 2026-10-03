@@ -234,7 +234,7 @@ Before cutting a new versioned release:
 7. Tag with the new semver and push the tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
 
 The Release workflow builds the zip and creates the GitHub Release; the external
-Appz4Fun Kodi repository then rebuilds and republishes NZB-DAV to its users.
+Appz4Fun Kodi repository then rebuilds and republishes NeNeTeePee-Stream-Kodi to its users.
 Tags containing a hyphen (for example `v2.0.0-beta.3`) are marked pre-release and
 go to the Beta channel only.
 

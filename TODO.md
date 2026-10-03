@@ -1,4 +1,4 @@
-# TODO - NZB-DAV Kodi Addon
+# TODO - NeNeTeePee-Stream-Kodi Addon
 
 Active backlog only. Completed work, old audit details, rejected designs, and long research notes live in git history.
 

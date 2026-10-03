@@ -1,18 +1,12 @@
 # Configure connections
 
 Open the add-on settings at **Settings → Add-ons → My add-ons → Video add-ons →
-NZB-DAV → Configure**. Choose and configure your server on **Playback backend**.
+NeNeTeePee-Stream-Kodi → Configure**. Choose and configure your server on **Playback backend**.
 For nzbdav / InfiniDysk or NZBGet, configure a search provider on **Indexers**,
 starting with NZBHydra2 at the top. Every setting is listed in
 the [settings reference](../reference/settings.md).
 
-<!--
-Screenshot placeholder — Capture the NZB-DAV Playback backend settings tab.
-IMPORTANT: use sanitized/dummy values (example hostnames, no real IPs or
-usernames) — do not commit a screenshot of a live configuration.
-To add: save it as docs-site/images/settings.png, then replace this comment
-with:  ![NZB-DAV settings](../images/settings.png)
--->
+See [Backend services](../backends/index.md) for illustrated connection guides.
 
 ## Choose the playback backend
 
@@ -40,11 +34,11 @@ it confirms both the URL and the API key.
 
 The **WebDAV** group is also on **Playback backend**, visible with
 **nzbdav / InfiniDysk** selected. nzbdav serves finished files over WebDAV;
-NZB-DAV streams from there.
+NeNeTeePee-Stream-Kodi streams from there.
 
 | Setting | What to enter |
 |---------|---------------|
-| **WebDAV URL (leave empty to use nzbdav URL)** | Leave this **empty** if WebDAV is served from the same address as the nzbdav URL — NZB-DAV then reuses the nzbdav URL. Enter a value only if your setup exposes WebDAV on a separate address. |
+| **WebDAV URL (leave empty to use nzbdav URL)** | Leave this **empty** if WebDAV is served from the same address as the nzbdav URL. NeNeTeePee-Stream-Kodi then reuses the nzbdav URL. Enter a value only if your setup exposes WebDAV on a separate address. |
 | **Username** | From the nzbdav web UI: **Settings → WebDAV tab → Username**. |
 | **Password** | From the nzbdav web UI: **Settings → WebDAV tab → Password**. |
 
@@ -54,7 +48,7 @@ server error.
 
 !!! warning "Leave WebDAV URL empty unless you need it"
     The WebDAV URL field defaults to `http://localhost:8080`. If your WebDAV
-    lives at the same address as nzbdav, clear this field so NZB-DAV reuses the
+    lives at the same address as nzbdav, clear this field so NeNeTeePee-Stream-Kodi reuses the
     nzbdav URL. Leaving an unreachable `localhost:8080` in place is a common
     cause of WebDAV connection errors.
 
@@ -62,13 +56,13 @@ server error.
 
 For nzbdav and NZBGet, open **Indexers** and enable at least one provider.
 NZBHydra2 is the first option. Turn on whichever you use and fill in its
-details. You can enable more than one — results are merged and de-duplicated.
+details. You can enable more than one. results are merged and de-duplicated.
 
 !!! tip "Recommended: NZBHydra2"
     [NZBHydra2](https://github.com/theotherp/nzbhydra2) is the recommended
     provider. Configure your indexers once in Hydra, which has a better search
     interface and is highly configurable, instead of entering each indexer's
-    Newznab API on NZB-DAV's **Indexers** tab. Each result still shows which
+    Newznab API on NeNeTeePee-Stream-Kodi's **Indexers** tab. Each result still shows which
     indexer Hydra found it on. See
     [Search and indexers](../features/search-and-indexers.md#provider-types).
 
@@ -77,7 +71,7 @@ details. You can enable more than one — results are merged and de-duplicated.
     | Setting | What to enter |
     |---------|---------------|
     | **Enable NZBHydra2** | Turn on. |
-    | **NZBHydra2 URL** | e.g. `http://192.168.1.100:5076`. |
+    | **NZBHydra2 URL** | for example, `http://192.168.1.100:5076`. |
     | **API Key** | NZBHydra2 web UI → **Config → Main → Security → API key**. |
 
     Select **Test NZBHydra Connection** to verify.
@@ -87,9 +81,9 @@ details. You can enable more than one — results are merged and de-duplicated.
     | Setting | What to enter |
     |---------|---------------|
     | **Enable Prowlarr** | Turn on. |
-    | **Prowlarr URL** | e.g. `http://192.168.1.100:9696`. |
+    | **Prowlarr URL** | for example, `http://192.168.1.100:9696`. |
     | **Prowlarr API Key** | Prowlarr web UI → **Settings → General → Security → API Key**. |
-    | **Prowlarr Indexer IDs (comma-separated)** | Comma-separated indexer IDs to query. **Required** — NZB-DAV skips the Prowlarr search if this is left empty. |
+    | **Prowlarr Indexer IDs (comma-separated)** | Comma-separated indexer IDs to query. **Required**. NeNeTeePee-Stream-Kodi skips the Prowlarr search if this is left empty. |
 
     Select **Test Prowlarr Connection**. It checks the URL and API key by
     listing Prowlarr's indexers. It doesn't check the indexer IDs you entered.
@@ -121,16 +115,16 @@ details. You can enable more than one — results are merged and de-duplicated.
 
 The last group on the **Indexers** tab, **TV search accuracy**, has one
 setting: **TMDB API key (optional, movies and TV)**. Enter a key from TMDB
-here, not from TVDB. With a key, NZB-DAV converts the ids TMDBHelper sends:
+here, not from TVDB. With a key, NeNeTeePee-Stream-Kodi converts the ids TMDBHelper sends:
 
-- **Movies:** When TMDBHelper sends only a TMDB id, NZB-DAV looks up the IMDb
+- **Movies:** When TMDBHelper sends only a TMDB id, NeNeTeePee-Stream-Kodi looks up the IMDb
   id and uses it to query indexers.
-- **TV:** When TMDBHelper doesn't send a TVDB id, NZB-DAV looks up the show's
+- **TV:** When TMDBHelper doesn't send a TVDB id, NeNeTeePee-Stream-Kodi looks up the show's
   TVDB id so indexers can search by id. Id searches return more accurate
   episode results than a title-only search.
 
 Ids that TMDBHelper already supplies are used directly. If you don't enter a
-key or a lookup fails, NZB-DAV falls back to the supplied ids or the title.
+key or a lookup fails, NeNeTeePee-Stream-Kodi falls back to the supplied ids or the title.
 
 !!! tip "Entering long API keys with a remote"
     Typing API keys on a TV remote is painful. Use a Kodi remote app with
@@ -140,7 +134,7 @@ key or a lookup fails, NZB-DAV falls back to the supplied ids or the title.
 ## Using NZBGet instead of nzbdav
 
 !!! info "Beta feature"
-    Added in 2.0.0-beta.1 — available on the [Beta channel](beta-channel.md).
+    Added in 2.0.0-beta.1. available on the [Beta channel](beta-channel.md).
 
 If you use NZBGet, its fields appear on **Playback backend**:
 

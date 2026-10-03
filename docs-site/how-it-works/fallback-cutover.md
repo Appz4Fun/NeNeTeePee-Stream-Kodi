@@ -1,6 +1,6 @@
 # Fallback cutover
 
-This page explains how NZB-DAV switches to a backup source mid-playback without
+This page explains how NeNeTeePee-Stream-Kodi switches to a backup source mid-playback without
 interrupting the video. For the user-facing summary, see
 [Fallback streams](../features/fallback-streams.md).
 
@@ -52,7 +52,7 @@ property, `nzbdav.playing`:
 
 - It's set `true` when playback monitoring begins.
 - It's cleared on stop, end, and terminal-error paths.
-- A transient **ERROR is not terminal** — if a retry recovers, the flag stays
+- A transient **ERROR is not terminal**. if a retry recovers, the flag stays
   set so backups still flow into the recovered playback.
 
 The worker uses a "seen-live" latch: it only aborts on the flag going false
@@ -90,14 +90,14 @@ clamped to **Maximum standby fallback streams**.
 
 ## Verifying a switch is safe
 
-Switching only works if the alternate's bytes line up exactly, so NZB-DAV checks
+Switching only works if the alternate's bytes line up exactly, so NeNeTeePee-Stream-Kodi checks
 this in two sampled stages (strong evidence of identical bytes, not a proof of
 every byte):
 
 1. **Content-length equality.** The alternate's total size must **exactly** equal
    the current source's. A mismatch permanently rejects that candidate.
-2. **SHA-256 fingerprint sweep.** NZB-DAV compares hashes of matching 4 KiB
-   byte ranges sampled deterministically across both files — **20** samples for
+2. **SHA-256 fingerprint sweep.** NeNeTeePee-Stream-Kodi compares hashes of matching 4 KiB
+   byte ranges sampled deterministically across both files. **20** samples for
    files under 1 GiB, **100** for larger files, with the first and last ranges
    always included. Every sampled range must match. A missing or empty hash on either
    side is *inconclusive* rather than a match.
@@ -141,10 +141,10 @@ sequenceDiagram
     end
 ```
 
-The key detail: the cutover **doesn't touch the byte offset**. The serve loop is
+The key detail: the cutover **doesn't change the byte offset**. The serve loop is
 sitting at `st.current`; after the swap it re-enters the same loop at the same
 offset on the same client socket, with the response headers already sent. There
-is no `Player.Stop`, no rewind, and no re-sent HTTP headers — which is why the
+is no `Player.Stop`, no rewind, and no re-sent HTTP headers. which is why the
 switch is invisible.
 
 When a switch succeeds, the dead primary is **demoted** into the standby pool
@@ -172,9 +172,9 @@ stream no new real upstream bytes, the proxy closes the stream cleanly with
 
 ## Dead-candidate tracking
 
-NZB-DAV remembers candidates that are **provably unrecoverable** for the session
-— a missing first article, an NNTP rejection, or a terminal Failed/Deleted state
-— keyed primarily by the indexer download link (the only id stable across
+NeNeTeePee-Stream-Kodi remembers candidates that are **provably unrecoverable** for the session
+a missing first article, an NNTP rejection, or a terminal Failed/Deleted state
+keyed primarily by the indexer download link (the only id stable across
 resubmits).
 Those are never retried. A **timeout is deliberately not treated as dead**: on a
 slow backend a timeout means load, not a missing post, so the candidate stays
