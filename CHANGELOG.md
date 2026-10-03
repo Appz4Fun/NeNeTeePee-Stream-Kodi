@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Complete media filters with Other / Unknown switches, resolution-then-HDR-then-REMUX ranking with three editable group tiers, picker show-all toggle with filter reasons, movie IMDb lookup, 60 s search cache, NZBGet local-path season-pack reuse, `.m2ts` playback, `/resolve-v2` source manifests |
+| **[Unreleased](#unreleased--main)** | on `main` | Backend settings section, EBML-aware MKV/WebM gap concealment, complete media filters with Other / Unknown switches, resolution-then-HDR-then-REMUX ranking with three editable group tiers, picker show-all toggle with filter reasons, movie IMDb lookup, 60 s search cache, NZBGet local-path season-pack reuse, `.m2ts` playback, `/resolve-v2` source manifests |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
 | **[1.2.3](#123--2026-05-08)** | 2026-05-08 | Proxy fallback hardening, repo install checksum fix, RunScript path reliability |
@@ -70,9 +70,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Select nzbdav / InfiniDysk, NZBGet, or StreamNZB in the Playback backend
-  dropdown. The selected backend's connection fields appear on the same tab;
-  NZBHydra2 is now first under Indexers.
+- **Backend settings section.** Move backend selection and connection settings
+  to the **Playback backend** section in the settings view. Choose nzbdav /
+  InfiniDysk, NZBGet, or StreamNZB to show the fields for that backend.
+  NZBHydra2 is now first under **Indexers**.
 - StreamNZB returns its ranked movie and episode releases and hands its playback
   URL directly to Kodi. Configure its server URL and masked stream token;
   StreamNZB owns indexer search, NZB handling, and server-side failover.
@@ -80,18 +81,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   plugin resolution and TMDBHelper RunScript playback, including episode show
   identity and season/episode numbers. Kodi reconnect recovery remains unverified.
 
-- **EBML-aware gap concealment for MKV/WebM.** When missing articles leave an
-  unreadable span in a Matroska or WebM stream, pass-through now replaces it
-  with correctly sized EBML Void elements instead of literal zeros, so the
-  demuxer skips the damage and resumes at the next intact cluster.
-  ffmpeg no longer logs `invalid as first byte of an EBML number` and resyncs
-  blindly. Verified fallback cutover still runs first. Response length and
-  offsets are unchanged, repeat and overlapping ranges replay identical bytes,
-  and the whole concealed span counts against the zero-fill budgets. When the
-  structure can't be confirmed, it falls back to plain zeros and logs why.
-  This is now how zero fill works for MKV/WebM, with no separate setting; the
-  **Enable zero-fill budget** help text describes it. The approach is adapted
-  from StreamNZB's EBML hole fill (GPL-3.0).
+- **EBML-aware gap concealment for MKV/WebM.** Missing Usenet data no longer
+  always produces a span of plain zeros in these containers. When the proxy
+  can confirm safe element boundaries, it replaces the damaged span with
+  correctly sized EBML `Void` elements. This preserves the container structure
+  so the demuxer can skip the missing data and continue with intact media.
+  Gaps contained within a media payload still use zero padding. Concealment
+  preserves byte offsets and response length, and repeated or overlapping
+  range requests receive the same replacement bytes. Verified fallback cutover
+  runs first, and concealed spans count against the zero-fill budgets.
+  If the structure cannot be confirmed, the proxy uses plain zeros and logs
+  why. This applies to Matroska and WebM pass-through streams; it does not
+  reconstruct missing frames or guarantee recovery for every format. No
+  separate setting is required. The approach is adapted from StreamNZB's
+  EBML hole filling (GPL-3.0).
 - **Complete media filters.** Many more options in each filter group:
   resolutions from 240p to 4320p, HDR / HDR10+ / Dolby Vision / HLG / SDR,
   18 audio formats, 14 video codecs, and 48 languages. Languages moved to
