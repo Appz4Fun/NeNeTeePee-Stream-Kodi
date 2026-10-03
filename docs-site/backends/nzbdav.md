@@ -2,7 +2,7 @@
 
 !!! note "Current source and next release"
     The unified **Playback backend** section and StreamNZB support are not in
-    Stable 1.2.3 or Beta 2.0.0-beta.2. These instructions and illustrations
+    Stable 1.2.3 or Beta 2.0.0-beta.2. These instructions and screenshots
     describe current source builds and the next release.
 
     In released builds, configure nzbdav and WebDAV under **Connection**.
@@ -11,11 +11,11 @@
     StreamNZB requires a current source build until a release includes it.
 
 
-Use [nzbdav](https://github.com/nzbdav-dev/nzbdav) or [InfiniDysk](https://github.com/infinidysk/infinidysk) for server installation and configuration instructions. Start with a running server that Kodi can reach.
+Use [nzbdav](https://github.com/nzbdav-dev/nzbdav) or [InfiniDysk](https://www.infinidysk.com/) for server installation and configuration instructions. Start with a running server that Kodi can reach.
 
-![Example add-on settings for nzbdav](../images/backend-nzbdav.svg)
+![Example add-on settings for nzbdav](../images/kodi/backend-nzbdav.png)
 
-The illustration shows example values, not a live configuration.
+This is a real Kodi screenshot from the captured `origin/main` build, using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
 
 ## Configure the add-on
 

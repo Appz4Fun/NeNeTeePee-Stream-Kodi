@@ -17,14 +17,15 @@ This page documents every setting in NeNeTeePee-Stream-Kodi, grouped by the tab 
 in Kodi's add-on settings (**My add-ons → Video add-ons → NeNeTeePee-Stream-Kodi → Configure**).
 
 For each setting you'll find its label, its internal id (useful if you edit
-`settings.xml` directly), its default, and what it does. Actions. The buttons
-that run a test or open a dialog. are listed with each tab.
+`settings.xml` directly), its default, and what it does. Buttons that run a test or open a dialog are listed with each tab.
 
 !!! note "Defaults are chosen to be safe"
     Configure your selected **Playback backend** and, for nzbdav / InfiniDysk
     or NZBGet, at least one provider under **Indexers**. Other settings
     have working defaults. The **Advanced** tab in particular should be changed
     only when you have a specific reason.
+
+See the [illustrated settings guide](../settings/index.md) for real Kodi screenshots, every individual option, and commit-pinned source footnotes.
 
 ## Playback backend
 
