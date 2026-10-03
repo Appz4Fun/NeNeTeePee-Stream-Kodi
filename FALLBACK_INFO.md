@@ -7,8 +7,8 @@
 > `fallback_streams.py` into sibling modules, and line numbers drift. Grep for
 > the names below.
 >
-> User-level docs: [Fallback streams](https://appz4fun.github.io/nzbdavkodi/features/fallback-streams/)
-> and [Fallback cutover](https://appz4fun.github.io/nzbdavkodi/how-it-works/fallback-cutover/).
+> User-level docs: [Fallback streams](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/fallback-streams/)
+> and [Fallback cutover](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/how-it-works/fallback-cutover/).
 
 ## Overview
 

@@ -20,8 +20,8 @@
         <disclaimer lang="en">Requires your own backend service and Usenet access. No content is provided.</disclaimer>
         <platform>all</platform>
         <license>GPL-3.0-or-later</license>
-        <source>https://github.com/Appz4Fun/nzbdavkodi</source>
-        <website>https://appz4fun.github.io/nzbdavkodi/</website>
+        <source>https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi</source>
+        <website>https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/</website>
         <news>v2.0.0-beta.2: Exact season-pack episode reuse, SMB readability gate, polish.</news>
         <assets>
             <icon>resources/icon.png</icon>

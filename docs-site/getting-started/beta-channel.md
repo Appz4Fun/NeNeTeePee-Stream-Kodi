@@ -14,7 +14,7 @@ to report problems.
 | Beta | 2.0.0-beta.2 | 2026-07-18 |
 
 The full release list is on the
-[GitHub releases page](https://github.com/Appz4Fun/nzbdavkodi/releases). Any
+[GitHub releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases). Any
 release marked **Pre-release** there goes only to the Beta channel. The release
 workflow sets that flag automatically for any version tag with a hyphen, such
 as `v2.0.0-beta.2`.
@@ -29,7 +29,7 @@ as `v2.0.0-beta.2`.
 
 These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
 1.2.3. The full notes are in the
-[changelog](https://github.com/Appz4Fun/nzbdavkodi/blob/main/CHANGELOG.md).
+[changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md).
 
 ### New features
 
@@ -63,7 +63,7 @@ These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
 
 Changes on `main` that aren't in a release yet are listed under
 **Unreleased** at the top of the
-[changelog](https://github.com/Appz4Fun/nzbdavkodi/blob/main/CHANGELOG.md#unreleased--main).
+[changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md#unreleased--main).
 
 ## Joining the beta
 
@@ -112,7 +112,7 @@ add-on info page.
 2. Remove API keys, passwords, and server addresses from anything you share.
    NeNeTeePee-Stream-Kodi redacts credentials in its own log lines, but other add-ons may not.
 3. Open an issue on
-   [GitHub](https://github.com/Appz4Fun/nzbdavkodi/issues). Include the
+   [GitHub](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/issues). Include the
    NeNeTeePee-Stream-Kodi version (shown on the add-on info page), your backend (nzbdav or
    NZBGet), your platform, and the relevant log lines.
 

@@ -16,9 +16,9 @@ order.
 
 ## NeNeTeePee-Stream-Kodi stopped updating
 
-If you installed NeNeTeePee-Stream-Kodi from the old **NeNeTeePee-Stream-Kodi Repository**
+If you installed NeNeTeePee-Stream-Kodi from the old **legacy Kodi repository**
 (`https://appz4fun.github.io/nzbdavkodi/`), you won't get any more updates. That
-address now hosts this documentation site, not add-on metadata.
+address no longer supplies add-on metadata.
 
 To fix it, install the Appz4Fun repository and move NeNeTeePee-Stream-Kodi over to it. The
 steps are in
@@ -260,4 +260,4 @@ For the internals behind these behaviors, see
   secrets removed.
 
 Report issues at the
-[NeNeTeePee-Stream-Kodi issue tracker](https://github.com/Appz4Fun/nzbdavkodi/issues).
+[NeNeTeePee-Stream-Kodi issue tracker](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/issues).

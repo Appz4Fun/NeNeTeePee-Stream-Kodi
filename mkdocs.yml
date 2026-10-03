@@ -2,11 +2,11 @@ site_name: NeNeTeePee-Stream-Kodi
 site_description: >-
   Stream Usenet movies and TV shows in Kodi through TMDBHelper, NZBHydra2 or
   Prowlarr, and nzbdav / InfiniDysk, NZBGet or StreamNZB.
-site_url: https://appz4fun.github.io/nzbdavkodi/
+site_url: https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/
 site_author: Appz4Fun
 
-repo_url: https://github.com/Appz4Fun/nzbdavkodi
-repo_name: Appz4Fun/nzbdavkodi
+repo_url: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi
+repo_name: Appz4Fun/NeNeTeePee-Stream-Kodi
 edit_uri: edit/main/docs-site/
 
 # The documentation source lives in docs-site/ so it never collides with the
@@ -83,7 +83,7 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/Appz4Fun/nzbdavkodi
+      link: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi
       name: NeNeTeePee-Stream-Kodi on GitHub
 
 nav:

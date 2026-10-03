@@ -2,7 +2,7 @@
 
 NeNeTeePee-Stream-Kodi is open source under GPL-3.0-or-later. Contributions are welcome. This
 page is a quick orientation; the authoritative contributor contract lives in
-[`AGENTS.md`](https://github.com/Appz4Fun/nzbdavkodi/blob/main/AGENTS.md) in the
+[`AGENTS.md`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/AGENTS.md) in the
 repository.
 
 ## Ground rules
@@ -82,13 +82,13 @@ you change. especially around the resolve, poll, proxy, and fallback paths.
 ## Where to start reading
 
 - Architecture and module map: [How it works](how-it-works/architecture.md).
-- Active backlog: [`TODO.md`](https://github.com/Appz4Fun/nzbdavkodi/blob/main/TODO.md).
+- Active backlog: [`TODO.md`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/TODO.md).
 - Contributor internals for the proxy:
-  [`docs/proxy-architecture.md`](https://github.com/Appz4Fun/nzbdavkodi/blob/main/docs/proxy-architecture.md)
+  [`docs/proxy-architecture.md`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/docs/proxy-architecture.md)
   (historical detail; the [Stream proxy](how-it-works/stream-proxy.md) page here
   reflects the current, verified behavior).
 - Code-level map of the fallback system:
-  [`FALLBACK_INFO.md`](https://github.com/Appz4Fun/nzbdavkodi/blob/main/FALLBACK_INFO.md)
+  [`FALLBACK_INFO.md`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/FALLBACK_INFO.md)
   (module and function names; the user-level view is
   [Fallback cutover](how-it-works/fallback-cutover.md)).
 - Release steps: the **Release Checklist** in `AGENTS.md`. Bump only

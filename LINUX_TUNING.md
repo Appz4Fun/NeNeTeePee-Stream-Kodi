@@ -15,7 +15,7 @@ squashfs root, so persistent files must live under `/storage/`.
 > were running on the tuned box; they are not part of NeNeTeePee-Stream-Kodi. The summary and
 > the NeNeTeePee-Stream-Kodi-side settings that matter here (read-ahead buffer, stall wait,
 > and Kodi's `<cache><memorysize>0</memorysize></cache>`) are on the docs site:
-> [CoreELEC and Linux tuning](https://appz4fun.github.io/nzbdavkodi/operations/coreelec-tuning/).
+> [CoreELEC and Linux tuning](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/operations/coreelec-tuning/).
 
 ---
 

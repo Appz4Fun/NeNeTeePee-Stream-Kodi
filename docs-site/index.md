@@ -12,7 +12,7 @@ The add-on provides no media or indexers. You need your own backend service and 
 4. [Install the TMDBHelper player](getting-started/tmdbhelper.md).
 5. [Play your first title](getting-started/first-playback.md).
 
-This site describes the current source. Released builds can have fewer features. Check the [beta channel guide](getting-started/beta-channel.md) and [release notes](https://github.com/Appz4Fun/nzbdavkodi/releases) for your installed version.
+This site describes the current source. Released builds can have fewer features. Check the [beta channel guide](getting-started/beta-channel.md) and [release notes](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases) for your installed version.
 
 ## Choose a backend
 
@@ -42,4 +42,4 @@ Use [quality filtering and sorting](features/quality-filtering.md) to control th
 
 ## Compatibility
 
-The display name is `NeNeTeePee-Stream-Kodi`. The add-on ID remains `plugin.video.nzbdav` so existing installations, settings, and TMDBHelper routes continue to work. Repository and documentation URLs retain their existing paths.
+The display name is `NeNeTeePee-Stream-Kodi`. The add-on ID remains `plugin.video.nzbdav` so existing installations, settings, and TMDBHelper routes continue to work. The repository and documentation use the new project name.

@@ -2,14 +2,14 @@
 
 ## Use the right channel
 
-- Bug reports: open a [GitHub issue](https://github.com/Appz4Fun/nzbdavkodi/issues)
+- Bug reports: open a [GitHub issue](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/issues)
   with Kodi version, NeNeTeePee-Stream-Kodi version, reproduction steps, and relevant `kodi.log` lines.
 - Security issues: do not file a public issue. Use the private reporting path in [SECURITY.md](SECURITY.md).
-- Setup questions: start with the [setup guide](https://appz4fun.github.io/nzbdavkodi/getting-started/prerequisites/),
-  then check [Troubleshooting](https://appz4fun.github.io/nzbdavkodi/operations/troubleshooting/).
-- Not getting updates? Installs from the retired `https://appz4fun.github.io/nzbdavkodi/`
+- Setup questions: start with the [setup guide](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/prerequisites/),
+  then check [Troubleshooting](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/operations/troubleshooting/).
+- Not getting updates? Installs from the retired `https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/`
   repository no longer update. Install the Appz4Fun Kodi repository instead; see
-  [Install the add-on](https://appz4fun.github.io/nzbdavkodi/getting-started/installation/).
+  [Install the add-on](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/installation/).
 
 ## What to include
 

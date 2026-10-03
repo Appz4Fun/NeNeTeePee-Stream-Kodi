@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Orientation for agents (Claude, Copilot, Codex, etc.) working in this repo. A short install/setup summary lives in [README.md](README.md); the full user and technical documentation lives in `docs-site/` and is published to GitHub Pages at <https://appz4fun.github.io/nzbdavkodi/>. Outstanding work lives in [TODO.md](TODO.md).
+Orientation for agents (Claude, Copilot, Codex, etc.) working in this repo. A short install/setup summary lives in [README.md](README.md); the full user and technical documentation lives in `docs-site/` and is published to GitHub Pages at <https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/>. Outstanding work lives in [TODO.md](TODO.md).
 
 ## TL;DR
 
@@ -219,7 +219,7 @@ Prefer evidence first, restart second. If Kodi is actively wedged and logs are a
 - CI runs on every push to `main` and PRs: `just lint` (ruff + black + pylint + vermin) and `just test` on Python 3.14, plus a `compat-3-8` job that `compileall`s the addon on Python 3.8.
 - Release workflow triggers on `v*` tags: runs tests, verifies `addon.xml` version matches the tag, builds the zip, creates a GitHub Release, and pings the external Appz4Fun Kodi repository to rebuild.
 - Add-on distribution lives in the external multi-channel Kodi repository at `https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo` (served from its own Pages site). This repo no longer self-hosts a Kodi repository.
-- The Docs workflow (`pages.yml`) builds the MkDocs site from `docs-site/` and deploys it to GitHub Pages at `https://appz4fun.github.io/nzbdavkodi/`.
+- The Docs workflow (`pages.yml`) builds the MkDocs site from `docs-site/` and deploys it to GitHub Pages at `https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/`.
 
 ## Release Checklist
 

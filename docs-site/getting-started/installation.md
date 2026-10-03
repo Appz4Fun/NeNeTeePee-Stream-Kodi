@@ -28,7 +28,7 @@ Which build each channel serves right now:
     channels. Anything marked **Beta feature** needs the Beta channel.
     Changes on `main` that aren't in a release yet are listed under
     **Unreleased** in the
-    [changelog](https://github.com/Appz4Fun/nzbdavkodi/blob/main/CHANGELOG.md#unreleased--main).
+    [changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md#unreleased--main).
 
 Pick **Stable** if you want the most-tested build. Pick **Beta** if you want
 the 2.0.0 features now and are happy to report problems. You can switch later
@@ -75,7 +75,7 @@ the 2.0.0 features now and are happy to report problems. You can switch later
 ## Upgrading from the legacy Kodi repository
 
 Older builds (up to the 1.2.x line) came from a repository add-on called
-**NeNeTeePee-Stream-Kodi Repository** (`repository.nzbdav`), served from
+**legacy Kodi repository** (`repository.nzbdav`), served from
 `https://appz4fun.github.io/nzbdavkodi/`. That URL now hosts this
 documentation site instead of add-on metadata, so installs from it no longer
 get updates.
@@ -89,7 +89,7 @@ installing the new repository alone isn't enough. To move over:
    version listed under **Appz4Fun Repository** (or **Appz4Fun Repository
    (Beta)**). NeNeTeePee-Stream-Kodi now updates from the new repository. Your settings are
    kept.
-3. Uninstall the old **NeNeTeePee-Stream-Kodi Repository** add-on, and remove the old
+3. Uninstall the old **legacy Kodi repository** add-on, and remove the old
    `nzbdav` source from **Settings → File manager**.
 
 ## Install manually from a zip
@@ -97,7 +97,7 @@ installing the new repository alone isn't enough. To move over:
 Use this if you'd rather not add a repository, or you want a specific version.
 
 1. Download the add-on zip from the
-   [NeNeTeePee-Stream-Kodi releases page](https://github.com/Appz4Fun/nzbdavkodi/releases).
+   [NeNeTeePee-Stream-Kodi releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases).
    Each release has one asset named `plugin.video.nzbdav-<version>.zip`, for
    example `plugin.video.nzbdav-2.0.0-beta.2.zip`. Releases marked
    **Pre-release** on GitHub are beta builds.
