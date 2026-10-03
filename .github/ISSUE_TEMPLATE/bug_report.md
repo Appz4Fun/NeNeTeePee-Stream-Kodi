@@ -26,4 +26,4 @@ A clear description of what happened.
 What you expected to happen.
 
 **Kodi log**
-Paste relevant lines from `kodi.log` (lines starting with `NeNeTeePee-Stream-Kodi:`), with API keys, passwords, and server URLs removed. Enable debug logging under Settings > System > Logging if needed.
+Paste relevant lines from `kodi.log` (lines starting with `NeNeTeePee-Stream-Kodi:` in renamed builds or `NZB-DAV:` in current releases), with API keys, passwords, and server URLs removed. Enable debug logging under Settings > System > Logging if needed.

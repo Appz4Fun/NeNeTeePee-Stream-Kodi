@@ -147,7 +147,7 @@ Three rules run through the whole codebase. They exist because breaking them
 hangs or crashes Kodi on the target devices:
 
 - **Always resolve the handle.** On the `plugin://` resolve path, Kodi blocks
-  until the add-on calls `setResolvedUrl`. `True` on success, `False` on any
+  until the add-on calls `setResolvedUrl` — `True` on success, `False` on any
   failure, cancellation, or timeout. Every code path, including exceptions,
   routes through a resolution call so Kodi never hangs. (The RunScript path has
   no handle; there a failure just notifies and playback doesn't start.)

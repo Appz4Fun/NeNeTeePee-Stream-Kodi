@@ -1,5 +1,14 @@
 # StreamNZB backend
 
+!!! note "Current source and next release"
+    The unified **Playback backend** section and StreamNZB support are not in
+    Stable 1.2.3 or Beta 2.0.0-beta.2. The settings layout described here applies
+    to current source builds and the next release. Released builds configure
+    nzbdav and WebDAV under **Connection**. Beta 2.0.0-beta.2 uses a separate
+    **NZBGet** section and the **Use NZBGet instead of nzbdav for playback**
+    toggle. StreamNZB requires a current source build until a release includes it.
+
+
 [StreamNZB](https://github.com/Gaisberg/streamnzb) can search and stream releases
 through the existing NeNeTeePee-Stream-Kodi TMDBHelper player. No additional Kodi add-on or
 Jellyfin server is required.

@@ -1,5 +1,16 @@
 # Configure connections
 
+!!! note "Current source and next release"
+    The unified **Playback backend** section and StreamNZB support are not in
+    Stable 1.2.3 or Beta 2.0.0-beta.2. These instructions and illustrations
+    describe current source builds and the next release.
+
+    In released builds, configure nzbdav and WebDAV under **Connection**.
+    Beta 2.0.0-beta.2 has a separate **NZBGet** section with an
+    **Use NZBGet instead of nzbdav for playback** toggle. Stable 1.2.3 supports nzbdav only.
+    StreamNZB requires a current source build until a release includes it.
+
+
 Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
 
 Open the add-on settings at **Settings → Add-ons → My add-ons → Video add-ons →

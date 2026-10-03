@@ -95,7 +95,7 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
    then releases with no HDR tag. A release with several tags ranks by its best.
 3. **Release type**. filenames containing both REMUX and HYBRID first,
    then other REMUX releases, then everything else.
-4. **Preferred group**. **Tier 1**, then **Tier 2**, then **Tier 3**, then
+4. **Preferred group** — **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
 5. **Audio**. TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
    DTS-HD MA/FLAC/PCM/ALAC, then DTS-HD High Resolution/DTS, DD+, DD, AAC,

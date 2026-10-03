@@ -8,7 +8,7 @@ the [NZBGet backend](../features/nzbget-backend.md) follows a parallel path.
 
 The resolve path has one non-negotiable rule: **Kodi must always receive a
 resolution.** When Kodi asks the add-on to resolve a `plugin://` URL, it blocks
-until `setResolvedUrl` is called. `True` with a playable URL, or `False` on any
+until `setResolvedUrl` is called — `True` with a playable URL, or `False` on any
 failure, cancellation, or timeout. Every branch, including exceptions and even a
 corrupt-settings read, routes through a resolution call. Settings reads and
 dialog creation are deliberately placed inside the try/except so a rare failure

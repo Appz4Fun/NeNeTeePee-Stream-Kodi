@@ -18,4 +18,4 @@
 - Whether the problem happens for all titles or one title
 - Which search providers (NZBHydra2, Prowlarr, direct indexers) and backend (nzbdav, InfiniDysk, NZBGet, or StreamNZB) you use
 - Sanitized search-provider and backend configuration details
-- Relevant `kodi.log` excerpts (lines starting with `NeNeTeePee-Stream-Kodi:`) with secrets removed
+- Relevant `kodi.log` excerpts (lines starting with `NeNeTeePee-Stream-Kodi:` in renamed builds or `NZB-DAV:` in current releases) with secrets removed

@@ -11,7 +11,9 @@ order.
     but other add-ons and Kodi itself may not.
 
 !!! tip "Finding NeNeTeePee-Stream-Kodi in kodi.log"
-    Every NeNeTeePee-Stream-Kodi log line starts with `NeNeTeePee-Stream-Kodi:`. Kodi writes `kodi.log` to its
+    Renamed source builds use the log prefix `NeNeTeePee-Stream-Kodi:`.
+    Stable 1.2.3 and Beta 2.0.0-beta.2 use `NZB-DAV:`. Search for the prefix
+    used by your installed build. Kodi writes `kodi.log` to its
     temp folder (`/storage/.kodi/temp/kodi.log` on CoreELEC and LibreELEC). Some
     detail, such as the filter summary, is logged only when Kodi's debug
     logging is on (**Settings → System → Logging**).
@@ -241,8 +243,8 @@ Notifications during playback tell you what the proxy is doing:
 
 | Notification | Meaning |
 |---|---|
-| **nzbdav unreachable. playback may glitch** | The proxy lost its connection to nzbdav. Check that nzbdav is running and reachable. |
-| **nzbdav can't keep up. playback stalled** | nzbdav couldn't deliver data fast enough. Your Usenet provider or nzbdav may be overloaded. |
+| **nzbdav unreachable — playback may glitch** | The proxy lost its connection to nzbdav. Check that nzbdav is running and reachable. |
+| **nzbdav can't keep up — playback stalled** | nzbdav couldn't deliver data fast enough. Your Usenet provider or nzbdav may be overloaded. |
 | **fall back to candidate #N successful** / **was a failure** | A backup release took over, or failed to. See [Fallback streams](../features/fallback-streams.md). |
 | **Skipped N bytes across N recoveries** | Missing articles were skipped. You may notice a brief glitch. |
 | **Stream aborted after repeated zero-fill recovery** | Too much of the file was unreadable. Pick another release. |
@@ -258,7 +260,7 @@ For the internals behind these behaviors, see
 - Which search providers and which backend (nzbdav, InfiniDysk, or NZBGet) you use.
 - Whether your backend accepted, completed, or failed the job.
 - Sanitized NeNeTeePee-Stream-Kodi settings relevant to the failure.
-- Relevant `kodi.log` lines (the `NeNeTeePee-Stream-Kodi:` lines around the failure), with
+- Relevant `kodi.log` lines (the `NeNeTeePee-Stream-Kodi:` or `NZB-DAV:` lines around the failure), with
   secrets removed.
 
 Report issues at the
