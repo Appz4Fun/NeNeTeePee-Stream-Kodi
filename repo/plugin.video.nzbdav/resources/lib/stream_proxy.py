@@ -306,7 +306,7 @@ class _StreamHandler(  # pylint: disable=too-many-ancestors
     # BaseHTTPRequestHandler.log_message, which precedes the mixins in the
     # base list.
     def log_message(self, fmt, *args):  # pylint: disable=arguments-differ
-        xbmc.log("NZB-DAV: Proxy: {}".format(fmt % args), xbmc.LOGDEBUG)
+        xbmc.log("NeNeTeePee-Stream-Kodi: Proxy: {}".format(fmt % args), xbmc.LOGDEBUG)
 
 
 # ``_ThreadedHTTPServer`` (the worker-bounded threaded server) now lives in

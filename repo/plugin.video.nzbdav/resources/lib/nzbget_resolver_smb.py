@@ -298,9 +298,12 @@ def _warn_unreadable_smb_video(path):
     reset.
     """
     _core.xbmc.log(
-        "NZB-DAV: video is listable but not readable through Kodi's VFS: {} "
-        "-- if this persists, restart Kodi (for smb:// roots this resets "
-        "its cached SMB session)".format(_core._redact_text(path)),
+        (
+            "NeNeTeePee-Stream-Kodi: video is listable but not "
+            "readable through Kodi's VFS: {} -- if this persists, "
+            "restart Kodi (for smb:// roots this resets its cached "
+            "SMB session)"
+        ).format(_core._redact_text(path)),
         _core.xbmc.LOGERROR,
     )
     try:
@@ -318,7 +321,7 @@ def _report_smb_inventory(callback, inventory):
         callback(inventory)
     except Exception as error:  # pylint: disable=broad-except
         _core.xbmc.log(
-            "NZB-DAV: SMB inventory callback failed: {}".format(error),
+            "NeNeTeePee-Stream-Kodi: SMB inventory callback failed: {}".format(error),
             _core.xbmc.LOGDEBUG,
         )
 
@@ -396,8 +399,10 @@ def resolve_smb_video(
                 return selected
             if selected != unreadable_path:
                 _core.xbmc.log(
-                    "NZB-DAV: selected video listed but not readable yet, "
-                    "waiting: {}".format(_core._redact_text(selected)),
+                    (
+                        "NeNeTeePee-Stream-Kodi: selected video listed but not "
+                        "readable yet, waiting: {}"
+                    ).format(_core._redact_text(selected)),
                     _core.xbmc.LOGINFO,
                 )
             unreadable_path = selected

@@ -132,7 +132,9 @@ def _get_hydra_caps_for_search(base_url, api_key):
     refreshed_caps, error = refresh_hydra_caps(base_url, api_key)
     if error:
         xbmc.log(
-            "NZB-DAV: Hydra caps refresh failed before search: {}".format(error),
+            (
+                "NeNeTeePee-Stream-Kodi: Hydra caps refresh failed before search: {}"
+            ).format(error),
             xbmc.LOGDEBUG,
         )
         return {}, False
@@ -152,7 +154,9 @@ def _fetch_hydra_xml(request_url, error_prefix):
         from resources.lib.http_util import redact_text
 
         xbmc.log(
-            "NZB-DAV: {}: {}".format(error_prefix, redact_text(str(error))),
+            ("NeNeTeePee-Stream-Kodi: {}: {}").format(
+                error_prefix, redact_text(str(error))
+            ),
             xbmc.LOGERROR,
         )
         return None, _hydra_unavailable_error(error)
@@ -227,12 +231,17 @@ def _select_hydra_fallback(plan, title, has_provider_caps):
 def _run_hydra_fallback(base_url, fallback, redact_url):
     """Run a fallback Hydra query and return (results, error)."""
     xbmc.log(
-        "NZB-DAV: No results with primary Hydra query, retrying fallback",
+        (
+            "NeNeTeePee-Stream-Kodi: No results with primary Hydra "
+            "query, retrying fallback"
+        ),
         xbmc.LOGINFO,
     )
     fallback_url = _search_url(base_url, fallback)
     xbmc.log(
-        "NZB-DAV: Hydra fallback URL: {}".format(redact_url(fallback_url)),
+        ("NeNeTeePee-Stream-Kodi: Hydra fallback URL: {}").format(
+            redact_url(fallback_url)
+        ),
         xbmc.LOGDEBUG,
     )
     return _fetch_planned_hydra_results(
@@ -246,7 +255,10 @@ def _fetch_hydra_with_fallback(base_url, plan, title, has_provider_caps):
 
     primary_url = _search_url(base_url, plan.primary)
     xbmc.log(
-        "NZB-DAV: Hydra search URL: {}".format(redact_url(primary_url)), xbmc.LOGDEBUG
+        ("NeNeTeePee-Stream-Kodi: Hydra search URL: {}").format(
+            redact_url(primary_url)
+        ),
+        xbmc.LOGDEBUG,
     )
 
     results, error = _fetch_planned_hydra_results(
@@ -267,7 +279,10 @@ def _execute_hydra_plan(base_url, plan, title, has_provider_caps):
     """Run a planned Hydra search, logging the skip/result outcome."""
     if not plan.primary:
         xbmc.log(
-            "NZB-DAV: Hydra search skipped: no supported query for '{}'".format(title),
+            (
+                "NeNeTeePee-Stream-Kodi: Hydra search skipped: no "
+                "supported query for '{}'"
+            ).format(title),
             xbmc.LOGINFO,
         )
         return [], None
@@ -279,7 +294,9 @@ def _execute_hydra_plan(base_url, plan, title, has_provider_caps):
         return [], error
 
     xbmc.log(
-        "NZB-DAV: Hydra returned {} results for '{}'".format(len(results), title),
+        ("NeNeTeePee-Stream-Kodi: Hydra returned {} results for '{}'").format(
+            len(results), title
+        ),
         xbmc.LOGINFO,
     )
     return results, None
@@ -291,7 +308,8 @@ def _read_hydra_settings(settings_getter):
         base_url, api_key = _get_settings(settings_getter)
     except _HYDRA_REQUEST_ERRORS as error:
         xbmc.log(
-            "NZB-DAV: Failed to read Hydra settings: {}".format(error), xbmc.LOGERROR
+            ("NeNeTeePee-Stream-Kodi: Failed to read Hydra settings: {}").format(error),
+            xbmc.LOGERROR,
         )
         return "", "", "Failed to read NZBHydra settings"
     return base_url, api_key, None
@@ -398,7 +416,7 @@ def _fetch_hydra_internal_search(base_url, title):
             data = _json.load(response)
     except (_HTTPError, _URLError, OSError, ValueError) as error:
         xbmc.log(
-            "NZB-DAV: Hydra duplicate-uploads lookup failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: Hydra duplicate-uploads lookup failed: {}".format(
                 _format_request_error(error)
             ),
             xbmc.LOGDEBUG,
@@ -557,14 +575,17 @@ def _parse_results_checked(xml_text):
         root = safe_fromstring(xml_text)
     except (ParseError, UnsafeXmlError) as error:
         xbmc.log(
-            "NZB-DAV: Failed to parse Hydra XML response: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Failed to parse Hydra XML response: {}").format(
+                error
+            ),
             xbmc.LOGERROR,
         )
         return [], "NZBHydra returned an invalid response: {}".format(error)
 
     if root.tag != "rss":
         xbmc.log(
-            "NZB-DAV: Unexpected Hydra XML root: {}".format(root.tag), xbmc.LOGERROR
+            ("NeNeTeePee-Stream-Kodi: Unexpected Hydra XML root: {}").format(root.tag),
+            xbmc.LOGERROR,
         )
         return [], "NZBHydra returned an invalid response: expected RSS feed"
 

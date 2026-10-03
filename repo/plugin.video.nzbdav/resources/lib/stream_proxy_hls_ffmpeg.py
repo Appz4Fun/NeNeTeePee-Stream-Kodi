@@ -90,8 +90,10 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
                 proc.wait(timeout=2)
             except _sp.subprocess.TimeoutExpired:
                 _sp.xbmc.log(
-                    "NZB-DAV: HLS ffmpeg pid={} did not exit 2 s after kill; "
-                    "leaking for the OS to reap".format(getattr(proc, "pid", "?")),
+                    (
+                        "NeNeTeePee-Stream-Kodi: HLS ffmpeg pid={} did not exit "
+                        "2 s after kill; leaking for the OS to reap"
+                    ).format(getattr(proc, "pid", "?")),
                     _sp.xbmc.LOGWARNING,
                 )
             except (OSError, _sp.subprocess.SubprocessError):
@@ -132,9 +134,10 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         start_time = seg_n * self.segment_seconds
         cmd = self._build_cmd(start_time, seg_n)
         _sp.xbmc.log(
-            "NZB-DAV: HLS producer starting ffmpeg at seg {} (t={:.1f}s)".format(
-                seg_n, start_time
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: HLS producer starting ffmpeg "
+                "at seg {} (t={:.1f}s)"
+            ).format(seg_n, start_time),
             _sp.xbmc.LOGINFO,
         )
         try:
@@ -167,7 +170,9 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
             )
         except OSError as e:
             _sp.xbmc.log(
-                "NZB-DAV: HLS producer ffmpeg spawn failed: {}".format(e),
+                ("NeNeTeePee-Stream-Kodi: HLS producer ffmpeg spawn failed: {}").format(
+                    e
+                ),
                 _sp.xbmc.LOGERROR,
             )
             self._proc = None
@@ -488,7 +493,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
                 return False, True
             if self._prepare_outputs_present(init_path, first_seg_path):
                 _sp.xbmc.log(
-                    "NZB-DAV: HlsProducer.prepare confirmed init.mp4 "
+                    "NeNeTeePee-Stream-Kodi: HlsProducer.prepare confirmed init.mp4 "
                     "and seg_000000.m4s on disk during argv window",
                     _sp.xbmc.LOGINFO,
                 )
@@ -513,7 +518,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         while _sp.time.monotonic() < prod_deadline:
             if self._prepare_outputs_present(init_path, first_seg_path):
                 _sp.xbmc.log(
-                    "NZB-DAV: HlsProducer.prepare confirmed init.mp4 "
+                    "NeNeTeePee-Stream-Kodi: HlsProducer.prepare confirmed init.mp4 "
                     "and seg_000000.m4s on disk",
                     _sp.xbmc.LOGINFO,
                 )
@@ -571,10 +576,11 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
                 proc.wait(timeout=5)
             except _sp.subprocess.TimeoutExpired:
                 _sp.xbmc.log(
-                    "NZB-DAV: HlsProducer.close: ffmpeg pid={} did not exit "
-                    "5 s after kill; leaking for the OS to reap".format(
-                        getattr(proc, "pid", "?")
-                    ),
+                    (
+                        "NeNeTeePee-Stream-Kodi: HlsProducer.close: ffmpeg "
+                        "pid={} did not exit 5 s after kill; leaking for the OS "
+                        "to reap"
+                    ).format(getattr(proc, "pid", "?")),
                     _sp.xbmc.LOGWARNING,
                 )
             except (OSError, _sp.subprocess.SubprocessError):
@@ -599,9 +605,10 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
             # so the user can diagnose "why isn't my ffmpeg.log
             # archived?" when it matters.
             _sp.xbmc.log(
-                "NZB-DAV: Failed to archive ffmpeg.log for session {}: {}".format(
-                    getattr(self, "session_dir", "?"), e
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: Failed to archive ffmpeg.log "
+                    "for session {}: {}"
+                ).format(getattr(self, "session_dir", "?"), e),
                 _sp.xbmc.LOGDEBUG,
             )
         try:
@@ -720,6 +727,6 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         self._trim_archived_ffmpeg_logs(archive_dir)
 
         _sp.xbmc.log(
-            "NZB-DAV: Archived session ffmpeg.log to {}".format(dst),
+            "NeNeTeePee-Stream-Kodi: Archived session ffmpeg.log to {}".format(dst),
             _sp.xbmc.LOGINFO,
         )

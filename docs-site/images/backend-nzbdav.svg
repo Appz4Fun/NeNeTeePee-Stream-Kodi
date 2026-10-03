@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="590" viewBox="0 0 1000 590">
+<rect width="100%" height="100%" fill="#171d2b"/>
+<g fill="#fff" font-family="sans-serif"><text x="35" y="48" font-size="28">NeNeTeePee-Stream-Kodi</text><text x="35" y="93" font-size="22">Playback backend — example settings</text>
+<rect x="25" y="117" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="151" font-size="18">Playback backend</text>
+<text x="550" y="151" font-size="18" fill="#b7d4ff">nzbdav / InfiniDysk</text>
+<rect x="25" y="187" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="221" font-size="18">nzbdav URL</text>
+<text x="550" y="221" font-size="18" fill="#b7d4ff">http://media-server:3000</text>
+<rect x="25" y="257" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="291" font-size="18">API Key</text>
+<text x="550" y="291" font-size="18" fill="#b7d4ff">Your server API key</text>
+<rect x="25" y="327" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="361" font-size="18">WebDAV URL</text>
+<text x="550" y="361" font-size="18" fill="#b7d4ff">Empty to reuse the nzbdav URL</text>
+<rect x="25" y="397" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="431" font-size="18">Username</text>
+<text x="550" y="431" font-size="18" fill="#b7d4ff">Your WebDAV username</text>
+<rect x="25" y="467" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="501" font-size="18">Password</text>
+<text x="550" y="501" font-size="18" fill="#b7d4ff">Your WebDAV password</text>
+</g></svg>

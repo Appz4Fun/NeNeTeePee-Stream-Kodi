@@ -1,6 +1,15 @@
 # NZBGet backend
 
-By default, NZB-DAV downloads and streams through nzbdav. It can use
+!!! note "Current source and next release"
+    The unified **Playback backend** section and StreamNZB support are not in
+    Stable 1.2.3 or Beta 2.0.0-beta.2. The settings layout described here applies
+    to current source builds and the next release. Released builds configure
+    nzbdav and WebDAV under **Connection**. Beta 2.0.0-beta.2 uses a separate
+    **NZBGet** section and the **Use NZBGet instead of nzbdav for playback**
+    toggle. StreamNZB requires a current source build until a release includes it.
+
+
+By default, NeNeTeePee-Stream-Kodi downloads and streams through nzbdav. It can use
 **NZBGet** as the backend instead. In that mode it submits the NZB to NZBGet
 and waits for NZBGet to download and post-process it. It then plays the
 finished file from an SMB share or a local/mounted path.
@@ -30,7 +39,7 @@ settings appear below the dropdown:
 | **NZBGet URL** | `http://localhost:6789` | Your NZBGet address. |
 | **NZBGet Username** | `nzbget` | NZBGet control username. |
 | **NZBGet Password** | *(empty)* | NZBGet control password. |
-| **NZBGet Category** | *(empty)* | The category to submit under. NZB-DAV also uses it to find the completed file when it can't read NZBGet's own `DestDir`. |
+| **NZBGet Category** | *(empty)* | The category to submit under. NeNeTeePee-Stream-Kodi also uses it to find the completed file when it can't read NZBGet's own `DestDir`. |
 | **Completed Folder (SMB or Local Path)** | *(empty)* | NZBGet's completed-downloads base as Kodi sees it. This can be an SMB URL, for example `smb://server/downloads/completed`, or a local/mounted path such as an NFS mount, for example `/storage/nzbget/downloads`. An NFS hard mount is [recommended](#recommended-mount-the-completed-folder-over-nfs). |
 
 Use **Test NZBGet Connection** to check the control API. Use **Test Completed
@@ -38,9 +47,9 @@ Folder** to check that Kodi can reach the completed folder. Playback fails with
 "NZBGet not configured" if the URL or the completed folder is empty.
 
 NZBGet mode also uses two settings from the **Polling** group on the
-**Advanced** tab. **Poll interval (seconds)** sets how often NZB-DAV checks
+**Advanced** tab. **Poll interval (seconds)** sets how often NeNeTeePee-Stream-Kodi checks
 NZBGet. **Download timeout (seconds)** defaults to 3600 and is clamped to
-60–86400. If the timeout runs out, NZB-DAV reports "Download timed out" and
+60–86400. If the timeout runs out, NeNeTeePee-Stream-Kodi reports "Download timed out" and
 leaves the job running in NZBGet, so it can finish for a later play.
 
 <!--
@@ -62,10 +71,10 @@ comment with:  ![NZBGet settings](../images/nzbget-settings.png)
 
 An `smb://` completed folder goes through Kodi's built-in SMB client, which
 keeps a cached session to the server. That cache is a poor fit for NZBGet
-downloads. NZB-DAV looks for the video as soon as NZBGet reports success, and
+downloads. NeNeTeePee-Stream-Kodi looks for the video as soon as NZBGet reports success, and
 Kodi may probe a file while it is still being unpacked or moved. Kodi can then
 keep a stale, half-written view of that file. The finished file lists but won't
-open, often until you restart Kodi. NZB-DAV
+open, often until you restart Kodi. NeNeTeePee-Stream-Kodi
 [checks that the file is readable](#how-it-works) before playback and
 tells you to restart Kodi when this happens, but it can't clear Kodi's SMB
 cache for you.
@@ -78,109 +87,11 @@ sources are better than SMB but still use Kodi's built-in client, so a
 system-level hard mount is the best option for streaming NZBGet downloads from
 another machine.
 
-### 1. Export the folder over NFS on your NAS
+### Use an existing mounted folder
 
-On the storage server, share the folder that contains NZBGet's completed
-downloads over NFS, not only over SMB. Synology, TrueNAS, Unraid, and
-OpenMediaVault all have an NFS option in their share settings. On a plain Linux
-server, an `/etc/exports` line like this gives read-only access to your local
-network:
+Mount the completed-download folder using your operating system or storage provider documentation. In the add-on, set **Completed Folder (SMB or Local Path)** to that mounted path, then select **Test Completed Folder**.
 
-```text
-/mnt/nzbget  192.168.1.0/24(ro,no_subtree_check)
-```
-
-Run `exportfs -ra` after editing `/etc/exports`.
-
-### 2. Create a systemd mount unit on CoreELEC
-
-CoreELEC's system partition is read-only, so you can't add a unit under `/etc`.
-Put your own units in **`/storage/.config/system.d/`**, the folder CoreELEC
-reads user units from:
-
-```console
-CoreELEC:~ # cd /storage/.config/system.d
-CoreELEC:~/.config/system.d # ls
-README                    nfs-mountd.service        rpcbind.service
-cifs.mount.sample         nfs.mount.sample          ...
-```
-
-systemd requires a mount unit's file name to match the path it mounts. Slashes
-become dashes, so a mount at `/storage/nzbget` must be named
-`storage-nzbget.mount`. Create
-`/storage/.config/system.d/storage-nzbget.mount`:
-
-```ini
-[Unit]
-Description=Mount NFS share 192.168.1.50:/mnt/nzbget
-Requires=network-online.service
-After=network-online.service
-Before=kodi.service
-
-[Mount]
-What=192.168.1.50:/mnt/nzbget
-Where=/storage/nzbget
-Type=nfs
-Options=ro,hard,timeo=30,retrans=2,noatime,nofail,nolock
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Replace `192.168.1.50:/mnt/nzbget` with your NAS address and export path.
-`Before=kodi.service` makes the share available before Kodi starts. The mount
-options do the following:
-
-| Option | Why |
-|--------|-----|
-| `ro` | Read-only. NZB-DAV only lists and reads files in the completed folder. |
-| `hard` | Retry indefinitely through a server or network blip instead of failing the read. |
-| `timeo=30,retrans=2` | Wait 3 seconds (the value is in tenths of a second) before retrying, with 2 retransmissions per cycle. |
-| `noatime` | Don't update access times on every read. |
-| `nofail` | Don't hold up boot if the NAS is offline. |
-| `nolock` | Skip NFS file locking, which a read-only playback mount doesn't need. |
-
-### 3. Enable and start the mount
-
-```console
-CoreELEC:~ # systemctl daemon-reload
-CoreELEC:~ # systemctl enable storage-nzbget.mount
-CoreELEC:~ # systemctl start storage-nzbget.mount
-CoreELEC:~ # systemctl status storage-nzbget.mount
-● storage-nzbget.mount - Mount NFS share 192.168.1.50:/mnt/nzbget
-     Loaded: loaded (/storage/.config/system.d/storage-nzbget.mount; enabled; preset: disabled)
-     Active: active (mounted) since Wed 2026-09-23 09:17:09 CDT; 11h ago
-      Where: /storage/nzbget
-       What: 192.168.1.50:/mnt/nzbget
-```
-
-Once enabled, the share mounts automatically on every boot.
-
-### 4. Point NZB-DAV at the mount
-
-**Completed Folder** must be the Kodi-side path of NZBGet's completed-downloads
-folder, NZBGet's `DestDir` setting (**Settings → Paths**). For example, if
-NZBGet saves to `/mnt/nzbget/downloads` on the server and you mounted
-`/mnt/nzbget` at `/storage/nzbget`, that folder is `/storage/nzbget/downloads`.
-
-1. Check that the folder exists on the Kodi device and contains your completed
-   NZBGet downloads:
-
-    ```console
-    CoreELEC:~ # ls /storage/nzbget/downloads
-    ```
-
-2. On **Playback backend** with **NZBGet** selected, set **Completed Folder (SMB or Local Path)** to
-   `/storage/nzbget/downloads`.
-3. Run **Test Completed Folder**.
-
-NZB-DAV maps each job's `DestDir` onto this folder, including any category
-subfolders. Playback then reads straight from the NFS mount.
-
-!!! note "LibreELEC and other Linux systems"
-    LibreELEC uses the same `/storage/.config/system.d/` folder. On a regular
-    Linux install, put the unit in `/etc/systemd/system/` or add an equivalent
-    `/etc/fstab` entry with the same options.
+The mount must expose NZBGet’s completed files to Kodi. For server setup, use the [NZBGet project documentation](https://github.com/nzbgetcom/nzbget).
 
 ## How it works
 
@@ -195,7 +106,7 @@ flowchart LR
     F --> H[Kodi plays from SMB or local path]
 ```
 
-- **Submission:** NZB-DAV fetches the NZB itself and uploads it through
+- **Submission:** NeNeTeePee-Stream-Kodi fetches the NZB itself and uploads it through
   NZBGet's JSON-RPC `append` method with HTTP Basic auth. Over `http://` the
   username and password travel unencrypted, so use an `https://` **NZBGet
   URL** unless NZBGet runs on the same machine or a network you trust.
@@ -206,20 +117,20 @@ flowchart LR
   `SUCCESS` status. A `WARNING` result counts as a failure, so you're never
   handed a corrupt file. That includes repairable or damaged downloads where
   repair didn't complete.
-- **File discovery:** NZB-DAV maps the job's completed directory onto your
+- **File discovery:** NeNeTeePee-Stream-Kodi maps the job's completed directory onto your
   configured completed folder. It uses NZBGet's `DestDir` option when it can
   read it, and otherwise works it out from the category. It then scans up to
   three folder levels deep for a playable video: `.mkv`, `.mp4`, `.m4v`,
   `.avi`, `.ts`, `.m2ts`, `.wmv`, or `.mov`. It keeps retrying
   for up to 60 seconds while NZBGet's moved files become visible. For movies, the largest
   video wins. For episode requests, samples, trailers, featurettes, and other
-  extras are excluded, and a file named for the exact requested season and
+  extras are excluded, and a filenamed for the exact requested season and
   episode wins over larger videos. If the right episode can't be identified,
   the selection fails rather than playing a different episode.
-- **Readability check:** NZB-DAV hands the file to Kodi only after reading its
+- **Readability check:** NeNeTeePee-Stream-Kodi hands the file to Kodi only after reading its
   first bytes through Kodi's own file layer. A file can still be settling after
   NZBGet's move, or Kodi's cached SMB session can deny access even though the
-  file is listed. In those cases NZB-DAV keeps retrying. If the file never
+  file is listed. In those cases NeNeTeePee-Stream-Kodi keeps retrying. If the file never
   becomes readable, it shows a notification: "Video file is listed but not
   readable. If this persists, check the share or mount and restart Kodi."
   This check was added in 2.0.0-beta.2.
@@ -229,7 +140,7 @@ flowchart LR
 The NZBGet backend downloads the whole release before playback, so it can't
 switch streams live. It relies on NZBGet's own
 [Smart Duplicates](https://nzbget.com/documentation/rss/#duplicates) instead.
-When you pick a release, NZB-DAV also submits every other result with the
+When you pick a release, NeNeTeePee-Stream-Kodi also submits every other result with the
 **same release name**. These are reposts or mirrors of the same release from
 other indexers. Every submission gets:
 
@@ -255,10 +166,10 @@ copy and repairs that with its own par2. The add-on **follows this failover
 live within the same play**. It tracks the promoted backup and plays it when
 it completes, or plays a backup that already finished, instead of reporting a
 failed playback. NZBGet may refuse your pick because the same content is
-already in its history. If nothing else in the set can play, NZB-DAV
+already in its history. If nothing else in the set can play, NeNeTeePee-Stream-Kodi
 re-submits the pick once with `FORCE`.
 
-If you cancel the play, NZB-DAV removes everything that play submitted or was
+If you cancel the play, NeNeTeePee-Stream-Kodi removes everything that play submitted or was
 following: the pick, any promoted backup, and the parked backups. NZBGet
 doesn't keep a backup running, and another play of the same release isn't
 affected.
@@ -272,7 +183,7 @@ submitted as the lowest-priority backups.
     `None`, or `Park`. The modern default is `Delete`. With `Pause`, NZBGet
     pauses a broken download instead of promoting a backup. The add-on shows a
     notice about this once per Kodi session. If NZBGet's **DupeCheck** is `no`,
-    NZB-DAV skips the backups entirely, because NZBGet would download them all
+    NeNeTeePee-Stream-Kodi skips the backups entirely, because NZBGet would download them all
     in parallel.
 
 The backups are best-effort. A backup that fails to submit never affects your
@@ -287,17 +198,17 @@ pick's download or playback. They're controlled by two fallback settings:
 If NZBGet already downloaded a title successfully, the picker marks it with a
 green **DL** tag. A result gets the tag when its name matches a `SUCCESS`
 history item, its size is within 15%, and its recorded Usenet post date
-matches. If you play it, NZB-DAV reuses the completed file directly instead of
+matches. If you play it, NeNeTeePee-Stream-Kodi reuses the completed file directly instead of
 resubmitting it. This is deliberate: NZBGet's duplicate check would otherwise
 delete a resubmission of a `SUCCESS` item and fail the playback.
 
-NZB-DAV also remembers completed folders that hold at least two reliably named
+NeNeTeePee-Stream-Kodi also remembers completed folders that hold at least two reliably named
 episodes from one season as season packs. When the exact episode you want is
 in such a pack, later episode pickers show an
-**Already downloaded season pack - Episodes …** row above the online releases.
+**Already downloaded season pack - Episodes …** row before the online releases.
 Each record is tied to the `nzbget` backend, the exact NZBGet `NZBID`, and that
 job's `DestDir`. Files from another job are never merged in just because its
-name looks the same. When you select the row, NZB-DAV checks that exact
+name looks the same. When you select the row, NeNeTeePee-Stream-Kodi checks that exact
 successful history item and completed folder again. It then plays the
 requested episode without a new submission.
 

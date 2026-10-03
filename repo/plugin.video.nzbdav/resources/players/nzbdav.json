@@ -1,9 +1,9 @@
 {
-    "name": "NZB-DAV",
+    "name": "NeNeTeePee-Stream-Kodi",
     "plugin": "plugin.video.nzbdav",
     "priority": 100,
     "is_resolvable": "false",
-    "schema_version": 8,
+    "schema_version": 9,
     "play_movie": "executebuiltin://RunScript(special://home/addons/plugin.video.nzbdav/addon.py,tmdb_play,type=movie,title={title_url},year={year},imdb={imdb},tmdb_id={tmdb_id})",
     "play_episode": "executebuiltin://RunScript(special://home/addons/plugin.video.nzbdav/addon.py,tmdb_play,type=episode,title={showname_url},year={showyear},season={season},episode={episode},imdb={imdb},tmdb_id={tmdb},tvdb={tvdb},ep_season={ep_showseason},ep_episode={ep_showepisode})"
 }

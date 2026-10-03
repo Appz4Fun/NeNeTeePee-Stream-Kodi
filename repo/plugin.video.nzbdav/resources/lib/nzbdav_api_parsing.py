@@ -166,7 +166,9 @@ def _record_completed_name_matches(slots, target_names, found):
         if name in remaining and slot.get("status") == "Completed":
             found[name] = _completed_job_from_slot(slot)
             xbmc.log(
-                "NZB-DAV: Found existing download '{}' in history".format(name),
+                (
+                    "NeNeTeePee-Stream-Kodi: Found existing download '{}' in history"
+                ).format(name),
                 xbmc.LOGINFO,
             )
 
@@ -178,7 +180,7 @@ def _record_queued_matches(slots, key, target_names, found):
         if name not in target_names or name in found:
             continue
         xbmc.log(
-            "NZB-DAV: Found '{}' in queue via {} (nzo_id={})".format(
+            "NeNeTeePee-Stream-Kodi: Found '{}' in queue via {} (nzo_id={})".format(
                 name, key, slot.get("nzo_id")
             ),
             xbmc.LOGINFO,
@@ -221,7 +223,7 @@ def _job_status_from_slots(slots, nzo_id):
         status = slot.get("status", "Unknown")
         percentage = slot.get("percentage", "0")
         xbmc.log(
-            "NZB-DAV: Job {} status={} percentage={}".format(
+            "NeNeTeePee-Stream-Kodi: Job {} status={} percentage={}".format(
                 nzo_id, status, percentage
             ),
             xbmc.LOGDEBUG,
@@ -232,7 +234,9 @@ def _job_status_from_slots(slots, nzo_id):
             "filename": slot.get("filename", ""),
         }
     xbmc.log(
-        "NZB-DAV: Job {} not found in queue (may be complete)".format(nzo_id),
+        ("NeNeTeePee-Stream-Kodi: Job {} not found in queue (may be complete)").format(
+            nzo_id
+        ),
         xbmc.LOGDEBUG,
     )
     return None
@@ -255,7 +259,9 @@ def _submit_http_error_result(e):
         pass
     body = _redact_text(_sanitize_server_message(body))[:500]
     xbmc.log(
-        "NZB-DAV: Submit NZB got HTTP {} from nzbdav: {}".format(e.code, body),
+        ("NeNeTeePee-Stream-Kodi: Submit NZB got HTTP {} from nzbdav: {}").format(
+            e.code, body
+        ),
         xbmc.LOGERROR,
     )
     return None, {"status": e.code, "message": body}
@@ -270,7 +276,7 @@ def _submit_request_error_result(e, timeout, nzb_name):
     """
     if _is_timeout_error(e):
         xbmc.log(
-            "NZB-DAV: Submit NZB client-side timeout after {}s — nzbdav "
+            "NeNeTeePee-Stream-Kodi: Submit NZB client-side timeout after {}s — nzbdav "
             "may have accepted the submit anyway; caller will check "
             "queue/history for '{}' before retrying".format(timeout, nzb_name),
             xbmc.LOGWARNING,
@@ -283,7 +289,9 @@ def _submit_request_error_result(e, timeout, nzb_name):
     # (which embeds the indexer apikey) into the log. Same defense as
     # the prowlarr / hydra fetch paths. TODO.md §H.2-H2f / §H.3.
     xbmc.log(
-        "NZB-DAV: Submit NZB request failed: {}".format(_redact_text(str(e))),
+        ("NeNeTeePee-Stream-Kodi: Submit NZB request failed: {}").format(
+            _redact_text(str(e))
+        ),
         xbmc.LOGERROR,
     )
     return None, None
@@ -300,7 +308,9 @@ def _submit_parse_result(response):
     if response.get("status") and isinstance(nzo_ids, list) and nzo_ids and nzo_ids[0]:
         nzo_id = nzo_ids[0]
         xbmc.log(
-            "NZB-DAV: NZB submitted successfully, nzo_id={}".format(nzo_id),
+            ("NeNeTeePee-Stream-Kodi: NZB submitted successfully, nzo_id={}").format(
+                nzo_id
+            ),
             xbmc.LOGINFO,
         )
         return nzo_id, None
@@ -311,7 +321,7 @@ def _submit_parse_result(response):
     # inside its rejection payload (e.g. "Failed to fetch <url>"), which
     # would otherwise land in the Kodi log.
     xbmc.log(
-        "NZB-DAV: Submit NZB rejected by nzbdav: {}".format(
+        "NeNeTeePee-Stream-Kodi: Submit NZB rejected by nzbdav: {}".format(
             _redact_text(str(response))
         ),
         xbmc.LOGERROR,
@@ -332,14 +342,19 @@ def _cancel_job_outcome(response, nzo_id):
     # the §H.3 cancel/submit-asymmetric finding.
     if response.get("status"):
         xbmc.log(
-            "NZB-DAV: cancel_job removed nzo_id={} from queue".format(nzo_id),
+            ("NeNeTeePee-Stream-Kodi: cancel_job removed nzo_id={} from queue").format(
+                nzo_id
+            ),
             xbmc.LOGINFO,
         )
         return True
     err = response.get("error", "unknown")
     xbmc.log(
-        "NZB-DAV: cancel_job got status=false for nzo_id={} (job is no longer "
-        "in the active queue, may have completed/failed): {}".format(nzo_id, err),
+        (
+            "NeNeTeePee-Stream-Kodi: cancel_job got status=false "
+            "for nzo_id={} (job is no longer in the active queue, "
+            "may have completed/failed): {}"
+        ).format(nzo_id, err),
         xbmc.LOGDEBUG,
     )
     return False

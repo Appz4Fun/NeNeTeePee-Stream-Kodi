@@ -360,7 +360,7 @@ def _dialog_close_called_when_poll_raises(helper_name, poll_ctx):
     with patch("resources.lib.resolver.xbmcgui") as gui, patch(
         "resources.lib.resolver._get_poll_settings", return_value=(1, 10)
     ), patch("resources.lib.resolver._maybe_clear_queue_before_submit"), patch(
-        "resources.lib.resolver._addon_name", return_value="NZB-DAV"
+        "resources.lib.resolver._addon_name", return_value="NeNeTeePee-Stream-Kodi"
     ), patch(
         "resources.lib.resolver._string", return_value="msg"
     ), patch(

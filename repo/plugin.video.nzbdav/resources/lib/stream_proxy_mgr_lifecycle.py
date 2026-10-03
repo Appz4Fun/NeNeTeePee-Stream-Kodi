@@ -28,7 +28,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
         self._thread.daemon = True
         self._thread.start()
         _sp.xbmc.log(
-            "NZB-DAV: Stream proxy started on port {}".format(self.port),
+            "NeNeTeePee-Stream-Kodi: Stream proxy started on port {}".format(self.port),
             _sp.xbmc.LOGINFO,
         )
 
@@ -171,7 +171,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
                 hls_producer.close(wait_for_process=wait_for_process)
             except _sp._HLS_CLOSE_ERRORS as e:
                 _sp.xbmc.log(
-                    "NZB-DAV: HLS producer close failed: {}".format(e),
+                    "NeNeTeePee-Stream-Kodi: HLS producer close failed: {}".format(e),
                     _sp.xbmc.LOGWARNING,
                 )
 
@@ -210,7 +210,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
             return False
         supported = all(marker in output for marker in _sp._FMP4_HLS_CAPABILITY_MARKERS)
         _sp.xbmc.log(
-            "NZB-DAV: ffmpeg fmp4 HLS capability {} ({})".format(
+            "NeNeTeePee-Stream-Kodi: ffmpeg fmp4 HLS capability {} ({})".format(
                 "present" if supported else "absent", ffmpeg_path
             ),
             _sp.xbmc.LOGINFO if supported else _sp.xbmc.LOGWARNING,

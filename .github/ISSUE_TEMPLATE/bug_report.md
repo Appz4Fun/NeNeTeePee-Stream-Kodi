@@ -9,7 +9,7 @@ assignees: ''
 **Environment**
 - Kodi version:
 - Platform/device (e.g., CoreELEC on Odroid N2+):
-- NZB-DAV version:
+- NeNeTeePee-Stream-Kodi version:
 - Channel (Stable / Beta / manual zip):
 - Backend (nzbdav / InfiniDysk / NZBGet):
 - Search provider (NZBHydra2 / Prowlarr / direct indexers):
@@ -26,4 +26,4 @@ A clear description of what happened.
 What you expected to happen.
 
 **Kodi log**
-Paste relevant lines from `kodi.log` (lines starting with `NZB-DAV:`), with API keys, passwords, and server URLs removed. Enable debug logging under Settings > System > Logging if needed.
+Paste relevant lines from `kodi.log` (lines starting with `NeNeTeePee-Stream-Kodi:` in renamed builds or `NZB-DAV:` in current releases), with API keys, passwords, and server URLs removed. Enable debug logging under Settings > System > Logging if needed.

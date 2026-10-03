@@ -192,13 +192,15 @@ class _HlsSegmentMixin:  # pylint: disable=too-few-public-methods
             with open(init_path, "rb") as f:
                 self._canonical_init_bytes = f.read()
             _sp.xbmc.log(
-                "NZB-DAV: Cached canonical init.mp4 "
+                "NeNeTeePee-Stream-Kodi: Cached canonical init.mp4 "
                 "({} bytes) for session".format(len(self._canonical_init_bytes)),
                 _sp.xbmc.LOGINFO,
             )
         except OSError as e:
             _sp.xbmc.log(
-                "NZB-DAV: Failed to cache canonical init.mp4: {}".format(e),
+                (
+                    "NeNeTeePee-Stream-Kodi: Failed to cache canonical init.mp4: {}"
+                ).format(e),
                 _sp.xbmc.LOGWARNING,
             )
 

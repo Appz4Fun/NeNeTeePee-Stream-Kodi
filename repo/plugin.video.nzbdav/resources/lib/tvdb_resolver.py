@@ -181,9 +181,9 @@ def _resolve_tvdb_via_api(http_get, key, tmdb_id, imdb):
         from resources.lib.http_util import redact_text
 
         xbmc.log(
-            "NZB-DAV: TVDB resolve failed for tmdb={} imdb={}: {}".format(
-                tmdb_id or "-", imdb or "-", redact_text(str(error))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: TVDB resolve failed for tmdb={} imdb={}: {}"
+            ).format(tmdb_id or "-", imdb or "-", redact_text(str(error))),
             xbmc.LOGDEBUG,
         )
         return ""
@@ -257,7 +257,9 @@ def resolve_movie_imdb_id(tmdb_id, settings_getter=None, http_get=None, cache=No
         from resources.lib.http_util import redact_text
 
         xbmc.log(
-            "NZB-DAV: movie ID lookup failed: {}".format(redact_text(str(error))),
+            ("NeNeTeePee-Stream-Kodi: movie ID lookup failed: {}").format(
+                redact_text(str(error))
+            ),
             xbmc.LOGDEBUG,
         )
     return ""

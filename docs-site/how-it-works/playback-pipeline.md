@@ -1,6 +1,6 @@
 # Playback pipeline
 
-Once you pick a source, NZB-DAV submits it, polls until it's ready, discovers the
+Once you pick a source, NeNeTeePee-Stream-Kodi submits it, polls until it's ready, discovers the
 playable file, and hands Kodi a local URL. This page covers the nzbdav backend;
 the [NZBGet backend](../features/nzbget-backend.md) follows a parallel path.
 
@@ -51,12 +51,12 @@ sequenceDiagram
 Submission runs on a worker thread while the plugin thread pumps the progress
 dialog every 250 ms and watches for cancellation. Concurrently, probe threads
 watch the queue and history for the job by name and **adopt** it the moment it
-appears — often before the submit call even returns. Submission retries up to
+appears. often before the submit call even returns. Submission retries up to
 three attempts, two seconds apart (the wait is abortable), and classifies
 errors carefully:
 
-- A client-side **submit timeout is not a failure** — nzbdav may still be
-  fetching and parsing the NZB (routinely slow on a large remux). NZB-DAV probes
+- A client-side **submit timeout is not a failure**. nzbdav may still be
+  fetching and parsing the NZB (routinely slow on a large remux). NeNeTeePee-Stream-Kodi probes
   the queue and history to adopt a slow-but-successful submit rather than
   double-submitting.
 - Transient HTTP errors (408/502/503/504) retry. An explicit nzbdav rejection or
@@ -69,10 +69,10 @@ errors carefully:
 ### Polling
 
 Each poll queries the queue and history APIs in parallel. Because nzbdav can
-remap the job id when a job moves from queue to history, NZB-DAV also has a
+remap the job id when a job moves from queue to history, NeNeTeePee-Stream-Kodi also has a
 by-name history fallback, gated by the submit timestamp so a stale prior attempt
 can't trigger a false failure. When neither API answers within the poll
-window, NZB-DAV probes WebDAV reachability to tell a missing job apart from an
+window, NeNeTeePee-Stream-Kodi probes WebDAV reachability to tell a missing job apart from an
 unreachable server. The progress dialog maps the backend status to a line:
 
 | Status | Dialog line |
@@ -86,15 +86,15 @@ unreachable server. The progress dialog maps the backend status to a line:
 
 ## Finding the right video file
 
-When a job completes, NZB-DAV maps the completed storage path to a WebDAV path
+When a job completes, NeNeTeePee-Stream-Kodi maps the completed storage path to a WebDAV path
 and lists the folder with a `PROPFIND` (`Depth: 1` per level, recursion capped
 a few levels deep, XML parsed with entity declarations refused). It then chooses
 the playable file:
 
 - Video extensions recognized: `.mkv`, `.mp4`, `.avi`, `.m4v`, `.ts`, `.m2ts`,
   `.wmv`, `.mov`.
-- For a **TV season pack**, NZB-DAV matches the requested season/episode against
-  filenames — handling multi-episode and range patterns — and recurses into
+- For a **TV season pack**, NeNeTeePee-Stream-Kodi matches the requested season/episode against
+  filenames. handling multi-episode and range patterns. And recurses into
   subfolders when needed. A named wrong episode fails closed rather than being
   selected for its size.
 - With an explicit episode request, one generic video may retain the ordinary
@@ -105,19 +105,19 @@ the playable file:
 ### Guarding against "Completed but broken"
 
 A backend can report *Completed* while the file is really a placeholder or is
-missing its middle article bodies. NZB-DAV runs two guards, and **both fail open**
+missing its middle article bodies. NeNeTeePee-Stream-Kodi runs two guards, and **both fail open**
 (they only reject on positive evidence of a problem, never on missing data):
 
-- **Stub guard** — rejects the folder when its total video bytes are under half
+- **Stub guard**. rejects the folder when its total video bytes are under half
   the advertised release size, or when the picked file is a tiny fraction of the
   largest sibling video. This catches nzbdav's ~30-second job-start placeholder.
-- **Body guard** — after a `HEAD`, issues a 64 KiB range `GET` from the middle
+- **Body guard**. after a `HEAD`, issues a 64 KiB range `GET` from the middle
   of the file. A `≥400` or an empty body means the bodies aren't really there.
 
 ## Remembering completed season packs
 
 !!! info "Beta feature"
-    Added in 2.0.0-beta.2 — available on the [Beta channel](../getting-started/beta-channel.md).
+    Added in 2.0.0-beta.2. available on the [Beta channel](../getting-started/beta-channel.md).
 
 After a confirmed completed-folder inventory, a folder containing at least two
 reliably named episodes from exactly one season is recorded for later reuse.
@@ -143,18 +143,18 @@ errors fail soft and preserve the record for a later attempt.
 
 ## Queue clearing
 
-Before submitting, NZB-DAV can clear nzbdav's download queue, controlled by
+Before submitting, NeNeTeePee-Stream-Kodi can clear nzbdav's download queue, controlled by
 **Clear download queue when starting a new download** (**Advanced › Polling**;
 Ask / Always clear / Never, default Ask). It excludes this title's own
 in-flight job, skips clearing when a completed copy you could reuse already
-exists, and — in Ask mode — shows a Keep/Clear prompt *before* the progress
+exists, and. in Ask mode. shows a Keep/Clear prompt *before* the progress
 dialog so it's never hidden behind the modal. Any probe or dialog
 failure leaves the queue untouched.
 
 ## Resume
 
-NZB-DAV tracks resume points **per release identity** (title + size + post date),
-not per stream URL — so resume survives the churning proxy/WebDAV URL and stays
+NeNeTeePee-Stream-Kodi tracks resume points **per release identity** (title + size + post date),
+not per stream URL. So resume survives the churning proxy/WebDAV URL and stays
 distinct per episode. On replay it shows Kodi's native **Resume from…** /
 **Start from beginning** prompt (honoring your Kodi play-action preference). It
 also scrubs Kodi's own bookmark for the outer `plugin://` URL, which otherwise

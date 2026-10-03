@@ -139,12 +139,14 @@ def _dump_submitted_nzb(nzb_url, nzb_name):
         with open(out_path, "wb") as fh:
             fh.write(body)
         xbmc.log(
-            "NZB-DAV: Dumped submitted NZB '{}' to {}".format(nzb_name, out_path),
+            ("NeNeTeePee-Stream-Kodi: Dumped submitted NZB '{}' to {}").format(
+                nzb_name, out_path
+            ),
             xbmc.LOGINFO,
         )
     except Exception as exc:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Failed to dump submitted NZB '{}': {}".format(
+            "NeNeTeePee-Stream-Kodi: Failed to dump submitted NZB '{}': {}".format(
                 nzb_name, _redact_text(str(exc))
             ),
             xbmc.LOGWARNING,
@@ -171,7 +173,9 @@ def _build_submit_request(
         else _get_submit_timeout(settings_getter=settings_getter)
     )
     xbmc.log(
-        "NZB-DAV: Submit NZB URL (timeout={}s): {}".format(timeout, redact_url(url)),
+        ("NeNeTeePee-Stream-Kodi: Submit NZB URL (timeout={}s): {}").format(
+            timeout, redact_url(url)
+        ),
         xbmc.LOGDEBUG,
     )
     return url, timeout
@@ -212,7 +216,9 @@ def submit_nzb(nzb_url, nzb_name="", settings_getter=None, submit_timeout=None):
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Failed to read nzbdav settings: {}".format(_redact_text(str(e))),
+            ("NeNeTeePee-Stream-Kodi: Failed to read nzbdav settings: {}").format(
+                _redact_text(str(e))
+            ),
             xbmc.LOGERROR,
         )
         return None, None
@@ -260,7 +266,9 @@ def _build_cancel_url(base_url, api_key, nzo_id, timeout):
     from resources.lib.http_util import redact_url
 
     xbmc.log(
-        "NZB-DAV: cancel_job URL (timeout={}s): {}".format(timeout, redact_url(url)),
+        ("NeNeTeePee-Stream-Kodi: cancel_job URL (timeout={}s): {}").format(
+            timeout, redact_url(url)
+        ),
         xbmc.LOGDEBUG,
     )
     return url
@@ -302,7 +310,7 @@ def cancel_job(nzo_id, timeout=30, settings_getter=None):
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: cancel_job failed to read settings: {}".format(
+            "NeNeTeePee-Stream-Kodi: cancel_job failed to read settings: {}".format(
                 _redact_text(str(e))
             ),
             xbmc.LOGERROR,
@@ -326,7 +334,7 @@ def _fetch_cancel_response(url, nzo_id, timeout):
         # prevents the cancel from reaching nzbdav should just get logged
         # and swallowed so the caller doesn't cascade into error dialogs.
         xbmc.log(
-            "NZB-DAV: cancel_job network error for nzo_id={}: {}".format(
+            "NeNeTeePee-Stream-Kodi: cancel_job network error for nzo_id={}: {}".format(
                 nzo_id, _redact_text(str(e))
             ),
             xbmc.LOGWARNING,
@@ -347,9 +355,9 @@ def get_queue_slots(settings_getter=None, timeout=15):
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: get_queue_slots failed to read settings: {}".format(
-                _redact_text(str(e))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: get_queue_slots failed to read settings: {}"
+            ).format(_redact_text(str(e))),
             xbmc.LOGERROR,
         )
         return []
@@ -362,7 +370,9 @@ def get_queue_slots(settings_getter=None, timeout=15):
         response = _coerce_response_dict(json.loads(_http_get(url, timeout=timeout)))
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: get_queue_slots network error: {}".format(_redact_text(str(e))),
+            ("NeNeTeePee-Stream-Kodi: get_queue_slots network error: {}").format(
+                _redact_text(str(e))
+            ),
             xbmc.LOGWARNING,
         )
         return []
@@ -403,7 +413,9 @@ def clear_queue(settings_getter=None, slots=None, timeout=None):
             cleared += 1
     if cleared:
         xbmc.log(
-            "NZB-DAV: clear_queue cancelled {} queued job(s)".format(cleared),
+            ("NeNeTeePee-Stream-Kodi: clear_queue cancelled {} queued job(s)").format(
+                cleared
+            ),
             xbmc.LOGINFO,
         )
     return cleared
@@ -421,7 +433,10 @@ def get_job_history(nzo_id, settings_getter=None):
     try:
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception:  # pylint: disable=broad-except
-        xbmc.log("NZB-DAV: Failed to read settings for job history", xbmc.LOGDEBUG)
+        xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: Failed to read settings for job history"),
+            xbmc.LOGDEBUG,
+        )
         return None
 
     params = {
@@ -437,9 +452,10 @@ def get_job_history(nzo_id, settings_getter=None):
         response = _coerce_response_dict(json.loads(response_text))
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Job history request failed for nzo_id={}: {}".format(
-                nzo_id, _redact_text(str(e))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Job history request failed for "
+                "nzo_id={}: {}"
+            ).format(nzo_id, _redact_text(str(e))),
             xbmc.LOGDEBUG,
         )
         return None
@@ -471,9 +487,10 @@ def _fetch_exact_history(nzo_id, settings_getter):
         decoded = json.loads(_http_get(url, timeout=_API_READ_TIMEOUT))
     except Exception as error:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: exact history lookup failed for nzo_id={}: {}".format(
-                nzo_id, _redact_text(str(error))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: exact history lookup failed "
+                "for nzo_id={}: {}"
+            ).format(nzo_id, _redact_text(str(error))),
             xbmc.LOGDEBUG,
         )
         return None
@@ -601,7 +618,7 @@ def _history_slots(base_url, params, log_context):
         response = _coerce_response_dict(json.loads(response_text))
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: History {} request failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: History {} request failed: {}".format(
                 log_context, _redact_text(str(e))
             ),
             xbmc.LOGDEBUG,
@@ -625,9 +642,10 @@ def find_completed_by_names(names, settings_getter=None):
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Settings read failed in find_completed_by_names: {}".format(
-                _redact_text(str(e))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Settings read failed in "
+                "find_completed_by_names: {}"
+            ).format(_redact_text(str(e))),
             xbmc.LOGDEBUG,
         )
         return {}
@@ -717,7 +735,7 @@ def find_queued_by_names(names, settings_getter=None):
         response = _coerce_response_dict(json.loads(response_text))
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: find_queued_by_names request failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: find_queued_by_names request failed: {}".format(
                 _redact_text(str(e))
             ),
             xbmc.LOGWARNING,
@@ -760,9 +778,10 @@ def get_completed_jobs(settings_getter=None):
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Settings read failed in get_completed_jobs: {}".format(
-                _redact_text(str(e))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Settings read failed in "
+                "get_completed_jobs: {}"
+            ).format(_redact_text(str(e))),
             xbmc.LOGDEBUG,
         )
         return {}
@@ -780,14 +799,16 @@ def get_completed_jobs(settings_getter=None):
         response = _coerce_response_dict(json.loads(response_text))
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: get_completed_jobs request failed: {}".format(e),
+            "NeNeTeePee-Stream-Kodi: get_completed_jobs request failed: {}".format(e),
             xbmc.LOGDEBUG,
         )
         return {}
 
     jobs = _completed_jobs_from_slots(_response_slots(response, "history"))
     xbmc.log(
-        "NZB-DAV: Loaded {} completed downloads from history".format(len(jobs)),
+        ("NeNeTeePee-Stream-Kodi: Loaded {} completed downloads from history").format(
+            len(jobs)
+        ),
         xbmc.LOGDEBUG,
     )
     return jobs
@@ -821,7 +842,10 @@ def get_job_status(nzo_id, settings_getter=None):
         base_url, api_key = _get_settings(settings_getter=settings_getter)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Failed to read nzbdav settings for status check: {}".format(e),
+            (
+                "NeNeTeePee-Stream-Kodi: Failed to read nzbdav settings "
+                "for status check: {}"
+            ).format(e),
             xbmc.LOGERROR,
         )
         return None
@@ -834,7 +858,10 @@ def get_job_status(nzo_id, settings_getter=None):
     url = "{}/api?{}".format(base_url, urlencode(params))
     from resources.lib.http_util import redact_url
 
-    xbmc.log("NZB-DAV: Job status URL: {}".format(redact_url(url)), xbmc.LOGDEBUG)
+    xbmc.log(
+        ("NeNeTeePee-Stream-Kodi: Job status URL: {}").format(redact_url(url)),
+        xbmc.LOGDEBUG,
+    )
     try:
         response_text = _http_get(url, timeout=_API_READ_TIMEOUT)
         response = _coerce_response_dict(json.loads(response_text))
@@ -845,9 +872,9 @@ def get_job_status(nzo_id, settings_getter=None):
         # crash here would kill the poll loop, so we log and return None
         # so the caller treats the tick as "no data, try again".
         xbmc.log(
-            "NZB-DAV: Job status request failed for nzo_id={}: {}".format(
-                nzo_id, _redact_text(str(e))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Job status request failed for nzo_id={}: {}"
+            ).format(nzo_id, _redact_text(str(e))),
             xbmc.LOGERROR,
         )
         return None

@@ -955,7 +955,9 @@ def _run_nzbget_backend(  # pylint: disable=too-many-arguments
         # str(exc) can echo the indexer nzb_url (apikey=...) or the
         # smb://user:pass@host root — redact before logging.
         xbmc.log(
-            "NZB-DAV: NZBGet resolve error: {}".format(_redact_text(str(exc))),
+            ("NeNeTeePee-Stream-Kodi: NZBGet resolve error: {}").format(
+                _redact_text(str(exc))
+            ),
             xbmc.LOGERROR,
         )
         on_failure(None)

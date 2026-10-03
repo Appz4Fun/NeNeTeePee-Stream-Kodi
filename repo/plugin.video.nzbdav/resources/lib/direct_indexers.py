@@ -79,9 +79,10 @@ def _configured_preset(addon, indexer_id, label, default_url):
     api_key = _setting_text(addon, "direct_indexer_{}_api_key".format(indexer_id))
     if not url or not api_key:
         xbmc.log(
-            "NZB-DAV: Direct indexer {} enabled without URL/API key; skipping".format(
-                label
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Direct indexer {} enabled "
+                "without URL/API key; skipping"
+            ).format(label),
             xbmc.LOGDEBUG,
         )
         return None
@@ -102,9 +103,10 @@ def _configured_custom(addon, slot_id):
     api_key = _setting_text(addon, "direct_indexer_{}_api_key".format(slot_id))
     if not name or not url or not api_key:
         xbmc.log(
-            "NZB-DAV: Direct indexer {} missing name, URL, or API key; skipping".format(
-                slot_id
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Direct indexer {} missing "
+                "name, URL, or API key; skipping"
+            ).format(slot_id),
             xbmc.LOGDEBUG,
         )
         return None
@@ -265,7 +267,9 @@ def parse_results(xml_text, fallback_indexer):
         root = _safe_fromstring(xml_text)
     except (_XmlParseError, _UnsafeXmlError, TypeError) as error:
         xbmc.log(
-            "NZB-DAV: Failed to parse direct indexer XML: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Failed to parse direct indexer XML: {}").format(
+                error
+            ),
             xbmc.LOGERROR,
         )
         return [], "Direct indexer returned an invalid response: {}".format(error)
@@ -368,7 +372,7 @@ def _run_indexer_fanout(indexers, worker, timeout_seconds=None):
 def _fetch_indexer(indexer, params, error_prefix):
     url = build_search_url(indexer["api_url"], params)
     xbmc.log(
-        "NZB-DAV: Direct indexer {} search URL: {}".format(
+        "NeNeTeePee-Stream-Kodi: Direct indexer {} search URL: {}".format(
             indexer["label"], _redact_url(url)
         ),
         xbmc.LOGDEBUG,
@@ -377,7 +381,9 @@ def _fetch_indexer(indexer, params, error_prefix):
         return _http_get(url, timeout=15), None
     except _DIRECT_REQUEST_ERRORS as error:
         xbmc.log(
-            "NZB-DAV: {}: {}".format(error_prefix, _redact_text(str(error))),
+            ("NeNeTeePee-Stream-Kodi: {}: {}").format(
+                error_prefix, _redact_text(str(error))
+            ),
             xbmc.LOGERROR,
         )
         return None, _indexer_unavailable_error(indexer, error)
@@ -410,9 +416,10 @@ def _search_one_indexer(indexer, query, max_results):
     params = plan.primary
     if not params:
         xbmc.log(
-            "NZB-DAV: Direct indexer {} has no supported search query; skipping".format(
-                indexer["label"]
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Direct indexer {} has no "
+                "supported search query; skipping"
+            ).format(indexer["label"]),
             xbmc.LOGDEBUG,
         )
         return [], None
@@ -458,7 +465,7 @@ def search_direct_indexers(
     for _indexer, results, error in _run_indexer_fanout(indexers, worker):
         if error:
             errors.append(error)
-            xbmc.log("NZB-DAV: {}".format(error), xbmc.LOGWARNING)
+            xbmc.log("NeNeTeePee-Stream-Kodi: {}".format(error), xbmc.LOGWARNING)
             continue
         all_results.extend(results)
 
@@ -488,7 +495,7 @@ def test_configured_indexers():
         if error:
             errors.append(error)
             xbmc.log(
-                "NZB-DAV: Direct indexer caps error for {}: {}".format(
+                "NeNeTeePee-Stream-Kodi: Direct indexer caps error for {}: {}".format(
                     indexer["label"], _redact_text(error)
                 ),
                 xbmc.LOGWARNING,

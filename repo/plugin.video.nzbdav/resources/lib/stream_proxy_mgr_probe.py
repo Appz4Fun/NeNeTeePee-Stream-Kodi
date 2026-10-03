@@ -92,7 +92,10 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
                     proc.communicate(timeout=5)
                 except (OSError, _sp.subprocess.SubprocessError):
                     pass
-                _sp.xbmc.log("NZB-DAV: ffprobe duration timed out", _sp.xbmc.LOGWARNING)
+                _sp.xbmc.log(
+                    ("NeNeTeePee-Stream-Kodi: ffprobe duration timed out"),
+                    _sp.xbmc.LOGWARNING,
+                )
                 return None
             if proc.returncode != 0:
                 return None
@@ -104,7 +107,10 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
             except ValueError:
                 return None
         except (OSError, _sp.subprocess.SubprocessError) as e:
-            _sp.xbmc.log("NZB-DAV: ffprobe failed: {}".format(e), _sp.xbmc.LOGWARNING)
+            _sp.xbmc.log(
+                ("NeNeTeePee-Stream-Kodi: ffprobe failed: {}").format(e),
+                _sp.xbmc.LOGWARNING,
+            )
             return None
 
     @staticmethod
@@ -169,7 +175,7 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
 
         if not done.wait(timeout=_sp._PROBE_DEADLINE_SECONDS):
             _sp.xbmc.log(
-                "NZB-DAV: {} probe wall-clock deadline ({}s) exceeded, "
+                "NeNeTeePee-Stream-Kodi: {} probe wall-clock deadline ({}s) exceeded, "
                 "killing ffmpeg".format(label, _sp._PROBE_DEADLINE_SECONDS),
                 _sp.xbmc.LOGWARNING,
             )
@@ -191,7 +197,7 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
             )
         except (OSError, _sp.subprocess.SubprocessError, ValueError) as e:
             _sp.xbmc.log(
-                "NZB-DAV: {} probe spawn failed: {}".format(label, e),
+                "NeNeTeePee-Stream-Kodi: {} probe spawn failed: {}".format(label, e),
                 _sp.xbmc.LOGWARNING,
             )
             return None
@@ -213,7 +219,9 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
             # diagnostic in kodi.log. Closes TODO.md §H.3 silent
             # stderr-reader failure.
             _sp.xbmc.log(
-                "NZB-DAV: {} probe stderr-reader failed: {}".format(label, exc),
+                ("NeNeTeePee-Stream-Kodi: {} probe stderr-reader failed: {}").format(
+                    label, exc
+                ),
                 _sp.xbmc.LOGWARNING,
             )
         finally:
@@ -244,9 +252,10 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
         result = parser(collected[0])
         if result is None and len(collected[0]) > budget:
             _sp.xbmc.log(
-                "NZB-DAV: {} not found in first {}B of ffmpeg output".format(
-                    label, budget
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: {} not found in first {}B of "
+                    "ffmpeg output"
+                ).format(label, budget),
                 _sp.xbmc.LOGWARNING,
             )
         return result

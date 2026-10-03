@@ -31,7 +31,7 @@ from resources.lib.stream_proxy import (  # noqa: E402
 
 
 class ServiceProxyUnavailableError(OSError):
-    """Raised when the NZB-DAV background service's proxy is unreachable.
+    """Raised when the NeNeTeePee-Stream-Kodi background service's proxy is unreachable.
 
     Distinct from the underlying OSError so resolver's error-handling
     layer can present the user a specific "background service not
@@ -132,7 +132,7 @@ def prepare_stream_via_service(
     )
     req = _build_prepare_request(url, payload, prepare_token)
     unreachable = (
-        "NZB-DAV background service unreachable on 127.0.0.1:{} — "
+        "NeNeTeePee-Stream-Kodi background service unreachable on 127.0.0.1:{} — "
         "restart Kodi or toggle the addon".format(port)
     )
     last_error = None

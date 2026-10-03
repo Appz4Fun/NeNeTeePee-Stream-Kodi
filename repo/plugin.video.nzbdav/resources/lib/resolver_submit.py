@@ -57,7 +57,7 @@ def _safe_probe_by_name(find_fn, title, settings_getter, probe_label):
         return find_fn(title, **_resolver._settings_getter_kwargs(settings_getter))
     except Exception as e:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: concurrent {} probe raised: {}".format(
+            "NeNeTeePee-Stream-Kodi: concurrent {} probe raised: {}".format(
                 probe_label, _resolver._redact_log(e)
             ),
             _resolver.xbmc.LOGWARNING,
@@ -147,13 +147,13 @@ def _cancel_late_accepted_submit(nzo_id, title, settings_getter):
             **_resolver._settings_getter_kwargs(settings_getter),
         )
         _resolver.xbmc.log(
-            "NZB-DAV: Cancelled late-accepted submit nzo_id={} for "
+            "NeNeTeePee-Stream-Kodi: Cancelled late-accepted submit nzo_id={} for "
             "'{}' after user abort".format(nzo_id, title),
             _resolver.xbmc.LOGINFO,
         )
     except Exception as cancel_error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: Failed to cancel late-accepted submit "
+            "NeNeTeePee-Stream-Kodi: Failed to cancel late-accepted submit "
             "nzo_id={}: {}".format(nzo_id, _resolver._redact_log(cancel_error)),
             _resolver.xbmc.LOGWARNING,
         )
@@ -192,7 +192,7 @@ def _start_submit_worker(
                 _cancel_late_accepted_submit(submit_result[0], title, settings_getter)
         except Exception as e:  # pylint: disable=broad-except
             _resolver.xbmc.log(
-                "NZB-DAV: submit_nzb worker raised: {}".format(
+                "NeNeTeePee-Stream-Kodi: submit_nzb worker raised: {}".format(
                     _resolver._redact_log(e)
                 ),
                 _resolver.xbmc.LOGERROR,
@@ -231,7 +231,7 @@ def _submit_nzb_with_ui_pump(
     or submit failure.
     """
     _resolver.xbmc.log(
-        "NZB-DAV: _submit_nzb_with_ui_pump entered for '{}' "
+        "NeNeTeePee-Stream-Kodi: _submit_nzb_with_ui_pump entered for '{}' "
         "(threaded pump + concurrent queue probe)".format(title),
         _resolver.xbmc.LOGINFO,
     )
@@ -352,9 +352,10 @@ def _submit_nzb_with_ui_pump(
                 thread.start()
             except RuntimeError as error:
                 _resolver.xbmc.log(
-                    "NZB-DAV: Could not start {} thread for '{}': {}".format(
-                        label, title, error
-                    ),
+                    (
+                        "NeNeTeePee-Stream-Kodi: Could not start {} thread for "
+                        "'{}': {}"
+                    ).format(label, title, error),
                     _resolver.xbmc.LOGWARNING,
                 )
                 return False
@@ -363,7 +364,10 @@ def _submit_nzb_with_ui_pump(
 
         if not _start_submit_thread(submit_t, "submit"):
             _resolver.xbmc.log(
-                "NZB-DAV: Falling back to synchronous submit for '{}'".format(title),
+                (
+                    "NeNeTeePee-Stream-Kodi: Falling back to synchronous "
+                    "submit for '{}'"
+                ).format(title),
                 _resolver.xbmc.LOGWARNING,
             )
             submit_t.run()
@@ -399,7 +403,7 @@ def _submit_nzb_with_ui_pump(
                 "Found in nzbdav\nChecking download status: {}".format(title[:60]),
             )
         _resolver.xbmc.log(
-            "NZB-DAV: Concurrent queue/history probe found '{}' under "
+            "NeNeTeePee-Stream-Kodi: Concurrent queue/history probe found '{}' under "
             "nzo_id={}; adopting without waiting for addurl response".format(
                 title, nzo_id
             ),
@@ -445,7 +449,10 @@ def _submit_nzb_with_ui_pump(
                 return probe_result
             if dialog.iscanceled():
                 _resolver.xbmc.log(
-                    "NZB-DAV: User cancelled during submit for '{}'".format(title),
+                    (
+                        "NeNeTeePee-Stream-Kodi: User cancelled during submit "
+                        "for '{}'"
+                    ).format(title),
                     _resolver.xbmc.LOGINFO,
                 )
                 cancel_after_submit.set()
@@ -463,9 +470,11 @@ def _submit_nzb_with_ui_pump(
         nzo_id = _current_adoption_hit()
         if nzo_id and not submit_result[0]:
             _resolver.xbmc.log(
-                "NZB-DAV: Queue probe found '{}' under nzo_id={} just as "
-                "submit worker finished; preferring the adopted job over "
-                "the submit result".format(title, nzo_id),
+                (
+                    "NeNeTeePee-Stream-Kodi: Queue probe found '{}' under "
+                    "nzo_id={} just as submit worker finished; preferring "
+                    "the adopted job over the submit result"
+                ).format(title, nzo_id),
                 _resolver.xbmc.LOGINFO,
             )
             return nzo_id, None
@@ -505,7 +514,7 @@ def _submit_nzb_with_ui_pump(
                 # daemon=True so they die with the interpreter anyway)
                 # but log at debug so a real misuse surfaces.
                 _resolver.xbmc.log(
-                    "NZB-DAV: Resolver worker join failed: {}".format(e),
+                    "NeNeTeePee-Stream-Kodi: Resolver worker join failed: {}".format(e),
                     _resolver.xbmc.LOGDEBUG,
                 )
 
@@ -566,7 +575,7 @@ def _adopt_queued_or_completed_job(
 def _log_submit_attempt_failed(attempt, max_submit_retries, title):
     """Log a submit attempt that produced neither an nzo_id nor an error."""
     _resolver.xbmc.log(
-        "NZB-DAV: Submit attempt {}/{} failed for '{}'".format(
+        "NeNeTeePee-Stream-Kodi: Submit attempt {}/{} failed for '{}'".format(
             attempt, max_submit_retries, title
         ),
         _resolver.xbmc.LOGWARNING,
@@ -577,7 +586,7 @@ def _submit_retry_backoff_aborted(attempt, max_submit_retries, monitor, title):
     """Wait the inter-attempt backoff; return True if Kodi is shutting down."""
     if attempt < max_submit_retries and monitor.waitForAbort(2):
         _resolver.xbmc.log(
-            "NZB-DAV: Kodi shutdown during submit retry backoff "
+            "NeNeTeePee-Stream-Kodi: Kodi shutdown during submit retry backoff "
             "(attempt {}/{}) for '{}'".format(attempt, max_submit_retries, title),
             _resolver.xbmc.LOGINFO,
         )
@@ -591,7 +600,7 @@ def _report_all_submit_attempts_failed(
     """Surface the terminal error after every submit attempt failed."""
     if last_submit_error:
         _resolver.xbmc.log(
-            "NZB-DAV: All {} submit attempts failed for '{}', "
+            "NeNeTeePee-Stream-Kodi: All {} submit attempts failed for '{}', "
             "last HTTP {}: {}".format(
                 max_submit_retries,
                 title,
@@ -607,7 +616,7 @@ def _report_all_submit_attempts_failed(
         return
 
     _resolver.xbmc.log(
-        "NZB-DAV: All {} submit attempts failed for '{}'. "
+        "NeNeTeePee-Stream-Kodi: All {} submit attempts failed for '{}'. "
         "Check nzbdav URL and API key in settings.".format(max_submit_retries, title),
         _resolver.xbmc.LOGERROR,
     )
@@ -627,7 +636,8 @@ def _submit_nzb_with_retries(
 ):
     """Submit an NZB with the existing retry and error-dialog behavior."""
     _resolver.xbmc.log(
-        "NZB-DAV: Submitting NZB for '{}'".format(title), _resolver.xbmc.LOGINFO
+        ("NeNeTeePee-Stream-Kodi: Submitting NZB for '{}'").format(title),
+        _resolver.xbmc.LOGINFO,
     )
     last_submit_error = None
     error_ctx = _resolver._build_submit_error_ctx(

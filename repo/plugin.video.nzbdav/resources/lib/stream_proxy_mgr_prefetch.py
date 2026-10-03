@@ -30,7 +30,9 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
             handler._refresh_standby_fallback_sources(ctx)
         except Exception as exc:  # pylint: disable=broad-except
             _sp.xbmc.log(
-                "NZB-DAV: standby fallback resolve failed: {}".format(exc),
+                ("NeNeTeePee-Stream-Kodi: standby fallback resolve failed: {}").format(
+                    exc
+                ),
                 _sp.xbmc.LOGWARNING,
             )
 
@@ -41,13 +43,15 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
             validated = handler._prevalidate_ready_fallback_sources(ctx)
         except Exception as exc:  # pylint: disable=broad-except
             _sp.xbmc.log(
-                "NZB-DAV: Fallback prevalidation failed: {}".format(exc),
+                "NeNeTeePee-Stream-Kodi: Fallback prevalidation failed: {}".format(exc),
                 _sp.xbmc.LOGWARNING,
             )
             return
         if validated:
             _sp.xbmc.log(
-                "NZB-DAV: Prevalidated {} fallback stream(s)".format(validated),
+                ("NeNeTeePee-Stream-Kodi: Prevalidated {} fallback stream(s)").format(
+                    validated
+                ),
                 _sp.xbmc.LOGINFO,
             )
 
@@ -55,18 +59,20 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
         expected_length = _sp._StreamHandler._fallback_expected_content_length(ctx)
         if expected_length <= 0:
             _sp.xbmc.log(
-                "NZB-DAV: prevalidation skipped (expected_length={})".format(
-                    expected_length
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: prevalidation skipped "
+                    "(expected_length={})"
+                ).format(expected_length),
                 _sp.xbmc.LOGINFO,
             )
             return
         sources = ctx.get("fallback_sources") or []
         pending = [s for s in sources if _sp._fallback_source_needs_prevalidation(s)]
         _sp.xbmc.log(
-            "NZB-DAV: prevalidation pending sources={}/{} expected_length={}".format(
-                len(pending), len(sources), expected_length
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: prevalidation pending "
+                "sources={}/{} expected_length={}"
+            ).format(len(pending), len(sources), expected_length),
             _sp.xbmc.LOGINFO,
         )
         if not pending:
@@ -145,7 +151,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
             )
         except Exception as exc:  # pylint: disable=broad-except
             _sp.xbmc.log(
-                "NZB-DAV: Initial range prefetch failed: {}".format(exc),
+                "NeNeTeePee-Stream-Kodi: Initial range prefetch failed: {}".format(exc),
                 _sp.xbmc.LOGDEBUG,
             )
             return
@@ -202,7 +208,9 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
                     return
             except Exception as exc:  # pylint: disable=broad-except
                 _sp.xbmc.log(
-                    "NZB-DAV: Read-ahead prefetch loop error: {}".format(exc),
+                    (
+                        "NeNeTeePee-Stream-Kodi: Read-ahead prefetch loop error: {}"
+                    ).format(exc),
                     _sp.xbmc.LOGDEBUG,
                 )
                 if monitor.waitForAbort(_sp._READAHEAD_ERROR_BACKOFF_SECONDS):
@@ -360,7 +368,7 @@ class _MgrPrefetchMixin:  # pylint: disable=too-few-public-methods
             )
         except Exception as exc:  # pylint: disable=broad-except
             _sp.xbmc.log(
-                "NZB-DAV: Tail prewarm failed: {}".format(exc),
+                "NeNeTeePee-Stream-Kodi: Tail prewarm failed: {}".format(exc),
                 _sp.xbmc.LOGDEBUG,
             )
 

@@ -56,7 +56,7 @@ class DolbyVisionSourceResult:
 def _log_debug(msg):
     if xbmc is not None:
         try:
-            xbmc.log("NZB-DAV: " + msg, xbmc.LOGDEBUG)
+            xbmc.log("NeNeTeePee-Stream-Kodi: " + msg, xbmc.LOGDEBUG)
         except Exception:  # pylint: disable=broad-except
             pass
 

@@ -1,6 +1,6 @@
 # Features overview
 
-NZB-DAV is a player and resolver: it finds a Usenet source for the title you
+NeNeTeePee-Stream-Kodi is a player and resolver: it finds a Usenet source for the title you
 picked, downloads it through your backend, and streams it into Kodi with a set
 of reliability features built for imperfect Usenet retention and low-powered
 devices.
@@ -26,7 +26,7 @@ devices.
 
 -   :material-swap-horizontal: __[Fallback streams](fallback-streams.md)__
 
-    When a source degrades mid-playback, NZB-DAV switches to a verified
+    When a source degrades mid-playback, NeNeTeePee-Stream-Kodi switches to a verified
     alternate release (matched by length + sampled SHA-256) without interrupting
     the video.
 

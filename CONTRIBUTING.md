@@ -1,7 +1,7 @@
 # Contributing
 
 The full contributor guide (dev setup, `just` commands, CI and release flow) is on
-the docs site: [Contributing](https://appz4fun.github.io/nzbdavkodi/contributing/).
+the docs site: [Contributing](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/contributing/).
 The authoritative rules for code changes are in [AGENTS.md](AGENTS.md).
 
 ## Before you start

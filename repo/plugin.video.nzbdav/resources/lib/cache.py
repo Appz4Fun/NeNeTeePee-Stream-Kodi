@@ -62,7 +62,10 @@ def _get_cache_ttl_seconds():
         raw_ttl = addon.getSetting("cache_ttl") or str(DEFAULT_CACHE_TTL_SECONDS)
     except RuntimeError as exc:
         xbmc.log(
-            "NZB-DAV: cache_ttl setting unavailable; using default: {}".format(exc),
+            (
+                "NeNeTeePee-Stream-Kodi: cache_ttl setting unavailable; "
+                "using default: {}"
+            ).format(exc),
             xbmc.LOGWARNING,
         )
         return DEFAULT_CACHE_TTL_SECONDS
@@ -107,7 +110,7 @@ def _read_fresh_cache(path, cache_ttl, title):
     except OSError:
         # Best-effort mtime touch; still return the cache hit if it fails.
         pass
-    xbmc.log("NZB-DAV: Cache hit for '{}'".format(title), xbmc.LOGDEBUG)
+    xbmc.log("NeNeTeePee-Stream-Kodi: Cache hit for '{}'".format(title), xbmc.LOGDEBUG)
     return data.get("results", [])
 
 
@@ -152,7 +155,9 @@ def set_cached(search_type, title, results, **kwargs):
             json.dump(data, f)
         os.replace(tmp_path, path)
         xbmc.log(
-            "NZB-DAV: Cached {} results for '{}'".format(len(results), title),
+            ("NeNeTeePee-Stream-Kodi: Cached {} results for '{}'").format(
+                len(results), title
+            ),
             xbmc.LOGDEBUG,
         )
     except OSError:
@@ -215,7 +220,7 @@ def _evict_entries(entries, total):
         total -= size
         current_count -= 1
         xbmc.log(
-            "NZB-DAV: Cache evicted '{}'".format(os.path.basename(path)),
+            "NeNeTeePee-Stream-Kodi: Cache evicted '{}'".format(os.path.basename(path)),
             xbmc.LOGDEBUG,
         )
 

@@ -47,13 +47,18 @@ def _fallback_candidate_row(candidate, index, dead, primary_nzb_url):
     # pool after a live cutover demotes it -- handled in stream_proxy).
     if dead is not None and dead.has_url(nzb_url):
         _resolver.xbmc.log(
-            "NZB-DAV: Skipping dead fallback candidate '{}'".format(title),
+            ("NeNeTeePee-Stream-Kodi: Skipping dead fallback candidate '{}'").format(
+                title
+            ),
             _resolver.xbmc.LOGINFO,
         )
         return None
     if primary_nzb_url and nzb_url == primary_nzb_url:
         _resolver.xbmc.log(
-            "NZB-DAV: Skipping primary's own release as a fallback '{}'".format(title),
+            (
+                "NeNeTeePee-Stream-Kodi: Skipping primary's own release "
+                "as a fallback '{}'"
+            ).format(title),
             _resolver.xbmc.LOGINFO,
         )
         return None
@@ -85,7 +90,7 @@ def _submit_one_fallback_candidate(
         )
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: Fallback submit failed for '{}': {}".format(
+            "NeNeTeePee-Stream-Kodi: Fallback submit failed for '{}': {}".format(
                 job_name, _resolver._redact_log(error)
             ),
             _resolver.xbmc.LOGWARNING,
@@ -98,7 +103,10 @@ def _submit_one_fallback_candidate(
     if not nzo_id:
         if submit_error is None:
             _resolver.xbmc.log(
-                "NZB-DAV: Fallback submit did not create job for '{}'".format(job_name),
+                (
+                    "NeNeTeePee-Stream-Kodi: Fallback submit did not create "
+                    "job for '{}'"
+                ).format(job_name),
                 _resolver.xbmc.LOGWARNING,
             )
         return None
@@ -113,7 +121,7 @@ def _recover_fallback_submit_error(
     nzo_id = None
     if status == "timeout":
         _resolver.xbmc.log(
-            "NZB-DAV: Fallback submit timed out for '{}'; probing "
+            "NeNeTeePee-Stream-Kodi: Fallback submit timed out for '{}'; probing "
             "queue/history in background".format(job_name),
             _resolver.xbmc.LOGWARNING,
         )
@@ -124,7 +132,10 @@ def _recover_fallback_submit_error(
         if dead is not None and _resolver.is_provably_dead_submit_error(submit_error):
             dead.add(nzb_url=nzb_url)
         _resolver.xbmc.log(
-            "NZB-DAV: Fallback submit skipped for '{}' (status={}): {}".format(
+            (
+                "NeNeTeePee-Stream-Kodi: Fallback submit skipped for "
+                "'{}' (status={}): {}"
+            ).format(
                 job_name, status, _resolver._redact_log(submit_error.get("message", ""))
             ),
             _resolver.xbmc.LOGWARNING,
@@ -135,7 +146,7 @@ def _recover_fallback_submit_error(
 def _adopt_existing_fallback_job(existing_job, nzb_url, title, job_name):
     """Build the fallback-job record for an already-present nzbdav job."""
     _resolver.xbmc.log(
-        "NZB-DAV: Adopting existing fallback job '{}' nzo_id={}".format(
+        "NeNeTeePee-Stream-Kodi: Adopting existing fallback job '{}' nzo_id={}".format(
             job_name, existing_job["nzo_id"]
         ),
         _resolver.xbmc.LOGINFO,
@@ -427,7 +438,7 @@ def _resolve_active_fallback_candidates(candidate_list, candidate_loader):
         loaded_candidates = candidate_loader()
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: Fallback candidate lookup failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: Fallback candidate lookup failed: {}".format(
                 _resolver._redact_log(error)
             ),
             _resolver.xbmc.LOGWARNING,
@@ -466,7 +477,7 @@ def _run_fallback_on_append_hook(state):
         hook()
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: fallback on_append hook failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: fallback on_append hook failed: {}".format(
                 _resolver._redact_log(error)
             ),
             _resolver.xbmc.LOGWARNING,
@@ -589,7 +600,7 @@ def _start_fallback_submit_worker(
             _load_and_submit_fallback_candidates(state, submit_inputs)
         except Exception as error:  # pylint: disable=broad-except
             _resolver.xbmc.log(
-                "NZB-DAV: Fallback submit worker failed: {}".format(
+                "NeNeTeePee-Stream-Kodi: Fallback submit worker failed: {}".format(
                     _resolver._redact_log(error)
                 ),
                 _resolver.xbmc.LOGWARNING,
@@ -611,7 +622,9 @@ def _start_fallback_submit_worker(
         state["thread"] = None
         state["finished"].set()
         _resolver.xbmc.log(
-            "NZB-DAV: Fallback submit worker did not start: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Fallback submit worker did not start: {}").format(
+                error
+            ),
             _resolver.xbmc.LOGWARNING,
         )
     return state

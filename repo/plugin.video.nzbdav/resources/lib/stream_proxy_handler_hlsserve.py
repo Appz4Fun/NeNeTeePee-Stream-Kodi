@@ -123,7 +123,9 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
             return
         init_path = producer.wait_for_init()
         if init_path is None:
-            _sp.xbmc.log("NZB-DAV: HLS init wait timed out", _sp.xbmc.LOGWARNING)
+            _sp.xbmc.log(
+                ("NeNeTeePee-Stream-Kodi: HLS init wait timed out"), _sp.xbmc.LOGWARNING
+            )
             self.send_error(504)
             return
         # Serve the canonical bytes cached in the producer, not whatever
@@ -148,7 +150,7 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
                     body = f.read()
             except OSError as e:
                 _sp.xbmc.log(
-                    "NZB-DAV: HLS init read failed: {}".format(e),
+                    "NeNeTeePee-Stream-Kodi: HLS init read failed: {}".format(e),
                     _sp.xbmc.LOGERROR,
                 )
                 self.send_error(500)
@@ -192,7 +194,7 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
         segment_path = producer.wait_for_segment(seg_n)
         if segment_path is None:
             _sp.xbmc.log(
-                "NZB-DAV: HLS seg {} wait timed out".format(seg_n),
+                "NeNeTeePee-Stream-Kodi: HLS seg {} wait timed out".format(seg_n),
                 _sp.xbmc.LOGWARNING,
             )
             self.send_error(504)
@@ -246,7 +248,7 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
             )  # noqa: SIM115 — closed by _stream_hls_segment_file / caller
         except OSError as e:
             _sp.xbmc.log(
-                "NZB-DAV: HLS seg {} open failed: {}".format(seg_n, e),
+                "NeNeTeePee-Stream-Kodi: HLS seg {} open failed: {}".format(seg_n, e),
                 _sp.xbmc.LOGERROR,
             )
             self.send_error(500)
@@ -256,7 +258,7 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
         except OSError as e:
             seg_file.close()
             _sp.xbmc.log(
-                "NZB-DAV: HLS seg {} fstat failed: {}".format(seg_n, e),
+                "NeNeTeePee-Stream-Kodi: HLS seg {} fstat failed: {}".format(seg_n, e),
                 _sp.xbmc.LOGERROR,
             )
             self.send_error(500)
@@ -295,21 +297,23 @@ class _HlsServeMixin:  # pylint: disable=too-few-public-methods
                     total += len(chunk)
         except (BrokenPipeError, ConnectionResetError, _sp._socket.timeout):
             _sp.xbmc.log(
-                "NZB-DAV: HLS seg {} client disconnected after {} KB".format(
-                    seg_n, total // 1024
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: HLS seg {} client disconnected "
+                    "after {} KB"
+                ).format(seg_n, total // 1024),
                 _sp.xbmc.LOGDEBUG,
             )
         except OSError as e:
             _sp.xbmc.log(
-                "NZB-DAV: HLS seg {} read error: {}".format(seg_n, e),
+                "NeNeTeePee-Stream-Kodi: HLS seg {} read error: {}".format(seg_n, e),
                 _sp.xbmc.LOGWARNING,
             )
         else:
             _sp.xbmc.log(
-                "NZB-DAV: HLS seg {} done (start={:.1f}s dur={:.1f}s {} KB)".format(
-                    seg_n, start, this_dur, total // 1024
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: HLS seg {} done (start={:.1f}s "
+                    "dur={:.1f}s {} KB)"
+                ).format(seg_n, start, this_dur, total // 1024),
                 _sp.xbmc.LOGINFO,
             )
 

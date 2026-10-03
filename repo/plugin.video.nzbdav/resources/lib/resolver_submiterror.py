@@ -50,9 +50,10 @@ def _adopt_after_submit_failure(submit_error, ctx, after_timeout):
     else:
         suffix = "after HTTP {} rejection".format(submit_error["status"])
     _resolver.xbmc.log(
-        "NZB-DAV: Adopted existing nzbdav job nzo_id={} for '{}' {}".format(
-            adopted_nzo_id, title, suffix
-        ),
+        (
+            "NeNeTeePee-Stream-Kodi: Adopted existing nzbdav job "
+            "nzo_id={} for '{}' {}"
+        ).format(adopted_nzo_id, title, suffix),
         _resolver.xbmc.LOGINFO,
     )
     return "return", adopted_nzo_id
@@ -72,7 +73,9 @@ def _handle_submit_attempt_error(submit_error, ctx):
         # User hit cancel on the progress dialog or Kodi is shutting down.
         # Stop immediately — no retry, no adoption, no error dialog.
         _resolver.xbmc.log(
-            "NZB-DAV: Submit aborted ({}) for '{}'".format(status, title),
+            ("NeNeTeePee-Stream-Kodi: Submit aborted ({}) for '{}'").format(
+                status, title
+            ),
             _resolver.xbmc.LOGINFO,
         )
         return "return", None
@@ -80,7 +83,9 @@ def _handle_submit_attempt_error(submit_error, ctx):
         return _handle_submit_timeout(submit_error, ctx)
     if status in _resolver._TRANSIENT_HTTP_STATUSES:
         _resolver.xbmc.log(
-            "NZB-DAV: Submit attempt {} hit transient HTTP {}: {}".format(
+            (
+                "NeNeTeePee-Stream-Kodi: Submit attempt {} hit transient HTTP {}: {}"
+            ).format(
                 ctx["attempt_label"],
                 status,
                 _resolver._redact_log(submit_error["message"]),
@@ -103,7 +108,7 @@ def _handle_submit_rejected(submit_error, ctx):
     3× and showing a generic failure.
     """
     _resolver.xbmc.log(
-        "NZB-DAV: nzbdav rejected the NZB for '{}': {}".format(
+        "NeNeTeePee-Stream-Kodi: nzbdav rejected the NZB for '{}': {}".format(
             ctx["title"], _resolver._redact_log(submit_error["message"])
         ),
         _resolver.xbmc.LOGERROR,
@@ -120,7 +125,10 @@ def _handle_submit_4xx(submit_error, ctx):
     progress dialog stuck.
     """
     _resolver.xbmc.log(
-        "NZB-DAV: Submit failed with HTTP {}, not probing queue: {}".format(
+        (
+            "NeNeTeePee-Stream-Kodi: Submit failed with HTTP {}, "
+            "not probing queue: {}"
+        ).format(
             submit_error["status"], _resolver._redact_log(submit_error["message"])
         ),
         _resolver.xbmc.LOGERROR,
@@ -138,7 +146,7 @@ def _handle_submit_timeout(submit_error, ctx):
     """
     title = ctx["title"]
     _resolver.xbmc.log(
-        "NZB-DAV: Submit attempt {} timed out; probing nzbdav "
+        "NeNeTeePee-Stream-Kodi: Submit attempt {} timed out; probing nzbdav "
         "queue for '{}' before retrying".format(ctx["attempt_label"], title),
         _resolver.xbmc.LOGWARNING,
     )
@@ -146,7 +154,7 @@ def _handle_submit_timeout(submit_error, ctx):
     if adopted is not None:
         return adopted
     _resolver.xbmc.log(
-        "NZB-DAV: '{}' not found in nzbdav queue or history "
+        "NeNeTeePee-Stream-Kodi: '{}' not found in nzbdav queue or history "
         "after submit timeout; retrying".format(title),
         _resolver.xbmc.LOGWARNING,
     )
@@ -164,7 +172,7 @@ def _handle_submit_nontransient(submit_error, ctx):
     if adopted is not None:
         return adopted
     _resolver.xbmc.log(
-        "NZB-DAV: Submit failed with HTTP {}, not retrying: {}".format(
+        "NeNeTeePee-Stream-Kodi: Submit failed with HTTP {}, not retrying: {}".format(
             submit_error["status"], _resolver._redact_log(submit_error["message"])
         ),
         _resolver.xbmc.LOGERROR,

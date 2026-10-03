@@ -98,7 +98,7 @@ def _handle_prompt_result(result, addon):
             # session. Surface that to the log so the user has a clue why
             # they're seeing it again, without crashing the resolve flow.
             _log_warning(
-                "NZB-DAV: cache_prompt failed to persist 'Never ask' "
+                "NeNeTeePee-Stream-Kodi: cache_prompt failed to persist 'Never ask' "
                 "(setting=cache_dialog_dismissed): {!r}".format(exc)
             )
     # _DLG_NOT_NOW (0) or cancelled (-1): session flag already set
@@ -149,7 +149,9 @@ def maybe_show_cache_prompt(stream_info):
             _s(30157),  # yes label: Show instructions
         )
     except RuntimeError as exc:
-        _log_warning("NZB-DAV: cache_prompt dialog suppressed: {!r}".format(exc))
+        _log_warning(
+            ("NeNeTeePee-Stream-Kodi: cache_prompt dialog suppressed: {!r}").format(exc)
+        )
         return
 
     _handle_prompt_result(result, addon)

@@ -1,6 +1,8 @@
 # Beta channel and beta features
 
-NZB-DAV ships through two channels of the
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
+NeNeTeePee-Stream-Kodi ships through two channels of the
 [Appz4Fun Kodi repository](installation.md#choose-a-channel). **Stable** gets
 only full releases. **Beta** gets every release, including pre-releases. This
 page covers what the Beta channel gives you, how to join it or leave it, and how
@@ -14,7 +16,7 @@ to report problems.
 | Beta | 2.0.0-beta.2 | 2026-07-18 |
 
 The full release list is on the
-[GitHub releases page](https://github.com/Appz4Fun/nzbdavkodi/releases). Any
+[GitHub releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases). Any
 release marked **Pre-release** there goes only to the Beta channel. The release
 workflow sets that flag automatically for any version tag with a hyphen, such
 as `v2.0.0-beta.2`.
@@ -29,20 +31,20 @@ as `v2.0.0-beta.2`.
 
 These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
 1.2.3. The full notes are in the
-[changelog](https://github.com/Appz4Fun/nzbdavkodi/blob/main/CHANGELOG.md).
+[changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md).
 
 ### New features
 
 | Feature | What it does | Details |
 |---------|--------------|---------|
-| **NZBGet backend** | Use NZBGet instead of nzbdav. NZB-DAV submits the NZB, shows download and post-processing progress, then plays the finished file from your completed-downloads folder. | [NZBGet backend](../features/nzbget-backend.md) |
+| **NZBGet backend** | Use NZBGet instead of nzbdav. NeNeTeePee-Stream-Kodi submits the NZB, shows download and post-processing progress, then plays the finished file from your completed-downloads folder. | [NZBGet backend](../features/nzbget-backend.md) |
 | **Smart Duplicates failover** (NZBGet) | Other same-name results are queued as backups. If your pick can't be repaired, NZBGet switches to a backup and playback follows it. | [Smart Duplicates](../features/nzbget-backend.md#smart-duplicates-failover) |
 | **Exact season-pack episode reuse** (beta.2) | A finished season pack plays the episode you asked for, not the largest file. Later episodes from the same pack play from it without downloading again. | [Reuse a completed season pack](first-playback.md#reuse-a-completed-season-pack) |
 | **Indexer manager** | Add, edit, and remove direct Newznab indexers from a preset list of known indexers, with searches that respect each indexer's capabilities. | [Search and indexers](../features/search-and-indexers.md) |
-| **TVDB-aware TV search** | With an optional TMDB API key, NZB-DAV looks up the show's TVDB id and searches indexers by id instead of by title. | [Search and indexers](../features/search-and-indexers.md) |
-| **Read-ahead buffer** | While a stream plays, and while it's paused, NZB-DAV reads ahead of the playhead so a pause builds real buffer. Default 256 MB. | [Settings reference](../reference/settings.md) |
+| **TVDB-aware TV search** | With an optional TMDB API key, NeNeTeePee-Stream-Kodi looks up the show's TVDB id and searches indexers by id instead of by title. | [Search and indexers](../features/search-and-indexers.md) |
+| **Read-ahead buffer** | While a stream plays, and while it's paused, NeNeTeePee-Stream-Kodi reads ahead of the playhead so a pause builds real buffer. Default 256 MB. | [Settings reference](../reference/settings.md) |
 | **Stall wait and starvation notices** | A slow backend gets a patience window (default 120 s) instead of a dropped stream, and a notification tells you what's happening instead of a silent black screen. | [Playback](../features/playback-and-remux.md) |
-| **Queue-clear prompt** | When you start a new download, NZB-DAV can clear nzbdav's queue: **Ask** (default), **Always clear**, or **Never**. It never cancels the job for the title you're starting. | [Settings reference](../reference/settings.md) |
+| **Queue-clear prompt** | When you start a new download, NeNeTeePee-Stream-Kodi can clear nzbdav's queue: **Ask** (default), **Always clear**, or **Never**. It never cancels the job for the title you're starting. | [Settings reference](../reference/settings.md) |
 | **Help text for every setting** | The settings screen was rebuilt on Kodi's newer settings format, so every setting and category shows a help line. | [Settings reference](../reference/settings.md) |
 
 ### Improvements
@@ -63,7 +65,7 @@ These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
 
 Changes on `main` that aren't in a release yet are listed under
 **Unreleased** at the top of the
-[changelog](https://github.com/Appz4Fun/nzbdavkodi/blob/main/CHANGELOG.md#unreleased--main).
+[changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md#unreleased--main).
 
 ## Joining the beta
 
@@ -76,29 +78,29 @@ its own.
 
 1. Install the Beta repository zip (**Settings → Add-ons → Install from zip
    file**).
-2. Open **Settings → Add-ons → My add-ons → Video add-ons → NZB-DAV →
+2. Open **Settings → Add-ons → My add-ons → Video add-ons → NeNeTeePee-Stream-Kodi →
    Versions**, and pick the newest version listed under **Appz4Fun Repository
    (Beta)**.
 3. Optionally uninstall the Stable repository add-on (**Appz4Fun
-   Repository**). It no longer affects NZB-DAV.
+   Repository**). It no longer affects NeNeTeePee-Stream-Kodi.
 
 Your settings stay in place. The 2.0.0 settings screen adds an **NZBGet**
 category, and every new setting starts at its default.
 
 ## Switching channels
 
-To go back to Stable, use the same **Versions** list: open NZB-DAV's add-on
+To go back to Stable, use the same **Versions** list: open NeNeTeePee-Stream-Kodi's add-on
 info, choose **Versions**, and pick the version listed under **Appz4Fun
 Repository**. You have to do this by hand: Stable (1.2.3) is a lower version
 than the beta (2.0.0-beta.x), and Kodi never downgrades an add-on on its own.
-See [Going back from Beta to Stable](../operations/troubleshooting.md#going-back-from-beta-to-stable).
+See [Return from the beta channel to the stable channel](../operations/troubleshooting.md#return-from-the-beta-channel-to-the-stable-channel).
 
 After you switch either way, check that **Auto-update** is still on in the
 add-on info page.
 
 !!! warning "When 2.0.0 final is released"
     Kodi reads a version like `2.0.0-beta.2` as the base version `2.0.0` plus
-    an extra suffix, and it ranks a version with a suffix **above** the same
+    an extra suffix, and it ranks a version with a suffix **higher than** the same
     version without one. So Kodi treats `2.0.0-beta.2` as newer than a final
     `2.0.0`, and won't offer that update on its own. If a final release has the
     same base number as the beta you're running, install it from
@@ -110,10 +112,10 @@ add-on info page.
    the problem, and save `kodi.log`. On CoreELEC and LibreELEC it's at
    `/storage/.kodi/temp/kodi.log`.
 2. Remove API keys, passwords, and server addresses from anything you share.
-   NZB-DAV redacts credentials in its own log lines, but other add-ons may not.
+   NeNeTeePee-Stream-Kodi redacts credentials in its own log lines, but other add-ons may not.
 3. Open an issue on
-   [GitHub](https://github.com/Appz4Fun/nzbdavkodi/issues). Include the
-   NZB-DAV version (shown on the add-on info page), your backend (nzbdav or
+   [GitHub](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/issues). Include the
+   NeNeTeePee-Stream-Kodi version (shown on the add-on info page), your backend (nzbdav or
    NZBGet), your platform, and the relevant log lines.
 
 See [Troubleshooting](../operations/troubleshooting.md) for common problems

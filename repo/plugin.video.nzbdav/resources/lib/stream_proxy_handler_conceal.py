@@ -57,7 +57,7 @@ class _EbmlTapWriter:  # pylint: disable=too-few-public-methods
                 # snapshot is trusted again) and keep streaming.
                 self.broken = True
                 _sp.xbmc.log(
-                    "NZB-DAV: EBML tracker disabled after error: {!r} "
+                    "NeNeTeePee-Stream-Kodi: EBML tracker disabled after error: {!r} "
                     "(reason=ebml_tracker_error)".format(exc),
                     _sp.xbmc.LOGWARNING,
                 )
@@ -164,10 +164,11 @@ class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
             start = st.current
             emitted = self._ebml_emit_plan(st, plan, emit_end)
             _sp.xbmc.log(
-                "NZB-DAV: Replayed EBML concealment {}-{} ({} bytes, kind={}) "
-                "for a repeated range (reason=ebml_conceal_replay)".format(
-                    start, emit_end, emitted, plan.kind
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: Replayed EBML concealment "
+                    "{}-{} ({} bytes, kind={}) for a repeated range "
+                    "(reason=ebml_conceal_replay)"
+                ).format(start, emit_end, emitted, plan.kind),
                 _sp.xbmc.LOGINFO,
             )
             if st.current > st.end:
@@ -239,7 +240,7 @@ class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
 
     def _ebml_log_unrepaired(self, st, skip, detail):
         _sp.xbmc.log(
-            "NZB-DAV: EBML concealment not applied at byte {} (skip={}, "
+            "NeNeTeePee-Stream-Kodi: EBML concealment not applied at byte {} (skip={}, "
             "detail={}); using plain zero-fill, container structure NOT "
             "repaired (reason=ebml_conceal_unrepaired)".format(
                 st.current, skip, detail
@@ -333,9 +334,11 @@ class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
         )
         _sp._maybe_notify_recovery_summary(self.server, ctx)
         _sp.xbmc.log(
-            "NZB-DAV: EBML-concealed unreadable span at byte {} (probe skip={}, "
-            "kind={}, plan={}-{}, span={}, voids={}, detail={}) "
-            "(reason=ebml_conceal_{})".format(
+            (
+                "NeNeTeePee-Stream-Kodi: EBML-concealed unreadable span "
+                "at byte {} (probe skip={}, kind={}, plan={}-{}, "
+                "span={}, voids={}, detail={}) (reason=ebml_conceal_{})"
+            ).format(
                 st.current,
                 skip,
                 plan.kind,
@@ -354,10 +357,11 @@ class _EbmlConcealMixin:  # pylint: disable=too-few-public-methods
         """After emitting a whole plan the tracker must be synced again."""
         if emit_end == plan.end and not cs.tracker.synced and not cs.tap.broken:
             _sp.xbmc.log(
-                "NZB-DAV: EBML concealment self-check failed: tracker lost sync "
-                "at resume byte {} ({}) (reason=ebml_conceal_selfcheck)".format(
-                    plan.end, cs.tracker.desync_reason
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: EBML concealment self-check "
+                    "failed: tracker lost sync at resume byte {} ({}) "
+                    "(reason=ebml_conceal_selfcheck)"
+                ).format(plan.end, cs.tracker.desync_reason),
                 _sp.xbmc.LOGERROR,
             )
 

@@ -260,16 +260,18 @@ def _dismiss_tmdbhelper_player_choosers():
     """
     if _wait_for_dialog_select(timeout=30):
         try:
-            _kodi_rpc("Input.Select")  # pick NZB-DAV from the player list
+            _kodi_rpc(
+                "Input.Select"
+            )  # pick NeNeTeePee-Stream-Kodi from the player list
         except Exception:  # noqa: BLE001
             pass
-        # The second chooser ("Play with NZB-DAV" / Cancel) replaces the
+        # The second chooser ("Play with NeNeTeePee-Stream-Kodi" / Cancel) replaces the
         # first so window id stays 12000 — give it a beat to actually
         # transition before re-polling.
         time.sleep(0.8)
         if _wait_for_dialog_select(timeout=10):
             try:
-                _kodi_rpc("Input.Select")  # confirm "Play with NZB-DAV"
+                _kodi_rpc("Input.Select")  # confirm "Play with NeNeTeePee-Stream-Kodi"
             except Exception:  # noqa: BLE001
                 pass
 

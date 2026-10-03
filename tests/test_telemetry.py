@@ -14,7 +14,10 @@ def test_timed_block_logs_elapsed_milliseconds(monkeypatch):
         pass
 
     log.assert_called_once_with(
-        "NZB-DAV: timing search hydra elapsed_ms=125.0 count=3 error=False",
+        (
+            "NeNeTeePee-Stream-Kodi: timing search hydra "
+            "elapsed_ms=125.0 count=3 error=False"
+        ),
         telemetry.xbmc.LOGDEBUG,
     )
 

@@ -1,4 +1,4 @@
-# NZB-DAV Kodi Addon
+# NeNeTeePee-Stream-Kodi Addon
 set positional-arguments
 
 # Pinned dev tooling, self-bootstrapping (installs on first run, cached after).

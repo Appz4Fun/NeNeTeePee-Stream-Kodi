@@ -9,7 +9,7 @@ import xbmc
 def log_timing(label, elapsed_ms, **fields):
     """Log one timing sample without letting Kodi logging failures escape."""
     parts = [
-        "NZB-DAV: timing {}".format(label),
+        "NeNeTeePee-Stream-Kodi: timing {}".format(label),
         "elapsed_ms={:.1f}".format(elapsed_ms),
     ]
     for key in sorted(fields):

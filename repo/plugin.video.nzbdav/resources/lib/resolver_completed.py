@@ -106,9 +106,10 @@ def _close_dialog_before_submit_error(dialog):
         dialog.close()
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: progress dialog close before submit error failed: {}".format(
-                error
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: progress dialog close before "
+                "submit error failed: {}"
+            ).format(error),
             _resolver.xbmc.LOGDEBUG,
         )
 
@@ -121,9 +122,10 @@ def _start_existing_completed_cleanup(title, on_existing_completed):
         on_existing_completed()
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: Existing completed cleanup start failed for '{}': {}".format(
-                title, error
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Existing completed cleanup "
+                "start failed for '{}': {}"
+            ).format(title, error),
             _resolver.xbmc.LOGWARNING,
         )
 
@@ -269,13 +271,18 @@ def _completed_job_webdav_folder(title, completed_job):
         return None
 
     _resolver.xbmc.log(
-        "NZB-DAV: '{}' already downloaded, streaming directly".format(title),
+        ("NeNeTeePee-Stream-Kodi: '{}' already downloaded, streaming directly").format(
+            title
+        ),
         _resolver.xbmc.LOGINFO,
     )
     storage = completed_job.get("storage")
     if not storage:
         _resolver.xbmc.log(
-            "NZB-DAV: Completed history row for '{}' has no storage path".format(title),
+            (
+                "NeNeTeePee-Stream-Kodi: Completed history row for '{}' "
+                "has no storage path"
+            ).format(title),
             _resolver.xbmc.LOGWARNING,
         )
         return None
@@ -385,16 +392,19 @@ def _completed_job_video_rejected(
         webdav_folder, video_path, download_size, settings_getter
     ):
         _resolver.xbmc.log(
-            "NZB-DAV: '{}' completed row exposes '{}' far smaller than the "
-            "advertised release size; treating as nzbdav job-start stub and "
-            "re-downloading instead of streaming directly".format(title, video_path),
+            (
+                "NeNeTeePee-Stream-Kodi: '{}' completed row exposes "
+                "'{}' far smaller than the advertised release size; "
+                "treating as nzbdav job-start stub and re-downloading "
+                "instead of streaming directly"
+            ).format(title, video_path),
             _resolver.xbmc.LOGWARNING,
         )
         _record_rejected_completed_id(completed_job, rejected_completed_ids)
         return True
     if not _resolver._completed_stream_body_available(stream_url, stream_headers):
         _resolver.xbmc.log(
-            "NZB-DAV: '{}' is marked Completed but its mid-file body is "
+            "NeNeTeePee-Stream-Kodi: '{}' is marked Completed but its mid-file body is "
             "unavailable; re-downloading instead of streaming directly".format(title),
             _resolver.xbmc.LOGWARNING,
         )

@@ -125,7 +125,7 @@ def _completed_copy_blocks_clear(title, settings_getter):
         # leave the queue intact (return True = SKIP the clear) rather than
         # letting the RuntimeError escape and abort the submit path.
         _resolver.xbmc.log(
-            "NZB-DAV: completed-adopt probe thread did not start before "
+            "NeNeTeePee-Stream-Kodi: completed-adopt probe thread did not start before "
             "clearing the queue; leaving queue intact: {}".format(
                 _resolver._redact_log(error)
             ),
@@ -140,16 +140,20 @@ def _completed_copy_blocks_clear_result(worker, result):
     """Interpret the adopt-probe outcome: True means SKIP the queue clear."""
     if worker.is_alive():
         _resolver.xbmc.log(
-            "NZB-DAV: completed-adopt probe exceeded {}s before clearing the "
-            "queue; leaving queue intact and deferring to the in-dialog download "
-            "check".format(_resolver._CLEAR_QUEUE_PROBE_TIMEOUT),
+            (
+                "NeNeTeePee-Stream-Kodi: completed-adopt probe exceeded "
+                "{}s before clearing the queue; leaving queue intact "
+                "and deferring to the in-dialog download check"
+            ).format(_resolver._CLEAR_QUEUE_PROBE_TIMEOUT),
             _resolver.xbmc.LOGINFO,
         )
         return True
     if result.get("error") is not None:
         _resolver.xbmc.log(
-            "NZB-DAV: completed-adopt probe failed before clearing the queue; "
-            "leaving queue intact: {}".format(_resolver._redact_log(result["error"])),
+            (
+                "NeNeTeePee-Stream-Kodi: completed-adopt probe failed "
+                "before clearing the queue; leaving queue intact: {}"
+            ).format(_resolver._redact_log(result["error"])),
             _resolver.xbmc.LOGWARNING,
         )
         return True
@@ -172,8 +176,10 @@ def _probe_clearable_queue_slots(title, settings_getter):
         )
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: queue probe before submit failed; leaving queue intact: "
-            "{}".format(_resolver._redact_log(error)),
+            (
+                "NeNeTeePee-Stream-Kodi: queue probe before submit "
+                "failed; leaving queue intact: {}"
+            ).format(_resolver._redact_log(error)),
             _resolver.xbmc.LOGWARNING,
         )
         return []
@@ -191,14 +197,14 @@ def _confirm_queue_clear(title, slots):
         )
     except (RuntimeError, OSError, TypeError) as error:
         _resolver.xbmc.log(
-            "NZB-DAV: clear-queue prompt failed; leaving queue intact: "
+            "NeNeTeePee-Stream-Kodi: clear-queue prompt failed; leaving queue intact: "
             "{}".format(error),
             _resolver.xbmc.LOGWARNING,
         )
         return False
     if not confirmed:
         _resolver.xbmc.log(
-            "NZB-DAV: user kept the existing queue before submitting "
+            "NeNeTeePee-Stream-Kodi: user kept the existing queue before submitting "
             "'{}'".format(title),
             _resolver.xbmc.LOGINFO,
         )
@@ -278,8 +284,8 @@ def _clear_queue_slots(title, slots, settings_getter):
         **_resolver._settings_getter_kwargs(settings_getter),
     )
     _resolver.xbmc.log(
-        "NZB-DAV: cleared {} queued job(s) before submitting '{}'".format(
-            cleared, title
-        ),
+        (
+            "NeNeTeePee-Stream-Kodi: cleared {} queued job(s) before submitting '{}'"
+        ).format(cleared, title),
         _resolver.xbmc.LOGINFO,
     )

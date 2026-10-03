@@ -52,7 +52,7 @@ def _set_upstream_read_timeout(resp, timeout):
     disconnect. Tolerant of the CPython-internal attribute path
     (BufferedReader -> SocketIO -> socket) being absent on other
     implementations; on failure the inherited urlopen timeout still
-    applies. See https://github.com/Appz4Fun/nzbdavkodi/issues/214
+    applies. See https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/issues/214
     """
     try:
         sock = resp.fp.raw._sock
@@ -207,7 +207,7 @@ def _classify_contract_mismatch(
 
 def _log_contract_mismatch(start, end, status, content_range, content_length, detail):
     _sp.xbmc.log(
-        "NZB-DAV: Upstream contract mismatch for {}-{} status={} "
+        "NeNeTeePee-Stream-Kodi: Upstream contract mismatch for {}-{} status={} "
         "Content-Range={!r} Content-Length={!r} detail={} "
         "(reason=protocol_mismatch)".format(
             start, end, status, content_range, content_length, detail

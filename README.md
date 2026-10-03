@@ -1,19 +1,21 @@
-# NZB-DAV Kodi Addon
+# NeNeTeePee-Stream-Kodi add-on
 
-[![CI](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/ci.yml/badge.svg)](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/ci.yml)
-[![CodeQL](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/codeql.yml/badge.svg)](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/codeql.yml)
-[![Release](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/release.yml/badge.svg)](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/release.yml)
-[![Docs](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/pages.yml/badge.svg)](https://github.com/Appz4Fun/nzbdavkodi/actions/workflows/pages.yml)
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
+[![CI](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/ci.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/codeql.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/codeql.yml)
+[![Release](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/release.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/release.yml)
+[![Docs](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/pages.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/pages.yml)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Kodi](https://img.shields.io/badge/Kodi-21%20Omega-blue.svg)](https://kodi.tv/)
 [![Python](https://img.shields.io/badge/Python-3.8%2B-blue.svg)](https://www.python.org/)
 
 A Kodi 21 (Omega) player/resolver add-on that streams Usenet media through
 [TMDBHelper](https://github.com/jurialmunkey/plugin.video.themoviedb.helper). You
-browse a movie or TV episode in TMDBHelper, NZB-DAV searches your indexers, you
-pick a release, and NZB-DAV streams it through
+browse a movie or TV episode in TMDBHelper, NeNeTeePee-Stream-Kodi searches your indexers, you
+pick a release, and NeNeTeePee-Stream-Kodi streams it through
 [nzbdav](https://github.com/nzbdav-dev/nzbdav) or
-[InfiniDysk](https://github.com/infinidysk/infinidysk) — with a progress bar,
+[InfiniDysk](https://github.com/infinidysk/infinidysk). with a progress bar,
 seeking, and automatic recovery when a source goes bad. No manual NZB handling
 required. An optional download-first NZBGet backend is also available.
 
@@ -23,28 +25,30 @@ required. An optional download-first NZBGet backend is also available.
 
 StreamNZB is also available in the **Playback backend** dropdown. Enter its
 reachable server URL and stream token and use the existing TMDBHelper player.
-StreamNZB supplies the release list and playback URL, with no NZB-DAV indexer,
-WebDAV or proxy configuration required. See the
+StreamNZB supplies the release list and playback URL, with no NeNeTeePee-Stream-Kodi indexer,
+WebDAV, or proxy configuration required. See the
 [StreamNZB setup and recovery limits](docs-site/features/streamnzb-backend.md).
 
 ## 📖 Full documentation
 
-**This README is the short version. The complete guide — every setting, every
-feature, and a technical breakdown of how it all works — lives at:**
+**This README is the short version. The complete guide. every setting, every
+feature, and a technical breakdown of how it all works. lives at:**
 
-### 👉 [appz4fun.github.io/nzbdavkodi](https://appz4fun.github.io/nzbdavkodi/)
+### Documentation
 
-There you'll find [getting-started walkthroughs](https://appz4fun.github.io/nzbdavkodi/getting-started/prerequisites/),
-a [complete settings reference](https://appz4fun.github.io/nzbdavkodi/reference/settings/),
-[feature guides](https://appz4fun.github.io/nzbdavkodi/features/),
-and a [technical "how it works" section](https://appz4fun.github.io/nzbdavkodi/how-it-works/architecture/)
+[Read the documentation](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/).
+
+There you'll find [getting-started walkthroughs](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/prerequisites/),
+a [complete settings reference](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/reference/settings/),
+[feature guides](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/),
+and a [technical "how it works" section](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/how-it-works/architecture/)
 with architecture diagrams.
 
 ## How it works
 
 ```mermaid
 flowchart LR
-    A[TMDBHelper] -->|movie / episode| B[NZB-DAV Addon]
+    A[TMDBHelper] -->|movie / episode| B[NeNeTeePee-Stream-Kodi add-on]
     B -->|Newznab / native search| C[NZBHydra2 / Prowlarr /<br/>direct indexers]
     C -->|results| B
     B -->|you pick a result| D{Filter & rank}
@@ -54,7 +58,7 @@ flowchart LR
     F -->|range requests, gap recovery| G[Kodi player]
 ```
 
-nzbdav (or InfiniDysk) handles both fetching and serving over WebDAV — no
+nzbdav (or InfiniDysk) handles both fetching and serving over WebDAV. no
 separate download client needed. A background stream proxy adds seeking,
 on-the-fly remuxing, and mid-playback source switching. With the optional
 NZBGet backend, NZBGet downloads the whole file first and Kodi plays it from an
@@ -71,18 +75,18 @@ SMB share or a local/mounted folder.
 | **TMDBHelper** | To browse titles and trigger playback |
 | **ffmpeg** *(recommended)* | Enables the optional remux tiers; without it the proxy uses pass-through |
 
-See [Prerequisites](https://appz4fun.github.io/nzbdavkodi/getting-started/prerequisites/)
+See [Prerequisites](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/prerequisites/)
 for details.
 
 ## Installation
 
 ### From the Appz4Fun Kodi repository (recommended)
 
-NZB-DAV is distributed through the
+NeNeTeePee-Stream-Kodi is distributed through the
 [Appz4Fun Kodi repository](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo), which
 delivers automatic updates on one of two channels:
 
-| Channel | Repository add-on | NZB-DAV today |
+| Channel | Repository add-on | NeNeTeePee-Stream-Kodi today |
 |---------|-------------------|---------------|
 | **Stable** | `repository.appz4fun.stable` | 1.2.3 |
 | **Beta** | `repository.appz4fun.beta` | 2.0.0-beta.2 (pre-releases included) |
@@ -92,36 +96,34 @@ delivers automatic updates on one of two channels:
 2. In Kodi: **Settings → System → Add-ons** → enable **Unknown sources**.
 3. **Settings → Add-ons → Install from zip file** → select the channel zip.
 4. **Settings → Add-ons → Install from repository → Appz4Fun Repository** (or
-   **Appz4Fun Repository (Beta)**) → **Video add-ons** → install **NZB-DAV**.
+   **Appz4Fun Repository (Beta)**) → **Video add-ons** → install **NeNeTeePee-Stream-Kodi**.
    Future updates on that channel install automatically.
 
 Kodi only updates a third-party add-on from the repository it was installed
 from, so to switch channels (or move an existing install onto the new
-repository), install the other repository zip, then open NZB-DAV's add-on info
+repository), install the other repository zip, then open NeNeTeePee-Stream-Kodi's add-on info
 page → **Versions** and pick the version listed under that repository. See
-[Beta channel and beta features](https://appz4fun.github.io/nzbdavkodi/getting-started/beta-channel/)
+[Beta channel and beta features](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/beta-channel/)
 for what the beta adds and how to switch.
 
-> **Upgrading from the old repository?** NZB-DAV used to be distributed from the
-> **NZB-DAV Repository** add-on (`repository.nzbdav`) at
-> `https://appz4fun.github.io/nzbdavkodi/`. That URL now hosts this project's
-> documentation, not add-on metadata, so installs made from it no longer
-> update. Install an Appz4Fun repository zip as above, reinstall NZB-DAV from it
+> **Upgrading from the old repository?** NeNeTeePee-Stream-Kodi used to be distributed from the
+> **NZB-DAV Repository** (legacy) add-on (`repository.nzbdav`) at
+> `https://appz4fun.github.io/nzbdavkodi/`. That address no longer supplies add-on metadata, so installs made from it no longer update. Install an Appz4Fun repository zip using the earlier steps, reinstall NeNeTeePee-Stream-Kodi from it
 > through **Versions** (settings are kept), then remove the old `nzbdav`
-> file-manager source and the old **NZB-DAV Repository** add-on.
+> file-manager source and the old **NZB-DAV Repository** (legacy) add-on.
 
 ### Manual install
 
 Download `plugin.video.nzbdav-<version>.zip` from the
-[releases page](https://github.com/Appz4Fun/nzbdavkodi/releases) (releases
+[releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases) (releases
 marked **Pre-release** are beta builds), then **Settings → Add-ons → Install
 from zip file**. Manual installs don't auto-update.
 
-Full steps: [Install the add-on](https://appz4fun.github.io/nzbdavkodi/getting-started/installation/).
+Full steps: [Install the add-on](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/installation/).
 
 ## Quick setup
 
-1. Open **My add-ons → Video add-ons → NZB-DAV → Configure** and enter your
+1. Open **My add-ons → Video add-ons → NeNeTeePee-Stream-Kodi → Configure** and enter your
    **nzbdav** URL + API key and **WebDAV** credentials (InfiniDysk uses the same
    fields). Use the **Test** actions. To use NZBGet instead, fill in the
    **Playback backend** tab after selecting **NZBGet** in the dropdown.
@@ -131,13 +133,13 @@ Full steps: [Install the add-on](https://appz4fun.github.io/nzbdavkodi/getting-s
    indexer they came from.
 3. On the **Player Installation** tab, select **Install TMDBHelper Player**.
 4. Restart Kodi (or run TMDBHelper **Players → Update players**), then set
-   **Default player (Movies)** and **Default player (TV Shows)** to **NZB-DAV**.
+   **Default player (Movies)** and **Default player (TV Shows)** to **NeNeTeePee-Stream-Kodi**.
 5. Play a title from TMDBHelper.
 
 Full walkthrough:
-[Configure connections](https://appz4fun.github.io/nzbdavkodi/getting-started/configuration/) ·
-[Set up TMDBHelper](https://appz4fun.github.io/nzbdavkodi/getting-started/tmdbhelper/) ·
-[Play your first title](https://appz4fun.github.io/nzbdavkodi/getting-started/first-playback/).
+[Configure connections](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/configuration/) ·
+[Set up TMDBHelper](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/tmdbhelper/) ·
+[Play your first title](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/getting-started/first-playback/).
 
 ## Key features
 
@@ -158,16 +160,16 @@ Full walkthrough:
   alternate release mid-playback without stopping or rewinding.
 - **Optional NZBGet backend** *(beta)* as an alternative to nzbdav, playing
   from an SMB share or a local/mounted folder, with
-  [Smart Duplicates failover](https://appz4fun.github.io/nzbdavkodi/features/nzbget-backend/#smart-duplicates-failover)
+  [Smart Duplicates failover](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/nzbget-backend/#smart-duplicates-failover)
   to a same-release backup when a download turns out unrepairable.
 
 Each feature is documented in full under
-[Features](https://appz4fun.github.io/nzbdavkodi/features/).
+[Features](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/).
 
 ## Troubleshooting
 
-If NZB-DAV doesn't appear in TMDBHelper, no results show, or playback fails, see
-the [Troubleshooting guide](https://appz4fun.github.io/nzbdavkodi/operations/troubleshooting/).
+If NeNeTeePee-Stream-Kodi doesn't appear in TMDBHelper, no results show, or playback fails, see
+the [Troubleshooting guide](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/operations/troubleshooting/).
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Development
@@ -189,7 +191,7 @@ just docs-serve    # Serve the docs site locally with live reload
 
 Contributor orientation: [AGENTS.md](AGENTS.md) ·
 architecture and internals:
-[How it works](https://appz4fun.github.io/nzbdavkodi/how-it-works/architecture/) and
+[How it works](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/how-it-works/architecture/) and
 [`docs/proxy-architecture.md`](docs/proxy-architecture.md).
 
 ### Project structure
@@ -221,7 +223,7 @@ The Release workflow builds the zip and creates a GitHub Release, then notifies
 the [Appz4Fun Kodi repository](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo) to
 rebuild and republish. Pre-release tags (any tag with a hyphen, such as
 `v2.0.0-beta.3`) are published to the Beta channel only. Note that Kodi ranks
-`2.0.0-beta.N` above `2.0.0`, so beta users auto-update only to a higher base
+`2.0.0-beta.N` higher than `2.0.0`, so beta users auto-update only to a higher base
 version; see [AGENTS.md](AGENTS.md#release-checklist).
 
 ## Compatibility
@@ -232,8 +234,8 @@ version; see [AGENTS.md](AGENTS.md#release-checklist).
 | Python | 3.8+ |
 | OS | CoreELEC, LibreELEC, OSMC, Windows, macOS, Linux |
 | Architecture | ARM64 (aarch64), x86-64 |
-| Dependencies | None — all vendored, no pip required |
+| Dependencies | None. all vendored, no pip required |
 
 ## License
 
-GPLv3 — see [LICENSE](LICENSE) for details.
+GPLv3. see [LICENSE](LICENSE) for details.

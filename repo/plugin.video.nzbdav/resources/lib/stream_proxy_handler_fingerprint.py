@@ -238,7 +238,7 @@ class _FingerprintMixin:  # pylint: disable=too-few-public-methods
             primary_digest = future.result()
         except Exception as exc:  # defensive guard for threaded probes
             _sp.xbmc.log(
-                "NZB-DAV: Primary fallback range probe failed at bytes "
+                "NeNeTeePee-Stream-Kodi: Primary fallback range probe failed at bytes "
                 "{}-{}: {}".format(start, end, exc),
                 _sp.xbmc.LOGWARNING,
             )

@@ -25,7 +25,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         """
         _sp.xbmc.log(
             (
-                "NZB-DAV: Established forward stream stalled at "
+                "NeNeTeePee-Stream-Kodi: Established forward stream stalled at "
                 "byte {} (result={}); holding client open and "
                 "re-reading (elapsed={:.0f}s/{}s, "
                 "reason=patient_forward_stall)"
@@ -80,7 +80,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         ):
             st.terminal_reason = "fallback_exhausted"
             _sp.xbmc.log(
-                "NZB-DAV: Fallback chain exhausted at byte {} "
+                "NeNeTeePee-Stream-Kodi: Fallback chain exhausted at byte {} "
                 "after {} fruitless cutover re-entries with no "
                 "validated source and no primary progress; "
                 "closing cleanly (reason={})".format(
@@ -105,7 +105,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
                 else "protocol_mismatch"
             )
             _sp.xbmc.log(
-                "NZB-DAV: Aborting pass-through at byte {} "
+                "NeNeTeePee-Stream-Kodi: Aborting pass-through at byte {} "
                 "(result={}, reason={})".format(
                     st.current, st.result, st.terminal_reason
                 ),
@@ -125,7 +125,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
                 "no readable probe" if skip is None else "zero-fill budget exceeded"
             )
             _sp.xbmc.log(
-                "NZB-DAV: Zero-fill recovery exhausted at byte {}; "
+                "NeNeTeePee-Stream-Kodi: Zero-fill recovery exhausted at byte {}; "
                 "closing with {} bytes unread ({}, reason={})".format(
                     st.current, remaining, detail, st.terminal_reason
                 ),
@@ -141,7 +141,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         ):
             st.terminal_reason = "density_breaker_tripped"
             _sp.xbmc.log(
-                "NZB-DAV: Recovery density breaker tripped at byte {} "
+                "NeNeTeePee-Stream-Kodi: Recovery density breaker tripped at byte {} "
                 "(result={}, skip={}, ratio={:.2f}, reason={})".format(
                     st.current,
                     st.result,
@@ -153,7 +153,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
             )
             try:
                 _sp._notify(
-                    "NZB-DAV",
+                    "NeNeTeePee-Stream-Kodi",
                     "Stream aborted after repeated zero-fill recovery",
                 )
             except (RuntimeError, OSError):
@@ -193,7 +193,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         )
         _sp._maybe_notify_recovery_summary(self.server, ctx)
         _sp.xbmc.log(
-            "NZB-DAV: Zero-filled {} bytes at offset {} to skip bad "
+            "NeNeTeePee-Stream-Kodi: Zero-filled {} bytes at offset {} to skip bad "
             "usenet articles (reason=zero_fill_resume)".format(skip, st.current - skip),
             _sp.xbmc.LOGWARNING,
         )
@@ -219,9 +219,11 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
             if projected_ratio > _sp._SESSION_ZERO_FILL_RATIO_MAX:
                 st.terminal_reason = "session_zero_fill_budget_exceeded"
                 _sp.xbmc.log(
-                    "NZB-DAV: Session zero-fill budget exceeded at byte {} "
-                    "(projected_ratio={:.3f}, skipped={}, recoveries={}, "
-                    "reason={})".format(
+                    (
+                        "NeNeTeePee-Stream-Kodi: Session zero-fill budget "
+                        "exceeded at byte {} (projected_ratio={:.3f}, "
+                        "skipped={}, recoveries={}, reason={})"
+                    ).format(
                         st.current,
                         projected_ratio,
                         projected_zero_fill,
@@ -256,7 +258,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         if st.active_ctx.get("passthrough_stall_detected"):
             st.terminal_reason = "passthrough_stall"
             _sp.xbmc.log(
-                "NZB-DAV: Pass-through stall at byte {} "
+                "NeNeTeePee-Stream-Kodi: Pass-through stall at byte {} "
                 "(rate={:.0f} B/s over {:.1f}s; threshold={} B/s) — "
                 "closing to force Kodi reconnect (reason={})".format(
                     st.current,
@@ -274,7 +276,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
             # client-side event, never an upstream error. Log at INFO so
             # routine startup-probe churn doesn't masquerade as warnings.
             _sp.xbmc.log(
-                "NZB-DAV: Pass-through write aborted at byte {} "
+                "NeNeTeePee-Stream-Kodi: Pass-through write aborted at byte {} "
                 "(client stalled or disconnected, reason={})".format(
                     st.current, st.terminal_reason
                 ),
@@ -302,7 +304,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
             _sp._notify_fallback_outcome(st.fallback_pending_candidate, False)
         st.fallback_pending_candidate = None
         _sp.xbmc.log(
-            "NZB-DAV: Pass-through summary reason={} range={}-{} "
+            "NeNeTeePee-Stream-Kodi: Pass-through summary reason={} range={}-{} "
             "streamed={} zero_fill={} recoveries={} "
             "upstream_unreachable={} upstream_notified={} "
             "session_streamed={} session_zero_fill={}".format(
@@ -349,8 +351,11 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         """
         if ctx.get("upstream_down_notified"):
             _sp.xbmc.log(
-                "NZB-DAV: Retry ladder short-circuited (upstream marked down) "
-                "(reason=retry_ladder_circuit_breaker)",
+                (
+                    "NeNeTeePee-Stream-Kodi: Retry ladder short-circuited "
+                    "(upstream marked down) "
+                    "(reason=retry_ladder_circuit_breaker)"
+                ),
                 _sp.xbmc.LOGINFO,
             )
             return _sp._UPSTREAM_RANGE_UPSTREAM_ERROR, 0, start

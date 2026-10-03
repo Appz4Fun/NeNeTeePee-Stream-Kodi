@@ -5,7 +5,7 @@
 
 import xbmcaddon
 
-_FALLBACK_NAME = "NZB-DAV"
+_FALLBACK_NAME = "NeNeTeePee-Stream-Kodi"
 _FALLBACK_STRINGS = {
     30011: "Install TMDBHelper Player",
     30082: "Search cache cleared",
@@ -18,7 +18,7 @@ _FALLBACK_STRINGS = {
     30089: "No results after filtering for {}",
     30091: "Clear Cache",
     30092: "Settings",
-    30093: "Install NZB-DAV Player To",
+    30093: "Install NeNeTeePee-Stream-Kodi Player To",
     30094: "Player installed to: {}",
     30095: "Failed to install to: {}",
     30096: "No NZB URL provided",
@@ -172,7 +172,7 @@ def string(msg_id):
         import xbmc
 
         xbmc.log(
-            "NZB-DAV: missing localized string id={}".format(msg_id),
+            "NeNeTeePee-Stream-Kodi: missing localized string id={}".format(msg_id),
             xbmc.LOGWARNING,
         )
     except Exception:  # pylint: disable=broad-except
@@ -206,7 +206,7 @@ def fmt(msg_id, *args, **kwargs):
             import xbmc
 
             xbmc.log(
-                "NZB-DAV: i18n.fmt({}) format failure ({}); "
+                "NeNeTeePee-Stream-Kodi: i18n.fmt({}) format failure ({}); "
                 "args={!r} kwargs={!r}".format(msg_id, exc, args, kwargs),
                 xbmc.LOGWARNING,
             )

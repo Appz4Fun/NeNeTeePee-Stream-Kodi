@@ -1,6 +1,8 @@
 # Architecture
 
-NZB-DAV is a Kodi 21 **player/resolver** add-on. It presents itself to
+The add-on supports three playback backends. The nzbdav / InfiniDysk path uses WebDAV and the local proxy. NZBGet plays completed files. StreamNZB returns a direct HTTP stream. See [Backend services](../backends/index.md) for connection guides. The proxy internals described here apply to nzbdav / InfiniDysk.
+
+NeNeTeePee-Stream-Kodi is a Kodi 21 **player/resolver** add-on. It presents itself to
 TMDBHelper as a player, and when you start a title it runs the whole pipeline:
 search → filter → submit → poll → proxy → play. This page is the technical map;
 the pages that follow drill into each stage.
@@ -11,14 +13,14 @@ fork. It is a drop-in replacement that uses the same nzbdav settings and API.
 
 !!! note "Runtime constraints that shape the design"
     The add-on runtime is **pure Python, 3.8-compatible, with no compiled
-    dependencies** — so it runs identically on ARM64 CoreELEC boxes and x86-64
+    dependencies**. So it runs identically on ARM64 CoreELEC boxes and x86-64
     desktops. Every third-party library (including the release-title parser) is
     vendored. These constraints explain several choices below, such as the
     pure-Python MP4 rewriter and the "no pip installs" rule.
 
 ## Two execution contexts
 
-NZB-DAV runs in two separate processes, and understanding the split explains
+NeNeTeePee-Stream-Kodi runs in two separate processes, and understanding the split explains
 most of the design.
 
 ```mermaid
@@ -68,7 +70,7 @@ flowchart TB
   `resolve_and_play()`. The handle-based `plugin://…/play` and `/direct_play`
   routes (dispatched by `router.route()`) finish with `setResolvedUrl` instead.
 - **The service process** starts with Kodi (`start="startup"`) and runs for
-  Kodi's whole lifetime. It owns the **stream proxy** — a localhost HTTP server
+  Kodi's whole lifetime. It owns the **stream proxy**. a localhost HTTP server
   on a random port. The plugin process reaches it by reading the port and a
   security token from Kodi's Home-window properties and POSTing to a loopback
   `/prepare` endpoint. The service also runs the playback monitor: the resolver
@@ -83,7 +85,7 @@ involved.
 
 ## Module organization
 
-Three large surfaces — `router.py`, `resolver.py`, and `stream_proxy.py` — are
+Three large surfaces. `router.py`, `resolver.py`, and `stream_proxy.py`. are
 **façades**. Their logic lives in many sibling modules (`router_*`, `resolver_*`,
 `stream_proxy_*`) that are re-imported into the façade. This keeps each file
 small while letting the test suite import and patch names from the façade. The
@@ -165,7 +167,7 @@ flowchart LR
         NG[NZBGet<br/>JSON-RPC + SMB/local share]
         US[Usenet provider]
     end
-    A[NZB-DAV add-on] -->|Newznab / native search| H
+    A[NeNeTeePee-Stream-Kodi add-on] -->|Newznab / native search| H
     A -->|submit + poll| ND
     A -->|stream over WebDAV| ND
     A -.->|optional backend| NG

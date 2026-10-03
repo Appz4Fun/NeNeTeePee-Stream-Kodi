@@ -117,7 +117,9 @@ def fetch_caps(api_url, api_key, timeout=15):
     except _REQUEST_ERRORS as error:
         formatted_error = format_request_error(error)
         xbmc.log(
-            "NZB-DAV: Newznab caps fetch failed: {}".format(formatted_error),
+            ("NeNeTeePee-Stream-Kodi: Newznab caps fetch failed: {}").format(
+                formatted_error
+            ),
             xbmc.LOGWARNING,
         )
         return _empty_caps(), formatted_error

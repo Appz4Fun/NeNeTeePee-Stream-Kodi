@@ -86,7 +86,7 @@ def test_http_range_sends_addon_user_agent():
         assert _http_range("http://host/file.mp4", 0, 3) == b"abcd"
 
     req = mocked.call_args[0][0]
-    assert _request_header(req, "User-Agent") == "NZB-DAV Kodi Addon"
+    assert _request_header(req, "User-Agent") == "NeNeTeePee-Stream-Kodi Addon"
 
 
 def _nal(body):

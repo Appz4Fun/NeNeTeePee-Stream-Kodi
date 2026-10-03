@@ -1,12 +1,12 @@
 # Playback, remux, and seeking
 
 On the nzbdav backend, every playback request goes through a local HTTP proxy
-that NZB-DAV runs as a background service. Kodi talks only to this proxy on
+that NeNeTeePee-Stream-Kodi runs as a background service. Kodi talks only to this proxy on
 `127.0.0.1`, never directly to your WebDAV server. (The
 [NZBGet backend](nzbget-backend.md) plays finished files straight from the
 completed folder instead.) This design avoids a Kodi bug where scanning the parent
 directory over WebDAV throws an `Open - Unhandled exception`, and it lets
-NZB-DAV add seeking, format handling, and recovery on top of the raw stream.
+NeNeTeePee-Stream-Kodi add seeking, format handling, and recovery on top of the raw stream.
 
 ## What the proxy does for you
 
@@ -15,13 +15,13 @@ NZB-DAV add seeking, format handling, and recovery on top of the raw stream.
   whole file first. A pure-Python rewriter moves the `moov` to the front
   virtually and rewrites the `stco`/`co64` chunk offsets. No ffmpeg is needed.
 - **Recovers from missing articles** mid-stream by probing forward and filling
-  the gap, so a few bad blocks don't kill playback.
+  the gap, so a few bad blocks don't stop playback.
 - **Offers optional remux tiers** for very large or awkward files.
 - **Enables mid-playback source switching** via [fallback streams](fallback-streams.md).
 
 ## How a file is served
 
-NZB-DAV picks a serving path based on the container, the file size, and your
+NeNeTeePee-Stream-Kodi picks a serving path based on the container, the file size, and your
 settings:
 
 ```mermaid
@@ -39,7 +39,7 @@ flowchart TD
 
 - **MP4, already faststart:** proxied as-is with full range seeking.
 - **MP4 with `moov` at the tail:** rewritten in pure Python into a virtual
-  faststart file so it plays immediately. If parsing fails, NZB-DAV tries an
+  faststart file so it plays immediately. If parsing fails, NeNeTeePee-Stream-Kodi tries an
   ffmpeg temp-file faststart (files up to 4 GB only), then an ffmpeg Matroska
   remux. If ffmpeg isn't available either, it falls back to a plain proxy.
 - **MKV and other containers** (including `.ts`/`.m2ts`): by default, streamed
@@ -47,7 +47,7 @@ flowchart TD
 
 !!! note "Fallback streams force pass-through"
     If verified [fallback backups](fallback-streams.md) are already attached
-    when a stream starts, NZB-DAV serves it as a plain byte pass-through and
+    when a stream starts, NeNeTeePee-Stream-Kodi serves it as a plain byte pass-through and
     skips the MP4 rewrite and the remux tiers. Mid-stream switching needs the
     original byte offsets. It only works on the pass-through path.
 
@@ -62,7 +62,7 @@ so only change them if you have a specific reason.
 | **Force ffmpeg remux above (MB, 0=off)** | 15000 (~15 GB) | The size where the selected remux mode takes over for non-MP4 files. `0` turns the size-based remux off, so those files always stream pass-through. It has no effect while the mode is Direct pass-through. |
 | **Convert MP4 subtitles to SRT** | On | During a Matroska remux, converts subtitles from non-MKV sources (MP4 `mov_text`) to SRT so embedded subs survive. MKV subtitle tracks are copied unchanged. |
 
-With a remux mode selected, NZB-DAV also remuxes any non-MP4 file whose size
+With a remux mode selected, NeNeTeePee-Stream-Kodi also remuxes any non-MP4 file whose size
 it can't determine. That's safer than serving an unsized pass-through.
 
 !!! note "Pass-through is the default for a reason"
@@ -78,27 +78,27 @@ it can't determine. That's safer than serving an unsized pass-through.
     - If the HLS ffmpeg process fails to produce output at startup, the session
       switches to Matroska remux too.
 
-    NZB-DAV looks for ffmpeg on `PATH`, in the **ffmpeg-tools** add-on
+    NeNeTeePee-Stream-Kodi looks for ffmpeg on `PATH`, in the **ffmpeg-tools** add-on
     (`tools.ffmpeg-tools`), `/usr/bin/ffmpeg`, and `/storage/.opt/bin/ffmpeg`.
 
 ### Full seeking on large files
 
-NZB-DAV's design notes say that some 32-bit Kodi builds (common on
+NeNeTeePee-Stream-Kodi's design notes say that some 32-bit Kodi builds (common on
 CoreELEC/Amlogic devices) fail on pass-through streams larger than about 4 GB
-unless Kodi's in-memory cache is disabled with
-`<cache><memorysize>0</memorysize></cache>` in `advancedsettings.xml`. NZB-DAV
+unless Kodi's in-memory cache is turned off with
+`<cache><memorysize>0</memorysize></cache>` in `advancedsettings.xml`. NeNeTeePee-Stream-Kodi
 doesn't test for this and doesn't act on it. It never writes
 `advancedsettings.xml`, and the **Large non-MP4 stream mode** setting alone
 decides between pass-through and remux. The only use of the file is a read-only
 check that controls an advisory dialog. When a stream you started from
 TMDBHelper is served through an ffmpeg remux and the cache isn't already `0`,
-NZB-DAV shows the dialog at most once per Kodi session (unless you choose
+NeNeTeePee-Stream-Kodi shows the dialog at most once per Kodi session (unless you choose
 **Never ask**). See
 [advancedsettings.xml and seeking](../reference/advancedsettings.md).
 
 ## Dolby Vision handling
 
-When you choose the fMP4 HLS mode, NZB-DAV reads the Dolby Vision RPU from the
+When you choose the fMP4 HLS mode, NeNeTeePee-Stream-Kodi reads the Dolby Vision RPU from the
 source in pure Python and routes each file based on the result. Not every DV
 variant is safe over HLS on Amlogic devices:
 
@@ -128,8 +128,8 @@ pass-through path recovers:
 | **Read-ahead buffer size in MB (keeps filling while paused; 0=off)** | 256 (clamped 0–4096) |
 | **Send 200 for no-range pass-through** | Off |
 
-When a stream stops because the backend fell behind, NZB-DAV shows a
-"nzbdav can't keep up — playback stalled" notification instead of leaving you
+When a stream stops because the backend fell behind, NeNeTeePee-Stream-Kodi shows a
+"nzbdav can't keep up. playback stalled" notification instead of leaving you
 at a silent black screen.
 
 !!! info "Beta feature"

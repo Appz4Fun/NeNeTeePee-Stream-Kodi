@@ -173,7 +173,7 @@ def probe_webdav_reachable(
 def _log_probe_exhausted(error, max_retries):
     """Log a WebDAV probe failure after all retries were exhausted."""
     xbmc.log(
-        "NZB-DAV: WebDAV probe connection error after {} "
+        "NeNeTeePee-Stream-Kodi: WebDAV probe connection error after {} "
         "attempts: {} ({})".format(max_retries + 1, error, type(error).__name__),
         xbmc.LOGERROR,
     )
@@ -182,7 +182,7 @@ def _log_probe_exhausted(error, max_retries):
 def _log_probe_retry(error, attempt, max_retries):
     """Log a single WebDAV probe connection error before retrying."""
     xbmc.log(
-        "NZB-DAV: WebDAV probe connection error "
+        "NeNeTeePee-Stream-Kodi: WebDAV probe connection error "
         "(attempt {}/{}): {} ({})".format(
             attempt, max_retries, error, type(error).__name__
         ),
@@ -215,19 +215,23 @@ def _classify_probe_status(status):
     """Classify an HTTP HEAD status into a (reachable, error_type) tuple."""
     if status in (401, 403):
         xbmc.log(
-            "NZB-DAV: WebDAV probe auth failed (status={})".format(status),
+            ("NeNeTeePee-Stream-Kodi: WebDAV probe auth failed (status={})").format(
+                status
+            ),
             xbmc.LOGERROR,
         )
         return False, "auth_failed"
     if status >= 500:
         xbmc.log(
-            "NZB-DAV: WebDAV probe server error (status={})".format(status),
+            ("NeNeTeePee-Stream-Kodi: WebDAV probe server error (status={})").format(
+                status
+            ),
             xbmc.LOGWARNING,
         )
         return False, "server_error"
     # Any other status - server responded, classify as reachable.
     xbmc.log(
-        "NZB-DAV: WebDAV probe reachable (status={})".format(status),
+        "NeNeTeePee-Stream-Kodi: WebDAV probe reachable (status={})".format(status),
         xbmc.LOGDEBUG,
     )
     return True, None
@@ -412,7 +416,7 @@ def _folder_total_href_path(response, ns):
         href_path = parsed_href.path
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: folder_video_total_bytes skipping malformed href "
+            "NeNeTeePee-Stream-Kodi: folder_video_total_bytes skipping malformed href "
             "'{}': {}".format(href_text, e),
             xbmc.LOGWARNING,
         )
@@ -484,7 +488,7 @@ def _folder_total_entry_path(response, ns, request_path, seen_resources):
         return None, False
     if not _folder_total_path_is_contained(href_path, request_path):
         xbmc.log(
-            "NZB-DAV: folder inventory ignored out-of-tree href '{}' "
+            "NeNeTeePee-Stream-Kodi: folder inventory ignored out-of-tree href '{}' "
             "for '{}'".format(href_path, request_path),
             xbmc.LOGWARNING,
         )
@@ -638,9 +642,10 @@ def folder_video_total_bytes(
         # incomplete so the guard fails OPEN rather than rejecting on a partial
         # (the poll loop re-runs the guard, so this self-heals next iteration).
         xbmc.log(
-            "NZB-DAV: folder_video_total_bytes scan failed for '{}': {}".format(
-                folder_path, error
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: folder_video_total_bytes scan "
+                "failed for '{}': {}"
+            ).format(folder_path, error),
             xbmc.LOGDEBUG,
         )
         return _FOLDER_TOTAL_INCOMPLETE
@@ -764,7 +769,7 @@ def find_video_file(
     except Exception as e:
         error_detail = webdav_discovery._describe_webdav_error(e)
         xbmc.log(
-            "NZB-DAV: Error browsing WebDAV folder '{}': {} ({})".format(
+            "NeNeTeePee-Stream-Kodi: Error browsing WebDAV folder '{}': {} ({})".format(
                 folder_path, error_detail, type(e).__name__
             ),
             xbmc.LOGERROR,
@@ -884,7 +889,9 @@ def find_video_stream_for_folder(
             on_inventory(inventory)
         except Exception as error:  # pylint: disable=broad-except
             xbmc.log(
-                "NZB-DAV: WebDAV inventory callback failed: {}".format(error),
+                ("NeNeTeePee-Stream-Kodi: WebDAV inventory callback failed: {}").format(
+                    error
+                ),
                 xbmc.LOGDEBUG,
             )
     if not video_path:

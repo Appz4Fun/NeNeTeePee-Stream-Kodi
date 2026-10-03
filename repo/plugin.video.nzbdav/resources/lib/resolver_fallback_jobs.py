@@ -54,7 +54,9 @@ def _cancel_fallback_job(state, job):
         return _invoke_fallback_job_cancel(job, nzo_id, cancel_callable)
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: Failed to cancel fallback submit job {}: {}".format(
+            (
+                "NeNeTeePee-Stream-Kodi: Failed to cancel fallback submit job {}: {}"
+            ).format(
                 _resolver._redact_log(nzo_id or job), _resolver._redact_log(error)
             ),
             _resolver.xbmc.LOGWARNING,
@@ -115,8 +117,10 @@ def _stop_fallback_submit_worker(
         thread.join(timeout=timeout)
         if thread.is_alive():
             _resolver.xbmc.log(
-                "NZB-DAV: Fallback submit worker still running after {:.2f}s; "
-                "resolve shutdown is continuing".format(timeout),
+                (
+                    "NeNeTeePee-Stream-Kodi: Fallback submit worker still "
+                    "running after {:.2f}s; resolve shutdown is continuing"
+                ).format(timeout),
                 _resolver.xbmc.LOGWARNING,
             )
         else:

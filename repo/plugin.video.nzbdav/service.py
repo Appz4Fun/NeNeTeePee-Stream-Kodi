@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
-"""NZB-DAV background service — hosts stream proxy and monitors playback."""
+"""NeNeTeePee-Stream-Kodi proxy and playback monitoring service."""
 
 import faulthandler
 import os
@@ -102,9 +102,10 @@ def _clamp_int_setting(setting_id, value, lo, hi):
         clamped = hi
     if clamped != value:
         xbmc.log(
-            "NZB-DAV: Setting {}={} out of range [{}..{}]; clamping to {}".format(
-                setting_id, value, lo, hi, clamped
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Setting {}={} out of range "
+                "[{}..{}]; clamping to {}"
+            ).format(setting_id, value, lo, hi, clamped),
             xbmc.LOGWARNING,
         )
     return clamped
@@ -267,7 +268,7 @@ class NzbdavPlayer(xbmc.Player):
         except _PLAYER_RUNTIME_ERRORS:
             pass
         xbmc.log(
-            "NZB-DAV: Service monitoring stream '{}'".format(title),
+            "NeNeTeePee-Stream-Kodi: Service monitoring stream '{}'".format(title),
             xbmc.LOGINFO,
         )
 
@@ -281,7 +282,7 @@ class NzbdavPlayer(xbmc.Player):
             self._state = PlaybackState.MONITORING
             title = self._title
         xbmc.log(
-            "NZB-DAV: Playback started for '{}'".format(title),
+            "NeNeTeePee-Stream-Kodi: Playback started for '{}'".format(title),
             xbmc.LOGINFO,
         )
 
@@ -367,7 +368,7 @@ class NzbdavPlayer(xbmc.Player):
         # must not run while a Kodi callback thread holds the lock or
         # the service tick will block waiting for ffmpeg to exit.
         xbmc.log(
-            "NZB-DAV: Playback stopped for '{}'".format(title),
+            "NeNeTeePee-Stream-Kodi: Playback stopped for '{}'".format(title),
             xbmc.LOGINFO,
         )
         self._save_stable_resume(resume_key, position, av_started)
@@ -383,7 +384,7 @@ class NzbdavPlayer(xbmc.Player):
             title = self._title
             resume_key = self._resume_key
         xbmc.log(
-            "NZB-DAV: Playback completed for '{}'".format(title),
+            "NeNeTeePee-Stream-Kodi: Playback completed for '{}'".format(title),
             xbmc.LOGINFO,
         )
         self._clear_stable_resume(resume_key)
@@ -404,7 +405,9 @@ class NzbdavPlayer(xbmc.Player):
             title = self._title
             retry_count = self._retry_count
         xbmc.log(
-            "NZB-DAV: Playback error for '{}' (retry {})".format(title, retry_count),
+            ("NeNeTeePee-Stream-Kodi: Playback error for '{}' (retry {})").format(
+                title, retry_count
+            ),
             xbmc.LOGERROR,
         )
 
@@ -431,7 +434,10 @@ class NzbdavPlayer(xbmc.Player):
             self._save_position()
             return
         xbmc.log(
-            "NZB-DAV: Playback seek for '{}' -> {:.0f}s (offset={:.0f}s)".format(
+            (
+                "NeNeTeePee-Stream-Kodi: Playback seek for '{}' -> "
+                "{:.0f}s (offset={:.0f}s)"
+            ).format(
                 title,
                 position,
                 float(seek_offset),
@@ -462,7 +468,7 @@ class NzbdavPlayer(xbmc.Player):
             retry_count = self._retry_count
 
         xbmc.log(
-            "NZB-DAV: Retrying '{}' from {:.0f}s ({}/{})".format(
+            "NeNeTeePee-Stream-Kodi: Retrying '{}' from {:.0f}s ({}/{})".format(
                 title,
                 position,
                 retry_count,
@@ -471,7 +477,7 @@ class NzbdavPlayer(xbmc.Player):
             xbmc.LOGINFO,
         )
         _notify(
-            "NZB-DAV",
+            "NeNeTeePee-Stream-Kodi",
             "Reconnecting ({}/{})...".format(retry_count, max_retries),
             5000,
         )
@@ -569,9 +575,10 @@ class NzbdavPlayer(xbmc.Player):
             return False
 
         xbmc.log(
-            "NZB-DAV: Playback never started for '{}' after {:.0f}s".format(
-                title, elapsed
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Playback never started for "
+                "'{}' after {:.0f}s"
+            ).format(title, elapsed),
             xbmc.LOGERROR,
         )
         from resources.lib.i18n import addon_name as _addon_name
@@ -596,7 +603,9 @@ class NzbdavPlayer(xbmc.Player):
 
         if retry_count >= max_retries:
             xbmc.log(
-                "NZB-DAV: Max retries ({}) reached for '{}'".format(max_retries, title),
+                ("NeNeTeePee-Stream-Kodi: Max retries ({}) reached for '{}'").format(
+                    max_retries, title
+                ),
                 xbmc.LOGERROR,
             )
             from resources.lib.i18n import addon_name as _addon_name
@@ -661,13 +670,13 @@ def _run_tick(player, consecutive_failures):
         consecutive_failures += 1
         if consecutive_failures == 1:
             xbmc.log(
-                "NZB-DAV: Unhandled exception in player.tick(): {} "
+                "NeNeTeePee-Stream-Kodi: Unhandled exception in player.tick(): {} "
                 "(reason=tick_exception)".format(e),
                 xbmc.LOGERROR,
             )
         else:
             xbmc.log(
-                "NZB-DAV: player.tick() still failing "
+                "NeNeTeePee-Stream-Kodi: player.tick() still failing "
                 "(streak={}, latest={})".format(consecutive_failures, e),
                 xbmc.LOGERROR,
             )
@@ -708,7 +717,7 @@ def main():
     # running until the next prepare_stream call.
     player = NzbdavPlayer(proxy=proxy)
     xbmc.log(
-        "NZB-DAV: Service started (proxy on port {})".format(proxy.port),
+        "NeNeTeePee-Stream-Kodi: Service started (proxy on port {})".format(proxy.port),
         xbmc.LOGINFO,
     )
 
@@ -733,14 +742,14 @@ def main():
         except Exception as e:  # pylint: disable=broad-except
             # Never let a settings-read glitch take down the service loop.
             xbmc.log(
-                "NZB-DAV: cache warning check failed: {}".format(e),
+                "NeNeTeePee-Stream-Kodi: cache warning check failed: {}".format(e),
                 xbmc.LOGERROR,
             )
 
         consecutive_tick_failures = _run_tick(player, consecutive_tick_failures)
 
     _shutdown_proxy(proxy)
-    xbmc.log("NZB-DAV: Service stopped", xbmc.LOGINFO)
+    xbmc.log("NeNeTeePee-Stream-Kodi: Service stopped", xbmc.LOGINFO)
 
 
 if __name__ == "__main__":

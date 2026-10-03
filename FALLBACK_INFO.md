@@ -7,8 +7,8 @@
 > `fallback_streams.py` into sibling modules, and line numbers drift. Grep for
 > the names below.
 >
-> User-level docs: [Fallback streams](https://appz4fun.github.io/nzbdavkodi/features/fallback-streams/)
-> and [Fallback cutover](https://appz4fun.github.io/nzbdavkodi/how-it-works/fallback-cutover/).
+> User-level docs: [Fallback streams](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/fallback-streams/)
+> and [Fallback cutover](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/how-it-works/fallback-cutover/).
 
 ## Overview
 
@@ -308,7 +308,7 @@ again on a fresh upstream open.
 `ctx["current_byte_pos"]` isn't touched. It's managed separately by
 `_update_current_byte_pos`, so playback resumes at the exact offset. The
 cutover log line is
-`NZB-DAV: Switched pass-through source at byte {} to fallback nzo_id={} (switch_count={})`.
+`NeNeTeePee-Stream-Kodi: Switched pass-through source at byte {} to fallback nzo_id={} (switch_count={})`.
 A primary stuck on AWAITING_DOWNLOAD with no progress for
 `_AWAITING_DOWNLOAD_NO_PROGRESS_MAX = 3` consecutive reads fails over through
 the same function and logs `Primary stuck on no-progress AWAITING_DOWNLOAD …`.

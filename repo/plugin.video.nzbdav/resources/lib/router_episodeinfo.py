@@ -150,9 +150,10 @@ def _episode_info_from_infolabels(title, season, episode):
             # Only log the winning source; logging every probed source in the
             # success path made a noisy 4-line log entry per play.
             xbmc.log(
-                "NZB-DAV: InfoLabel resolved: '{}' S{}E{} (from {})".format(
-                    title, season, episode, source[0]
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: InfoLabel resolved: '{}' "
+                    "S{}E{} (from {})"
+                ).format(title, season, episode, source[0]),
                 xbmc.LOGINFO,
             )
             break

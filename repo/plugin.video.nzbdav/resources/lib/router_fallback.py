@@ -115,7 +115,7 @@ def _fetch_fallback_extra_uploads(selected, settings_getter):
         from resources.lib.http_util import redact_text
 
         xbmc.log(
-            "NZB-DAV: duplicate-uploads lookup raised: {}".format(
+            "NeNeTeePee-Stream-Kodi: duplicate-uploads lookup raised: {}".format(
                 redact_text(str(error))
             ),
             xbmc.LOGDEBUG,

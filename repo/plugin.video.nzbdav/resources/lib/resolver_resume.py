@@ -24,7 +24,10 @@ def _show_cache_prompt_after_playback(stream_info):
         maybe_show_cache_prompt(stream_info)
     except _resolver._RESOLVE_RUNTIME_ERRORS as error:
         _resolver.xbmc.log(
-            "NZB-DAV: cache prompt skipped after playback handoff: {}".format(error),
+            (
+                "NeNeTeePee-Stream-Kodi: cache prompt skipped after "
+                "playback handoff: {}"
+            ).format(error),
             _resolver.xbmc.LOGWARNING,
         )
 
@@ -45,7 +48,7 @@ def _read_stored_resume(key):
         return _resolver._coerce_resume_seconds(_resolver.resume_store.get_resume(key))
     except _resolver._RESOLVE_RUNTIME_ERRORS as error:
         _resolver.xbmc.log(
-            "NZB-DAV: Failed to read resume state: {}".format(error),
+            "NeNeTeePee-Stream-Kodi: Failed to read resume state: {}".format(error),
             _resolver.xbmc.LOGWARNING,
         )
         return 0.0
@@ -74,7 +77,9 @@ def _preserve_resume_on_cancel(release_id, scrubbed_seconds):
         _resolver.resume_store.save_resume(release_id, seconds)
     except _resolver._RESOLVE_RUNTIME_ERRORS as error:
         _resolver.xbmc.log(
-            "NZB-DAV: Failed to preserve resume on cancel: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Failed to preserve resume on cancel: {}").format(
+                error
+            ),
             _resolver.xbmc.LOGWARNING,
         )
 
@@ -111,7 +116,9 @@ def _migrate_legacy_resume(release_id, legacy_key):
         _resolver.resume_store.clear_resume(legacy_key)
     except _resolver._RESOLVE_RUNTIME_ERRORS as error:
         _resolver.xbmc.log(
-            "NZB-DAV: Failed to migrate legacy resume key: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Failed to migrate legacy resume key: {}").format(
+                error
+            ),
             _resolver.xbmc.LOGWARNING,
         )
     return legacy_stored
@@ -171,7 +178,7 @@ def _resolve_direct_no_proxy(
     bust_url = _resolver._cache_bust_url(stream_url)
     play_url = _resolver._build_play_url(bust_url, stream_headers)
     _resolver.xbmc.log(
-        "NZB-DAV: Playing direct (no proxy) (handle={}): {}".format(
+        "NeNeTeePee-Stream-Kodi: Playing direct (no proxy) (handle={}): {}".format(
             handle, _resolver._redact_log(bust_url)
         ),
         _resolver.xbmc.LOGINFO,
@@ -218,7 +225,9 @@ def _finish_direct_playback(handle, prepared, resume_key="", resume_seconds=0.0)
         home = _resolver.xbmcgui.Window(10000)
         if stream_info.get("direct"):
             _resolver.xbmc.log(
-                "NZB-DAV: MP4 already faststart, direct play: {}".format(safe_url),
+                (
+                    "NeNeTeePee-Stream-Kodi: MP4 already faststart, direct play: {}"
+                ).format(safe_url),
                 _resolver.xbmc.LOGINFO,
             )
             bust_url = _resolver._cache_bust_url(stream_url)
@@ -271,7 +280,9 @@ def _finish_player_playback(prepared, resume_key="", resume_seconds=0.0):
 
         if stream_info.get("direct"):
             _resolver.xbmc.log(
-                "NZB-DAV: MP4 already faststart, direct play: {}".format(safe_url),
+                (
+                    "NeNeTeePee-Stream-Kodi: MP4 already faststart, direct play: {}"
+                ).format(safe_url),
                 _resolver.xbmc.LOGINFO,
             )
             bust_url = _resolver._cache_bust_url(stream_url)
@@ -300,7 +311,7 @@ def _finish_player_playback(prepared, resume_key="", resume_seconds=0.0):
     _apply_resume_start_offset(li, resume_seconds)
     play_url = _resolver._build_play_url(bust_url, stream_headers)
     _resolver.xbmc.log(
-        "NZB-DAV: Playing direct (no proxy): {}".format(safe_url),
+        "NeNeTeePee-Stream-Kodi: Playing direct (no proxy): {}".format(safe_url),
         _resolver.xbmc.LOGINFO,
     )
     _set_playback_monitor_properties(

@@ -1,10 +1,10 @@
 # CoreELEC and Linux tuning
 
-NZB-DAV runs well out of the box. This page is an **advanced, optional**
+NeNeTeePee-Stream-Kodi runs well out of the box. This page is an **advanced, optional**
 reference for a specific demanding scenario: 4K Dolby Vision playback running
 concurrently with heavy TMDBHelper cache-warming on a low-memory ARM device.
 
-None of this is required to use NZB-DAV. It documents a real, tested
+None of this is required to use NeNeTeePee-Stream-Kodi. It documents a real, tested
 configuration for a **CoreELEC box on an Amlogic S922X** (6-core big.LITTLE,
 4 GB RAM, Samsung T5 SSD over USB 3.0), which you can adapt if you push a similar
 device hard.
@@ -12,7 +12,7 @@ device hard.
 !!! note "Device-specific"
     These values were tuned for one hardware profile. Treat them as a worked
     example, not universal settings. CoreELEC uses a read-only squashfs root, so
-    persistent tuning lives under `/storage/` — applied via
+    persistent tuning lives under `/storage/`. applied via
     `/storage/.config/autostart.sh` and systemd units in
     `/storage/.config/system.d/`.
 
@@ -39,16 +39,16 @@ cat /sys/class/net/eth0/queues/rx-0/rps_cpus  # expect 3f (RPS active)
 lsmod | grep uas                              # expect uas loaded
 ```
 
-## How this relates to NZB-DAV
+## How this relates to NeNeTeePee-Stream-Kodi
 
-NZB-DAV doesn't apply or depend on any of the OS tuning above. Nothing in the
+NeNeTeePee-Stream-Kodi doesn't apply or depend on any of the OS preceding tuning. Nothing in the
 add-on changes kernel, sysctl, or systemd settings. The tuning is a separate
 layer that keeps storage and the network responsive when Kodi and background
 warmup services compete for a small pool of RAM and a single-queue NIC. On a
 roomier device (more RAM, a multi-queue NIC, native SATA), most of it isn't
 needed.
 
-These NZB-DAV settings address playback smoothness at the application layer
+These NeNeTeePee-Stream-Kodi settings address playback smoothness at the app layer
 (Advanced → **Pass-through validation**):
 
 - **Read-ahead buffer size in MB** (default 256, 0 turns it off). Keeps
@@ -60,8 +60,8 @@ See [Stream proxy](../how-it-works/stream-proxy.md) for how they work. Both
 were added in 2.0.0-beta.1 and are available on the
 [Beta channel](../getting-started/beta-channel.md).
 
-The one Kodi-side change NZB-DAV itself recommends is in
+The one Kodi-side change NeNeTeePee-Stream-Kodi itself recommends is in
 `advancedsettings.xml`: set `<cache><memorysize>0</memorysize></cache>` so
 large files can play in pass-through mode with full seeking on 32-bit Kodi
-builds. NZB-DAV only suggests this in a dialog; it never edits the file. See
+builds. NeNeTeePee-Stream-Kodi only suggests this in a dialog; it never edits the file. See
 [advancedsettings.xml and seeking](../reference/advancedsettings.md).

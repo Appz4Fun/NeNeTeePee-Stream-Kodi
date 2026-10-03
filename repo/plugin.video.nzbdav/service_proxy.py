@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
-"""Stream-proxy lifecycle helpers for the NZB-DAV background service.
+"""Stream-proxy lifecycle helpers for the NeNeTeePee-Stream-Kodi background service.
 
 These functions manage the long-lived stream proxy that the service hosts
 (start, advertise port/token, restart a dead daemon thread, shut down). They
@@ -50,7 +50,7 @@ def _restart_dead_proxy(home, proxy_cls, proxy, player):
     if proxy.is_alive():
         return proxy
     xbmc.log(
-        "NZB-DAV: Stream proxy thread is dead; restarting "
+        "NeNeTeePee-Stream-Kodi: Stream proxy thread is dead; restarting "
         "(reason=proxy_thread_died)",
         xbmc.LOGERROR,
     )
@@ -61,7 +61,7 @@ def _restart_dead_proxy(home, proxy_cls, proxy, player):
         # to spawn a fresh proxy anyway — the stop failure is
         # diagnostic-only, not user-actionable. Closes §H.3.
         xbmc.log(
-            "NZB-DAV: proxy.stop() raised during restart "
+            "NeNeTeePee-Stream-Kodi: proxy.stop() raised during restart "
             "(continuing): {!r}".format(e),
             xbmc.LOGWARNING,
         )
@@ -70,7 +70,7 @@ def _restart_dead_proxy(home, proxy_cls, proxy, player):
         proxy.start()
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Stream proxy restart failed: {} "
+            "NeNeTeePee-Stream-Kodi: Stream proxy restart failed: {} "
             "(reason=proxy_restart_failed)".format(e),
             xbmc.LOGERROR,
         )
@@ -82,7 +82,9 @@ def _restart_dead_proxy(home, proxy_cls, proxy, player):
         # stop() fires on the live proxy.
         player._proxy = proxy  # pylint: disable=protected-access
         xbmc.log(
-            "NZB-DAV: Stream proxy restarted on port {}".format(proxy.port),
+            ("NeNeTeePee-Stream-Kodi: Stream proxy restarted on port {}").format(
+                proxy.port
+            ),
             xbmc.LOGINFO,
         )
     return proxy
@@ -107,7 +109,9 @@ def _start_proxy(home, proxy_cls, monitor):
         proxy.start()
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Service failed to start stream proxy: {}".format(e),
+            ("NeNeTeePee-Stream-Kodi: Service failed to start stream proxy: {}").format(
+                e
+            ),
             xbmc.LOGERROR,
         )
         _clear_proxy_props(home)
@@ -131,7 +135,7 @@ def _shutdown_proxy(home, proxy):
         proxy.stop()
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: proxy.stop() raised during shutdown "
+            "NeNeTeePee-Stream-Kodi: proxy.stop() raised during shutdown "
             "(continuing): {!r}".format(e),
             xbmc.LOGWARNING,
         )

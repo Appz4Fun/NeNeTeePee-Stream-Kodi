@@ -1,13 +1,13 @@
 # Install the add-on
 
-The recommended way to install NZB-DAV is through the **Appz4Fun Kodi
+The recommended way to install NeNeTeePee-Stream-Kodi is through the **Appz4Fun Kodi
 repository**, which delivers automatic updates. A manual zip install is also
 available.
 
 ## Choose a channel
 
 The [Appz4Fun Kodi repository](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo)
-hosts NZB-DAV (and other Appz4Fun add-ons). It rebuilds itself from each
+hosts NeNeTeePee-Stream-Kodi (and other Appz4Fun add-ons). It rebuilds itself from each
 project's GitHub releases and publishes two channels, each with its own
 repository add-on:
 
@@ -18,7 +18,7 @@ repository add-on:
 
 Which build each channel serves right now:
 
-| Channel | NZB-DAV version | Notes |
+| Channel | NeNeTeePee-Stream-Kodi version | Notes |
 |---------|-----------------|-------|
 | Stable | **1.2.3** | Last non-pre-release build (May 2026). |
 | Beta | **2.0.0-beta.2** | The 2.0.0 line: NZBGet backend, exact season-pack reuse, the rewritten settings, and more. See [Beta channel and beta features](beta-channel.md). |
@@ -28,11 +28,17 @@ Which build each channel serves right now:
     channels. Anything marked **Beta feature** needs the Beta channel.
     Changes on `main` that aren't in a release yet are listed under
     **Unreleased** in the
-    [changelog](https://github.com/Appz4Fun/nzbdavkodi/blob/main/CHANGELOG.md#unreleased--main).
+    [changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md#unreleased--main).
 
 Pick **Stable** if you want the most-tested build. Pick **Beta** if you want
 the 2.0.0 features now and are happy to report problems. You can switch later
 (see [Switching channels](beta-channel.md#switching-channels)).
+
+!!! note "Display name in released builds"
+    Stable 1.2.3 and Beta 2.0.0-beta.2 still appear in Kodi as **NZB-DAV**.
+    The source build uses **NeNeTeePee-Stream-Kodi**. The renamed display name
+    appears in released packages after the next release. Both use the add-on
+    ID `plugin.video.nzbdav`.
 
 ## Install from the Appz4Fun Kodi repository (recommended)
 
@@ -40,7 +46,7 @@ the 2.0.0 features now and are happy to report problems. You can switch later
    **[appz4fun.github.io/Appz4Fun-Kodi-Repo](https://appz4fun.github.io/Appz4Fun-Kodi-Repo/)**,
    and download the **Stable** or **Beta** zip, for example
    `repository.appz4fun.stable-1.0.1.zip` or
-   `repository.appz4fun.beta-1.0.1.zip`. The version in the file name can
+   `repository.appz4fun.beta-1.0.1.zip`. The version in the filename can
    change, so always download it from the landing page.
 2. In Kodi, go to **Settings → System → Add-ons** and turn on **Unknown
    sources**. Kodi needs this to install any third-party repository.
@@ -48,12 +54,13 @@ the 2.0.0 features now and are happy to report problems. You can switch later
    repository zip you downloaded.
 4. Go to **Settings → Add-ons → Install from repository**. Open **Appz4Fun
    Repository** (Stable) or **Appz4Fun Repository (Beta)**, then
-   **Video add-ons → NZB-DAV → Install**.
-5. From now on, Kodi updates NZB-DAV automatically on that channel.
+   **Video add-ons → NZB-DAV → Install** for the current released packages.
+   For a renamed source build, select **NeNeTeePee-Stream-Kodi**.
+5. From now on, Kodi updates NeNeTeePee-Stream-Kodi automatically on that channel.
 
 !!! warning "Install one channel only"
     Kodi only updates a third-party add-on from the repository it was
-    installed from. If you install both repository add-ons, NZB-DAV still
+    installed from. If you install both repository add-ons, NeNeTeePee-Stream-Kodi still
     follows whichever channel you installed it from. Keep things simple:
     install only the channel you want.
 
@@ -72,24 +79,22 @@ the 2.0.0 features now and are happy to report problems. You can switch later
     For the Beta channel, replace both `stable`s with `beta`. Check the
     landing page for the current zip version.
 
-## Upgrading from the old NZB-DAV repository
+## Upgrading from the legacy Kodi repository
 
 Older builds (up to the 1.2.x line) came from a repository add-on called
-**NZB-DAV Repository** (`repository.nzbdav`), served from
-`https://appz4fun.github.io/nzbdavkodi/`. That URL now hosts this
-documentation site instead of add-on metadata, so installs from it no longer
-get updates.
+**NZB-DAV Repository** (legacy) (`repository.nzbdav`), served from
+`https://appz4fun.github.io/nzbdavkodi/`. That address no longer supplies add-on metadata, so installs from it no longer get updates.
 
 Because Kodi only updates an add-on from the repository it came from,
 installing the new repository alone isn't enough. To move over:
 
-1. Install the Appz4Fun repository zip for your channel (steps 1–3 above).
+1. Install the Appz4Fun repository zip for your channel (preceding steps 1–3).
 2. Open **Settings → Add-ons → My add-ons → Video add-ons → NZB-DAV** and
    choose **Versions** (called **Update** on some skins). Pick the newest
    version listed under **Appz4Fun Repository** (or **Appz4Fun Repository
-   (Beta)**). NZB-DAV now updates from the new repository. Your settings are
+   (Beta)**). NeNeTeePee-Stream-Kodi now updates from the new repository. Your settings are
    kept.
-3. Uninstall the old **NZB-DAV Repository** add-on, and remove the old
+3. Uninstall the old **NZB-DAV Repository** (legacy) add-on, and remove the old
    `nzbdav` source from **Settings → File manager**.
 
 ## Install manually from a zip
@@ -97,21 +102,22 @@ installing the new repository alone isn't enough. To move over:
 Use this if you'd rather not add a repository, or you want a specific version.
 
 1. Download the add-on zip from the
-   [NZB-DAV releases page](https://github.com/Appz4Fun/nzbdavkodi/releases).
+   [NeNeTeePee-Stream-Kodi releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases).
    Each release has one asset named `plugin.video.nzbdav-<version>.zip`, for
    example `plugin.video.nzbdav-2.0.0-beta.2.zip`. Releases marked
    **Pre-release** on GitHub are beta builds.
-2. In Kodi, turn on **Unknown sources** (see step 2 above).
+2. In Kodi, turn on **Unknown sources** (see the preceding step 2).
 3. Go to **Settings → Add-ons → Install from zip file** and select the file.
 
 A manual install doesn't update automatically. To start getting updates later,
-install a repository zip and reinstall NZB-DAV from it through **Versions**, as
-in [Upgrading from the old repository](#upgrading-from-the-old-nzb-dav-repository).
+install a repository zip and reinstall NeNeTeePee-Stream-Kodi from it through **Versions**, as
+in [Upgrading from the old repository](#upgrading-from-the-legacy-kodi-repository).
 
 ## Verify the install
 
-After installing, NZB-DAV appears under **Settings → Add-ons → My add-ons →
-Video add-ons → NZB-DAV**. The add-on info page shows the installed version,
+After installing a current released package, open **Settings → Add-ons → My
+add-ons → Video add-ons → NZB-DAV**. A renamed source build appears as
+**NeNeTeePee-Stream-Kodi** instead. The add-on info page shows the installed version,
 and it shows the repository it came from on skins that display that. A
 background service also starts automatically and runs the local stream proxy
 whenever Kodi is running.

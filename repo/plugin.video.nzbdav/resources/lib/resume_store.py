@@ -126,7 +126,7 @@ def _write(path, payload):
         os.replace(tmp_path, path)
     except (IOError, OSError, TypeError, ValueError) as error:
         xbmc.log(
-            "NZB-DAV: Failed to write resume state: {}".format(error),
+            "NeNeTeePee-Stream-Kodi: Failed to write resume state: {}".format(error),
             xbmc.LOGWARNING,
         )
         _discard_temp(fd, tmp_path)

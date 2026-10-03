@@ -81,7 +81,7 @@ _UPSTREAM_OPEN_TIMEOUT = 60
 # proxy->Kodi write timeout (_REMUX_WRITE_TIMEOUT) instead of unwinding as
 # terminal_reason="client_disconnected" with recoveries=0. Kept well above a
 # realistic single-article fetch so a slow-but-progressing source is not
-# falsely rotated. See https://github.com/Appz4Fun/nzbdavkodi/issues/214
+# falsely rotated. See https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/issues/214
 _UPSTREAM_READ_TIMEOUT = 45
 _SKIP_PROBE_TIMEOUT = 60
 # Geometric skip sizes for probing past a bad article region. 1 MB covers a

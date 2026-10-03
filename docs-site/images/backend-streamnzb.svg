@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="380" viewBox="0 0 1000 380">
+<rect width="100%" height="100%" fill="#171d2b"/>
+<g fill="#fff" font-family="sans-serif"><text x="35" y="48" font-size="28">NeNeTeePee-Stream-Kodi</text><text x="35" y="93" font-size="22">Playback backend — example settings</text>
+<rect x="25" y="117" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="151" font-size="18">Playback backend</text>
+<text x="550" y="151" font-size="18" fill="#b7d4ff">StreamNZB</text>
+<rect x="25" y="187" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="221" font-size="18">StreamNZB server/base URL</text>
+<text x="550" y="221" font-size="18" fill="#b7d4ff">http://media-server:7000</text>
+<rect x="25" y="257" width="950" height="56" rx="6" fill="#293348"/>
+<text x="40" y="291" font-size="18">StreamNZB stream token</text>
+<text x="550" y="291" font-size="18" fill="#b7d4ff">Your stream token</text>
+</g></svg>

@@ -48,7 +48,7 @@ def _direct_play_prepare_and_serve(
     fallback_sources = _direct_play_fallback_sources(fallback_urls, validate_url)
 
     xbmc.log(
-        "NZB-DAV: /direct_play primary={} fallbacks={}".format(
+        "NeNeTeePee-Stream-Kodi: /direct_play primary={} fallbacks={}".format(
             redact_text(redact_url(primary_url))[:120], len(fallback_sources)
         ),
         xbmc.LOGINFO,
@@ -68,7 +68,7 @@ def _direct_play_prepare_and_serve(
         _router.xbmcplugin.setResolvedUrl(handle, False, _router.xbmcgui.ListItem())
         return
     xbmc.log(
-        "NZB-DAV: /direct_play handing Kodi proxy URL: {}".format(
+        "NeNeTeePee-Stream-Kodi: /direct_play handing Kodi proxy URL: {}".format(
             redact_text(redact_url(proxy_url))[:160]
         ),
         xbmc.LOGINFO,
@@ -167,16 +167,17 @@ def _direct_play_fallback_sources(fallback_urls, validate_url):
             validate_url(url)
         except (ValueError, TypeError):
             xbmc.log(
-                "NZB-DAV: /direct_play skipping non-http(s) fallback: {}".format(
-                    redact_text(redact_url(url_raw))[:120]
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: /direct_play skipping "
+                    "non-http(s) fallback: {}"
+                ).format(redact_text(redact_url(url_raw))[:120]),
                 xbmc.LOGWARNING,
             )
             continue
         length, err = _direct_play_head_length(url, auth)
         if err or length <= 0:
             xbmc.log(
-                "NZB-DAV: /direct_play skipping unstreamable fallback "
+                "NeNeTeePee-Stream-Kodi: /direct_play skipping unstreamable fallback "
                 "({}): {}".format(
                     redact_text(str(err)), redact_text(redact_url(url))[:120]
                 ),
@@ -205,16 +206,20 @@ def _direct_play_proxy_url(prepared):
     no proxy URL (caller resolves the Kodi handle as a failure).
     """
     if not prepared:
-        xbmc.log("NZB-DAV: /direct_play prepare returned no payload", xbmc.LOGERROR)
+        xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: /direct_play prepare returned no payload"),
+            xbmc.LOGERROR,
+        )
         return ""
     if isinstance(prepared, str):
         return prepared
     proxy_url = prepared.get("playback_url") or prepared.get("proxy_url")
     if not proxy_url:
         xbmc.log(
-            "NZB-DAV: /direct_play prepared payload missing proxy URL: keys={}".format(
-                list(prepared.keys())
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: /direct_play prepared payload "
+                "missing proxy URL: keys={}"
+            ).format(list(prepared.keys())),
             xbmc.LOGERROR,
         )
         return ""

@@ -1,12 +1,12 @@
-site_name: NZB-DAV for Kodi
+site_name: NeNeTeePee-Stream-Kodi
 site_description: >-
   Stream Usenet movies and TV shows in Kodi through TMDBHelper, NZBHydra2 or
-  Prowlarr, and nzbdav — the complete user and technical guide.
-site_url: https://appz4fun.github.io/nzbdavkodi/
+  Prowlarr, and nzbdav / InfiniDysk, NZBGet or StreamNZB.
+site_url: https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/
 site_author: Appz4Fun
 
-repo_url: https://github.com/Appz4Fun/nzbdavkodi
-repo_name: Appz4Fun/nzbdavkodi
+repo_url: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi
+repo_name: Appz4Fun/NeNeTeePee-Stream-Kodi
 edit_uri: edit/main/docs-site/
 
 # The documentation source lives in docs-site/ so it never collides with the
@@ -14,7 +14,7 @@ edit_uri: edit/main/docs-site/
 docs_dir: docs-site
 
 copyright: >-
-  NZB-DAV is free software licensed under GPL-3.0-or-later. It ships no content
+  NeNeTeePee-Stream-Kodi is free software licensed under GPL-3.0-or-later. It ships no content
   and requires you to bring your own indexers and Usenet access.
 
 theme:
@@ -83,8 +83,8 @@ plugins:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/Appz4Fun/nzbdavkodi
-      name: NZB-DAV on GitHub
+      link: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi
+      name: NeNeTeePee-Stream-Kodi on GitHub
 
 nav:
   - Home: index.md
@@ -95,13 +95,19 @@ nav:
       - Configure connections: getting-started/configuration.md
       - Set up TMDBHelper: getting-started/tmdbhelper.md
       - Play your first title: getting-started/first-playback.md
+  - Backend services:
+      - Overview: backends/index.md
+      - nzbdav / InfiniDysk: backends/nzbdav.md
+      - NZBGet: backends/nzbget.md
+      - StreamNZB: backends/streamnzb.md
   - Features:
       - Overview: features/index.md
       - Search and indexers: features/search-and-indexers.md
       - Quality filtering and sorting: features/quality-filtering.md
       - Playback, remux, and seeking: features/playback-and-remux.md
       - Fallback streams: features/fallback-streams.md
-      - NZBGet backend: features/nzbget-backend.md
+      - NZBGet playback: features/nzbget-backend.md
+      - StreamNZB playback: features/streamnzb-backend.md
       - StreamNZB backend: features/streamnzb-backend.md
   - Settings reference:
       - All settings: reference/settings.md

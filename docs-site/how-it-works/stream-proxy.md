@@ -1,6 +1,6 @@
 # Stream proxy
 
-The stream proxy is a localhost HTTP server that runs inside NZB-DAV's background
+The stream proxy is a localhost HTTP server that runs inside NeNeTeePee-Stream-Kodi's background
 service. Every playback flows through it, and it's where seeking, format
 handling, and gap recovery happen.
 
@@ -45,7 +45,7 @@ The proxy binds an **ephemeral port** on `127.0.0.1` and publishes it plus a
 per-instance random token to Kodi's Home window. The service restarts the proxy
 if its server thread dies. The plugin process reads them and POSTs to
 `/prepare`; the service builds the stream context (it owns the session table)
-and returns the local URL. Only one session lives at a time — preparing a new
+and returns the local URL. Only one session lives at a time. preparing a new
 one tears the previous down, killing any ffmpeg process and cleaning its work
 directory.
 
@@ -119,7 +119,7 @@ watchdog also closes the response when proxy-to-Kodi throughput stays under
 fetch instead of wedging on a trickle. Pass-through is also the only path where
 a [fallback cutover](fallback-cutover.md) can happen.
 
-## Resilience knobs — exact behavior
+## Resilience knobs. exact behavior
 
 These live in **Advanced › Pass-through validation** and are read once per
 session. Defaults in parentheses.
@@ -127,8 +127,8 @@ session. Defaults in parentheses.
 | Knob | Behavior |
 |------|----------|
 | **Strict upstream contract mode** (Warn only) | Validates the upstream's status, `Content-Range`, and `Content-Length`. **Off** disables the density breaker entirely; **Enforce** treats a contract violation as fatal. |
-| **Enable density breaker** (off) | When contract mode isn't Off, aborts the stream if a rolling 16 MB window becomes more than 50% zero-fill — i.e. the source has gone mostly synthetic (a dead release). |
-| **Enable zero-fill budget** (on) | Caps zero-fill at 64 MB per response and 5% of the session; exceeding it ends the stream with a clean error rather than serving mostly-fake bytes. |
+| **Enable density breaker** (off) | When contract mode isn't Off, aborts the stream if a rolling 16 MB window becomes more than 50% zero-fill. that is the source has gone mostly synthetic (a dead release). |
+| **Enable zero-fill budget** (on) | Caps zero-fill at 64 MB per response and 5% of the session; exceeding it ends the stream with a clean error rather than serving mostly fake bytes. |
 | Zero fill for MKV/WebM (always on, no setting) | For MKV/WebM, zero fill replaces an unreadable span with Void elements sized to valid boundaries instead of plain zeros. The span may extend to the next verified cluster (one bounded look-ahead of at most 16 MB / 15 s), and that whole span counts against the zero-fill budget. Falls back to plain zeros when the file structure can't be confirmed. Lost frames aren't recovered. |
 | **Enable retry ladder before skip probe** (on) | Re-issues the original range with 2/4/8-second backoff on transient errors before skip-probing. A fresh open uses a short 0.25/0.5/1-second ladder so playback doesn't hang silently at the start. |
 | **Max seconds to wait for a slow/stalled backend before giving up (0=off)** (120 s, max 600) | For an *established* stream that stalls on a recoverable backend condition (still-downloading or a transient 5xx), holds Kodi's connection open with abortable backoff up to this budget; the clock resets on any real forward byte. Doesn't apply to genuinely missing articles (those zero-fill) or a fresh open. |
@@ -137,7 +137,7 @@ session. Defaults in parentheses.
 
 ## Dolby Vision routing
 
-When fMP4 HLS is selected, NZB-DAV probes the first HEVC access unit for a Dolby
+When fMP4 HLS is selected, NeNeTeePee-Stream-Kodi probes the first HEVC access unit for a Dolby
 Vision RPU (pure Python, no ffmpeg) and routes by profile, because DV over HLS
 hangs the decoder on Amlogic in several cases:
 
@@ -146,7 +146,7 @@ hangs the decoder on Amlogic in several cases:
 | P7 FEL (dual-layer) | Matroska | fMP4 can't carry the enhancement layer |
 | P7 MEL | fMP4 HLS | Metadata-only EL (experimental) |
 | P5 / P8 / other DV | Matroska | Safest on Amlogic |
-| Non-DV | fMP4 HLS | — |
+| Non-DV | fMP4 HLS |. |
 | Unknown | Matroska | Fail-safe |
 
 This is why fMP4 HLS is labeled experimental and is never the default: even with a correct DV
@@ -162,8 +162,8 @@ When a tier *wants* remux but no ffmpeg is present, the proxy falls back to
 pass-through with a warning. If ffmpeg lacks the fMP4 HLS flags, the HLS mode
 uses the piped Matroska path instead. If ffmpeg is present but can't produce
 a valid fMP4 init segment within 30 seconds, the session is **rewritten to the
-matroska path before Kodi ever sees the URL** — so a broken HLS setup never
+matroska path before Kodi ever sees the URL**. So a broken HLS setup never
 reaches the player. Credentials are passed to ffmpeg via an `Authorization`
 header argument rather than embedded in the URL, so they don't leak into logs.
 
-Next: how a failing source is swapped out live — [Fallback cutover](fallback-cutover.md).
+Next: how a failing source is swapped out live. [Fallback cutover](fallback-cutover.md).

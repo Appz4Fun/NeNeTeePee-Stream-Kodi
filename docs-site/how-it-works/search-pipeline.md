@@ -33,7 +33,7 @@ A shared planner builds each provider's query from the title and any ids:
 - When an indexer advertises its capabilities (caps), the planner honors the
   supported parameters for each search type; without caps it uses sensible
   defaults.
-- If an id-based query returns nothing, NZB-DAV retries by title so a missing or
+- If an id-based query returns nothing, NeNeTeePee-Stream-Kodi retries by title so a missing or
   mismatched id never leaves you empty-handed.
 - When an episode request has no TVDB id, `tvdb_resolver.py` looks it up once
   from the TMDB/IMDb id through the TMDB API (cached on disk, fail-soft) so every
@@ -41,7 +41,7 @@ A shared planner builds each provider's query from the title and any ids:
   the same way.
 
 **Prowlarr** is a special case: its native search API doesn't take id parameters,
-so NZB-DAV embeds them as tokens inside the query text — `{tvdbid:…}`,
+so NeNeTeePee-Stream-Kodi embeds them as tokens inside the query text. `{tvdbid:…}`,
 `{imdbid:…}`, `{season:…}`, `{episode:…}`.
 
 ## Provider fan-out
@@ -67,24 +67,24 @@ Every provider maps its response into one common shape:
 | `age` | Human-readable age string |
 
 !!! info "Why pubdate is normalized to RFC-2822"
-    Prowlarr reports ISO-8601 dates; Newznab reports RFC-2822. NZB-DAV
+    Prowlarr reports ISO-8601 dates; Newznab reports RFC-2822. NeNeTeePee-Stream-Kodi
     normalizes everything to RFC-2822 because post date drives sorting,
     same-repost de-duplication, and the download ledger. An unparseable date
     sorts at the epoch, which is why the format contract matters.
 
 ## De-duplication
 
-Results are de-duplicated by **download link** — first occurrence wins, and a
+Results are de-duplicated by **download link**. first occurrence wins, and a
 result with no link is dropped as unplayable. The same release offered by two
 providers with *different* download URLs is intentionally kept as two rows,
 because they are genuinely different downloads.
 
 ## Title parsing (PTT)
 
-NZB-DAV parses each release title with a vendored copy of *parse-torrent-title*
+NeNeTeePee-Stream-Kodi parses each release title with a vendored copy of *parse-torrent-title*
 to extract resolution, HDR, audio, codec, group, languages, edition, year, and
 flags such as PROPER/REPACK. If the parser throws or returns nothing useful, a
-regex fallback extracts the essentials. The normalized metadata is cached on the
+regular expression fallback extracts the essentials. The normalized metadata is cached on the
 result and reused by filtering, ranking, and fallback matching.
 
 ## Filtering and ranking
@@ -145,7 +145,7 @@ search type, title, year, season/episode, and ids. That means:
 
 - Re-opening the same title is instant within the cache duration (default 60 s,
   capped at 86400 s).
-- Changing filter or sort settings takes effect immediately — no new search
+- Changing filter or sort settings takes effect immediately. No new search
   needed, because filtering runs fresh on every read.
 - The cache self-limits to 50 MB and 1000 entries, evicting the oldest first,
   and writes atomically.
@@ -154,6 +154,6 @@ The cache is used by the `plugin://` play and search routes. The TMDBHelper
 RunScript path always queries providers fresh.
 
 Set **Cache duration (seconds, 0=disabled)** (**Advanced › Search Cache**) to
-`0` to disable caching, or clear it any time from the add-on's main menu.
+`0` to turn off caching, or clear it any time from the add-on's main menu.
 
 Next: the [Playback pipeline](playback-pipeline.md).

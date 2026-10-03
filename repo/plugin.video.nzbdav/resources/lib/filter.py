@@ -173,7 +173,7 @@ def _resolve_size_bounds(addon):
     max_size = _int_setting(addon, "filter_max_size", 0)
     if 0 < max_size < min_size:
         xbmc.log(
-            "NZB-DAV: filter_min_size={} exceeds filter_max_size={}; "
+            "NeNeTeePee-Stream-Kodi: filter_min_size={} exceeds filter_max_size={}; "
             "disabling size filter".format(min_size, max_size),
             xbmc.LOGWARNING,
         )
@@ -238,7 +238,8 @@ def parse_title_metadata(title):
         parsed = parse_title(title)
     except Exception as e:
         xbmc.log(
-            "NZB-DAV: PTT parse failed for '{}': {}".format(title, e), xbmc.LOGERROR
+            ("NeNeTeePee-Stream-Kodi: PTT parse failed for '{}': {}").format(title, e),
+            xbmc.LOGERROR,
         )
         parsed = _fallback_parse(title)
 
@@ -258,7 +259,7 @@ def parse_title_metadata(title):
         return supplement_metadata(title, _normalize_parsed_meta(parsed))
     except (TypeError, AttributeError, KeyError) as e:
         xbmc.log(
-            "NZB-DAV: PTT metadata normalisation failed for '{}': {}; "
+            "NeNeTeePee-Stream-Kodi: PTT metadata normalisation failed for '{}': {}; "
             "falling back to regex parse".format(title, e),
             xbmc.LOGWARNING,
         )
@@ -460,11 +461,13 @@ def _resolve_result_meta(result, parsed_by_title):
 def _log_filter_summary(total, matched_count, shown):
     """Log the filter result counts, noting truncation when it occurred."""
     if shown < matched_count:
-        message = "NZB-DAV: Filtered {} -> {} results (showing {})".format(
-            total, matched_count, shown
-        )
+        message = (
+            "NeNeTeePee-Stream-Kodi: Filtered {} -> {} results (showing {})"
+        ).format(total, matched_count, shown)
     else:
-        message = "NZB-DAV: Filtered {} -> {} results".format(total, shown)
+        message = ("NeNeTeePee-Stream-Kodi: Filtered {} -> {} results").format(
+            total, shown
+        )
     xbmc.log(message, xbmc.LOGDEBUG)
 
 

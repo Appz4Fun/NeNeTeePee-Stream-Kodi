@@ -130,7 +130,7 @@ def _record_upstream_recovered(server, ctx, observed_at=None):
 
     if cleared:
         _sp.xbmc.log(
-            "NZB-DAV: Upstream reachable again after outage "
+            "NeNeTeePee-Stream-Kodi: Upstream reachable again after outage "
             "(reason=upstream_recovered)",
             _sp.xbmc.LOGINFO,
         )
@@ -171,12 +171,16 @@ def _record_upstream_unreachable(server, ctx, error):
         return
 
     _sp.xbmc.log(
-        "NZB-DAV: Upstream appears unreachable ({}); notifying user once "
-        "(reason=upstream_unreachable)".format(type(error).__name__),
+        (
+            "NeNeTeePee-Stream-Kodi: Upstream appears unreachable "
+            "({}); notifying user once (reason=upstream_unreachable)"
+        ).format(type(error).__name__),
         _sp.xbmc.LOGERROR,
     )
     try:
-        _sp._notify("NZB-DAV", "nzbdav unreachable — playback may glitch")
+        _sp._notify(
+            ("NeNeTeePee-Stream-Kodi"), "nzbdav unreachable — playback may glitch"
+        )
     except (RuntimeError, OSError):
         pass
 
@@ -262,14 +266,14 @@ def _maybe_notify_stream_starvation(
         return False
 
     _sp.xbmc.log(
-        "NZB-DAV: Stream stalled — backend could not keep up "
+        "NeNeTeePee-Stream-Kodi: Stream stalled — backend could not keep up "
         "(terminal={} streamed={} requested={} reason=stream_starvation)".format(
             terminal_reason, total_streamed, requested_bytes
         ),
         _sp.xbmc.LOGWARNING,
     )
     try:
-        _sp._notify("NZB-DAV", "nzbdav can't keep up — playback stalled")
+        _sp._notify("NeNeTeePee-Stream-Kodi", "nzbdav can't keep up — playback stalled")
     except (RuntimeError, OSError):
         pass
     return True
@@ -387,7 +391,7 @@ def _maybe_notify_recovery_summary(
     skipped, recoveries = payload
     try:
         _sp._notify(
-            "NZB-DAV",
+            "NeNeTeePee-Stream-Kodi",
             "Skipped {} bytes across {} recoveries".format(skipped, recoveries),
         )
     except (RuntimeError, OSError):
@@ -411,7 +415,7 @@ def _notify_fallback_outcome(candidate_number, success):
     outcome = "successful" if success else "was a failure"
     try:
         _sp._notify(
-            "NZB-DAV",
+            "NeNeTeePee-Stream-Kodi",
             "fall back to candidate #{} {}".format(candidate_number, outcome),
         )
     except (RuntimeError, OSError):

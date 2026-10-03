@@ -73,14 +73,16 @@ def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
         data = json.loads(text)
     except Exception as exc:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: NZBGet {} failed: {}".format(method, _redact_text(str(exc))),
+            ("NeNeTeePee-Stream-Kodi: NZBGet {} failed: {}").format(
+                method, _redact_text(str(exc))
+            ),
             xbmc.LOGERROR,
         )
         return None, _redact_text(str(exc))
     if isinstance(data, dict) and data.get("error"):
         message = _redact_text(str(data["error"]))
         xbmc.log(
-            "NZB-DAV: NZBGet {} error: {}".format(method, message),
+            "NeNeTeePee-Stream-Kodi: NZBGet {} error: {}".format(method, message),
             xbmc.LOGERROR,
         )
         return None, message
@@ -155,7 +157,9 @@ def append_nzb(
         nzb_bytes = _fetch_nzb_bytes(nzb_url)
     except Exception as exc:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: NZBGet NZB fetch failed: {}".format(_redact_text(str(exc))),
+            ("NeNeTeePee-Stream-Kodi: NZBGet NZB fetch failed: {}").format(
+                _redact_text(str(exc))
+            ),
             xbmc.LOGERROR,
         )
         return None, _redact_text(str(exc))
@@ -282,7 +286,7 @@ def _fetch_nzbget_history(settings_getter):
         history, error = _rpc_call("history", [False], settings_getter=settings_getter)
     except Exception as exc:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: NZBGet exact history lookup failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: NZBGet exact history lookup failed: {}".format(
                 _redact_text(str(exc))
             ),
             xbmc.LOGDEBUG,
@@ -425,7 +429,7 @@ def completed_history(settings_getter=None):
         # injected getter (or an early-startup Addon read) must degrade to
         # "no tags", not crash the picker render.
         xbmc.log(
-            "NZB-DAV: NZBGet completed_history failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: NZBGet completed_history failed: {}".format(
                 _redact_text(str(exc))
             ),
             xbmc.LOGDEBUG,
