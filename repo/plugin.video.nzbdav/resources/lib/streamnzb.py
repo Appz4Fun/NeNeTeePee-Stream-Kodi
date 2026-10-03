@@ -38,6 +38,7 @@ class StreamEntry:
     description: str
     url: str = field(repr=False)
     headers: dict = field(default_factory=dict, repr=False)
+    size: int = 0
 
 
 def safe_display(text, token=None):
@@ -191,9 +192,16 @@ def _parse_entry(row, token):
     headers = _request_headers(hints)
     if headers is None:
         return None
-    name = safe_display(row.get("name"), token) or "StreamNZB"
+    name = (
+        safe_display(hints.get("filename"), token).strip()
+        or safe_display(row.get("name"), token)
+        or "StreamNZB"
+    )
     description = safe_display(row.get("description") or row.get("title"), token)
-    return StreamEntry(name, description, row["url"], headers)
+    size = hints.get("videoSize", 0)
+    if isinstance(size, bool) or not isinstance(size, int) or size < 0:
+        size = 0
+    return StreamEntry(name, description, row["url"], headers, size)
 
 
 def parse_streams(payload, token=None):

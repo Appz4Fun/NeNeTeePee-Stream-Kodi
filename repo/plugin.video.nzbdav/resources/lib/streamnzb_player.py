@@ -3,7 +3,8 @@
 
 """Kodi release selection and direct handoff for StreamNZB.
 
-No proxy, NZB submission, local filters, probes or fallback workers are used.
+Uses the shared release parser, filters, sorting and XML results picker.
+No proxy, NZB submission, probes or fallback workers are used.
 The non-modal progress dialog follows the existing CoreELEC-safe pattern.
 """
 
@@ -13,8 +14,10 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
+from resources.lib.filter import filter_results
 from resources.lib.http_util import notify
 from resources.lib.i18n import string
+from resources.lib.results_dialog import show_results_dialog
 from resources.lib.router_settings import _close_loading_dialog, _open_loading_dialog
 from resources.lib.streamnzb import (
     StreamNZBCancelled,
@@ -99,7 +102,7 @@ def _playback_listitem(entry, params):
 
 
 def _select_stream(params, settings_getter, monitor):
-    """Fetch then show server-ordered labels; close progress before the picker."""
+    """Fetch releases and show the shared picker after closing progress."""
     token = settings_getter("streamnzb_token", "")
     title = safe_display(params.get("title", ""), token)
     loading = _open_loading_dialog(title)
@@ -116,14 +119,26 @@ def _select_stream(params, settings_getter, monitor):
         raise StreamNZBError(string(30608))
     if monitor.abortRequested():
         raise StreamNZBCancelled()
-    rows = []
-    for entry in entries:
-        row = xbmcgui.ListItem(label=entry.name, label2=entry.description)
-        rows.append(row)
-    selected = xbmcgui.Dialog().select(string(30607), rows, useDetails=True)
-    if selected < 0 or selected >= len(entries) or monitor.abortRequested():
+    rows = [
+        {
+            "title": entry.name,
+            "size": entry.size,
+            "indexer": "StreamNZB",
+            "_stream_entry": entry,
+        }
+        for entry in entries
+    ]
+    filtered, all_rows = filter_results(rows, settings_getter=settings_getter)
+    selected = show_results_dialog(
+        filtered,
+        title=title,
+        year=params.get("year", ""),
+        total_count=len(rows),
+        all_results=all_rows,
+    )
+    if selected is None or monitor.abortRequested():
         raise StreamNZBCancelled()
-    return entries[selected]
+    return selected["_stream_entry"]
 
 
 def _finish_resume_state(key, captured, succeeded):
