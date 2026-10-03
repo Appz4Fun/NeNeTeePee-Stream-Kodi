@@ -354,7 +354,7 @@ def _player_mocks():
         kodi.Monitor.return_value.abortRequested.return_value = False
         gui.Dialog.return_value.select.return_value = 0
         picker.side_effect = lambda filtered, **kw: (
-            kw["all_results"][gui.Dialog.return_value.select.return_value]
+            filtered[gui.Dialog.return_value.select.return_value]
             if gui.Dialog.return_value.select.return_value >= 0
             else None
         )
@@ -709,3 +709,6 @@ def test_picker_applies_configured_filters_and_size_sort(player_mocks):
     all_rows = mocks["picker"].call_args.kwargs["all_results"]
     assert len(all_rows) == 3
     assert all_rows[0]["_filter_reject"]
+    assert mocks["gui"].ListItem.call_args.kwargs["label"] == (
+        "Large.2160p.REMUX.x265-GRP"
+    )
