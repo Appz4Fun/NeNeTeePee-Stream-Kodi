@@ -347,10 +347,17 @@ def _player_mocks():
         "resources.lib.resolver._preserve_resume_on_cancel"
     ) as preserve, patch(
         "resources.lib.resume_store.clear_resume"
-    ) as consumed:
+    ) as consumed, patch.object(
+        streamnzb_player, "show_results_dialog"
+    ) as picker:
         clear.return_value = 0.0
         kodi.Monitor.return_value.abortRequested.return_value = False
         gui.Dialog.return_value.select.return_value = 0
+        picker.side_effect = lambda filtered, **kw: (
+            filtered[gui.Dialog.return_value.select.return_value]
+            if gui.Dialog.return_value.select.return_value >= 0
+            else None
+        )
         fetch.return_value = [
             streamnzb.StreamEntry(
                 "Stream", "Returned description", URL, {"X-Test": "a+b &c/=d"}
@@ -369,6 +376,7 @@ def _player_mocks():
             "choose": choose,
             "preserve": preserve,
             "consumed": consumed,
+            "picker": picker,
         }
 
 
@@ -514,7 +522,7 @@ def test_failure_completion_and_cleanup(player_mocks, handle, failure):
     assert TOKEN not in str(mocks["kodi"].log.call_args)
 
 
-def test_picker_uses_server_order(player_mocks):
+def test_picker_uses_shared_xml_dialog(player_mocks):
     mocks = player_mocks
     mocks["fetch"].return_value = [
         streamnzb.StreamEntry("B", "desc B", URL),
@@ -522,8 +530,11 @@ def test_picker_uses_server_order(player_mocks):
     ]
     mocks["gui"].Dialog.return_value.select.return_value = 1
     streamnzb_player.play_streamnzb(MOVIE, settings)
-    mocks["gui"].ListItem.assert_any_call(label="B", label2="desc B")
-    mocks["gui"].ListItem.assert_any_call(label="A", label2="desc A")
+    mocks["gui"].Dialog.return_value.select.assert_not_called()
+    rows = mocks["picker"].call_args.kwargs["all_results"]
+    assert {row["title"] for row in rows} == {"A", "B"}
+    assert all("_meta" in row and "_filter_reject" in row for row in rows)
+    assert mocks["picker"].call_args.kwargs["total_count"] == 2
     assert mocks["kodi"].Player.return_value.play.call_args.args[0] == URL + "&a=1"
 
 
@@ -643,3 +654,61 @@ def test_episode_listitem_uses_canonical_numbers(player_mocks):
     info.setSeason.assert_called_once_with(0)
     info.setEpisode.assert_called_once_with(1)
     info.setMediaType.assert_called_once_with("episode")
+
+
+def test_stream_label_prefers_release_filename():
+    entries = streamnzb.parse_streams(
+        {
+            "streams": [
+                {
+                    "name": "StreamNZB",
+                    "description": "Release details",
+                    "url": URL,
+                    "behaviorHints": {"filename": "Movie.2026.2160p.REMUX.mkv"},
+                }
+            ]
+        }
+    )
+    assert entries[0].name == "Movie.2026.2160p.REMUX.mkv"
+    assert entries[0].description == "Release details"
+
+
+def test_stream_label_ignores_non_string_filename():
+    entries = streamnzb.parse_streams(
+        {
+            "streams": [
+                {
+                    "name": "Fallback label",
+                    "url": URL,
+                    "behaviorHints": {"filename": {"unexpected": "object"}},
+                }
+            ]
+        }
+    )
+    assert entries[0].name == "Fallback label"
+
+
+def test_picker_applies_configured_filters_and_size_sort(player_mocks):
+    mocks = player_mocks
+    mocks["fetch"].return_value = [
+        streamnzb.StreamEntry("Small.1080p.WEB-DL.x264-GRP", "", URL, size=100),
+        streamnzb.StreamEntry("Excluded.2160p.REMUX.x265-GRP", "", URL, size=900),
+        streamnzb.StreamEntry("Large.2160p.REMUX.x265-GRP", "", URL, size=500),
+    ]
+
+    def configured(key, default=""):
+        return {"filter_exclude_keywords": "Excluded", "sort_order": "1"}.get(
+            key, settings(key, default)
+        )
+
+    streamnzb_player.play_streamnzb(MOVIE, configured)
+    filtered = mocks["picker"].call_args.args[0]
+    assert [row["size"] for row in filtered] == [500, 100]
+    assert filtered[0]["_meta"]["resolution"] == "2160p"
+    assert filtered[0]["_meta"]["codec"]
+    all_rows = mocks["picker"].call_args.kwargs["all_results"]
+    assert len(all_rows) == 3
+    assert all_rows[0]["_filter_reject"]
+    assert mocks["gui"].ListItem.call_args.kwargs["label"] == (
+        "Large.2160p.REMUX.x265-GRP"
+    )

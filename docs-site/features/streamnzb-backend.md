@@ -23,8 +23,9 @@ Jellyfin server is required.
    and may include it in native networking/debug logs. Sanitize those before
    sharing them.
 5. Select a movie or episode in TMDBHelper and choose the existing NZB-DAV
-   player. A Kodi release picker shows StreamNZB's names and descriptions in
-   server order. Select a release or cancel the picker.
+   player. The full NZB picker shows release filenames and parsed metadata,
+   using the add-on's configured filters and sorting. Select a release or
+   cancel the picker.
 
 The server URL **and the playback URLs it advertises must be reachable from
 Kodi**. `localhost` on Kodi refers to the Kodi device. If the server advertises
@@ -45,16 +46,18 @@ no longer shown.
 ## Search and playback ownership
 
 StreamNZB owns indexer searches, filtering, ranking, NZB retrieval, archive
-handling and server-side failover. NZB-DAV preserves its result order and hands
-the selected HTTP playback URL directly to Kodi, preserving query parameters
+handling and server-side failover. NZB-DAV applies its local release filters
+and sorting to the returned entries and hands the selected HTTP playback URL
+directly to Kodi, preserving query parameters
 and supplied request headers. It does not submit an NZB, discover WebDAV files,
 run a remux/proxy or start NZB-DAV fallback workers for this backend.
 
 NZBHydra2, Prowlarr, direct indexers, nzbdav, WebDAV, NZBGet and a local TMDB key
 are not required in NZB-DAV's settings for StreamNZB. Configure the needed
 indexers, metadata services and Usenet providers on StreamNZB instead. Local
-NZB-DAV filters, auto-selection, completed-download tags, season-pack reuse and
-fallback settings do not apply to StreamNZB's release picker. Only directly
+NZB-DAV filters and sorting apply to the shared release picker, including its
+show-all option. Auto-selection, completed-download tags, season-pack reuse
+and fallback settings do not apply to StreamNZB playback. Only directly
 playable HTTP/HTTPS entries are listed; informational `externalUrl`, torrent
 and unsupported entries are omitted.
 
