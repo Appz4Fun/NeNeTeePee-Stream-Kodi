@@ -1,6 +1,6 @@
-"""Ralph loop — adversarial fuzzer for the addon's hot helpers.
+"""Ralph loop—adversarial fuzzer for the addon's hot helpers.
 
-Each round generates a deliberately-nasty input (huge file size, weird
+Each round generates a deliberately nasty input (huge file size, weird
 URLs, locale-confusion strings) and feeds it to a focused addon helper.
 Failures = either an unhandled exception or a contract violation
 (non-deterministic output, leak, off-by-one). When that happens, the
@@ -41,8 +41,8 @@ def _log(msg: str):
 def _rand_str(rng: random.Random, *, allow_ctrl: bool = False) -> str:
     pool = string.ascii_letters + string.digits + "-._~/?#[]@!$&'()*+,;="
     if allow_ctrl:
-        # CR, LF, NUL, tab — the URL-injection garnishes _validate_url
-        # has to reject. Including these so we can prove rejection.
+        # CR, LF, NUL, tab—the URL-injection garnishes _validate_url
+        # has to reject. Including these to prove rejection.
         pool += "\x00\r\n\t"
     n = rng.randint(0, 80)
     return "".join(rng.choice(pool) for _ in range(n))
@@ -71,9 +71,9 @@ def _rand_url(rng: random.Random) -> str:
     return "{}://{}{}{}{}".format(scheme, auth, host, port_part, path)
 
 
-# Each invariant is one assertion we expect to ALWAYS hold, regardless
+# Each invariant is one assertion expected to ALWAYS hold, regardless
 # of input. A regression that breaks the invariant fails the test
-# immediately so we can capture and ship a regression test.
+# immediately so the failure can be captured as a regression test.
 def _invariant_fingerprint_count(rng: random.Random) -> tuple[Callable, dict]:
     content_length = rng.choice(
         [
@@ -176,7 +176,7 @@ def _invariant_split_http_url(rng: random.Random) -> tuple[Callable, dict]:
 
 # The Ralph loop: each round picks one invariant at random and probes it.
 # Bug discovery is signalled by an AssertionError or unhandled exception
-# during ``check()``. Pytest's traceback gives us the exact input that
+# during ``check()``. Pytest's traceback shows the exact input that
 # tripped the invariant.
 INVARIANTS = (
     _invariant_fingerprint_count,

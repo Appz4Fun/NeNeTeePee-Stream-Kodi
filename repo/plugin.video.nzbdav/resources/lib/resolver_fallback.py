@@ -21,7 +21,7 @@ def _collect_fallback_candidate_jobs(
 ):
     """Filter raw candidates into ``(candidate, nzb_url, title, job_name)`` rows.
 
-    Drops non-dicts, entries missing a link/title, provably-dead URLs, and the
+    Drops non-dicts, entries missing a link/title, provably dead URLs, and the
     active primary's own release.
     """
     candidate_jobs = []
@@ -42,7 +42,7 @@ def _fallback_candidate_row(candidate, index, dead, primary_nzb_url):
     title = candidate.get("title")
     if not nzb_url or not title:
         return None
-    # Never re-admit a provably-dead candidate, and never offer the active
+    # Never re-admit a provably dead candidate, and never offer the active
     # primary as its own backup (the original primary only re-enters the
     # pool after a live cutover demotes it -- handled in stream_proxy).
     if dead is not None and dead.has_url(nzb_url):
@@ -302,7 +302,7 @@ def _playback_active_flag():
 
     The fallback submit worker's ``state["stop"]`` event is in-process and can
     never be set by service.py's player callbacks (a different process), so the
-    worker needs a cross-process signal to know playback ended. We use a
+    worker needs a cross-process signal to know playback ended. It uses a
     DEDICATED ``nzbdav.playing`` window property that service.py sets while
     monitoring and clears only on stop/end -- NOT the ``nzbdav.active`` handoff
     flag, which ``service._check_active()`` consumes (clears) on the first tick
@@ -317,17 +317,17 @@ def _playback_active_flag():
 def _wait_prewarm_or_inactive(state, prewarm_delay, playback_signaled):
     """Wait up to ``prewarm_delay`` seconds, aborting early on stop/inactive.
 
-    Returns True if the worker should ABORT: the in-process stop event is set,
-    or -- only once ``playback_signaled`` is True AND we have positively
+    Returns True if the worker should STOP: the in-process stop event is set,
+    or -- only once ``playback_signaled`` is True AND the worker has positively
     observed the cross-process ``nzbdav.playing`` flag as live at least once --
     that flag is later cleared (playback stopped/ended during the standby
     window). Returns False once the full delay elapses with playback still live.
 
     The "seen live first" latch matters: if playback was never actually
     signaled (the ``_await_playback_start`` cap path, or an unusual handoff
-    where service never set the flag), we never latch, so the worker degrades to
-    a late submit rather than a wrongly-stranded backup -- and a brief startup
-    race where the worker polls before service sets the flag can't abort it.
+    where service never set the flag), the latch never sets, so the worker degrades to
+    a late submit rather than a wrongly stranded backup -- and a brief startup
+    race where the worker polls before service sets the flag can't stop it.
 
     Uses ``Event.wait`` for the polling sleep so a daemon worker never blocks
     Kodi shutdown. Total wait equals ``prewarm_delay``.
@@ -354,7 +354,7 @@ def _prewarm_playback_latch(seen_live):
     """Advance the seen-live latch; return ``(seen_live, should_abort)``.
 
     ``flag is True`` latches that playback was observed live; ``flag is False``
-    once it was live means playback stopped/ended (abort). ``flag is None`` (read
+    once it was live means playback stopped/ended (stop). ``flag is None`` (read
     failed) leaves the latch unchanged and keeps waiting.
     """
     flag = _playback_active_flag()
@@ -386,7 +386,7 @@ def _get_fallback_submit_delay_seconds(settings_getter=None):
         return value if value >= 0 else _resolver._FALLBACK_PREWARM_DELAY_SECONDS
     except Exception:  # pylint: disable=broad-except
         # xbmcaddon import failure, unexpected setting shapes, int() on a
-        # MagicMock in tests — all funnel to the documented default.
+        # MagicMock in tests—all funnel to the documented default.
         return _resolver._FALLBACK_PREWARM_DELAY_SECONDS
 
 
@@ -429,7 +429,7 @@ def _resolve_active_fallback_candidates(candidate_list, candidate_loader):
     """Return ``(active_candidates, lookup_disabled)`` for the fallback worker.
 
     Uses the prefetched list when there is no loader; otherwise runs the loader,
-    mapping the disabled sentinel to ``([], True)`` and any error to ``([],
+    mapping the turned-off sentinel to ``([], True)`` and any error to ``([],
     False)`` (logged) so the worker keeps its original branching unchanged.
     """
     if candidate_loader is None:
@@ -450,7 +450,7 @@ def _resolve_active_fallback_candidates(candidate_list, candidate_loader):
 
 
 def _notify_no_fallback_candidates(candidate_lookup_disabled, settings_getter):
-    """Show the "no fallbacks" toast unless lookup was disabled or off."""
+    """Show the "no fallbacks" toast unless lookup was turned off."""
     if candidate_lookup_disabled or not _resolver._fallback_streams_enabled(
         settings_getter=settings_getter
     ):
@@ -458,7 +458,7 @@ def _notify_no_fallback_candidates(candidate_lookup_disabled, settings_getter):
     try:
         _resolver._notify(_resolver._addon_name(), _resolver._string(30187), 4000)
     except (RuntimeError, OSError):
-        # The "no fallback candidates" toast is cosmetic; a UI failure (e.g.
+        # The "no fallback candidates" toast is cosmetic; a UI failure (for example,
         # during shutdown) must not break the best-effort fallback worker's
         # clean return.
         pass

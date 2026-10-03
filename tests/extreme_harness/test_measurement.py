@@ -115,7 +115,7 @@ def test_player_poller_survives_jsonrpc_error(mock_kodi, tmp_path):
     poller.stop()
     poller.join(timeout=2)
     # Poller should not crash; output may be empty but file should exist after stop
-    # (we accept either no file or an empty file).
+    # (either no file or an empty file is acceptable).
     assert poller.exception_count > 0
 
 
@@ -133,14 +133,14 @@ def _tick(t_wall, time_sec, speed=1):
 
 
 def test_correlate_resume_seconds_simple():
-    """Playback stalls from t=10 to t=15, then advances. Resume should be 5s."""
+    """Playback stalls from t=10 to t=15, then advances. Resume should be 5 s."""
     timeline = (
         [
             _tick(1000.0 + t / 4.0, time_sec=t / 4.0)
-            for t in range(0, 40)  # 10s of playback, 0.25s ticks
+            for t in range(0, 40)  # 10 s of playback, 0.25 s ticks
         ]
         + [
-            _tick(1010.0 + (i * 0.25), time_sec=10.0)  # frozen for 5s
+            _tick(1010.0 + (i * 0.25), time_sec=10.0)  # frozen for 5 s
             for i in range(0, 20)
         ]
         + [

@@ -8,7 +8,7 @@ assignees: ''
 
 **Environment**
 - Kodi version:
-- Platform/device (e.g., CoreELEC on Odroid N2+):
+- Platform/device (for example, CoreELEC on Odroid N2+):
 - NeNeTeePee-Stream-Kodi version:
 - Channel (Stable / Beta / manual zip):
 - Backend (nzbdav / InfiniDysk / NZBGet):

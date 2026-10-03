@@ -27,7 +27,7 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
           (same URL+auth as primary, a definitively different content
           length, or a fingerprint digest that is present and provably
           differs). The caller fails the source permanently.
-        - ``_FALLBACK_INCONCLUSIVE``: a TRANSIENT condition — the needed
+        - ``_FALLBACK_INCONCLUSIVE``: a TRANSIENT condition—the needed
           range/probe is not yet available (empty digest, probe 5xx /
           timeout). The caller keeps the source eligible (bounded
           reconsider) instead of killing it for the whole session.
@@ -43,14 +43,14 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
             ctx, source, source_url, source_auth, primary_url
         )
         if is_self:
-            # The source IS the primary — it can never be its own
+            # The source IS the primary—it can never be its own
             # recovery. A definitive, permanent MISMATCH.
             return _sp._FALLBACK_MISMATCH
         expected_length = self._fallback_expected_content_length(ctx)
         source_length = self._fallback_source_content_length(ctx, source)
         if expected_length <= 0 or source_length != expected_length:
             # A different WebDAV-reported final content length is a
-            # different release — definitive wrong-file rejection.
+            # different release—definitive wrong-file rejection.
             return _sp._FALLBACK_MISMATCH
         if source_auth is _sp._AUTH_HEADER_NOT_PROVIDED:
             source_auth = self._fallback_source_auth(source)
@@ -101,7 +101,7 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
         )
         if current_range is _sp._FALLBACK_INCONCLUSIVE:
             # Range not yet available on the peer (still downloading) or a
-            # probe hiccup — transient, do not condemn the source.
+            # probe hiccup—transient, do not condemn the source.
             return _sp._FALLBACK_INCONCLUSIVE
         cfg = self._fingerprint_probe_cfg(
             expected_length,
@@ -116,10 +116,10 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
         classification = self._classify_fallback_fingerprint(ctx, source, cfg)
         if classification is _sp._FALLBACK_INCONCLUSIVE:
             # A probe couldn't be completed (5xx / timeout / empty body) so
-            # we can't PROVE same-or-different yet. Stay eligible.
+            # the probe can't PROVE same-or-different yet. Stay eligible.
             return _sp._FALLBACK_INCONCLUSIVE
         if classification is _sp._FALLBACK_MISMATCH:
-            # Digests present and provably differ — a different file.
+            # Digests present and provably differ—a different file.
             return _sp._FALLBACK_MISMATCH
         self._mark_fallback_source_validated(source)
         return _sp._FALLBACK_MATCH
@@ -179,7 +179,7 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
         when its (start, end) covers the WHOLE 4096-byte fingerprint range.
         When ``range_end`` is shorter than ``failed_byte + 4095`` (file-tail
         or short HTTP range), the digest was computed over fewer than 4096
-        bytes — the equality cache in _fetch_fallback_fingerprint_digest would
+        bytes—the equality cache in _fetch_fallback_fingerprint_digest would
         otherwise accept it as a match for a fingerprint sample whose natural
         end is failed_byte + 4095, producing a wrong proof. In the truncated
         case, return None so the fingerprint loop refetches the natural range.
@@ -277,7 +277,7 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
     def _prevalidate_source_eligibility(
         self, source, expected_length, primary_url, primary_auth
     ):
-        """Gate a source for prevalidation; return (eligible, url, auth, length)."""
+        """Gate a source for prevalidation; return eligibility, URL, auth, length."""
         if source.get("failed") or source.get("validated"):
             return False, None, None, 0
         source_url = source.get("stream_url")
@@ -371,13 +371,13 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
         Augments the global ``configured_stream_probe_bases()`` (which
         only carries the user-configured nzbdav_url / webdav_url
         origins) with the origins of *this session's* own primary and
-        fallback URLs. Those URLs were already accepted by the caller
-        — either resolve_and_play built them from the user-configured
+        fallback URLs. Those URLs were already accepted by the caller:
+        either resolve_and_play built them from the user-configured
         WebDAV roots, or /direct_play HEAD-validated each one before
-        prepare_stream — so peers from the same origin are by
+        prepare_stream—so peers from the same origin are by
         definition trusted for the lifetime of the session. Without
         this extension, a /direct_play test whose URLs live on
-        127.0.0.1 (e.g. local-file rangeserve) gets rejected by
+        127.0.0.1 (for example, local-file rangeserve) gets rejected by
         _validated_probe_url and the 100×4 KiB fingerprint sweep can
         never run.
         """
@@ -439,6 +439,6 @@ class _FallbackProbeMixin:  # pylint: disable=too-few-public-methods
             if origin in seen_origins:
                 continue
             seen_origins.add(origin)
-            # Path stays "/" — anything under this origin is in-scope
+            # Path stays "/"—anything under this origin is in-scope
             # because the URL was already trusted at session-prepare time.
             bases.append(_PrecomputedProbeBase(parts, origin, "/"))

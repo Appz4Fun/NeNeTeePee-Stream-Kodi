@@ -174,7 +174,7 @@ def test_resolve_smb_video_keeps_literal_spaces_unencoded_in_returned_url():
     # folders routinely contain literal spaces. Kodi's own SMB VFS percent-
     # encodes the path internally before it hits the wire, so this module
     # must NOT pre-encode: doing so double-encodes ("%20" becomes literal
-    # "%2520" on the wire) and 404s with "No such file or directory" even
+    # "%2520" on the wire) and 404 s with "No such file or directory" even
     # though the identical raw path lists/stats/reads fine through xbmcvfs.
     xbmcvfs = sys.modules["xbmcvfs"]
     folder = "smb://host/completed/Logan 2017 2160p WEB-DL DV HDR-FLUX"
@@ -206,8 +206,8 @@ def test_resolve_smb_video_keeps_literal_spaces_unencoded_in_returned_url():
 
 
 def test_resolve_smb_video_recognizes_raw_bluray_stream_file():
-    # Full Blu-ray disc rips (e.g. scene "-BLoz" releases) commonly land the
-    # main title as a raw .m2ts stream (e.g. "00000.m2ts") rather than a
+    # Full Blu-ray disc rips (for example, scene "-BLoz" releases) commonly land the
+    # main title as a raw .m2ts stream (for example, "00000.m2ts") rather than a
     # remuxed .mkv/.mp4. If .m2ts isn't a recognized video extension, the
     # NZBGet completed-history reuse probe never finds it and the resolver
     # falls through to re-submitting an already-downloaded release.
@@ -933,7 +933,7 @@ def test_reuse_completed_job_records_backend_native_dest_dir():
 def test_resolve_smb_video_descends_into_subdirectory():
     # Common archive layout: the release folder holds only a nested
     # subdirectory, and the video lives inside it. The resolver must descend
-    # rather than fail with "No video file found on SMB share".
+    # rather than fail with ``No video file found on SMB share``.
     xbmcvfs = sys.modules["xbmcvfs"]
     tree = {
         "smb://host/completed/The.Movie": (["The.Movie"], ["readme.nfo"]),
@@ -957,15 +957,15 @@ def test_resolve_smb_video_descends_into_subdirectory():
 
 def test_resolve_smb_video_keeps_retrying_past_legacy_budget():
     # Regression: NZBGet reports SUCCESS but the moved files take longer than
-    # the old ~4s (5×1s) window to become listable over SMB. The resolver must
+    # the old ~4 s (5×1 s) window to become listable over SMB. The resolver must
     # keep retrying within the wider post-success budget instead of giving up
-    # with "No video file found on SMB share".
+    # with ``No video file found on SMB share``.
     xbmcvfs = sys.modules["xbmcvfs"]
     calls = {"n": 0}
 
     def fake_listdir(path):
         calls["n"] += 1
-        # File becomes visible only on the 8th listing — past the legacy
+        # File becomes visible only on the eighth listing—past the legacy
         # 5-attempt cap, within the wider budget.
         if calls["n"] >= 8:
             return ([], ["movie.mkv"])
@@ -1187,7 +1187,7 @@ def test_poll_returns_timeout_when_budget_exhausted():
 
     # Monitor never aborts; the wall clock advances past the budget so the
     # real timeout branch fires (not aborted). Drive monotonic with a
-    # controlled clock that ticks 1s per read so the deadline is reached
+    # controlled clock that ticks 1 s per read so the deadline is reached
     # deterministically regardless of harness timing.
     clock = {"t": 0.0}
 
@@ -1214,7 +1214,7 @@ def test_poll_timeout_is_wall_clock_not_per_tick_accumulation():
     # Regression for the wall-clock-blind timeout: the budget must track real
     # elapsed time (time.monotonic), so a slow box whose RPCs consume far more
     # than `interval` per tick can't stretch the configured timeout. Here each
-    # tick "costs" 30s of wall time but the interval arg is only 2s; a
+    # tick "costs" 30 s of wall time but the interval arg is only 2 s; a
     # per-tick accumulator (+= interval) would allow ~30 ticks for timeout=60,
     # while a monotonic deadline allows ~2.
     def getter(k, d=""):
@@ -1229,7 +1229,7 @@ def test_poll_timeout_is_wall_clock_not_per_tick_accumulation():
 
     def group(nzbid, settings_getter=None):
         ticks["n"] += 1
-        clock["t"] += 30.0  # each RPC tick burns 30s of wall time
+        clock["t"] += 30.0  # each RPC tick burns 30 s of wall time
         return {"present": True, "status": "DOWNLOADING", "percent": 10}
 
     with patch(
@@ -1245,15 +1245,15 @@ def test_poll_timeout_is_wall_clock_not_per_tick_accumulation():
             42, _Dialog(), _Monitor(), timeout=60, settings_getter=getter, interval=2
         )
     assert result["outcome"] == "timeout"
-    # With a 60s budget and 30s burned per tick, the deadline is reached after
-    # ~2 ticks — NOT the ~30 a per-interval (2s) accumulator would have run.
+    # With a 60 s budget and 30 s burned per tick, the deadline is reached after
+    # ~2 ticks—NOT the ~30 a per-interval (2 s) accumulator would have run.
     assert ticks["n"] <= 3
 
 
 def test_poll_post_processing_status_shows_pp_label():
-    # An in-queue post-processing stage (e.g. UNPACKING) is reported by
+    # An in-queue post-processing stage (for example, UNPACKING) is reported by
     # NZBGet as a bare status while the group is still present; it must show
-    # "Post-processing..." (30219), not a frozen "Downloading... 100%".
+    # the "Post-processing" message (30219), not a frozen "Downloading 100%" message.
     def getter(k, d=""):
         return {"nzbget_url": "http://box"}.get(k, d)
 
@@ -1279,7 +1279,7 @@ def test_poll_post_processing_status_shows_pp_label():
         )
     assert result["outcome"] == "success"
     # The UNPACKING tick must have used the post-processing string (30219),
-    # not the "Downloading... {}%" template (30105).
+    # not the "Downloading {}%" template (30105).
     pp_messages = [msg for _pct, msg in dialog.lines if msg]
     assert any("30219" in m or "Post-processing" in m for m in pp_messages)
     assert not any("30105" in m or "Downloading" in m for m in pp_messages)
@@ -1625,7 +1625,7 @@ def test_resolve_success_applies_resume_offset_to_listitem():
 def test_resolve_success_arms_playback_monitor_window_properties():
     # On success the resolver must hand the SMB session to the background
     # NzbdavPlayer monitor (gated on nzbdav.active="true") so a resume point is
-    # actually saved/read for the NZBGet/SMB path — the persistence gap. Assert
+    # actually saved/read for the NZBGet/SMB path—the persistence gap. Assert
     # all five monitor window properties, including the supplied resume_key.
     plugin = sys.modules["xbmcplugin"]
     plugin.setResolvedUrl = MagicMock()
@@ -1662,7 +1662,7 @@ def test_resolve_success_arms_playback_monitor_window_properties():
 
 
 def test_resolve_success_resume_key_falls_back_to_stream_url():
-    # No release identity threaded (e.g. a bare script/widget play): the monitor
+    # No release identity threaded (for example, a bare script/widget play): the monitor
     # still keys resume on the playable SMB URL so the session is monitored.
     plugin = sys.modules["xbmcplugin"]
     plugin.setResolvedUrl = MagicMock()
@@ -1891,7 +1891,7 @@ def test_read_settings_none_uses_single_arg_getsetting():
         "download_timeout": "600",
     }
 
-    def get_setting(key):  # one positional arg only — errors on a second
+    def get_setting(key):  # one positional arg only—errors on a second
         return values.get(key, "")
 
     addon = MagicMock()
@@ -1905,7 +1905,7 @@ def test_read_settings_none_uses_single_arg_getsetting():
 
 def test_read_settings_defaults_url_to_schema_default():
     # nzbget_url left at its schema default is absent from the profile XML, so
-    # the injected getter returns the default we pass — which must be the
+    # the injected getter returns the default the test passes—which must be the
     # settings.xml default, not "" (else "not configured" on the widget path).
     def getter(key, default=""):
         return {"nzbget_smb_root": "smb://host/done"}.get(key, default)
@@ -2015,7 +2015,7 @@ def test_resolve_success_records_download_pubdate_in_ledger():
 
 def test_resolve_records_ledger_even_when_smb_resolve_fails():
     # NZBGet completed the download (it IS in history as SUCCESS, so the
-    # picker will tag it DL); a later SMB-mapping failure must not lose the
+    # picker tags it DL); a later SMB-mapping failure must not lose the
     # pubdate record.
     plugin = sys.modules["xbmcplugin"]
     plugin.setResolvedUrl = MagicMock()
@@ -2408,7 +2408,7 @@ def test_spawn_dupe_backups_skips_when_dupecheck_disabled():
 
 def test_snapshot_conn_getter_preserves_blank_username():
     # A blank nzbget_username must survive into the worker getter (NZBGet's empty
-    # ControlUsername disables username checking) -- not be defaulted to "nzbget".
+    # ControlUsername disables username checking) -- not be defaulted to ``nzbget``.
     getter = _settings({"nzbget_url": "http://box:6789", "nzbget_username": ""})
     snap = _snapshot_conn_getter(getter)
     assert snap("nzbget_username", "nzbget") == ""
@@ -2677,7 +2677,7 @@ def test_poll_reports_failed_when_group_exhausted():
 
 def test_poll_waits_for_backup_submitter_before_declaring_failed():
     # A fast-failing primary can hit the promotion grace before the backup daemon
-    # has even appended a backup (each NZB fetch can take up to the 30s timeout).
+    # has even appended a backup (each NZB fetch can take up to the 30 s timeout).
     # The poll must not declare the group exhausted while backups are still being
     # submitted, else automatic failover is lost (round-2 review finding).
     dialog = _Dialog()
@@ -2763,7 +2763,7 @@ def test_handle_poll_failure_cancel_also_cancels_promoted_backup():
 
 
 def test_poll_holds_failover_while_promotion_sits_paused():
-    # A promoted backup queued PAUSED (e.g. NZBGet globally paused) is not an
+    # A promoted backup queued PAUSED (for example, NZBGet globally paused) is not an
     # exhausted group: the poll must keep waiting (bounded by the outer
     # timeout) instead of reporting FAILURE/DUPE at grace expiry, and fail only
     # once no paused member remains (round-3 review finding).
@@ -2887,7 +2887,7 @@ def test_extra_backups_from_loader_honors_limit():
 
 
 def test_extra_backups_from_loader_no_ceiling_above_five():
-    # No code-level ceiling: a limit above the old hard-coded cap of 5 is
+    # No code-level ceiling: a limit over the old hard-coded cap of 5 is
     # honored as-is, matching fallback_streams_max having no artificial max.
     from resources.lib.nzbget_resolver import _extra_backups_from_loader
 
@@ -3222,7 +3222,7 @@ def test_cancel_is_scoped_to_this_resolves_nzbids():
     assert (handled, leave) == (True, False)
     assert deleted == [
         [9, 12, 7, 8, 5]
-    ]  # tracked, paused, submitted, pick -- ours only
+    ]  # tracked, paused, submitted, pick -- add-on jobs only
 
 
 def test_poll_canceled_carries_paused_nzbids():
@@ -3258,7 +3258,7 @@ def test_group_follow_never_adopts_a_foreign_active_download():
     # active_group_by_dupekey can return THEIR active download. Group-follow
     # must not track (or later cancel) an NZBID this resolve doesn't own -- it
     # holds instead, bounded by the outer timeout; their SUCCESS is played via
-    # the history lookup and their failure frees the key for OUR backups
+    # the history lookup and their failure frees the key for the add-on's own backups
     # (review finding: keep failover tracking scoped to this resolve).
     dialog = _Dialog()
     foreign = {"present": True, "nzbid": 77, "status": "DOWNLOADING", "percent": 5}
@@ -3291,17 +3291,17 @@ def test_group_follow_never_adopts_a_foreign_active_download():
             60,
             interval=0,
             dupe_key="k",
-            fleet={"owned_nzbids": lambda: (1, 7, 8)},  # 77 is NOT ours
+            fleet={"owned_nzbids": lambda: (1, 7, 8)},  # 77 is NOT an add-on job
         )
     assert result["outcome"] == "failed"
     # Two _ACT calls prove the foreign-active tick HELD (did not fail, did not
-    # track 77) and only the truly-empty second tick exhausted the group.
+    # track 77) and only the truly empty second tick exhausted the group.
     assert not act_results
 
 
 def test_group_follow_tracks_owned_promoted_backup():
-    # NZBGet preserves NZBIDs across history<->queue moves, so OUR promoted
-    # backup surfaces with the id we submitted -- with an owned filter present
+    # NZBGet preserves NZBIDs across history<->queue moves, so the add-on's own promoted
+    # backup surfaces with the id the add-on submitted -- with an owned filter present
     # it must still be tracked to success.
     dialog = _Dialog()
     hs = {
@@ -3712,7 +3712,7 @@ def test_poll_reports_failure_copy_when_rescue_unavailable_or_fails():
 
 def test_poll_copy_veto_uses_short_grace():
     # With _PROMOTION_GRACE huge but _COPY_VETO_GRACE 0, the COPY branch's short
-    # grace still lets exhaustion/rescue be reached promptly (no ~20s stall).
+    # grace still lets exhaustion/rescue be reached promptly (no ~20 s stall).
     dialog = _Dialog()
     counter = {"n": 0}
     with patch("resources.lib.nzbget_resolver._PROMOTION_GRACE", 9999), patch(
@@ -3782,7 +3782,7 @@ def test_copy_veto_rearms_short_grace_not_full_promotion_grace_while_pending():
     # re-arm branch unconditionally extended by the full _PROMOTION_GRACE,
     # even when the pick died COPY -- defeating the whole point of the short
     # _COPY_VETO_GRACE (a worker that drains moments later would still wait
-    # out the full ~20s stall this change exists to avoid).
+    # out the full ~20 s stall this change exists to avoid).
     state = {
         "current": None,
         "exclude": 1,
@@ -3805,7 +3805,7 @@ def test_copy_veto_rearms_short_grace_not_full_promotion_grace_while_pending():
             {"is_submitting": lambda: True},  # still pending -> re-arm, not rescue
         )
     assert outcome is None
-    # Re-armed on the short grace (~3s out), nowhere near the full 9999s.
+    # Re-armed on the short grace (~3 s out), nowhere near the full 9999 s.
     assert state["promotion_deadline"] < before + 3 + 2
     assert state["promotion_deadline"] > before + 3 - 2
 

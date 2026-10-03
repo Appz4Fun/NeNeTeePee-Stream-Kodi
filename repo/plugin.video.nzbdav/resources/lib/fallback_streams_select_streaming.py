@@ -294,9 +294,9 @@ def _attach_selection_candidates_streaming(
         _fs._start_selection_manifest_fetch("selected", -1, selected, result_queue)
 
     def _receive_next():
-        # Returns (action, message) where action is "got" (message is the
-        # (kind, index, target) tuple), "return_true", "settle_expired", or
-        # "continue".
+        # Returns (action, message) where action is ``got`` (message is the
+        # (kind, index, target) tuple), ``return_true``, ``settle_expired``, or
+        # ``continue``.
         try:
             if settle_pending[0]:
                 # A cap-fill is held pending an earlier in-flight peer; wait at

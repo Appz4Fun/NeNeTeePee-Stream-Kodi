@@ -177,7 +177,7 @@ def test_readability_probe_does_not_require_prior_resolver_import():
     # Regression: the lazy import must go through nzbget_resolver. Importing
     # nzbget_resolver_smb first trips its module-level import cycle while
     # partially initialized (ImportError), which broke this module when the
-    # resolver had not been imported yet (e.g. running this file alone).
+    # resolver had not been imported yet (for example, running this file alone).
     import sys
 
     saved = {}
@@ -582,7 +582,7 @@ _LOCAL_COMPLETED_ROOTS = (
 def test_nzbget_cached_mapping_accepts_local_completed_roots(
     native_folder, completed_base, smb_root, expected
 ):
-    # An NFS/local mount standing in for the SMB share (e.g. a hard NFS mount
+    # An NFS/local mount standing in for the SMB share (for example, a hard NFS mount
     # that makes NZBGet's completed folder look like a plain local path):
     # same cached-reuse fast path, just not an smb:// URL.
     record = _record(folder=native_folder)

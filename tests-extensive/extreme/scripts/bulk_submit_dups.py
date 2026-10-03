@@ -4,7 +4,7 @@ For each IMDB Top 50 movie, query NZBHydra2's *internal* API with
 ``showSingleResultPerSearchResultGroup=false`` so duplicate Usenet
 uploads of the same release are returned. Group by exact title, pick
 the largest grouping, deduplicate by ``searchResultId`` (so each
-submission is a different Usenet upload — different article IDs — of
+submission is a different Usenet upload—different article IDs—of
 byte-equivalent content), and POST each NZB URL to nzbdav-rs's
 SABnzbd-style ``addurl`` endpoint. Also save a copy of every NZB body
 under ``OUT_DIR`` for offline inspection.
@@ -98,7 +98,7 @@ def biggest_group(results: list[dict]) -> tuple[str, list[dict]]:
     """Pick the largest cluster of same-release Usenet uploads.
 
     Group by exact title first, then within that group keep only entries
-    whose indexer size is within +/-20% of the group's median — same
+    whose indexer size is within +/-20% of the group's median—same
     addon-side tolerance the runtime fallback peer-matcher applies.
     Deduplicate by searchResultId so each retained row is a distinct
     upload (different article IDs, byte-equivalent content).
@@ -149,7 +149,7 @@ def download_nzb(url: str) -> bytes:
 
 
 def submit_to_nzbdav(nzb_url: str, name: str) -> tuple[bool, str]:
-    """addurl-mode submit. Returns (ok, info)."""
+    """addurl-mode submit. Returns a success flag and an info string."""
     qs = urllib.parse.urlencode(
         {
             "mode": "addurl",

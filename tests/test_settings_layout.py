@@ -110,7 +110,7 @@ def test_webdav_url_default_is_localhost_8080(settings_root):
 
 def test_nzbhydra_enabled_defaults_false(settings_root):
     """nzbhydra_enabled with empty hydra_api_key would always fail
-    test_hydra on first launch — flipped to opt-in after creds."""
+    test_hydra on first launch, so it flipped to opt-in after creds."""
     cat = _category_by_label(settings_root, "30163")
     hydra = _setting_by_id(cat, "nzbhydra_enabled")
     assert hydra is not None
@@ -191,17 +191,17 @@ def test_direct_indexer_options_depend_on_master_toggle(settings_root):
     via an `enable` dependency, not `visible`.
 
     Kodi's CGUIDialogSettingsBase only creates GUI controls for a group at
-    dialog-build time if the group contains at least one currently-visible
+    dialog-build time if the group contains at least one currently visible
     setting (CSettingCategory::GetGroups -> ContainsVisibleSettings). The
     "Popular Indexers" / "Custom Newznab Indexers" groups have no setting
     other than these dependents, so when direct_indexers_enabled is off,
-    those groups are entirely hidden and get NO controls built at all —
+    those groups are entirely hidden and get NO controls built at all,
     meaning there is nothing for the live dependency-update mechanism to
     later reveal when the toggle flips (confirmed live on a Kodi 21.3-Omega
     device: toggling stayed stuck until switching category tabs away and
     back forced a rebuild). `enable` sidesteps this because it never hides
-    the setting from ContainsVisibleSettings — the row always renders, just
-    greyed out — and enabled/disabled state DOES update live through the
+    the setting from ContainsVisibleSettings—the row always renders, just
+    greyed out—and on/off state DOES update live through the
     same UpdateSettingControl path regardless of group composition.
     """
     cat = _category_by_label(settings_root, "30163")
@@ -249,7 +249,7 @@ def test_passthrough_stall_wait_setting_present(settings_root):
 
 
 def test_no_duplicate_setting_ids(settings_root):
-    """Settings with an id attribute should be unique across the file —
+    """Settings with an id attribute should be unique across the file;
     Kodi keys by id, and a dup silently shadows."""
     seen = []
     for setting in settings_root.iter("setting"):

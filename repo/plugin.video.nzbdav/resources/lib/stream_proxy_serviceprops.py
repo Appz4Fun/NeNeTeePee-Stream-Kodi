@@ -8,8 +8,8 @@ Stage-final decomposition of ``stream_proxy``: the ``get_service_proxy_*``
 helpers that read the proxy port / prepare token off the Kodi Home window were
 moved here verbatim. ``stream_proxy`` re-exports them (and rebinds its
 ``_ORIGINAL_GET_SERVICE_PROXY_*`` aliases to the same objects) so every caller
-and test patch target — ``resources.lib.stream_proxy.get_service_proxy_port``
-and the ``_ORIGINAL_*`` identity check in ``resolver_prepare`` — keeps working.
+and test patch target—``resources.lib.stream_proxy.get_service_proxy_port``
+and the ``_ORIGINAL_*`` identity check in ``resolver_prepare``—keeps working.
 Module-level names (``_KODI_SETTING_ERRORS``, ``_PROP_PROXY_TOKEN``) are reached
 via ``_sp.<name>`` at call time so they resolve against the shared namespace.
 """

@@ -46,12 +46,12 @@ def _find_video_file_in_subdirs(
 
     When a requested title/episode hint is available, a sibling whose video
     name matches the hint (especially the requested SxxExx episode) is preferred
-    over the largest video — so a multi-episode pack returns the requested
+    over the largest video—so a multi-episode pack returns the requested
     episode instead of whichever sibling happens to be biggest. With no hint
     (or no hint match) the historical "largest video wins" behavior is kept.
 
-    Every sibling is scanned (no early-exit on the first match) so a polluted
-    release folder can't win by ordering. Among equally-scored hint matches, or
+    Every sibling is scanned (no early exit on the first match) so a polluted
+    release folder can't win by ordering. Among equally scored hint matches, or
     when no hint matches, ties break toward the larger then earlier-listed
     sibling so behavior stays stable.
     """
@@ -175,13 +175,13 @@ def _sibling_rank_key(
 ):
     """Build the ranking key for a sibling-subfolder scan result.
 
-    Rank by (not-wrong-episode, above-floor, episode identity, size, token
+    Rank by (not-wrong-episode, over-floor, episode identity, size, token
     overlap) and break ties toward the earlier sibling (negative index sorts a
-    smaller index higher). The above-floor dimension mirrors the current-level
+    smaller index higher). The over-floor dimension mirrors the current-level
     key so a child returning a below-floor requested-episode stub never beats a
-    sibling's above-floor real file on episode identity alone -- otherwise the
+    sibling's over-floor real file on episode identity alone -- otherwise the
     stub wins and the resolver re-rejects it every poll (Codex #340). "not a
-    wrong episode" sits ABOVE the floor flag so a wrong-episode above-floor
+    wrong episode" sits AHEAD of the floor flag so a wrong-episode over-floor
     sibling can't be promoted over the requested stub either. Episode match
     stays primary among same-class candidates; size outranks loose token
     overlap. With no hint and no floor every flag is constant, so this reduces
@@ -219,12 +219,12 @@ def _resolve_hint_sets(title_hint, title_hint_tokens, title_hint_episode_tags):
 
 
 def _build_propfind_request(folder_path, _already_encoded, settings):
-    """Build the PROPFIND Request and return (request, url)."""
+    """Build the PROPFIND Request and return (request, URL)."""
     import resources.lib.webdav as _webdav
 
     base = settings["webdav_url"] or settings["nzbdav_url"]
     # Recursive calls pass hrefs that the PROPFIND response already
-    # URL-encoded for us (e.g. "My%20Show"). Re-running quote() on that
+    # URL-encoded (for example, "Some%20Show"). Re-running quote() on that
     # would turn ``%`` into ``%25``, 404'ing every subdirectory probe.
     # Top-level callers pass a raw path which needs encoding.
     if _already_encoded:
@@ -245,7 +245,7 @@ def _build_propfind_request(folder_path, _already_encoded, settings):
 
 
 def _parse_propfind_xml(body):
-    """Parse a PROPFIND XML body with external entities disabled (XXE-safe)."""
+    """Parse a PROPFIND XML body with external entities turned off (XXE-safe)."""
     from resources.lib.xml_safety import safe_fromstring
 
     return safe_fromstring(body)
@@ -255,11 +255,11 @@ def _extract_href_path(href_text, base_host):
     """Return the path portion of a PROPFIND href, or None if unusable.
 
     Handles cross-host hrefs. nzbdav legitimately returns its INTERNAL hostname
-    in PROPFIND hrefs (e.g. localhost:8080) while we address it at the
-    configured public endpoint (e.g. 192.168.1.93:3000). Trust only the PATH
+    in PROPFIND hrefs (for example, localhost:8080) while the add-on addresses it at the
+    configured public endpoint (for example, 192.168.1.93:3000). Trust only the PATH
     portion of the href -- all follow-up requests hit the configured WebDAV
-    host anyway, so an attacker-controlled href host cannot redirect us
-    off-server. Previously we rejected the entire href on host mismatch, which
+    host anyway, so an attacker-controlled href host cannot redirect requests
+    off-server. Previously the code rejected the entire href on host mismatch, which
     broke real users with reverse-proxied nzbdav setups ("Completed but no
     video found").
     """
@@ -296,15 +296,15 @@ def _extract_href_path(href_text, base_host):
 
 def _collect_subdir(href_path, request_path, subdirs):
     """Append a non-hidden child collection to subdirs (skip self / dot dirs)."""
-    # Skip the folder itself (href matches our request URL)
+    # Skip the folder itself (href matches the request URL)
     child = href_path.rstrip("/")
     if child == request_path:
         return
     # Skip hidden (dot-prefixed) subfolders. nzbdav release folders sometimes
     # get polluted with a leading-dot child holding a different (often wrong,
-    # smaller) movie — e.g. a '.and_justice_for_all...1080p...' folder
+    # smaller) movie—for example, a '.and_justice_for_all.1080p' folder
     # hijacking a 2160p release. Leading dots are not URL-encoded, so the
-    # encoded path segment still starts with ".".
+    # encoded path segment still starts with a dot.
     segment = child.rsplit("/", 1)[-1]
     if segment.startswith("."):
         xbmc.log(
@@ -325,7 +325,7 @@ def _parse_content_length(response, href_path):
     try:
         return int(size_el.text.strip())
     except ValueError:
-        # Malformed getcontentlength body — log so a server bug doesn't
+        # Malformed getcontentlength body—log so a server bug doesn't
         # silently cause every file to be reported as size 0 (and thus never
         # selected as "largest").
         xbmc.log(
@@ -347,22 +347,22 @@ def _current_level_file_key(
     sibling, while size outranks loose token overlap so a small token-rich
     extra can't beat the feature.
 
-    "Above the advertised-size floor" is the TOP ranking dimension so a
+    "Clearing the advertised-size floor" is the TOP ranking dimension so a
     below-floor job-start stub never outranks a real file at the SAME level: an
-    episode-tagged stub (ep=1000) would otherwise beat a generically-named
-    above-floor real file (ep=0), win selection, and -- with no subdir to defer
+    episode-tagged stub (ep=1000) would otherwise beat a generically named
+    over-floor real file (ep=0), win selection, and -- with no subdir to defer
     into -- be returned and re-rejected every poll (#282 follow-up D / Codex).
     With no floor (min_video_size <= 0) this flag is constantly True, so the key
     reduces to the historical (ep, size, tok) and ranking is byte-identical. A
     size-0 file is NOT below-floor (unknown size, not a known stub), so it is
     unaffected.
 
-    A WRONG-episode file (ep=-1000) must never be promoted above a
-    requested-episode stub by the above-floor boost: an above-floor S01E04
+    A WRONG-episode file (ep=-1000) must never be promoted over a
+    requested-episode stub by the over-floor boost: an over-floor S01E04
     would otherwise outrank a below-floor requested-S01E05 stub, become
     best_file, pass the resolver's stub guard (its size is real) and STREAM THE
     WRONG EPISODE instead of waiting (Codex #340). Rank "not a wrong episode"
-    ABOVE the floor flag so wrong episodes sink below everything; the
+    AHEAD of the floor flag so wrong episodes sink below everything; the
     requested-ep stub then stays best_file and the poll loop keeps waiting.
     ``ep_score >= 0`` is monotonic in ep_score at the wrong-ep boundary, so with
     no floor this term never reverses the historical (ep, size, tok) ordering.
@@ -481,11 +481,11 @@ def _sibling_beats_deferred(
 ):
     """Return True if a sibling result should be adopted over the deferred file.
 
-    If we deferred a wrong-episode current-level file, only adopt the sibling
+    If the walk deferred a wrong-episode current-level file, only adopt the sibling
     when it is at least as good a hint match; otherwise the mismatched
     current-level file is no worse and stays the fallback. The key carries the
-    same above-floor flag as the current-level ranking, so a below-floor stub
-    never wins on episode identity: an above-floor (or unknown-size) child
+    same over-floor flag as the current-level ranking, so a below-floor stub
+    never wins on episode identity: an over-floor (or unknown-size) child
     always outranks a deferred stub -- including an exact-episode child whose
     PROPFIND has no getcontentlength (size hint 0 is NOT below-floor)
     (#282 / Codex).
@@ -528,7 +528,7 @@ def _defer_decision(
     requested episode may still live in a sibling subdir. This covers both an
     explicit wrong-episode file (score -1000) AND a generic current-level video
     that merely shares show tokens but carries no SxxExx tag (score 0) -- either
-    would otherwise be returned before we ever scan the subdir holding the exact
+    would otherwise be returned before the walk ever scans the subdir holding the exact
     requested episode. A movie/token-only hint has empty hint_episode_tags so it
     keeps the historical short-circuit, as does the no-hint path. The stub case
     defers on the same terms. Both only defer when there is actually a subdir to

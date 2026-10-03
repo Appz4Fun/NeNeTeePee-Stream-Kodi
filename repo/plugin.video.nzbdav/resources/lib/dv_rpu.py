@@ -19,10 +19,10 @@ Edge cases worth knowing about:
 * ``use_prev_vdr_rpu_flag=True`` frames legitimately carry no NLQ data.
   ``parse_rpu_payload`` returns ``DolbyVisionRpuInfo(profile=7, el_type=None)``
   for them. Callers that sample only one frame may land on such a frame and
-  fail to classify MEL/FEL — the classifier is frame-local, but el_type is
+  fail to classify MEL/FEL—the classifier is frame-local, but el_type is
   not. Callers needing high-confidence classification should either probe
-  multiple frames or accept the el_type=None result as "profile known,
-  EL type unknown".
+  multiple frames or accept the el_type=None result as profile known,
+  EL type unknown.
 """
 
 from dataclasses import dataclass
@@ -46,7 +46,7 @@ class _BitReader:
     # or adversarial payload could yield a stream of zeros that never
     # terminates; this caps the prefix length so the loop can't run away.
     # The H.265 spec uses up to ue(31) (32-bit values) so this is an order
-    # of magnitude above any legitimate input.
+    # of magnitude over any legitimate input.
     _MAX_UE_PREFIX_BITS = 64
 
     def __init__(self, data):
@@ -57,7 +57,7 @@ class _BitReader:
         """Read and return the next bit MSB-first; raise ValueError if truncated."""
         byte_index = self.bit_pos // 8
         if byte_index >= len(self.data):
-            # Truncated payload — caller (`parse_unspec62_nalu`) wraps
+            # Truncated payload—caller (`parse_unspec62_nalu`) wraps
             # ValueError into a soft "could not parse" return, so a raw
             # IndexError must not escape here.
             raise ValueError(
@@ -245,7 +245,7 @@ def _parse_bit_depths(reader, fields):
     """Read the bit-depth/resampling sub-block into ``fields`` in place."""
     fields["bl_bit_depth_minus8"] = reader.read_ue()
     # dovi_tool splits this ue into the low 8 bits (el_bit_depth_minus8) and
-    # the next 8 bits (ext_mapping_idc). We only need the low 8 for MEL/FEL
+    # the next 8 bits (ext_mapping_idc). Only the low 8 are needed for MEL/FEL
     # classification, so the upper bits are discarded.
     fields["el_bit_depth_minus8"] = reader.read_ue() & 0xFF
     fields["vdr_bit_depth_minus8"] = reader.read_ue()
@@ -390,7 +390,7 @@ def _parse_mapping(reader, header):
 
 
 def _parse_nlq(reader, header):
-    """Parse rpu_data_nlq() — one iteration per component, one pivot each."""
+    """Parse rpu_data_nlq()—one iteration per component, one pivot each."""
     el_bit_depth = header.el_bit_depth_minus8 + 8
     coef_len = header.coefficient_log2_denom_length
 
@@ -456,7 +456,7 @@ def parse_rpu_payload(data):
     Note:
         If the polynomial mapping data uses linear interpolation, the RPU
         is considered successfully profile-detected but NLQ parsing is
-        skipped — so MEL/FEL detection returns None for those (extremely
+        skipped—so MEL/FEL detection returns None for those (extremely
         rare) frames, rather than raising.
     """
     payload = _validated_rpu_payload(data)
@@ -475,8 +475,8 @@ def parse_rpu_payload(data):
         has_nlq = _parse_mapping(reader, header)
     except NotImplementedError:
         # Polynomial linear interpolation isn't supported in dovi_tool either.
-        # Profile detection already succeeded — degrade gracefully to
-        # "profile known, EL type not classifiable".
+        # Profile detection already succeeded—degrade gracefully to
+        # profile known, EL type not classifiable.
         return DolbyVisionRpuInfo(profile=profile)
 
     if not has_nlq:

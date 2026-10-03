@@ -21,7 +21,7 @@ from resources.lib.xml_safety import safe_fromstring as _safe_fromstring
 def _test_connection(label, url, test_url, ok_condition):
     """Test a service connection and notify the user of the result.
 
-    If url is empty, notifies "<label> URL not configured". Otherwise
+    If the URL is empty, notifies `<label> URL not configured`. Otherwise
     issues a GET to test_url, notifies "<label> connection OK" when
     ok_condition(response) is True, "<label>: unexpected response" when
     False, and "<label>: <error>" (truncated to 60 chars) on exception.
@@ -46,7 +46,7 @@ def _test_connection(label, url, test_url, ok_condition):
         # urllib exceptions often embed the full URL (with apikey!) in
         # str(e). The verbatim-URL substitution catches the most common
         # case; ``redact_text`` handles the residue (apikey embedded in
-        # an error phrase, percent-encoded variants, etc.) — TODO.md §H.2-M31.
+        # an error phrase, percent-encoded variants, etc.)—TODO.md §H.2-M31.
         from resources.lib.http_util import redact_text
 
         err_msg = str(e).replace(test_url, redact_url(test_url))
@@ -210,8 +210,8 @@ def _test_nzbget_smb():
     addon = _router.xbmcaddon.Addon("plugin.video.nzbdav")
     smb_root = addon.getSetting("nzbget_smb_root").strip()
     # xbmcvfs.listdir() does NOT raise for an unreachable/typo'd/wrong-
-    # credentials SMB path — it returns ([], []) and only logs at the C++
-    # VFS layer — so a non-raising listdir is a false "reachable". Gate on
+    # credentials SMB path—it returns ([], []) and only logs at the C++
+    # VFS layer—so a non-raising listdir is a false `reachable`. Gate on
     # xbmcvfs.exists(), which returns False for those paths (the same
     # positive-signal check player_installer.py uses).
     reachable = False

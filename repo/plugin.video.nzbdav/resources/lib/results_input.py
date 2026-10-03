@@ -156,7 +156,7 @@ class OkHold:
             self._reader.close()
 
     def close(self):
-        """Stop watching; never wait for our own callback thread."""
+        """Stop watching; never wait for the watcher's own callback thread."""
         self._stop.set()
         if self._thread and self._thread is not threading.current_thread():
             self._thread.join(timeout=1.0)

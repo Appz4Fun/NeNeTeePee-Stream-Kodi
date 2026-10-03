@@ -341,7 +341,7 @@ def test_choose_resume_seconds_does_not_clear_store_on_beginning():
     ), patch("resources.lib.resume_choice.xbmc") as xbmc_mock:
         xbmc_mock.getLocalizedString.return_value = ""
         # No resume_store import exists in the module, so there is nothing to
-        # clear; the contract is simply "return 0.0 and leave storage alone".
+        # clear; the contract is simply "return 0.0 and leave storage alone."
         assert resume_choice.choose_resume_seconds("id", 90.0, dialog=dialog) == 0.0
     assert not hasattr(resume_choice, "resume_store")
 

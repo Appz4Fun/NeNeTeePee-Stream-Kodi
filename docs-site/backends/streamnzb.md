@@ -29,10 +29,10 @@ The illustration shows example values, not a live configuration.
 
 The add-on parses release filenames and applies your configured filters and sorting. Use the picker’s show-all option to view filtered entries.
 
-StreamNZB manages searches, NZB retrieval, archive streaming, and server recovery. The add-on sends the selected HTTP playback URL and request headers directly to Kodi. Local indexer settings, WebDAV settings and proxy fallback workers do not apply. Both the API address and the playback address returned by the server must be reachable from Kodi.
+StreamNZB manages searches, NZB retrieval, archive streaming, and server recovery. The add-on sends the selected HTTP playback URL and request headers directly to Kodi. Local indexer settings, WebDAV settings, and proxy fallback workers don't apply. Both the API address and the playback address returned by the server must be reachable from Kodi.
 
 See [StreamNZB behavior and identity requirements](../features/streamnzb-backend.md) for supported entry points and recovery limits.
 
 ## Archive limits
 
-StreamNZB streams supported RAR and 7z archives whose media is stored without compression. Compressed RAR and 7z releases cannot be streamed through this backend; they require downloading and unpacking with a download client such as NZBGet or SABnzbd. See [StreamNZB’s supported formats](https://github.com/Gaisberg/streamnzb#what-can-and-cannot-be-streamed) for the upstream format restrictions.
+StreamNZB streams supported RAR and 7z archives whose media is stored without compression. This backend can't stream compressed RAR and 7z releases; they require downloading and unpacking with a download client such as NZBGet or SABnzbd. See [StreamNZB’s supported formats](https://github.com/Gaisberg/streamnzb#what-can-and-cannot-be-streamed) for the upstream format restrictions.

@@ -23,7 +23,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         """If no ffmpeg is alive, (re)spawn it at its current target.
 
         Bootstrap (fresh session: target defaults to 0) or respawn at
-        whatever target the last generation had. DO NOT hardcode 0 — a
+        whatever target the last generation had. DO NOT hardcode 0—a
         crashed mid-seek producer still has the right start_segment to
         resume at. If ffmpeg is alive, leave it alone (CRITICAL B).
         """
@@ -35,15 +35,15 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
             self._ensure_ffmpeg_headed_for(current_target)
 
     def _ensure_ffmpeg_headed_for(self, seg_n):
-        """Start or restart ffmpeg so that it will produce seg_n.
+        """Start or restart ffmpeg so that it produces seg_n.
 
         If ffmpeg is already running and its start segment is <= seg_n
-        (i.e. the live process will eventually reach this segment as
+        (that is, the live process eventually reaches this segment as
         it streams forward), do nothing.
 
-        Otherwise — ffmpeg is dead, or started at a segment index
+        Otherwise—ffmpeg is dead, or started at a segment index
         greater than seg_n (seek backward), or far before seg_n (seek
-        far forward) — kill the current ffmpeg and start a new one
+        far forward)—stop the current ffmpeg and start a new one
         whose ``-ss`` matches seg_n.
         """
         with self._lock:
@@ -61,7 +61,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         MUST be called with self._lock held. ffmpeg only produces
         segments >= start_segment in sequence; a request before that
         means a backward seek, and a request far ahead means a forward
-        seek beyond the near-future buffer window — both restart.
+        seek beyond the near-future buffer window—both restart.
         """
         proc = self._proc
         proc_alive = proc is not None and proc.poll() is None
@@ -74,14 +74,14 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         return False
 
     def _stop_old_ffmpeg(self):
-        """Kill + reap the current ffmpeg, then clear self._proc.
+        """Stop and reap the current ffmpeg, then clear self._proc.
 
-        MUST be called with self._lock held. 2s wait (was 5s):
+        MUST be called with self._lock held. 2 s wait (was 5 s):
         concurrency audit flagged this as the worst-case hold time on
         the HlsProducer lock, which blocks every concurrent
-        wait_for_segment / wait_for_init / close() call. 2s is enough
+        wait_for_segment / wait_for_init / close() call. 2 s is enough
         for SIGKILL to land on a healthy child; on a genuinely stuck
-        one we log + let the OS reap rather than stalling the session.
+        one it logs + lets the OS reap rather than stalling the session.
         """
         proc = self._proc
         if proc is not None and proc.poll() is None:
@@ -106,7 +106,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         MUST be called with self._lock held. Unlink the new target
         segment file so the "seg_<start_segment>.m4s exists"
         completeness signal in _init_file_complete is unambiguously
-        bound to the NEW ffmpeg. Do NOT blanket-sweep other segments —
+        bound to the NEW ffmpeg. Do NOT blanket-sweep other segments—
         leaving prior-generation files in place preserves the
         backward-seek cache optimization in _segment_complete. Do NOT
         unlink init.mp4 either: the canonical bytes cache already
@@ -126,7 +126,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
             pass
         # Reset _init_ready so wait_for_init/wait_for_segment re-verify
         # the generation boundary (checks that seg_<new_target>.m4s
-        # exists post-spawn) — but the canonical init bytes persist.
+        # exists post-spawn)—but the canonical init bytes persist.
         self._init_ready = False
 
     def _spawn_ffmpeg_at(self, seg_n):
@@ -143,7 +143,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         try:
             # Set _spawn_time + _start_segment BEFORE Popen so a
             # concurrent _segment_complete() can't observe a stale
-            # _spawn_time of 0 (which would accept a freshly-unlinked
+            # _spawn_time of 0 (which would accept a freshly unlinked
             # prior-generation segment as complete). The tiny skew
             # before the actual spawn is harmless for that guard.
             self._start_segment = seg_n
@@ -186,7 +186,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
           writes ``seg_%06d.ts`` directly via ffmpeg's segment muxer.
         - "fmp4" (new): ``-f hls -hls_segment_type fmp4`` writes
           ``init.mp4`` (once per process start) plus ``seg_%06d.m4s``
-          fragments. This is the DV-capable branch — DV RPU SEI NALs
+          fragments. This is the DV-capable branch—DV RPU SEI NALs
           survive fmp4 fragment boundaries (vs mpegts PES packetization,
           which breaks them).
 
@@ -196,7 +196,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         ``int()`` coercion absorbs leading zeros either way.
 
         Timestamp handling: ``-copyts`` is set so each output frame
-        keeps the source PTS. No ``-reset_timestamps`` — an earlier
+        keeps the source PTS. No ``-reset_timestamps``—an earlier
         attempt used ``-reset_timestamps 1`` to normalize each
         segment's PTS to near-zero, but Kodi's Amlogic HW decoder
         interpreted the repeated near-zero PTS values as
@@ -205,14 +205,14 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         decoder timeout - elf:[5021ms]`` errors until playback froze
         (seen on the 2026-04-13 Shawshank test run). With ``-copyts``
         and default timestamp continuity, a single running ffmpeg
-        emits seg 0 at PTS 0-30, seg 1 at PTS 30-60, ... — perfectly
+        emits seg 0 at PTS 0-30, seg 1 at PTS 30-60, and so on—perfectly
         monotonic. On seek-restart, the new ffmpeg's ``-ss T`` gives
         first-frame PTS near T, matching Kodi's EXTINF-based global
         time at ``seg_T/segment_seconds``. The per-segment keyframe-
-        snap overlap that bit us with the earlier fresh-ffmpeg-per-
+        snap overlap that affected the earlier fresh-ffmpeg-per-
         segment design doesn't apply here: adjacent segments come
         from the SAME ffmpeg process in the persistent model, so
-        only the seek boundary has any chance of overlap — and at a
+        only the seek boundary has any chance of overlap—and at a
         seek Kodi expects a discontinuity anyway.
         """
         cmd = self._build_base_input_args(start_time)
@@ -224,7 +224,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
 
     def _append_mpegts_output_args(self, cmd, start_segment):
         """Append the legacy mpegts segment-muxer output args (unchanged)."""
-        # mpegts branch — unchanged filename pattern.
+        # mpegts branch—unchanged filename pattern.
         seg_pattern = _sp.os.path.join(self.session_dir, "seg_%06d.ts")
         cmd.extend(
             [
@@ -260,14 +260,14 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         # E-AC-3 (DDP) sources.
         #
         # The first bump to 5 MB / 2 s helped DTS slightly but
-        # didn't catch E-AC-3 in a sparsely-interleaved MKV — 2 s
+        # didn't catch E-AC-3 in a sparsely interleaved MKV—2 s
         # of media time covers only a handful of audio packets in
         # a 4K REMUX where audio is interleaved between large
         # video keyframes. Bumping to 50 MB / 15 s gives ffmpeg a
         # comfortable margin to read dozens of audio packets and
         # determine the codec frame size for any practical source.
         # Costs ~3-5 s of extra startup latency on first spawn
-        # (and on every seek respawn) — the playback-never-started
+        # (and on every seek respawn)—the playback-never-started
         # watchdog in service.py was raised to 30 s for exactly
         # this reason.
         cmd = [
@@ -357,12 +357,12 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         # DTS-HD MA output in the MP4/fMP4 muxer. ffmpeg 6.0.1
         # otherwise refuses with "truehd in MP4 support is
         # experimental, add '-strict -2' if you want to use it"
-        # / "dts in MP4 support is experimental, ..." and fails
+        # / "dts in MP4 support is experimental" and fails
         # to write the init header at all. Virtually every UHD
         # REMUX uses one of those codecs, so without this flag
         # the fmp4 HLS path never produces a playable output
         # on real content. Verified 2026-04-14 against The
-        # Machinist (TrueHD) — failed without -strict, succeeded
+        # Machinist (TrueHD)—failed without -strict, succeeded
         # with it.
         cmd.extend(["-strict", "-2"])
 
@@ -377,7 +377,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         # bitexact strips volatile muxer metadata, and the CMAF-style
         # movflags keep fragments self-relative across respawns. Do not
         # enable hls delete_segments here; this proxy owns segment
-        # retention and may serve recently-produced files during a
+        # retention and may serve recently produced files during a
         # reconnect or backward seek.
         cmd.extend(
             [
@@ -416,7 +416,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         Called from _register_session right after construction. For
         mpegts producers (the legacy lazy path) this is a no-op.
         For fmp4 producers this is the spawn-time validation that
-        keeps the matroska late-binding fallback working — without
+        keeps the matroska late-binding fallback working—without
         it, ffmpeg's first spawn happens inside wait_for_init AFTER
         the HLS URL has already been returned to Kodi.
 
@@ -440,7 +440,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         Both checks must pass before prepare() returns successfully.
         Costs up to 30 s of latency on the first spawn for healthy
         sessions (typical: 2-5 s). That's the right tradeoff vs
-        handing Kodi a URL that will never play — and the
+        handing Kodi a URL that never plays—and the
         playback-never-started watchdog in service.py was raised
         to 30 s for exactly this latency budget.
 
@@ -456,7 +456,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
 
         ready, early_exit = self._prepare_argv_window(init_path, first_seg_path)
         if ready:
-            return  # healthy — both files are on disk
+            return  # healthy—both files are on disk
         self._prepare_production_window(init_path, first_seg_path, early_exit)
 
     @staticmethod
@@ -469,9 +469,9 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
 
         An early exit with rc != 0 is a hard failure (bad argv, missing
         muxer, refused experimental codec). An early exit with rc == 0
-        is a SUCCESSFUL completion — possible when the source is shorter
+        is a SUCCESSFUL completion—possible when the source is shorter
         than 500 ms of stream-copy work (the synthetic test MKV). Either
-        way, on early exit we drop straight to the production check.
+        way, on early exit the code drops straight to the production check.
 
         Returns (ready, early_exit): ready=True if both output files
         are already on disk (caller returns); early_exit tracks whether
@@ -522,7 +522,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
                     "and seg_000000.m4s on disk",
                     _sp.xbmc.LOGINFO,
                 )
-                return  # healthy — both files are on disk
+                return  # healthy—both files are on disk
             if early_exit:
                 # ffmpeg already finished; if the files aren't here,
                 # they're never going to be. Fail immediately
@@ -532,7 +532,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
                     "seg_000000.m4s — check ffmpeg.log"
                 )
             if self._prepare_ffmpeg_exited_clean():
-                # ffmpeg exited mid-window with rc==0 — the source was
+                # ffmpeg exited mid-window with rc==0—the source was
                 # short enough to finish during the production wait.
                 # Give the file-existence check one more iteration
                 # before declaring failure.
@@ -592,17 +592,17 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         # Persist the session's ffmpeg.log to a stable rolling
         # location BEFORE the session dir is deleted. Otherwise
         # every "playback failed" debug session has to chase a
-        # log that no longer exists — which has bitten us several
+        # log that no longer exists—which has bitten maintainers several
         # times already on the fmp4 spike. Keep the most recent
         # 10 logs, named by session_id so they're easy to
-        # cross-reference with the kodi.log "session_id=..." lines.
+        # cross-reference with the kodi.log ``session_id=<id>`` lines.
         try:
             self._archive_ffmpeg_log()
         except Exception as e:  # pylint: disable=broad-except
             # _archive_ffmpeg_log's whole purpose is preserving the
             # session log for post-mortem debugging. Swallowing its
-            # own failure silently defeats that goal — log at debug
-            # so the user can diagnose "why isn't my ffmpeg.log
+            # own failure silently defeats that goal—log at debug
+            # so the user can diagnose "why isn't the ffmpeg.log
             # archived?" when it matters.
             _sp.xbmc.log(
                 (
@@ -631,7 +631,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
             self._finish_close_after_kill(proc, wait_for_proc)
 
     def close(self, wait_for_process=True):
-        """Kill ffmpeg and delete the session directory."""
+        """Stop ffmpeg and delete the session directory."""
         with self._lock:
             self._closed = True
             proc = self._proc
@@ -711,7 +711,7 @@ class _HlsProduceMixin:  # pylint: disable=too-few-public-methods
         except OSError:
             return
         if size == 0:
-            return  # empty log — nothing useful to preserve
+            return  # empty log—nothing useful to preserve
 
         archive_dir = self._resolve_ffmpeg_log_archive_dir()
         if not archive_dir:

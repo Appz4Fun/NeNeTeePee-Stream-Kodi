@@ -35,14 +35,14 @@ def has_cache_memorysize_zero():
     """Return True iff ``<cache><memorysize>0</memorysize></cache>`` is set.
 
     Any failure path (missing file, unreadable, malformed XML, unexpected
-    structure, non-zero or non-integer value) returns False — callers
+    structure, non-zero or non-integer value) returns False—callers
     treat False as "the user has not opted in" and gate the passthrough
     mode accordingly.
     """
-    # The docstring above promises "any failure path returns False"; that
+    # The docstring promises "any failure path returns False"; that
     # only holds if translatePath itself can't escape this function. In
-    # tests / CLI use xbmcvfs is a MagicMock and translatePath should be
-    # safe, but in a partly-initialized Kodi environment translatePath
+    # tests / command-line use xbmcvfs is a MagicMock and translatePath should be
+    # safe, but in a partly initialized Kodi environment translatePath
     # has been observed raising RuntimeError. Treat any exception the
     # same as "missing file" → False. See TODO.md §H.3.
     try:

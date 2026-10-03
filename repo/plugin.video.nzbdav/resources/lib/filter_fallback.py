@@ -52,7 +52,7 @@ _FALLBACK_AUDIO_TAGS = (
 
 
 def _fallback_audio(t):
-    """Detect audio tags via regex; mirrors PTT's audio list ordering."""
+    """Detect audio tags via regular expression; mirrors PTT's audio list ordering."""
     audio = [label for regex, label in _FALLBACK_AUDIO_TAGS if regex.search(t)]
     if _RE_DTS.search(t) and not audio:
         audio.append("DTS")
@@ -60,12 +60,12 @@ def _fallback_audio(t):
 
 
 def _fallback_hdr(t):
-    """Detect HDR tags via regex."""
+    """Detect HDR tags via regular expression."""
     hdr = []
     if _RE_DV.search(t):
         hdr.append("DV")
     # HDR10+ alternation needs both branches anchored to a leading word
-    # boundary so we don't pick up substrings inside another token.
+    # boundary, so the pattern doesn't match substrings inside another token.
     if _RE_HDR10PLUS.search(t):
         hdr.append("HDR10+")
     # `hdr10` without the optional `0` would match `hdr1`; require the digit.
@@ -77,7 +77,7 @@ def _fallback_hdr(t):
 
 
 def _fallback_quality(t):
-    """Map a quality/source regex hit to a normalized label, or ""."""
+    """Map a quality/source regular expression hit to a normalized label, or ""."""
     m = _RE_QUALITY.search(t)
     if not m:
         return ""
@@ -99,8 +99,8 @@ def _fallback_year(t):
     """Parse a plausible release year from the title, or 0.
 
     Range chosen broadly enough that this isn't a time bomb the next
-    time we forget to bump it (TODO.md §H.2-M44 was the previous
-    bump — 2030 turned out to be too tight). 2100 is well past any
+    time someone forgets to bump it (TODO.md §H.2-M44 was the previous
+    bump—2030 turned out to be too tight). 2100 is well past any
     plausible release window for content this addon would index.
     """
     m = _RE_YEAR.search(t)
@@ -113,7 +113,7 @@ def _fallback_year(t):
 
 
 def _fallback_parse(title):
-    """Simple regex fallback when PTT fails or returns empty."""
+    """Simple regular expression fallback when PTT fails or returns empty."""
     result = {
         "resolution": "",
         "codec": "",
@@ -156,7 +156,7 @@ def _fallback_parse(title):
         result["upscaled"] = True
 
     # Group (last segment after hyphen). Scene groups can contain hyphens and
-    # underscores, e.g. GROUP-NAME or GROUP_NAME.
+    # underscores, for example, GROUP-NAME or GROUP_NAME.
     m = _RE_GROUP.search(title)
     if m:
         result["group"] = m.group(1)

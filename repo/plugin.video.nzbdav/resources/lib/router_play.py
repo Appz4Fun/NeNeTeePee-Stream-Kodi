@@ -158,7 +158,7 @@ def _attach_episode_context(
 ):
     """Attach canonical episode identity to internal resolver parameters.
 
-    The public plugin URL remains unchanged.  Movies and episode requests whose
+    The public plugin URL remains unchanged. Movies and episode requests whose
     season/episode could not be resolved deliberately carry no exact-selection
     context, preserving the legacy largest/title-hint behavior.
     """
@@ -274,7 +274,7 @@ def _resolve_play_episode_args(params, search_type, title, season, episode, imdb
             title, season, episode
         )
 
-    # If we still have IMDB but no title, look up from IMDB
+    # If an IMDB ID remains but there is no title, look up the title from IMDB
     if search_type == "episode" and imdb and not title:
         looked_up = _router._lookup_episode_info(imdb, params.get("tmdb_id", ""))
         if looked_up:
@@ -330,7 +330,7 @@ def _handle_play_filter_and_select(
 ):
     """Filter, optionally auto-select, tag, and run the picker for ``_handle_play``.
 
-    Resolves the Kodi handle itself (False on abort / no selection, or via the
+    Resolves the Kodi handle itself (False on cancel / no selection, or via the
     auto-select / picker-selection resolvers). ``identity`` carries the release
     id fields the NZBGet DupeKey is built from (#372).
     """
@@ -588,7 +588,7 @@ def _dupe_max_backups(getter):
     """Settings gate for the duplicate fleet: the configured backup count, or ``None``.
 
     ``None`` (plain single submit) when the NZBGet backend is off, fallback
-    streams are disabled, or the parsed ``fallback_streams_max`` cap is
+    streams are turned off, or the parsed ``fallback_streams_max`` cap is
     zero/negative; else exactly what the user configured for "Maximum standby
     fallback streams" -- no additional code-level ceiling. ``getter`` reads
     settings on the RunScript/script-play path; ``None`` reads the live Kodi
@@ -624,7 +624,7 @@ def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=N
     the NZBGet backend is on, fallback streams are enabled, a DupeKey is
     computable, AND there is at least one same-release-name backup on the picker
     (reposts / mirrors) -- else ``None`` (plain single submit). The pick takes
-    the top DupeScore and the same-name backups strictly-lower descending scores
+    the top DupeScore and the same-name backups strictly lower descending scores
     (count-based, so always positive and pick-highest for any fleet size), so
     NZBGet downloads the pick and parks the rest in history as duplicate backups,
     failing over on an unrepairable download. Bounded by ``fallback_streams_max``

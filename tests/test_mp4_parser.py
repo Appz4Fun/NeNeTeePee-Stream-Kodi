@@ -169,19 +169,19 @@ def test_rewrite_stco_overflow_returns_none():
     moov = struct.pack(">I", 8 + len(trak)) + b"moov" + trak
 
     result = rewrite_moov_offsets(moov, 1000)
-    assert result is None  # overflow — caller should use fallback
+    assert result is None  # overflow—caller should use fallback
 
 
 def test_rewrite_stco_delta_crosses_4gb_boundary_returns_none():
     """Modest offsets + a 4 GB+ delta must fail cleanly so callers
     fall back to co64 / MKV remux. Mirrors the real-world case of a
-    stream >4 GB whose original moov was authored with stco and we're
+    stream >4 GB whose original moov was authored with stco and the proxy is
     now relocating it past the 4 GB mark."""
     from resources.lib.mp4_parser import rewrite_moov_offsets
 
     # Offsets are tiny (original mdat started at 1 KB), but the delta
     # itself crosses 2^32. Every single offset, post-rewrite, lands
-    # above 2^32 → overflow on the first entry.
+    # over 2^32 → overflow on the first entry.
     stco_body = struct.pack(">I", 0) + struct.pack(">I", 2)
     stco_body += struct.pack(">II", 1024, 2048)
     stco = struct.pack(">I", 8 + len(stco_body)) + b"stco" + stco_body
@@ -192,13 +192,13 @@ def test_rewrite_stco_delta_crosses_4gb_boundary_returns_none():
     trak = struct.pack(">I", 8 + len(mdia)) + b"trak" + mdia
     moov = struct.pack(">I", 8 + len(trak)) + b"moov" + trak
 
-    # 4.5 GB delta — larger than the entire addressable stco range.
+    # 4.5 GB delta—larger than the entire addressable stco range.
     delta_over_4gb = 4_500_000_000
     assert rewrite_moov_offsets(moov, delta_over_4gb) is None
 
 
 def test_rewrite_co64_delta_crosses_4gb_boundary_succeeds():
-    """co64 must handle a >4 GB delta cleanly — the whole point of the
+    """co64 must handle a >4 GB delta cleanly—the whole point of the
     64-bit variant is that faststart on multi-GB files works. Catches
     the regression where someone swaps the pack/unpack format to ``>I``
     or introduces an accidental 32-bit mask in ``_rewrite_co64``."""
@@ -227,7 +227,7 @@ def test_rewrite_co64_delta_crosses_4gb_boundary_succeeds():
     o2_new = struct.unpack_from(">Q", result, off_start + 8)[0]
     assert o1_new == o1_orig + delta_over_4gb
     assert o2_new == o2_orig + delta_over_4gb
-    # Sanity: both new offsets live well above the 32-bit ceiling.
+    # Sanity: both new offsets live well over the 32-bit ceiling.
     assert o1_new > 0xFFFFFFFF
     assert o2_new > 0xFFFFFFFF
 
@@ -309,7 +309,7 @@ def test_fetch_moov_already_faststart():
 def test_fetch_remote_mp4_layout_rejects_zero_file_size():
     """TODO.md §H.2-H3f: a zero-byte file would otherwise produce
     `Range: bytes=0--1` (head_size = min(_HEAD_PROBE_SIZE, 0) = 0,
-    end = -1) — bail out before any HTTP call."""
+    end = -1)—bail out before any HTTP call."""
     from resources.lib.mp4_parser import fetch_remote_mp4_layout
 
     with patch("resources.lib.mp4_parser.urlopen") as mock_urlopen:
@@ -444,21 +444,21 @@ def test_fetch_remote_mp4_layout_rejects_negative_file_size():
 def test_fetch_remote_mp4_layout_rejects_overlapping_moov_mdat():
     """TODO.md §H.2-H3e: a tail probe can land inside an mdat that's
     larger than the head probe shows; if the bytes there happen to
-    parse as a `moov` header we'd serve mdat content as moov on the
+    parse as a `moov` header the proxy would serve mdat content as moov on the
     fast-start path, with corrupt offsets. Overlap check rejects the
     layout instead of trying to use it.
 
     Construction: head probe sees ftyp + mdat(declared 950). The byte
     at mdat_end is non-moov, so `_find_moov_after_mdat` returns None.
     The tail probe then returns a synthetic buffer whose first bytes
-    parse as a moov box at absolute offset 100 — well inside the
+    parse as a moov box at absolute offset 100—well inside the
     declared mdat range (32..982).
     """
     from resources.lib.mp4_parser import fetch_remote_mp4_layout
 
     file_size = 1000
     ftyp = struct.pack(">I", 32) + b"ftyp" + b"\x00" * 24
-    # mdat declares size 950 — body extends to 982.
+    # mdat declares size 950—body extends to 982.
     mdat_header = struct.pack(">I", 950) + b"mdat"
     head_payload = ftyp + mdat_header + b"\x00" * (file_size - len(ftyp) - 8)
 
@@ -477,9 +477,9 @@ def test_fetch_remote_mp4_layout_rejects_overlapping_moov_mdat():
         start = int(parts[0])
         end = int(parts[1]) if parts[1] else file_size - 1
 
-        # Head probe: 0..(file_size-1) — return our crafted head with
+        # Head probe: 0..(file_size-1)—return the crafted head with
         # the lying mdat. This is also where _find_moov_after_mdat
-        # probes (at byte 982) — return non-moov bytes there.
+        # probes (at byte 982)—return non-moov bytes there.
         if start == 0:
             return _make_mock_response(head_payload[: end + 1])
         # Tail probe: returns the fake-moov payload.
@@ -565,8 +565,8 @@ def test_build_faststart_layout_already_faststart():
     layout = build_faststart_layout(layout_info)
 
     assert layout is not None
-    # For faststart files, we just pass through — no rewriting needed
-    # But we still provide the layout for consistent proxy behavior
+    # For faststart files, the proxy just passes through—no rewriting needed
+    # But the proxy still provides the layout for consistent proxy behavior
     assert layout["header_data"] == ftyp + moov
     assert layout["payload_remote_start"] == 66  # after moov
     assert layout["payload_remote_end"] > 66
@@ -598,7 +598,7 @@ def test_build_faststart_layout_stco_overflow_returns_none():
 
     # delta = moov_size, and 0xFFFFFFFF + moov_size > 0xFFFFFFFF → overflow
     layout = build_faststart_layout(layout_info)
-    assert layout is None  # stco overflow — caller uses fallback
+    assert layout is None  # stco overflow—caller uses fallback
 
 
 def test_build_faststart_layout_with_free_atoms():

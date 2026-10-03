@@ -3,8 +3,8 @@
 
 # pytest fixtures are referenced by name in both the fixture definition and
 # the test function's parameter list, which pylint W0621 flags as an outer-
-# scope redefinition. That is the documented pytest usage pattern; disable
-# the check file-wide here.
+# scope redefinition. That is the documented pytest usage pattern; turn
+# off the check file-wide here.
 # pylint: disable=redefined-outer-name
 
 """Real-ffmpeg integration tests for the fmp4 HLS producer.
@@ -67,9 +67,9 @@ if FFMPEG_PATH is None:
 
 def _generate_test_mkv(path):
     """Generate a 10-second synthetic test MKV with H.264 video and
-    AC-3 audio. AC-3 is MP4-native (no -strict required) which lets
-    us isolate the HLS pipeline issues from the experimental-codec
-    issues. Returns the file path on success, raises on ffmpeg
+    AC-3 audio. AC-3 is MP4-native (no -strict required) which lets the test
+    isolate the HLS pipeline issues from the experimental-codec
+    issues. Returns the path of the file on success, raises on ffmpeg
     failure."""
     import subprocess
 
@@ -97,7 +97,7 @@ def _generate_test_mkv(path):
         "-pix_fmt",
         "yuv420p",
         "-g",
-        "24",  # keyframe every 1 s — gives us 10 GOPs
+        "24",  # keyframe every 1 s—yields 10 GOPs
         "-c:a",
         "ac3",
         "-b:a",
@@ -222,7 +222,7 @@ def hls_producer(served_test_mkv, tmp_path, request):
     }
     producer = HlsProducer(ctx, str(workdir))
     # Register teardown BEFORE prepare() so a failure during prepare()
-    # still runs _force_teardown_hls_producer on the partially-initialized
+    # still runs _force_teardown_hls_producer on the partially initialized
     # producer (ffmpeg may already be spawned by the time prepare()
     # raises).
     request.addfinalizer(lambda: _force_teardown_hls_producer(producer))
@@ -240,7 +240,7 @@ def hls_producer(served_test_mkv, tmp_path, request):
 def test_hls_producer_real_ffmpeg_produces_init_and_segments(hls_producer):
     """The big one. Runs HlsProducer end-to-end against the real
     ffmpeg binary with the exact command production uses. Catches
-    every class of bug we've hit on the spike at PR time, before
+    every class of bug found on the spike at PR time, before
     it gets near the test box.
     """
     producer = hls_producer

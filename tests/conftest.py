@@ -24,8 +24,8 @@ def _reap_readahead_threads():
     ``_cleanup_session`` stops it and ``waitForAbort`` really blocks; in the
     test harness neither happens, so without this reaper one such daemon
     leaks per ``prepare_stream`` test and they accumulate across the suite,
-    adding timer/GIL load that flakes timing-sensitive tests (e.g. the
-    byte-0 prefetch 0.08s deadline). After each test, signal abort (so the
+    adding timer/GIL load that flakes timing-sensitive tests (for example, the
+    byte-0 prefetch 0.08 s deadline). After each test, signal shutdown (so the
     loop's ``waitForAbort`` returns True and it exits) and join briefly,
     then restore the monitor defaults. Cheap no-op when none were spawned.
     """
@@ -61,16 +61,16 @@ def _suppress_readahead_daemon(request):
     ``prepare_stream`` spawns a per-session ``nzbdav-readahead`` daemon (read-ahead
     is on by default). Because ``Monitor.waitForAbort`` REALLY sleeps in this
     harness, that daemon backs off on real 0.25 s / 1.0 s sleeps: the autouse reaper
-    above then pays ~1.5 s per ``prepare_stream`` test joining it (≈30 s across the
+    then pays ~1.5 s per ``prepare_stream`` test joining it (≈30 s across the
     suite), and any daemon that outlives the reaper's join races sibling tests'
-    patched ``urlopen`` — the root of the nondeterministic
+    patched ``urlopen``—the root of the nondeterministic
     ``test_prevalidated_fallback_reuses_current_probe`` full-suite flake. No general
     test asserts the daemon spawned (``_serve_proxy`` never spawns it; only
     ``prepare_stream`` does), so no-op the spawn by default.
 
     Exemptions keep the REAL daemon running:
-      * ``real_readahead`` — unit tests that exercise the spawn directly.
-      * ``functional`` / ``integration`` / ``extreme`` — the live/dev-box suites
+      * ``real_readahead``—unit tests that exercise the spawn directly.
+      * ``functional`` / ``integration`` / ``extreme``—the live/dev-box suites
         (``just functional-test`` etc.) exist to catch real prefetch/cutover races
         against actual playback; users get read-ahead by default, so suppressing it
         there would hide exactly what those suites validate. They are excluded from
@@ -105,7 +105,7 @@ def resolver_mocks():
 
     Defaults mirror the v0.6.20 lesson (pin ``time.time()`` to 0.0
     so elapsed stays well under the download timeout) and the
-    1s-poll / 60s-timeout values used by almost every test.
+    1 s-poll / 60 s-timeout values used by almost every test.
     """
     with contextlib.ExitStack() as stack:
         xbmc_mock = stack.enter_context(patch("resources.lib.resolver.xbmc"))

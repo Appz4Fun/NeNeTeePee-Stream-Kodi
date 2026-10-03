@@ -426,7 +426,7 @@ def test_filter_exclude_release_group(mock_settings):
 
 @patch("resources.lib.filter._get_filter_settings")
 def test_filter_very_large_size(mock_settings):
-    """100GB+ files should not overflow or crash."""
+    """100 GB+ files should not overflow or crash."""
     mock_settings.return_value = _all_pass_settings()
     results = [_make_result("Movie.2024.2160p.REMUX-GRP", size="107374182400")]
     filtered, _ = filter_results(results)
@@ -710,7 +710,7 @@ def test_filter_results_reparses_partial_prefilled_meta(mock_settings):
 
 @patch("resources.lib.filter._get_filter_settings")
 def test_filter_results_reparses_malformed_prefilled_meta(mock_settings):
-    """filter_results should reject fully-keyed metadata with unsafe value types."""
+    """filter_results should reject fully keyed metadata with unsafe value types."""
     mock_settings.return_value = _all_pass_settings()
     result = _make_result("Movie.2024.1080p.BluRay.x264-GRP")
     result["_meta"] = {
@@ -996,8 +996,8 @@ def test_filter_results_logs_timing(
 
 @patch("xbmcaddon.Addon")
 def test_get_filter_settings_collects_enabled_resolutions_and_codecs(mock_addon):
-    """When specific resolution / codec toggles are "true", the
-    corresponding labels show up in the returned lists; disabled
+    """When specific resolution / codec toggles are `true`, the
+    corresponding labels show up in the returned lists; `false`
     toggles don't leak through."""
     from resources.lib.filter import _get_filter_settings
 
@@ -1025,7 +1025,7 @@ def test_get_filter_settings_collects_enabled_resolutions_and_codecs(mock_addon)
     assert "Atmos" in settings["audio"]
     assert "DD" not in settings["audio"]
     # Languages are stored as ISO 639-1 codes (matching PTT's output)
-    # rather than UI labels — see TODO.md §H.2-H11.
+    # rather than UI labels—see TODO.md §H.2-H11.
     assert "en" in settings["languages"]
     assert "es" not in settings["languages"]
 
@@ -1076,7 +1076,7 @@ def test_get_filter_settings_int_fields_fall_back_on_non_numeric(mock_addon):
 
 @patch("xbmcaddon.Addon")
 def test_get_filter_settings_returns_empty_lists_when_nothing_enabled(mock_addon):
-    """Explicitly disabled toggles produce empty known-format selections."""
+    """Toggles explicitly set to false produce empty known-format selections."""
     from resources.lib.filter import _get_filter_settings
 
     mock_addon.return_value.getSetting.side_effect = lambda k: (
@@ -1140,7 +1140,7 @@ def _build_size_settings(min_raw, max_raw):
     """Lookup table for ``settings_getter`` style filter resolution.
 
     Only the size keys are populated; everything else defaults to "" so
-    every other filter is disabled and we isolate the size handling.
+    every other filter stays off, which isolates the size handling.
     """
     overrides = {
         "filter_min_size": str(min_raw),
@@ -1155,7 +1155,7 @@ def _build_size_settings(min_raw, max_raw):
 
 def test_get_filter_settings_inverted_range_zeros_both_bounds():
     """min_size > max_size silently rejected everything before Fix #5.
-    Now both bounds zero out (filter disabled) and we log a warning."""
+    Now both bounds zero out (filter off) and the code logs a warning."""
     from resources.lib.filter import _get_filter_settings
 
     getter = _build_size_settings(min_raw=10000, max_raw=5000)
@@ -1171,7 +1171,7 @@ def test_get_filter_settings_inverted_range_zeros_both_bounds():
 
 
 def test_get_filter_settings_open_ended_floor_preserved():
-    """min>0 with max=0 (no upper bound) is a valid configuration —
+    """min>0 with max=0 (no upper bound) is a valid configuration:
     the inverted-range check must NOT zero it out."""
     from resources.lib.filter import _get_filter_settings
 
@@ -1242,7 +1242,7 @@ def test_get_filter_settings_valid_range_unchanged():
 
 
 def _complete_meta(title="Movie.2024.1080p.BluRay.x264-GROUP"):
-    """A fully-parsed _meta dict (the complete parse_title_metadata contract)."""
+    """A fully parsed _meta dict (the complete parse_title_metadata contract)."""
     return parse_title_metadata(title)
 
 
@@ -1298,22 +1298,22 @@ def test_partial_cached_meta_is_reparsed_not_reused(mock_settings):
     }
     filtered, all_parsed = filter_results([result])
     meta = all_parsed[0]["_meta"]
-    # Reparsed: the full contract keys are now present...
+    # Reparsed: the full contract keys are now present,
     for key in ("quality", "edition", "year", "upscaled", "container"):
         assert key in meta
-    # ...and the values reflect the real title, not the stale partial dict.
+    # and the values reflect the real title, not the stale partial dict.
     assert meta["resolution"] == "2160p"
     assert _has_filter_metadata_shape(meta) is True
 
 
 def test_normalize_fallback_meta_preserves_channels():
-    """Regex-fallback normalization must thread the extracted channels (5.1/7.1)
+    """Fallback normalization must thread the extracted channels (5.1/7.1)
     instead of hardcoding "", so fallback_streams_match sees the real signal
     (parity with the PTT path). Red-on-regression: the old code returned ""."""
     from resources.lib.filter import _fallback_parse, _normalize_fallback_meta
 
     parsed = _fallback_parse("Movie.2024.1080p.BluRay.DTS.5.1.x264-GROUP")
-    assert parsed["channels"] == "5.1"  # regex fallback extracts it
+    assert parsed["channels"] == "5.1"  # the fallback extracts it
     meta = _normalize_fallback_meta(parsed)
     assert meta["channels"] == "5.1"
 
@@ -1358,7 +1358,7 @@ def test_first_rejecting_filter_returns_none_for_kept_result():
 
 
 def test_first_rejecting_filter_reports_first_failure_in_order():
-    """A 720p x264 title fails resolution before codec — order matters."""
+    """A 720p x264 title fails resolution before codec—order matters."""
     title = "Movie.2024.720p.WEB-DL.x264-GRP"
     meta = parse_title_metadata(title)
     result = _make_result(title)

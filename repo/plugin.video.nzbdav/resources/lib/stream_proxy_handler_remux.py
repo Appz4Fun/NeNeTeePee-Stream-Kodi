@@ -81,14 +81,14 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
         Returns a tuple ``(session_id, resource)`` where ``resource``
         is one of:
 
-        - ``"playlist"`` — ``/hls/<session>/playlist.m3u8``
-        - ``"init"`` — ``/hls/<session>/init.mp4`` (fmp4 path)
-        - ``("segment", N, "ts")`` — legacy mpegts segment
-        - ``("segment", N, "m4s")`` — fmp4 segment
+        - ``"playlist"``—``/hls/<session>/playlist.m3u8``
+        - ``"init"``—``/hls/<session>/init.mp4`` (fmp4 path)
+        - ``("segment", N, "ts")``—legacy mpegts segment
+        - ``("segment", N, "m4s")``—fmp4 segment
 
         Returns ``None`` for malformed paths so the caller can 404.
 
-        The parser is extension-permissive for segments — it accepts
+        The parser is extension-permissive for segments—it accepts
         both .ts and .m4s regardless of session state. Handler-level
         validation (``do_HEAD`` / ``_handle_hls``) enforces that the
         returned extension matches the session's
@@ -131,10 +131,10 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
         "no active ffmpeg" check in `_resolve_seek` and reach the
         spawn line below. Whichever thread reaches the lock-protected
         store last would otherwise orphan the other thread's ffmpeg
-        process (still running, no one tracking it for cleanup). We
-        instead snapshot the current ctx["active_ffmpeg"] under the
-        lock before storing; if a winner is already present we kill
-        our just-spawned proc and pretend the winner's spawn is ours.
+        process (still running, no one tracking it for cleanup). The
+        method instead snapshots the current ctx["active_ffmpeg"] under the
+        lock before storing; if a winner is already present it stops
+        the just-spawned proc and treats the winner's spawn as its own.
         Closes TODO.md §H.2-H1d.
         """
         cmd = self._build_ffmpeg_cmd(ctx, seek_seconds=seek_seconds)
@@ -188,8 +188,8 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _kill_cas_loser(proc, existing):
-        """Kill the just-spawned ffmpeg that lost the CAS race against existing."""
-        # Another thread won the race. Kill our orphan.
+        """Stop the just-spawned ffmpeg that lost the CAS race against existing."""
+        # Another thread won the race. Stop the orphan.
         try:
             proc.kill()
         except OSError:
@@ -273,13 +273,13 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
             )
             return total
         except (OSError, ValueError) as exc:
-            # ffmpeg crash or its stdout pipe getting closed under us
+            # ffmpeg crash or its stdout pipe getting closed mid-read
             # raises OSError (BadFileDescriptor) or ValueError (operation
             # on closed file). The previous narrow catch let those escape
             # into the request handler, leaving Kodi waiting on an open
             # response while ffmpeg was already a zombie. Treat the same
             # as a client disconnect for stream-cleanup purposes; the
-            # request handler's finally block will reap the proc.
+            # request handler's finally block reaps the proc.
             # TODO.md §H.3 (proc.stdout.read() too narrow) + ffmpeg-
             # mid-stream-crash scenario.
             _sp.xbmc.log(
@@ -310,8 +310,8 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
         stderr_thread.join(timeout=30)
         stderr = b"".join(stderr_chunks).decode(errors="replace")
         if stderr.strip():
-            # ffmpeg's HTTP demuxer echoes the failing input URL — including
-            # any apikey=... query and user:pass@ userinfo — into stderr on
+            # ffmpeg's HTTP demuxer echoes the failing input URL—including
+            # any apikey=<value> query and user:pass@ userinfo—into stderr on
             # 4xx/5xx errors. Run through redact_text before logging.
             _sp.xbmc.log(
                 ("NeNeTeePee-Stream-Kodi: ffmpeg: {}").format(
@@ -357,7 +357,7 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
         in every argv element EXCEPT the value that follows ``-headers``,
         which legitimately contains ``\\r\\n`` as the HTTP header separator
         in ffmpeg's HTTP demuxer (see ``_ffmpeg_auth_args``). Without this
-        exemption the force-remux path 500s on every Authorization-carrying
+        exemption the force-remux path returns 500 on every Authorization-carrying
         stream (regression introduced in PR #83's security hardening).
         """
         if not _sp._StreamHandler._ffmpeg_argv_shape_ok(cmd):

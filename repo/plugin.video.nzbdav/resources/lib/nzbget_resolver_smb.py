@@ -36,10 +36,10 @@ def nzbget_smb_target(smb_root, dest_dir, category="", completed_base=""):
     Preferred mapping (exact): when ``completed_base`` (NZBGet's configured
     global completed DestDir) is known and is a prefix of ``dest_dir``, map the
     *relative* remainder onto ``smb_root``. This mirrors whatever subfolder
-    layout NZBGet actually used — ``AppendCategoryDir`` on/off, a category that
+    layout NZBGet actually used—``AppendCategoryDir`` on/off, a category that
     matches or a category-specific/custom ``DestDir`` whose folder name differs
-    from the category setting (e.g. ``<completed>/films/<release>`` for category
-    ``movies``) — without guessing.
+    from the category setting (for example, ``<completed>/films/<release>`` for category
+    ``movies``)—without guessing.
 
     Fallback heuristic (``completed_base`` unknown / ``dest_dir`` outside it):
     derive the category segment from ``dest_dir``'s own parent. Nest under it
@@ -74,7 +74,7 @@ def _smb_exact_mapping(normalized, base, completed_base):
         return None
     rel = normalized[len(cb) :].strip("/")
     # Guard against a doubled tail when smb_root was pointed at a
-    # subfolder of the completed base (e.g. root .../movies + rel
+    # subfolder of the completed base (for example, root .../movies + rel
     # movies/Release): drop rel's leading segment if base already ends
     # with it.
     rel_head = rel.split("/", 1)[0]
@@ -97,13 +97,13 @@ def _smb_fallback_mapping(normalized, base, category):
     release_folder = segments[-1]
     parent_folder = segments[-2] if len(segments) >= 2 else ""
     category = (category or "").strip().strip("/")
-    # Without the completed base we can't reliably tell a real category
+    # Without the completed base the resolver can't reliably tell a real category
     # subfolder apart from the completed base's own last segment (the
     # server-side folder name may differ from the SMB share alias). So only
-    # nest when DestDir's parent is *exactly* the configured category — the
-    # one case we can be sure about. Otherwise map the release folder directly
+    # nest when DestDir's parent is *exactly* the configured category—the
+    # one case that is certain. Otherwise map the release folder directly
     # under the SMB root (correct for AppendCategoryDir=no, and the safe
-    # default for a custom DestDir whose layout we can't confirm).
+    # default for a custom DestDir whose layout can't be confirmed).
     if (
         category
         and parent_folder.casefold() == category.casefold()
@@ -136,9 +136,9 @@ _SMB_LIST_RETRY_INTERVAL = 1.0
 # reports SUCCESS. NZBGet only enters history once its move is marked
 # complete, but the moved files can take a while longer to become listable
 # over the Samba export (observed: the containing folder's mtime landing at
-# the exact second we start looking). The old ~4s (5×1s) window lost that
+# the exact second the lookup starts). The old ~4 s (5×1 s) window lost that
 # race and failed with "No video file found on SMB share" even though the
-# download succeeded. 60s absorbs the visibility lag with wide margin.
+# download succeeded. 60 seconds absorbs the visibility lag with wide margin.
 _SMB_RESOLVE_BUDGET = 60.0
 # Releases whose archive unpacks into a nested ``<release>/<inner>/video``
 # layout are common; descend a few levels (like the WebDAV resolver) so they
@@ -146,11 +146,11 @@ _SMB_RESOLVE_BUDGET = 60.0
 _SMB_MAX_DEPTH = 3
 # Bytes to read when probing that a selected video actually opens for
 # reading. Listable is not readable: a file still settling after NZBGet's
-# move — or a poisoned cached Kodi SMB session — can list and stat fine
-# while open() fails with "Permission denied", which otherwise surfaces
+# move—or a poisoned cached Kodi SMB session—can list and stat fine
+# while open() fails with "Permission denied," which otherwise surfaces
 # only after the player handoff as a silent playback failure. The probe
-# goes through xbmcvfs, i.e. the exact same cached libsmbclient session
-# VideoPlayer will use.
+# goes through xbmcvfs, that is, the exact same cached libsmbclient session
+# VideoPlayer uses.
 _SMB_READ_PROBE_BYTES = 8192
 
 
@@ -161,7 +161,7 @@ class _UnreadableSelection:  # pylint: disable=too-few-public-methods
         return False
 
 
-# Distinct deadline result for "selected but never readable". Falsy, so a
+# Distinct deadline result for "selected but never readable." Falsy, so a
 # caller that only truth-tests keeps its ordinary miss behavior; the
 # completed-reuse callers test ``is SMB_UNREADABLE`` to fail closed instead
 # of falling through to a re-submit -- NZBGet would just dupe-delete a
@@ -184,7 +184,7 @@ def _is_video_name(name):
 
 
 def _largest_video_in_dir(folder, files):
-    """Return ``(url, size)`` for the largest video file directly in ``folder``.
+    """Return ``(URL, size)`` for the largest video file directly in ``folder``.
 
     Considers only the given ``files`` (no descent). Returns ``(None, -1)``
     when none are playable videos.
@@ -201,11 +201,11 @@ def _largest_video_in_dir(folder, files):
 
 
 def _largest_video_in_tree(folder, depth=_SMB_MAX_DEPTH):
-    """Return ``(url, size)`` for the largest video at or below ``folder``.
+    """Return ``(URL, size)`` for the largest video at or below ``folder``.
 
     Descends up to ``depth`` levels of subdirectories so a video tucked
     inside a top-level folder (a common archive layout) still resolves
-    instead of failing with "No video file found on SMB share". Returns
+    instead of failing with "No video file found on SMB share." Returns
     ``(None, -1)`` when nothing playable is found.
     """
     inventory = _core._smb_inventory(folder, depth=depth)
@@ -272,7 +272,7 @@ def _partial_smb_selection_is_safe(inventory, requested_episode):
 def _smb_video_is_readable(path):
     """True when ``path`` opens and yields data through Kodi's VFS.
 
-    Exercises the same cached SMB session VideoPlayer will use, so a
+    Exercises the same cached SMB session VideoPlayer uses, so a
     listable-but-unreadable selection is caught before the player handoff
     instead of failing playback with no user-visible explanation.
     """
@@ -357,7 +357,7 @@ def resolve_smb_video(
 
     Searches the folder tree (top level plus nested subdirectories, see
     ``_largest_video_in_tree``) and keeps retrying until a video appears or
-    the wall-clock ``budget`` (seconds, ``time.monotonic``) elapses — long
+    the wall-clock ``budget`` (seconds, ``time.monotonic``) elapses—long
     enough to absorb the lag between NZBGet reporting SUCCESS and the moved
     files becoming visible over SMB. Sleeps ``interval`` seconds between
     attempts via ``Monitor.waitForAbort`` so it stays cancelable and honors
@@ -418,7 +418,7 @@ def resolve_smb_video(
             # reports an ordinary miss and completed-reuse callers keep
             # their submit fallback. Everything else -- an incomplete scan
             # (share blip), or a complete scan where the file persists but
-            # selection went ambiguous (e.g. a second untagged video
+            # selection went ambiguous (for example, a second untagged video
             # appeared) -- keeps the unreadable state, so the deadline still
             # fails closed and never reports the stale
             # last_complete_inventory into the season-pack catalog as if

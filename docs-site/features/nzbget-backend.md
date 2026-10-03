@@ -111,7 +111,7 @@ flowchart LR
   username and password travel unencrypted, so use an `https://` **NZBGet
   URL** unless NZBGet runs on the same machine or a network you trust.
 - **Post-processing:** NZBGet handles this itself, with par2 repair and
-  unpack. The progress dialog shows a "Post-processing..." stage while it
+  unpack. The progress dialog shows a `Post-processing...` stage while it
   runs.
 - **Strict success:** a job counts as successful only when NZBGet reports a
   `SUCCESS` status. A `WARNING` result counts as a failure, so you're never
@@ -123,8 +123,8 @@ flowchart LR
   three folder levels deep for a playable video: `.mkv`, `.mp4`, `.m4v`,
   `.avi`, `.ts`, `.m2ts`, `.wmv`, or `.mov`. It keeps retrying
   for up to 60 seconds while NZBGet's moved files become visible. For movies, the largest
-  video wins. For episode requests, samples, trailers, featurettes, and other
-  extras are excluded, and a filenamed for the exact requested season and
+  video wins. For episode requests, it excludes samples, trailers, featurettes, and other
+  extras, and a file named for the exact requested season and
   episode wins over larger videos. If the right episode can't be identified,
   the selection fails rather than playing a different episode.
 - **Readability check:** NeNeTeePee-Stream-Kodi hands the file to Kodi only after reading its
@@ -147,16 +147,16 @@ other indexers. Every submission gets:
 - a shared **duplicate key** for the release: the normalized release name,
   prefixed with a content ID when one is known (for example `imdb=<id>`,
   `themoviedb=<id>`, or `tvdbid=<id>-S<ss>-E<ee>`);
-- its own **duplicate score**, with your pick scored highest and each backup
-  scored strictly lower;
+- its own **duplicate score**: your pick scores highest, and each backup
+  scores strictly lower;
 - **duplicate mode `SCORE`**.
 
 NZBGet downloads the highest-scored item, which is your pick, so the progress
 bar and completion behave exactly as before. It parks the rest in its history
 as duplicate backups (status `dupe`) without downloading them. The score
 decides which item plays, not the submission order. That keeps your pick
-active and lets the backups go in at any time. They're submitted in a
-background thread and never delay playback.
+active and lets the backups go in at any time. NeNeTeePee-Stream-Kodi submits them in a
+background thread, so they never delay playback.
 
 Your pick can finish unrepairable: par2 repair fails, unpack fails, or health
 drops below NZBGet's critical threshold. NZBGet then automatically pulls the
@@ -175,8 +175,8 @@ doesn't keep a backup running, and another play of the same release isn't
 affected.
 
 Besides exact same-name reposts, the backup pool also includes
-same-content mirrors and NZBHydra's deferred duplicate uploads. These are
-submitted as the lowest-priority backups.
+same-content mirrors and NZBHydra's deferred duplicate uploads. NeNeTeePee-Stream-Kodi
+submits these as the lowest-priority backups.
 
 !!! note "NZBGet options that affect failover"
     For automatic failover, NZBGet's **HealthCheck** option must be `Delete`,
@@ -187,10 +187,10 @@ submitted as the lowest-priority backups.
     in parallel.
 
 The backups are best-effort. A backup that fails to submit never affects your
-pick's download or playback. They're controlled by two fallback settings:
+pick's download or playback. Two fallback settings control them:
 
 - **Enable fallback streams** turns the backups on or off.
-- **Maximum standby fallback streams** caps how many are submitted. Unlike the
+- **Maximum standby fallback streams** caps how many NeNeTeePee-Stream-Kodi submits. Unlike the
   nzbdav path, NZBGet mode has no built-in ceiling of 5.
 
 ## Reusing already-downloaded files
@@ -212,7 +212,7 @@ name looks the same. When you select the row, NeNeTeePee-Stream-Kodi checks that
 successful history item and completed folder again. It then plays the
 requested episode without a new submission.
 
-A record is removed when it goes stale: the job is confirmed missing, the
+NeNeTeePee-Stream-Kodi removes a record when it goes stale: the job is confirmed missing, the
 folder changed, or the folder is reachable but no longer holds the requested
 episode. You then see "The downloaded season pack is no longer available.
 Choose another result." Temporary NZBGet, share/mount, authentication, or

@@ -19,7 +19,7 @@ class ExactJobLookup(NamedTuple):
 
     @property
     def state(self):
-        """Return the tri-state name: "transient", "valid", or "stale"."""
+        """Return the tri-state name: `transient`, `valid`, or `stale`."""
         if not self.lookup_done:
             return "transient"
         return "valid" if self.job is not None else "stale"

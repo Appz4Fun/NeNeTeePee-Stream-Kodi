@@ -88,11 +88,11 @@ def _prepare_attempt(req):
 
 
 def _classify_prepare_url_error(e):
-    """Map a URLError to "retry", "unreachable", or "reraise".
+    """Map a URLError to ``"retry"``, ``"unreachable"``, or ``"reraise"``.
 
     Retry the fast connection-reset family; treat a wrapped timeout/OSError as
-    unreachable; re-raise everything else (e.g. an HTTPError from a reachable
-    proxy — not a reachability problem).
+    unreachable; re-raise everything else (for example, an HTTPError from a reachable
+    proxy—not a reachability problem).
     """
     reason = getattr(e, "reason", None)
     if isinstance(reason, ConnectionError):
@@ -117,7 +117,7 @@ def prepare_stream_via_service(
     duration_seconds, total_bytes, seekable, remux.
 
     Raises ServiceProxyUnavailableError when the local proxy port is
-    stale / service crashed / firewall ate the loopback connection —
+    stale / service crashed / firewall ate the loopback connection—
     the user-visible error-dialog layer uses the subclass to substitute
     an actionable message for the opaque ``Connection refused``.
     """
@@ -150,13 +150,13 @@ def prepare_stream_via_service(
         except (_socket.timeout, TimeoutError) as e:
             # The proxy accepted but never answered within the budget: wedged,
             # not starved. Retrying another full budget won't help, so surface
-            # immediately — same worst case as before this retry loop existed.
+            # immediately—same worst case as before this retry loop existed.
             raise ServiceProxyUnavailableError(unreachable) from e
         except URLError as e:
             # URLError wraps the same family of errors when urlopen fails. Retry
             # only the fast connection-reset family; surface a wrapped timeout/
-            # OSError as unreachable; re-raise everything else (e.g. HTTPError,
-            # a 4xx/5xx from a reachable proxy — not a reachability problem).
+            # OSError as unreachable; re-raise everything else (for example, HTTPError,
+            # a 4xx/5xx from a reachable proxy—not a reachability problem).
             disposition = _classify_prepare_url_error(e)
             if disposition == "retry":
                 last_error = e
@@ -199,7 +199,7 @@ def update_stream_fallbacks_via_service(
         req.add_header(_PREPARE_TOKEN_HEADER, prepare_token)
     # Short timeout: this is an in-process loopback service that answers in
     # well under a second, and the flush push runs inline on the resolver
-    # thread just before playback handoff — a long timeout would stall it.
+    # thread just before playback handoff—a long timeout would stall it.
     # nosemgrep
     with _sp.urlopen(req, timeout=3) as resp:  # nosec B310 — loopback service URL
         return json.loads(resp.read())

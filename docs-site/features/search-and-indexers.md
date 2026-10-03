@@ -29,7 +29,7 @@ search capabilities (caps) Hydra advertises. It fetches those caps on first
 search and caches them. After changing Hydra's URL or its indexers, refresh
 them from **Manage Indexers → Refresh NZBHydra2 Caps** on the **Indexers** tab.
 That button stays greyed out until **Enable direct Newznab indexers** is on.
-Until you refresh, a changed URL is searched with a default query shape.
+Until you refresh, NeNeTeePee-Stream-Kodi searches a changed URL with a default query shape.
 
 For episodes, NeNeTeePee-Stream-Kodi prefers a TVDB id, then an IMDb id; for movies it uses
 the IMDb id. If the first query returns nothing, it retries with a plain title
@@ -39,9 +39,9 @@ search, so a missing or mismatched id doesn't leave you with zero results.
 
 NeNeTeePee-Stream-Kodi queries Prowlarr's native search API, which returns JSON. Because
 Prowlarr's native search binds ids inside the query text rather than as separate
-parameters, NeNeTeePee-Stream-Kodi embeds them as tokens. `{tvdbid:…}`, `{imdbid:…}`,
-`{season:…}`, `{episode:…}`. alongside the cleaned title. For episodes the
-TVDB id is preferred over the IMDb id. If an id-keyed query returns nothing,
+parameters, NeNeTeePee-Stream-Kodi embeds them as tokens (`{tvdbid:…}`, `{imdbid:…}`,
+`{season:…}`, `{episode:…}`) alongside the cleaned title. For episodes it
+prefers the TVDB id over the IMDb id. If an id-keyed query returns nothing,
 NeNeTeePee-Stream-Kodi retries by title, keeping the season and episode tokens.
 
 !!! info "Prowlarr contributes Usenet results only"
@@ -57,22 +57,22 @@ query. It's required: with an empty list, NeNeTeePee-Stream-Kodi skips Prowlarr 
 If you don't run Hydra or Prowlarr, connect directly to individual Newznab
 indexers. NeNeTeePee-Stream-Kodi queries them in parallel (up to four at a time, 15 seconds
 per request, 20 seconds for the whole batch) and shapes each query to that
-indexer's caps when it has them. An indexer that times out or fails is
-skipped; the others still return results.
+indexer's caps when it has them. NeNeTeePee-Stream-Kodi skips an indexer that times out or
+fails, and the others still return results.
 
-Two ways to configure them, both on the **Indexers** tab:
+You can configure them in two ways, both on the **Indexers** tab:
 
-- **Popular indexers**. built-in rows for NZB.su/NZB.life, NZBGeek, NZBFinder,
+- **Popular indexers:** built-in rows for NZB.su/NZB.life, NZBGeek, NZBFinder,
   NZBPlanet, DrunkenSlug, and DOGnzb. Enable one, enter its API key, done.
-- **Manage Indexers**. a dialog for adding any Newznab indexer from a larger
+- **Manage Indexers:** a dialog for adding any Newznab indexer from a larger
   preset catalog (22 well-known indexers) or a fully custom URL, and for
-  testing, editing, enabling/disabling, and deleting them.
+  testing, editing, turning on or off, and deleting them.
 
 The **Manage Indexers** dialog fetches caps before it saves a new indexer,
 validates each URL, re-fetches caps when you change a connection, and asks for
 confirmation before you delete your last enabled indexer. The first time you
 open it, it copies any complete rows from the **Indexers** tab into its list;
-from then on the managed entry wins over the tab row with the same id.
+from then on the managed entry wins over the tab row with the same ID.
 **Test Direct Indexers** checks caps for every enabled indexer.
 
 !!! info "Beta feature"
@@ -87,20 +87,20 @@ To add: save it as docs-site/images/manage-indexers.png, then replace this
 comment with:  ![Manage Indexers dialog](../images/manage-indexers.png)
 -->
 
-## TV and movie ids
+## TV and movie IDs
 
 Id-keyed searches are far more accurate than title searches. TMDBHelper
 normally passes the ids NeNeTeePee-Stream-Kodi needs, and they are used directly. When one is
 missing and you've set **TMDB API key (optional, movies and TV)** on the
 **Indexers** tab:
 
-- **Episodes**. NeNeTeePee-Stream-Kodi looks up the show's TVDB id from its TMDB or IMDb id,
+- **Episodes:** NeNeTeePee-Stream-Kodi looks up the show's TVDB id from its TMDB or IMDb id,
   because many indexers key TV on TVDB ids. All providers share the one lookup.
-- **Movies**. when only a TMDB id is available, NeNeTeePee-Stream-Kodi converts it to the
+- **Movies:** when only a TMDB id is available, NeNeTeePee-Stream-Kodi converts it to the
   movie's IMDb id.
 
-Successful lookups are cached on disk. Without a key, or if a lookup fails,
-the search simply uses the ids and title it already has.
+NeNeTeePee-Stream-Kodi caches successful lookups on disk. If you have no key or a lookup
+fails, the search uses the IDs and title it already has.
 
 !!! info "Beta feature"
     TVDB lookup for episodes was added in 2.0.0-beta.1 and is available on the
@@ -117,16 +117,16 @@ flowchart LR
     DD --> R[Combined result list]
 ```
 
-- When more than one provider is enabled, they are searched at the same time.
-  A provider that fails is logged and skipped; you only see its error if
+- When more than one provider is enabled, NeNeTeePee-Stream-Kodi searches them at the same
+  time. It logs and skips a provider that fails. You only see its error if
   every provider failed and nothing came back.
-- Each provider is asked for up to **Max results** (on the **Sorting** tab)
-  results.
+- NeNeTeePee-Stream-Kodi asks each provider for up to **Max results** (on the **Sorting**
+  tab) results.
 - Each provider normalizes its results into a common shape: title, download
   link, size, indexer name, post date, and age.
 - **De-duplication is by download link.** The first occurrence of a link wins.
   A release that two providers return with *different* download URLs appears
-  twice. This is intentional, because those are genuinely different downloads.
+  twice. This is intentional because those are genuinely different downloads.
 - A result with no download link is dropped, because it can't be played.
 
 ## Search caching
@@ -141,5 +141,5 @@ time from the add-on's main menu (**Clear Cache**).
 The cache applies to NeNeTeePee-Stream-Kodi's own plugin search and play routes. The
 TMDBHelper player always runs a fresh search.
 
-For the internal mechanics. The query planner, caps handling, and the exact
-result fields. see [How it works → Search pipeline](../how-it-works/search-pipeline.md).
+For the internal mechanics, including the query planner, caps handling, and the exact
+result fields, see [How it works → Search pipeline](../how-it-works/search-pipeline.md).

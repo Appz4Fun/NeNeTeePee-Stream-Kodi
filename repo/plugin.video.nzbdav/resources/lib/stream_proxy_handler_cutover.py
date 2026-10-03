@@ -61,11 +61,11 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _demote_active_source(ctx, fallback):
-        """Re-add the currently-active (pre-cutover) source as a trusted backup.
+        """Re-add the currently active (pre-cutover) source as a trusted backup.
 
         The original was just serving these exact bytes, so it is marked
         validated and demoted; skipped when it is already in the pool or is
-        the source we are cutting over to.
+        the source being cut over to.
         """
         demoted_url = ctx.get("remote_url")
         if not demoted_url or demoted_url == fallback.get("stream_url"):
@@ -93,16 +93,16 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
         AWAITING_DOWNLOAD failover so both perform identical bookkeeping
         (URL/auth swap, watchdog window reset, switch counters, index).
         """
-        # Demote the currently-active source to a last-resort fallback BEFORE we
-        # repoint at the new one. The original primary is never its own backup at
-        # session start; it only re-enters the pool here, after a real cutover to
-        # a different source. It carries a resolved stream_url, so no nzo
+        # Demote the currently active source to a last-resort fallback BEFORE the
+        # handler repoints at the new one. The original primary is never its own
+        # backup at session start; it only re-enters the pool here, after a real
+        # cutover to a different source. It carries a resolved stream_url, so no nzo
         # re-resolution is needed; the byte-identity gate still guards serving.
         #
         # Mark it validated: this source was just actively serving these exact
         # bytes, so it is content-identical by construction. Without the flag the
         # prevalidation warmer would treat it as a fresh source and re-fingerprint
-        # it (an extra upstream open of a peer we already trust); validated=True
+        # it (an extra upstream open of a peer already trusted); validated=True
         # skips that while leaving it selectable as a last resort.
         self._demote_active_source(ctx, fallback)
         ctx["remote_url"] = fallback["stream_url"]
@@ -110,7 +110,7 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
         ctx.pop("upstream_down_notified", None)
         ctx.pop("upstream_unreachable_error", None)
         # Reset throughput watchdog window so the new upstream gets a fresh
-        # stall window — otherwise the prior peer's wedge-induced low B/s would
+        # stall window—otherwise the prior peer's wedge-induced low B/s would
         # carry over and trip the watchdog mid-handshake against the healthy
         # peer.
         ctx["passthrough_window_t0"] = _sp.time.monotonic()
@@ -156,7 +156,7 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
 
         Returns True when the source is usable now (MATCH). On a definitive
         MISMATCH the source is failed permanently. On a transient
-        INCONCLUSIVE the source is left eligible — its
+        INCONCLUSIVE the source is left eligible—its
         ``transient_miss_count`` is bumped and only after exceeding
         ``_FALLBACK_SOURCE_TRANSIENT_MISS_MAX`` is it abandoned, so a peer
         that is briefly a few bytes short (or hiccups one probe) is
@@ -167,7 +167,7 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
             misses = int(source.get("transient_miss_count", 0) or 0) + 1
             source["transient_miss_count"] = misses
             if misses > _sp._FALLBACK_SOURCE_TRANSIENT_MISS_MAX:
-                # Stuck INCONCLUSIVE forever — abandon so the queue can't
+                # Stuck INCONCLUSIVE forever—abandon so the queue can't
                 # reconsider it on every cutover indefinitely.
                 source["failed"] = True
             return False
@@ -373,7 +373,7 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
     def _evaluate_resolved_source(self, ctx, source, index, selection, state):
         """Evaluate one resolved candidate; return the source when it matches.
 
-        ``state`` carries the lazily-resolved primary URL/auth across the
+        ``state`` carries the lazily resolved primary URL/auth across the
         selector loop; ``selection`` holds the per-call gate inputs.
         """
         is_first = index == selection["start_index"]

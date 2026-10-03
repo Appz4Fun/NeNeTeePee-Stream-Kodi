@@ -36,7 +36,7 @@ def _candidate_pubdate_epoch(candidate):
 
     None (missing or unparseable pubdate) means "always distinct": such a
     candidate is never collapsed against another and is never suppressed by the
-    primary's date — we cannot prove two undated posts are the same upload.
+    primary's date: two undated posts cannot be proven to be the same upload.
     """
     if not isinstance(candidate, dict):
         return None
@@ -265,7 +265,7 @@ def _rank_fallback_candidates(target, candidates):
         tier = _fs._release_similarity(target, candidate)
         if tier is None:
             # Content gate already ran upstream; keep as last-resort if it
-            # somehow lacks a tier (defensive — should not happen).
+            # somehow lacks a tier (defensive—should not happen).
             tier = 3
         candidate_size = _fs._release_size_bytes(candidate)
         size_delta = abs(target_size - candidate_size) if target_size else 0

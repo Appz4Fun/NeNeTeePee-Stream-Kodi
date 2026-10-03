@@ -4,7 +4,7 @@ UNSPEC62 RPU NAL, and feeds it into dv_rpu for structured classification.
 
 Returns a :class:`DolbyVisionSourceResult` that drives fMP4 vs Matroska
 routing in :mod:`stream_proxy`. The routing matrix lives in stream_proxy
-(see the comment block above the ``probe_dolby_vision_source`` call site);
+(see the comment block just before the ``probe_dolby_vision_source`` call site);
 this module only produces the structured classification.
 """
 
@@ -15,23 +15,23 @@ from urllib.request import Request, urlopen
 
 try:
     import xbmc
-except ImportError:  # pragma: no cover — tests inject the module via conftest
+except ImportError:  # pragma: no cover—tests inject the module via conftest
     xbmc = None  # type: ignore[assignment]
 
 from resources.lib.dv_rpu import parse_unspec62_nalu
 from resources.lib.http_util import HTTP_USER_AGENT
 from resources.lib.mp4_parser import fetch_remote_mp4_layout, read_box_header
 
-# Safety caps — apply at every I/O seam where an attacker-controlled field
+# Safety caps—apply at every I/O seam where an attacker-controlled field
 # (stsz.first_sample_size, SimpleBlock frame size, an unbounded 200 OK
-# response) could otherwise ask us to allocate gigabytes on 32-bit Kodi.
-_HTTP_READ_CAP = 16 * 1024 * 1024  # 16 MiB — larger than any real HEVC AU.
+# response) could otherwise make this code allocate gigabytes on 32-bit Kodi.
+_HTTP_READ_CAP = 16 * 1024 * 1024  # 16 MiB—larger than any real HEVC AU.
 _MAX_FIRST_SAMPLE_SIZE = 16 * 1024 * 1024
 _MKV_HEAD_SIZE = 2 * 1024 * 1024
 
 
 # EBML element IDs used during the MKV walk (include the length-descriptor
-# bits — see Matroska spec / RFC 8794).
+# bits—see Matroska spec / RFC 8794).
 _EBML_ID_SEGMENT = 0x18538067
 _EBML_ID_TRACKS = 0x1654AE6B
 _EBML_ID_CLUSTER = 0x1F43B675
@@ -69,7 +69,7 @@ def _sanitize_header_value(value):
 
 
 def _http_range(url, start, end, auth_header=None, max_bytes=_HTTP_READ_CAP):
-    """Fetch bytes[start..end] from url, capped at max_bytes to protect
+    """Fetch bytes[start..end] from the URL, capped at max_bytes to protect
     against servers that ignore the Range header (return 200 OK + full body).
     """
     req = Request(url)
@@ -356,7 +356,7 @@ def _iter_ebml(data, start=0, end=None):
             return
         payload_end = min(payload_end, end)
         if payload_end <= offset:
-            # Zero-sized or negative-progress element — refuse to loop.
+            # Zero-sized or negative-progress element—refuse to loop.
             return
         yield elem_id, payload_start, payload_end
         offset = payload_end
@@ -370,12 +370,12 @@ def _iter_block_frames(block_id, block, block_track, width):
     """Yield frame bytes from a Matroska (Simple)Block.
 
     Accepts both SimpleBlock (0xA3) and Block (0xA1). Returns nothing if
-    lacing is enabled (Xiph/EBML/fixed) — lacing layouts prepend lace
+    lacing is enabled (Xiph/EBML/fixed)—lacing layouts prepend lace
     metadata before frame data, so reading `block[width+3:]` as a NAL stream
     would produce garbage. Real HEVC muxes never lace video.
     """
-    # SimpleBlock: track(vint) + timecode(2) + flags(1) + frame(s)
-    # Block:       identical on-the-wire shape for our purposes
+    # SimpleBlock: track(vint) + timecode(2) + flags(1) + frames
+    # Block:       identical on-the-wire shape for this module's purposes
     # (lacing flags sit in the same position).
     if width + 3 > len(block):
         return
@@ -494,7 +494,7 @@ def probe_dolby_vision_source(url, auth_header=None, file_size=None):
 
     Args:
         url: Remote HTTP URL. Expected to be validated by the caller
-            (``stream_proxy._validate_url``) — no scheme/host check here.
+            (``stream_proxy._validate_url``)—no scheme/host check here.
         auth_header: Optional full ``Authorization`` header value. CR/LF
             bytes are stripped defensively.
         file_size: Optional total file size in bytes. Pass the real
@@ -505,7 +505,7 @@ def probe_dolby_vision_source(url, auth_header=None, file_size=None):
     Returns:
         :class:`DolbyVisionSourceResult` with one of four classifications:
         ``"dv_profile_7_fel"``, ``"dv_allowed_for_fmp4"``, ``"non_dv"``,
-        ``"dv_unknown"``. Never raises on I/O or parse errors — failures
+        ``"dv_unknown"``. Never raises on I/O or parse errors—failures
         degrade to ``dv_unknown`` so the caller can fail safe to matroska.
     """
     # Strip query string AND fragment so a URL like ``foo.mkv#.mp4`` is

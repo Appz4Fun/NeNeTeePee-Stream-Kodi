@@ -36,7 +36,7 @@ class _MgrPrepareMixin:  # pylint: disable=too-few-public-methods
         settings_snapshot = _sp.normalize_settings_snapshot(settings_snapshot)
         # Tear down any previous session before starting a new one. Kodi only
         # ever plays one stream at a time, so anything still in the table is
-        # garbage from a prior play — possibly with a zombie ffmpeg attached
+        # garbage from a prior play—possibly with a zombie ffmpeg attached
         # to a half-dead socket if Kodi stalled without firing
         # onPlayBackStopped. Cleaning up here guarantees the next play gets a
         # fresh proxy state and no stale ffmpeg hogging the upstream.

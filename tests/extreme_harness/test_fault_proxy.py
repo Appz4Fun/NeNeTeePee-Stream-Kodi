@@ -113,7 +113,7 @@ def test_proxy_state_replace_schedule_resets_clock(control_server):
 
 @pytest.fixture
 def fake_upstream():
-    """A tiny upstream that streams a 100MB body for any GET."""
+    """A tiny upstream that streams a 100 MB body for any GET."""
 
     class _Upstream(BaseHTTPRequestHandler):
         def log_message(self, *a, **k):
@@ -186,7 +186,7 @@ def test_connection_reset_fault_records_state_before_close(proxy_with_upstream):
     """State is recorded before the connection is torn down.
 
     Because record_fired now runs before send_response, the fired_events entry
-    is visible to test threads immediately after the client raises — no sleep
+    is visible to test threads immediately after the client raises—no sleep
     required.
     """
     proxy_url, state, _ = proxy_with_upstream
@@ -222,8 +222,8 @@ def test_truncated_response_short_eof(proxy_with_upstream):
     resp = _request_large_range(proxy_url)
     declared = int(resp.headers["Content-Length"])
     # Python's http.client raises IncompleteRead when the peer closes before
-    # Content-Length bytes arrive — that IS the truncation signal.  Extract the
-    # partial payload from the exception so we can assert on its length.
+    # Content-Length bytes arrive—that IS the truncation signal.  Extract the
+    # partial payload from the exception so the test can assert on its length.
     try:
         body = resp.read()
     except _IncompleteRead as exc:

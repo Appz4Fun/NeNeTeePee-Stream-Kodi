@@ -6,7 +6,7 @@
 When force-remux triggers on a large file, surface a one-off dialog
 offering the user the pass-through upgrade path: add
 ``<cache><memorysize>0</memorysize></cache>`` to their
-``advancedsettings.xml``. The addon never writes to that file —
+``advancedsettings.xml``. The addon never writes to that file—
 merging arbitrary XML would risk clobbering existing ``<video>``,
 ``<network>``, or ``<videodatabase>`` entries, so the dialog shows
 the snippet and lets the user paste it themselves.
@@ -40,7 +40,7 @@ def should_show_cache_prompt(
     """Pure decision: return True iff the first-play dialog should fire.
 
     ``stream_remux`` is the ``stream_info['remux']`` flag from
-    ``prepare_stream_via_service`` — True means the force-remux tier
+    ``prepare_stream_via_service``—True means the force-remux tier
     was selected, which is the "file is large enough for passthrough
     to matter" signal.
     """
@@ -66,7 +66,7 @@ def _log_warning(text):
 
 
 def _prop_is_true(value):
-    """True iff a Kodi property/setting value is explicitly "true".
+    """Return True only if a Kodi property/setting value is explicitly ``"true"``.
 
     Kodi can return None from getProperty / getSetting after addon
     reload races (especially during shutdown). Coerce to "" so the
@@ -77,7 +77,7 @@ def _prop_is_true(value):
 
 def _dialog_message(stream_info):
     """Build the user-facing dialog message from the stream size."""
-    # Clamp negatives to 0: buggy upstream sizers (e.g. Newznab providers
+    # Clamp negatives to 0: buggy upstream sizers (for example, Newznab providers
     # returning -1 for "unknown") would otherwise format as "-2.3 GB" in
     # the user-facing dialog. 0 falls through to the size-less message.
     total_bytes = max(0, int(stream_info.get("total_bytes") or 0))
@@ -94,7 +94,7 @@ def _handle_prompt_result(result, addon):
         try:
             addon.setSetting("cache_dialog_dismissed", "true")
         except _SUPPRESSED_EXCEPTIONS as exc:
-            # Failed to persist "Never ask" — the dialog will return next
+            # Failed to persist "Never ask"—the dialog returns next
             # session. Surface that to the log so the user has a clue why
             # they're seeing it again, without crashing the resolve flow.
             _log_warning(
@@ -126,8 +126,8 @@ def maybe_show_cache_prompt(stream_info):
         return
 
     # Mark shown for this session BEFORE surfacing the dialog so a
-    # cancelled / dismissed dialog still counts as "shown once" — we
-    # don't re-prompt on every subsequent large-file play.
+    # cancelled / dismissed dialog still counts as shown once, so the
+    # prompt doesn't reappear on every subsequent large-file play.
     try:
         window.setProperty(_PROP_SHOWN_THIS_SESSION, "true")
     except _SUPPRESSED_EXCEPTIONS:
@@ -136,9 +136,9 @@ def maybe_show_cache_prompt(stream_info):
     message = _dialog_message(stream_info)
 
     # Dialog().yesnocustom can raise RuntimeError on Kodi lifecycle issues
-    # (e.g. shutdown, no display). The session-shown flag was already set
-    # above, so a raised exception would silence all future prompts in
-    # this session — which is acceptable, but we still want a log line so
+    # (for example, shutdown, no display). The session-shown flag was already set
+    # earlier, so a raised exception would silence all future prompts in
+    # this session. That is acceptable, but a log line is still wanted so
     # the failure isn't completely invisible.
     try:
         result = xbmcgui.Dialog().yesnocustom(

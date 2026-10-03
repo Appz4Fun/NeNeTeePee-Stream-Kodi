@@ -18,7 +18,7 @@ except OSError:
     pass
 
 # Add resources/lib/ to sys.path so vendored libraries (PTT) can resolve
-# their internal imports (e.g. "from ptt.handlers import ...").
+# their internal imports (for example, "from ptt.handlers import <name>").
 addon_dir = os.path.dirname(os.path.abspath(__file__))
 lib_path = os.path.join(addon_dir, "resources", "lib")
 if lib_path not in sys.path:

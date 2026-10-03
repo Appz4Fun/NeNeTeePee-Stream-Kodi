@@ -1,6 +1,6 @@
-# Security Policy
+# Security policy
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
 If you discover a security vulnerability in this project, please report it responsibly:
 
@@ -8,9 +8,9 @@ If you discover a security vulnerability in this project, please report it respo
 2. Email the maintainer or use [GitHub's private vulnerability reporting](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/security/advisories/new)
 3. Include steps to reproduce and any relevant details
 
-We will respond within 72 hours and work to release a fix promptly.
+The maintainer responds within 72 hours and works to release a fix promptly.
 
-## Supported Versions
+## Supported versions
 
 | Version | Supported |
 |---------|-----------|

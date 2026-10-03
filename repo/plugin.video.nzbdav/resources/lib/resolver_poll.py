@@ -55,15 +55,15 @@ def _storage_to_webdav_path(storage):
       ``/mnt/nzbdav/completed-symlinks/uncategorized/Name`` or
       ``/mnt/data/completed-symlinks/uncategorized/Name``. Strip the
       mount prefix and re-root under ``/content/``.
-    * nzbdav-rs (Rust port): returns the WebDAV path directly, e.g.
+    * nzbdav-rs (Rust port): returns the WebDAV path directly, for example,
       ``/content/uncategorized/Name/`` or (no-category submit) just
       ``/content/Name/``. Pass through as-is with trailing slash.
 
     Fallback (unknown shape): take the last two path components as
     ``{category}/{name}`` under ``/content/``. Good enough for
-    SABnzbd-style layouts we haven't seen yet.
+    SABnzbd-style layouts not yet seen.
     """
-    # nzbdav-rs already returns a /content/... path.
+    # nzbdav-rs already returns a path under ``/content/``.
     if storage.startswith("/content/"):
         return storage.rstrip("/") + "/"
 
@@ -173,7 +173,7 @@ def _wait_for_nearly_complete_history(
 
 
 def _poll_clearly_active_grace_seconds(job_status):
-    """Pick the history grace window for a clearly-active queue row."""
+    """Pick the history grace window for a clearly active queue row."""
     if _queue_status_is_nearly_complete(job_status):
         return _queue_status_history_grace_seconds(job_status)
     if _queue_status_is_late_active(job_status):
@@ -205,7 +205,7 @@ def _poll_once_await_apis(
 
     ``job_status`` is the single-element holder mutated by the queue thread.
     Breaks as soon as terminal history is ready, an active queue row decides
-    the outcome, both APIs have returned, or the deadline elapses — preserving
+    the outcome, both APIs have returned, or the deadline elapses—preserving
     the original per-state grace-wait timing exactly.
     """
     while True:
@@ -279,7 +279,7 @@ def _by_name_terminal_history(
         # Thread the validated terminal timestamp through so the synthesized
         # row carries the same ``completed`` contract as a real history slot
         # (downstream consumers can re-apply the stale-row guard without it
-        # being silently absent). The gate above guarantees it parses to int.
+        # being silently absent). The earlier gate guarantees it parses to int.
         "completed": int(by_name.get("completed")),
     }
 
@@ -309,7 +309,7 @@ def _poll_once(
           None when not present.
         - error_type: None when polling succeeds; otherwise the error string
           returned by probe_webdav_reachable() when both APIs return None.
-          One of "auth_failed", "server_error", or "connection_error".
+          One of ``auth_failed``, ``server_error``, or ``connection_error``.
 
     Side effects:
         Spawns two threads to call get_job_status() and get_job_history().
@@ -319,7 +319,7 @@ def _poll_once(
     """
     # Terminal rows the body probe already rejected (Completed but mid-file
     # body unavailable). The by-name fallback must not surface them, or the
-    # poll loop would abort on the stale row instead of waiting for the fresh
+    # poll loop would end on the stale row instead of waiting for the fresh
     # re-download. Snapshot to an immutable tuple before spawning threads.
     rejected_terminal_ids = tuple(rejected_completed_ids or ())
     job_status = [None]
@@ -364,12 +364,12 @@ def _poll_once(
     t2 = _resolver.threading.Thread(target=check_history, daemon=True)
     t1.start()
     t2.start()
-    # Deadline must allow for API timeout (10s) + processing overhead
+    # Deadline must allow for API timeout (10 seconds) + processing overhead
     deadline = _resolver.time.monotonic() + 12
     _poll_once_await_apis(job_status, history_ready, queue_done, history_done, deadline)
 
     # Only probe WebDAV for errors after both APIs returned no data within the
-    # bounded wait, so we don't falsely conclude the job is missing.
+    # bounded wait, so the code doesn't falsely conclude the job is missing.
     if history_status[0] is None and job_status[0] is None:
         _, error = _resolver.probe_webdav_reachable(
             monitor=monitor,

@@ -8,7 +8,7 @@ episode/title match scoring in ``webdav_match``; this module keeps the
 test-patched surface (``find_video_file``, ``probe_webdav_reachable``,
 ``_get_settings``, ``_http_head``, ``urlopen``, the size-hint store) plus the
 public stream-URL helpers, and re-exports the moved names so existing imports
-(e.g. ``webdav_discovery``'s use of ``_episode_tags``) keep working.
+(for example, ``webdav_discovery``'s use of ``_episode_tags``) keep working.
 """
 
 import base64
@@ -86,7 +86,7 @@ def _get_settings(settings_getter=None):
         # configured URL otherwise survives into built stream URLs, where the
         # strict netloc-whitespace guard in _split_http_url rejects them on the
         # fallback content-length probe path (urllib tolerates the space, so the
-        # primary plays — only fallback validation breaks).
+        # primary plays—only fallback validation breaks).
         "webdav_url": settings_getter("webdav_url", "").strip().rstrip("/"),
         "nzbdav_url": settings_getter("nzbdav_url", "").strip().rstrip("/"),
         "username": settings_getter("webdav_username", ""),
@@ -102,7 +102,7 @@ def _read_settings(settings_getter=None):
 
 def _http_head(
     url, username="", password=""
-):  # nosec B107 — empty default = "no auth", not a real password
+):  # nosec B107—empty default = "no auth", not a real password
     req = Request(url, method="HEAD")
     if username:
         credentials = "{}:{}".format(username, password)
@@ -110,7 +110,7 @@ def _http_head(
         req.add_header("Authorization", "Basic {}".format(encoded))
     try:
         # nosemgrep
-        with urlopen(  # nosec B310 — URL from user's configured WebDAV setting
+        with urlopen(  # nosec B310—URL from user's configured WebDAV setting
             req, timeout=30
         ) as resp:
             return resp.getcode()
@@ -144,7 +144,7 @@ def probe_webdav_reachable(
         - (False, "auth_failed")      - 401 or 403
         - (False, "server_error")     - 5xx
         - (False, "connection_error") - network error after retries, or
-                                        abort signal received during
+                                        shutdown signal received during
                                         retry wait
     """
     settings = _get_settings(settings_getter=settings_getter)
@@ -166,7 +166,7 @@ def probe_webdav_reachable(
             _log_probe_retry(e, attempt, max_retries)
             if mon.waitForAbort(retry_delay):
                 return False, "connection_error"
-    # Unreachable in normal flow — defensive safety net for static analysis.
+    # Unreachable in normal flow—defensive safety net for static analysis.
     return False, "connection_error"
 
 
@@ -191,9 +191,9 @@ def _log_probe_retry(error, attempt, max_retries):
 
 
 def _probe_content_root(settings_getter):
-    """Resolve the configured WebDAV content root, defaulting to "content".
+    """Resolve the configured WebDAV content root, defaulting to "content."
 
-    Allows differently-routed nzbdav instances to override the content root.
+    Allows differently routed nzbdav instances to override the content root.
     `content_root` is guaranteed non-empty, so the historical trailing
     ``or "content"`` was dead code (closes §H.3 Low).
     """
@@ -357,7 +357,7 @@ def _folder_total_enter(folder_path, depth, visited):
 def _folder_total_resolve_url(settings_getter, settings, folder_path, already_encoded):
     """Resolve WebDAV settings and the PROPFIND URL for ``folder_path``.
 
-    Returns ``(settings, url)``. Recursive calls pass hrefs the PROPFIND
+    Returns ``(settings, URL)``. Recursive calls pass hrefs the PROPFIND
     response already URL-encoded, so ``already_encoded`` skips a second
     ``quote()`` that would turn ``%`` into ``%25`` and 404 the probe.
     """
@@ -370,7 +370,7 @@ def _folder_total_resolve_url(settings_getter, settings, folder_path, already_en
 
 
 def _folder_total_fetch_root(url, username, password):
-    """PROPFIND ``url`` and return the parsed XML root with entities disabled.
+    """PROPFIND ``url`` and return the parsed XML root with entities turned off.
 
     Parsing delegates to ``resources.lib.xml_safety.safe_fromstring``, which
     rejects entity declarations (XXE / billion-laughs) before the parser can
@@ -386,7 +386,7 @@ def _folder_total_fetch_root(url, username, password):
         req.add_header(header, value)
 
     # nosemgrep
-    with urlopen(  # nosec B310 — URL from user's configured WebDAV setting
+    with urlopen(  # nosec B310—URL from user's configured WebDAV setting
         req, timeout=10
     ) as resp:
         body = resp.read().decode("utf-8", errors="replace")
@@ -429,7 +429,7 @@ def _folder_total_collect_subdir(response, href_path, request_path, subdirs, ns)
 
     Returns ``True`` when the entry is a collection (so the caller stops
     classifying it as a video) -- the folder itself and dot-prefixed children
-    are recognised as collections but not enqueued for recursion.
+    are recognized as collections but not enqueued for recursion.
     """
     resource_type = response.find(".//D:resourcetype/D:collection", ns)
     if resource_type is None:
@@ -471,7 +471,7 @@ def _folder_total_track_max(stats, size):
 
 
 def _folder_total_track_video(stats, href_path, size):
-    """Append one completely-sized video row to the optional walk stats."""
+    """Append one completely sized video row to the optional walk stats."""
     if stats is not None:
         stats.setdefault("videos", []).append((href_path, size))
 
@@ -591,7 +591,7 @@ def folder_video_total_bytes(
     guard keeps polling; once the real feature/episodes materialise the total
     reaches the advertised size and playback proceeds. This replaces the old
     title-keyword ``release_is_pack`` gate, which guessed pack-ness from the name
-    and disabled the stub guard entirely for anything it classified as a pack.
+    and turned off the stub guard entirely for anything it classified as a pack.
 
     Return contract -- three outcomes, two of which make the caller fail OPEN
     (the stub guard only ever BLOCKS playback on positive evidence of a stub, so
@@ -638,7 +638,7 @@ def folder_video_total_bytes(
             root, request_path, _stats, _seen_resources
         )
     except Exception as error:  # pylint: disable=broad-except
-        # A PROPFIND/parse failure means we cannot trust the total; signal
+        # A PROPFIND/parse failure means the total cannot be trusted; signal
         # incomplete so the guard fails OPEN rather than rejecting on a partial
         # (the poll loop re-runs the guard, so this self-heals next iteration).
         xbmc.log(
@@ -701,8 +701,8 @@ def find_video_file(
         hints: Optional :class:`TitleHints` carrying the requested release name
             (``title_hint``) plus its pre-parsed ``tokens``/``episode_tags``.
             When a ``title_hint`` is supplied and a folder/pack holds several
-            candidate videos, the one whose name matches the hint — especially
-            the requested SxxExx episode — is preferred over the largest video.
+            candidate videos, the one whose name matches the hint—especially
+            the requested SxxExx episode—is preferred over the largest video.
             When omitted, the historical largest-video behavior is preserved.
         _state: Internal ``(depth, visited, already_encoded, settings)`` recursion
             tuple; external callers never pass it (default
@@ -725,12 +725,12 @@ def find_video_file(
             small is still returned. The resolver now threads this floor for ALL
             releases (it is pack-AGNOSTIC: ``advertised * fraction`` regardless of
             title); a pack whose episodes all sit below the floor simply has no
-            above-floor candidate, so ranking falls through to episode identity /
+            over-floor candidate, so ranking falls through to episode identity /
             size and the correct episode is still returned (#282 redesign).
 
     Returns:
         The WebDAV href path of the largest video file found, typically an
-        absolute server path beginning with "/", or None when no video is
+        absolute server path beginning with ``/``, or None when no video is
         located or an error occurs.
 
     Side effects:
@@ -787,7 +787,7 @@ def _browse_and_resolve(req, url, _depth, _visited, settings, hint_ctx):
 
     have_hint, hint_tokens, hint_episode_tags, min_video_size = hint_ctx
     # nosemgrep
-    with urlopen(  # nosec B310 — URL from user's configured WebDAV setting
+    with urlopen(  # nosec B310—URL from user's configured WebDAV setting
         req, timeout=10
     ) as resp:
         body = resp.read().decode("utf-8", errors="replace")
@@ -811,9 +811,9 @@ def _browse_and_resolve(req, url, _depth, _visited, settings, hint_ctx):
 def _get_webdav_stream_url_for_path_with_settings(file_path, settings):
     """Build a stream URL and auth headers from an already-read settings dict."""
     base = settings["webdav_url"] or settings["nzbdav_url"]
-    # Normalize base/file-path boundary so we never produce "host" + "path"
+    # Normalize base/file-path boundary so the code never produces "host" + "path"
     # (missing slash) or "host//" + "/path" (double slash). The PROPFIND
-    # response is *supposed* to hand us an absolute path with a leading
+    # response is *supposed* to return an absolute path with a leading
     # slash, but nothing enforces that on the server side.
     encoded_path = quote(file_path, safe="/%")
     url = _webdav_url_for_path(base, encoded_path, already_encoded=True)
@@ -824,7 +824,7 @@ def _get_webdav_stream_url_for_path_with_settings(file_path, settings):
 def get_webdav_stream_url_for_path(file_path, settings_getter=None):
     """Build a stream URL and auth headers for a full WebDAV path.
 
-    Returns (url, headers_dict) where headers_dict may be empty if no auth.
+    Returns (URL, headers_dict) where headers_dict may be empty if no auth.
     """
     return _get_webdav_stream_url_for_path_with_settings(
         file_path, _read_settings(settings_getter)

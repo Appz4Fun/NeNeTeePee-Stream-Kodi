@@ -596,7 +596,7 @@ def test_open_indexer_manager_edit_cancel_aborts_without_saving(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Fix #1 — _add_custom_flow rejects whitespace-only inputs
+# Fix #1—_add_custom_flow rejects whitespace-only inputs
 # ---------------------------------------------------------------------------
 
 
@@ -610,7 +610,7 @@ def test_add_custom_flow_rejects_whitespace_only_name(monkeypatch):
     result = indexer_manager._add_custom_flow(dialog)
 
     assert result is False
-    # Stops at the name prompt — never asks for url/key, never persists.
+    # Stops at the name prompt—never asks for URL/key, never persists.
     assert dialog.input.call_count == 1
     add_custom.assert_not_called()
     dialog.notification.assert_not_called()
@@ -650,7 +650,7 @@ def test_add_custom_flow_strips_surrounding_whitespace(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Fix #2 — duplicate-name overwrite must prompt for confirmation
+# Fix #2—duplicate-name overwrite must prompt for confirmation
 # ---------------------------------------------------------------------------
 
 
@@ -730,7 +730,7 @@ def test_add_preset_indexer_prompts_before_overwrite_and_aborts_on_no(monkeypatc
 
 
 # ---------------------------------------------------------------------------
-# Fix #3 — _KEEP_CURRENT_SENTINEL prevents user-input collision
+# Fix #3—_KEEP_CURRENT_SENTINEL prevents user-input collision
 # ---------------------------------------------------------------------------
 
 
@@ -752,7 +752,7 @@ def test_input_or_cancel_returns_user_string_even_if_equal_to_keep_current(monke
     api_key happened to equal the placeholder string would have it
     silently replaced with their *prior* stored value on edit. With the
     identity-only sentinel, the dialog's returned string is treated
-    as user input — but the dialog default is the placeholder, not the
+    as user input—but the dialog default is the placeholder, not the
     stored secret, so this test simulates the user *re-typing* the
     same literal string.
     """
@@ -768,8 +768,8 @@ def test_input_or_cancel_returns_user_string_even_if_equal_to_keep_current(monke
     )
 
     # The current implementation still returns the sentinel when value
-    # *equals* the placeholder (we cannot distinguish typed-vs-default
-    # at the API level), but the substitution path now uses identity
+    # *equals* the placeholder (the API cannot distinguish typed-vs-default
+    # input), but the substitution path now uses identity
     # comparison; the edit-flow test covers end-to-end protection.
     # This test simply pins the sentinel behavior.
     assert result is indexer_manager._KEEP_CURRENT_SENTINEL
@@ -782,13 +782,13 @@ def test_edit_indexer_flow_substitutes_current_only_on_sentinel_identity(monkeyp
     indexer = _indexer()
     indexer["api_key"] = "stored-key"
     dialog = MagicMock()
-    # name + url accept defaults; api_key is a fresh string that *equals*
+    # name + URL accept defaults; api_key is a fresh string that *equals*
     # _KEEP_CURRENT but is a different object identity.
     fresh_string = str("<keep current>")
     assert fresh_string is not indexer_manager._KEEP_CURRENT_SENTINEL
-    # _input_or_cancel will see this as `value == _KEEP_CURRENT` and return
+    # _input_or_cancel sees this as `value == _KEEP_CURRENT` and return
     # the sentinel (as designed). To prove the identity-substitution
-    # path, we patch _input_or_cancel directly and feed a non-sentinel
+    # path, this test patches _input_or_cancel directly and feed a non-sentinel
     # equal-by-value string for api_key.
     monkeypatch.setattr(
         indexer_manager,
@@ -801,7 +801,7 @@ def test_edit_indexer_flow_substitutes_current_only_on_sentinel_identity(monkeyp
     indexer_manager._edit_indexer_flow(dialog, indexer)
 
     # Because fresh_string is not the sentinel, it's passed through verbatim
-    # — the user's actual input wins, never replaced by the stored value.
+    # so the user's actual input wins, never replaced by the stored value.
     update.assert_called_once_with(
         "nzbgeek",
         name="NewName",
@@ -843,16 +843,16 @@ def test_edit_indexer_flow_keeps_current_when_sentinel_returned(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# Fix #4 — update_indexer detects concurrent modification
+# Fix #4—update_indexer detects concurrent modification
 # ---------------------------------------------------------------------------
 
 
 def test_update_indexer_detects_concurrent_modification(monkeypatch):
-    """If the on-disk entry changed between load and save, abort + warn."""
+    """If the on-disk entry changed between load and save, stop and warn."""
     starting = _indexer()
     # First load returns the unmodified entry; second load (the pre-save
     # re-read) returns a *different* api_key, simulating a concurrent
-    # writer that landed between our load and save.
+    # writer that landed between the load and save.
     drift = {**starting, "api_key": "concurrent-writer-changed-this"}
     load_calls = MagicMock(side_effect=[[starting], [drift]])
     save_indexers = MagicMock()
@@ -871,7 +871,7 @@ def test_update_indexer_detects_concurrent_modification(monkeypatch):
 def test_update_indexer_saves_when_versions_match(monkeypatch):
     """When no drift between load and re-load, the save must proceed."""
     starting = _indexer()
-    # Both loads return identical entries — no concurrent modification.
+    # Both loads return identical entries—no concurrent modification.
     load_calls = MagicMock(side_effect=[[starting], [starting]])
     save_indexers = MagicMock()
     monkeypatch.setattr(indexer_manager, "load_indexers", load_calls)
@@ -896,7 +896,7 @@ def test_entry_version_changes_when_editable_field_changes():
 
 
 # ---------------------------------------------------------------------------
-# Fix #5 — display ordering and disabled-row visual marker
+# Fix #5: display ordering and visual marker for rows that are turned off
 # ---------------------------------------------------------------------------
 
 
@@ -931,8 +931,8 @@ def test_sorted_for_display_groups_enabled_first_then_alpha(monkeypatch):
     assert [item["id"] for item in rendered] == [
         "a_idx",  # enabled, A
         "z_idx",  # enabled, Z
-        "b_idx",  # disabled, B
-        "m_idx",  # disabled, M
+        "b_idx",  # turned off, B
+        "m_idx",  # turned off, M
     ]
 
 
@@ -944,7 +944,7 @@ def test_open_indexer_manager_renders_indexers_in_sorted_order(monkeypatch):
         "enabled": False,
     }
     z_enabled = {**_indexer(indexer_id="z_idx"), "name": "Zulu", "enabled": True}
-    # Storage in shuffled order — UI must still sort.
+    # Storage in shuffled order—UI must still sort.
     storage = [m_disabled, z_enabled, a_enabled]
 
     dialog = MagicMock()

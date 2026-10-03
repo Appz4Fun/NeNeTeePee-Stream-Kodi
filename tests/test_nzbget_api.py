@@ -93,7 +93,7 @@ def test_append_nzb_fetches_encodes_and_returns_nzbid():
     assert base64.b64decode(params[1]).decode("utf-8") == "<nzb>data</nzb>"
     assert params[2] == "movies"
     assert params[8] == "SCORE"  # DupeMode
-    # AutoCategory=False so NZBGet keeps the category we send (the SMB path
+    # AutoCategory=False so NZBGet keeps the category the add-on sends (the SMB path
     # mapping depends on it); PPParameters=[] (no post-processing params).
     assert params[9] is False
     assert params[10] == []
@@ -150,7 +150,7 @@ def test_append_nzb_sends_dupe_key_score_and_mode():
 
 
 def test_config_option_reads_named_value_lowercased():
-    """config() returns [{Name,Value}]; read one option (e.g. HealthCheck)."""
+    """config() returns [{Name,Value}]; read one option (for example, HealthCheck)."""
     from resources.lib.nzbget_api import config_option
 
     getter = _getter({"nzbget_url": "http://box:6789"})
@@ -325,9 +325,9 @@ def test_history_status_failure_flagged():
 
 def test_history_status_warning_is_failure_even_with_destdir():
     # Spec decision #3 guarantees a repaired/unpacked/playable file, so a
-    # terminal WARNING/* (e.g. WARNING/REPAIRABLE / WARNING/DAMAGED, where
+    # terminal WARNING/* (for example, WARNING/REPAIRABLE / WARNING/DAMAGED, where
     # par2 repair did not run) is classified as a failure even when a DestDir
-    # is reported — we don't risk playing a corrupt file.
+    # is reported, so playback never risks a corrupt file.
     getter = _getter({"nzbget_url": "http://box:6789"})
     hist = [{"NZBID": 42, "Status": "WARNING/HEALTH", "DestDir": "/dl/movies/X"}]
     with patch("resources.lib.nzbget_api._rpc_call", return_value=(hist, None)):
@@ -374,7 +374,7 @@ def test_cancel_job_issues_group_then_history_delete():
         cancel_job(42, settings_getter=getter)
 
     # Both deletes must fire, in order, each targeting the NZBID. The modern
-    # v18+ editqueue shape is (Command, Args, IDs) — exactly 3 params with NO
+    # v18+ editqueue shape is (Command, Args, IDs)—exactly 3 params with NO
     # legacy int Offset, and the NZBID list last.
     assert [c[0] for c in calls] == ["editqueue", "editqueue"]
     assert calls[0][1] == ["GroupFinalDelete", "", [42]]
@@ -385,9 +385,9 @@ def test_cancel_job_issues_group_then_history_delete():
 
 
 def test_rpc_call_not_configured_when_url_blank():
-    # An explicitly-blank URL short-circuits to "not_configured" before any
+    # An explicitly blank URL short-circuits to "not_configured" before any
     # HTTP. (An *absent* nzbget_url now falls back to the schema default
-    # http://localhost:6789 — see test_get_settings_uses_schema_defaults_*.)
+    # http://localhost:6789—see test_get_settings_uses_schema_defaults_*.)
     result, error = _rpc_call(
         "version", [], settings_getter=_getter({"nzbget_url": ""})
     )
@@ -509,14 +509,14 @@ def test_completed_history_keys_success_items_by_name():
     # Visible history only, same shape history_status uses.
     assert rpc.call_args[0][0] == "history"
     assert rpc.call_args[0][1] == [False]
-    # Picker-render path: bounded like nzbdav's 10s picker timeout, not the
-    # 30s resolver-path _RPC_TIMEOUT.
+    # Picker-render path: bounded like nzbdav's 10 s picker timeout, not the
+    # 30 s resolver-path _RPC_TIMEOUT.
     assert rpc.call_args.kwargs.get("timeout") == 10
 
 
 def test_completed_history_never_raises_on_broken_settings_getter():
     # _tag_available's plugin call sites have no try/except; a raising
-    # injected getter must degrade to "no tags", not crash the picker.
+    # injected getter must degrade to ``no tags``, not crash the picker.
     def broken_getter(key, default=""):
         raise ValueError("corrupt settings")
 
@@ -683,7 +683,7 @@ def test_cancel_jobs_deletes_history_then_queue_and_skips_empty():
 
 
 def test_active_group_by_dupekey_reports_paused_presence():
-    # A same-key member queued PAUSED (e.g. NZBGet globally paused when the
+    # A same-key member queued PAUSED (for example, NZBGet globally paused when the
     # backup was promoted) is not a promotion -- but it is not an exhausted
     # group either. The scan reports it so the poll can keep waiting instead of
     # declaring FAILURE/DUPE (round-3 review finding). The excluded (just

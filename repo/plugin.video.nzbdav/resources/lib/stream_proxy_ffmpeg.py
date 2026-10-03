@@ -158,10 +158,10 @@ def _run_ffmpeg_hls_muxer_probe(ffmpeg_path):
 
 
 def _drain_killed_ffmpeg_probe(proc, ffmpeg_path):
-    """Kill a timed-out probe process and bound the post-kill drain.
+    """Stop a timed-out probe process and bound the drain that follows.
 
-    If the kill itself hangs (uninterruptible I/O) we don't want service
-    startup to wedge indefinitely waiting on ffmpeg.
+    If stopping the process hangs (uninterruptible I/O), service
+    startup must not wedge indefinitely waiting on ffmpeg.
     """
     proc.kill()
     try:
@@ -179,7 +179,7 @@ def _drain_killed_ffmpeg_probe(proc, ffmpeg_path):
 def _embed_auth_in_url(url, auth_header):
     """Embed Basic auth credentials into a URL for ffmpeg.
 
-    DEPRECATED for new code paths — prefer ``_ffmpeg_auth_args``,
+    DEPRECATED for new code paths—prefer ``_ffmpeg_auth_args``,
     which passes the Authorization header to ffmpeg via ``-headers``
     instead of splicing ``user:password@host`` into the URL. The URL
     form leaks credentials into ffmpeg's argv, where they're visible
@@ -215,13 +215,13 @@ def _embed_auth_in_url(url, auth_header):
 
 
 def _ffmpeg_auth_args(auth_header):
-    """Return ffmpeg ``-headers ...`` argv fragment for an
+    """Return ffmpeg ``-headers <value>`` argv fragment for an
     Authorization header, or an empty list if no auth is present.
 
     Pass the result to ``cmd.extend(...)`` BEFORE the ``-i URL``
     pair. ffmpeg's HTTP demuxer reads ``-headers`` as a string of
     HTTP headers separated by ``\\r\\n``; the trailing ``\\r\\n``
-    is required to terminate the header line.
+    is required to end the header line.
 
     Why this exists: the URL-embedding form (``_embed_auth_in_url``)
     splices ``user:password@host`` into argv, where the cleartext

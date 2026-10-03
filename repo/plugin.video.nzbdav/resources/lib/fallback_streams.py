@@ -40,7 +40,7 @@ class _NoRedirectHandler(HTTPRedirectHandler):
 
     The fingerprint probes pin the request URL to the configured-origin
     allow-list via ``_validated_probe_url``, but a vanilla
-    ``urlopen`` opener follows up to 10 redirects — a 302 to a
+    ``urlopen`` opener follows up to 10 redirects—a 302 to a
     different origin would silently bypass the allow-list, and on
     Python <3.11 the Authorization header even leaks across redirects.
     Raising ``HTTPError`` on the 3xx surfaces the redirect as a probe

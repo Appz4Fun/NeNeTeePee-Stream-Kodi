@@ -139,7 +139,7 @@ def test_player_json_uses_script_handoff_instead_of_plugin_media_url():
 
 
 def test_play_episode_forwards_tvdb_token():
-    """The episode action requests TMDBHelper's {tvdb} token — in episode
+    """The episode action requests TMDBHelper's {tvdb} token—in episode
     context it resolves to the show's TheTVDB id, letting providers search
     by tvdbid (issue #318)."""
     assert "tvdb={tvdb}" in PLAYER_JSON["play_episode"]
@@ -197,11 +197,11 @@ def test_install_player_enables_tmdbhelper_strm_only_for_script_handoff(
 def test_install_player_refuses_to_write_outside_addon_data(mock_vfs, mock_notify):
     """Defensive check: if special:// resolution maps TMDBHelper's player
     directory outside the Kodi profile's addon_data root, the installer
-    must refuse to write and notify the user — no arbitrary-filesystem
+    must refuse to write and notify the user—no arbitrary-filesystem
     write."""
 
     # Force translatePath to return a path that doesn't live under
-    # addon_data. realpath of both is stable since we picked real-ish
+    # addon_data. realpath of both is stable since the test picks real-ish
     # temp-ish paths the test host resolves identically.
     def _translate(path):
         if "profile/addon_data/" in path and path.endswith("addon_data/"):
@@ -253,7 +253,7 @@ def test_install_player_preserves_existing_file_on_matching_schema(
     mock_vfs, mock_notify
 ):
     """If a user has a hand-edited nzbdav.json with the current
-    schema_version, do NOT overwrite — preserves their customizations."""
+    schema_version, do NOT overwrite—preserves their customizations."""
     from resources.lib.player_installer import _PLAYER_SCHEMA_VERSION
 
     mock_vfs.translatePath.side_effect = lambda p: p.replace(
@@ -271,7 +271,7 @@ def test_install_player_preserves_existing_file_on_matching_schema(
     mock_write_file = MagicMock()
 
     # pylint: disable=keyword-arg-before-vararg
-    # `open(path, mode, *)` is the builtin signature we mirror.
+    # `open(path, mode, *)` is the builtin signature this factory mirrors.
     def _file_factory(path, mode="r", *a, **kw):
         return mock_read_file if mode == "r" else mock_write_file
 
@@ -302,7 +302,7 @@ def test_install_player_backs_up_and_overwrites_on_schema_mismatch(
     mock_write_file = MagicMock()
 
     # pylint: disable=keyword-arg-before-vararg
-    # `open(path, mode, *)` is the builtin signature we mirror.
+    # `open(path, mode, *)` is the builtin signature this factory mirrors.
     def _file_factory(path, mode="r", *a, **kw):
         return mock_read_file if mode == "r" else mock_write_file
 
@@ -311,8 +311,8 @@ def test_install_player_backs_up_and_overwrites_on_schema_mismatch(
     install_player()
 
     # copy() was called before the overwrite fired. The backup filename must
-    # not contain ".json" because TMDBHelper scans r".*\.json" with re.match
-    # and will otherwise treat nzbdav.json.bak as an active player.
+    # not contain `.json` because TMDBHelper scans `.*\.json` with re.match
+    # and otherwise treats nzbdav.json.bak as an active player.
     assert mock_vfs.copy.called
     backup_args = mock_vfs.copy.call_args[0]
     assert backup_args[1].endswith("/nzbdav.bak")

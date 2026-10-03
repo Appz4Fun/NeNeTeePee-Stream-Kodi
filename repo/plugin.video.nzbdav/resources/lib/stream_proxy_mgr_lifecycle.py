@@ -37,7 +37,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
 
         Returns False when either:
         - The proxy hasn't been started yet (``_thread`` is None).
-        - The serve_forever thread has exited for any reason —
+        - The serve_forever thread has exited for any reason—
           normal stop(), or an unhandled exception in the socket
           accept loop (rare but has happened historically on
           memory-pressure paths).
@@ -72,13 +72,13 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
             self._thread = None
 
     def clear_sessions(self, wait_for_process=True):
-        """Tear down every registered session and kill its ffmpeg process.
+        """Tear down every registered session and stop its ffmpeg process.
 
         Called from:
         - stop() on service shutdown
         - prepare_stream() on each new play, so a zombie ffmpeg from a
           previous stream that Kodi abandoned without firing onPlayBackStopped
-          (e.g. DB-vacuum stall that freezes the decoder) doesn't keep
+          (for example, DB-vacuum stall that freezes the decoder) doesn't keep
           writing into a half-dead TCP socket forever
         - NzbdavPlayer stop/end hooks for clean-stop cases
         """
@@ -105,10 +105,10 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
         """Tear down a single session by id, cleanup outside the lock.
 
         Used by the /prepare write-failure path when the plugin client
-        disconnects before the response is delivered (e.g. 60 s urlopen
+        disconnects before the response is delivered (for example, 60 s urlopen
         timeout firing during a slow tempfile-faststart remux). Without
         this, the session lingers until the next ``prepare_stream`` call
-        runs ``clear_sessions``, or the 6-hour TTL prune fires —
+        runs ``clear_sessions``, or the 6-hour TTL prune fires—
         meaning a tempfile from a give-up'd play could occupy disk for
         hours. Closes TODO.md §H.2-H12.
         """
@@ -156,7 +156,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
         # Signal the read-ahead prefetch daemon to stop (per-session close; the
         # thread is daemon and also aborts on waitForAbort for global shutdown).
         # This is the single sink reached by every close route, so all sessions
-        # are covered. Never block teardown on the thread — daemon is the
+        # are covered. Never block teardown on the thread—daemon is the
         # backstop.
         readahead_buffer = ctx.get(_sp._READAHEAD_BUFFER_KEY)
         if readahead_buffer is not None:
@@ -177,7 +177,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _kill_session_ffmpeg(ctx, wait_for_process):
-        """Kill the session's ffmpeg process and reap it (sync or background)."""
+        """Stop the session's ffmpeg process and reap it (sync or background)."""
         active_ffmpeg = ctx.get("active_ffmpeg")
         if not active_ffmpeg:
             return
@@ -202,7 +202,7 @@ class _MgrLifecycleMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _probe_hls_fmp4_capability(ffmpeg_path):
-        """Return True when ffmpeg exposes the HLS fMP4 muxer flags we use."""
+        """Return True when ffmpeg exposes the HLS fMP4 muxer flags it uses."""
         if not ffmpeg_path:
             return False
         output = _sp._run_ffmpeg_hls_muxer_probe(ffmpeg_path)

@@ -31,7 +31,7 @@ class _FingerprintMixin:  # pylint: disable=too-few-public-methods
         """Return True only when every sampled range provably matches.
 
         Bool wrapper over :meth:`_classify_fallback_fingerprint`. A
-        transient INCONCLUSIVE probe is treated as a non-match here — the
+        transient INCONCLUSIVE probe is treated as a non-match here—the
         prevalidation caller only wants to mark a source ``validated`` when
         it is byte-proven, and a transient miss simply stays unvalidated to
         be retried later. ``cfg`` is the bundled probe config from
@@ -58,7 +58,7 @@ class _FingerprintMixin:  # pylint: disable=too-few-public-methods
 
         A digest that is PRESENT on both sides and differs is a definitive
         MISMATCH (wrong file). A digest that cannot be fetched (empty body,
-        probe 5xx / timeout) is INCONCLUSIVE — we can't prove same-or-
+        probe 5xx / timeout) is INCONCLUSIVE—the probe can't prove same-or-
         different yet, so the caller keeps the source eligible. ``cfg`` is
         the bundled probe config from :meth:`_fingerprint_probe_cfg`.
         """
@@ -277,7 +277,7 @@ class _FingerprintMixin:  # pylint: disable=too-few-public-methods
         # writes. The threadsafe sibling guards both reads and writes
         # with this lock.
         cache_lock = _sp.threading.Lock()
-        # Manage the executor explicitly so the early-return paths can
+        # Manage the executor explicitly so the early return paths can
         # cancel pending probes instead of blocking on shutdown(wait=True).
         # A single mismatched range otherwise pays full latency for all
         # in-flight probes.
@@ -380,7 +380,7 @@ class _FingerprintMixin:  # pylint: disable=too-few-public-methods
     ):
         """Return cached primary range digest for one live fallback selection."""
         # Bug 5: cap the cache. OrderedDict preserves insertion order so
-        # the oldest entry is dropped when the cap is exceeded — bounding
+        # the oldest entry is dropped when the cap is exceeded—bounding
         # memory growth on long-lived sessions with many validation
         # rounds. Use setdefault with OrderedDict() so legacy {} caches
         # are upgraded transparently if missing.

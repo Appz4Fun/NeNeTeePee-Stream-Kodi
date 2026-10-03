@@ -1,7 +1,7 @@
 """Alternate between two user-supplied 12 Angry Men streams.
 
 The user picked the two URLs directly. Skip the streamability probe
-and just play A → wait 60s → play B → wait 60s, looped 20 times every
+and just play A → wait 60 s → play B → wait 60 s, looped 20 times every
 2 minutes.
 
 Auth and the inter-container hostname are added automatically since
@@ -72,8 +72,8 @@ def _kodi_rpc(method: str, params: dict | None = None, timeout: int = 10):
 def _build_kodi_url(mkv_path: str) -> str:
     """Compose a Kodi-reachable URL from a PROPFIND-derived mkv href.
 
-    ``mkv_path`` is already URL-quoted (e.g. ``/content/...mkv``)
-    so we pass it straight into urlunsplit's path slot.
+    ``mkv_path`` is already URL-quoted (for example, ``/content/<file>.mkv``)
+    so the function passes it straight into urlunsplit's path slot.
     """
     netloc = "{}:{}@{}".format(
         urllib.parse.quote(WEBDAV_USERNAME, safe=""),
@@ -132,7 +132,7 @@ def play(url: str):
 
 
 def play_window(url: str, label: str, log: Path, iteration: int) -> dict:
-    """Play url for PER_STREAM_PLAY_SECONDS and return its progress metrics."""
+    """Play the URL for PER_STREAM_PLAY_SECONDS and return its progress metrics."""
     play_resp = play(url)
     started_at = time.time()
     deadline = started_at + PER_STREAM_PLAY_SECONDS

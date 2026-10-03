@@ -24,7 +24,7 @@ def test_smb_target_includes_category_subfolder():
 
 
 def test_smb_target_maps_relative_to_completed_base():
-    # With NZBGet's global completed base known, DestDir maps relative to it —
+    # With NZBGet's global completed base known, DestDir maps relative to it—
     # exact even for a category-specific custom folder whose name differs from
     # the category setting (Codex: category=movies but DestDir under films/).
     target = nzbget_smb_target(
@@ -75,7 +75,7 @@ def test_smb_target_omits_category_when_destdir_not_nested():
     # AppendCategoryDir=no (or a category-specific DestDir): NZBGet reports the
     # release directly under completed, with no category folder. Even though a
     # category is configured, the SMB target must follow the *actual* DestDir
-    # layout and NOT insert a synthetic category segment that 404s.
+    # layout and NOT insert a synthetic category segment that 404 s.
     target = nzbget_smb_target(
         "smb://user:pw@host/completed",
         "/downloads/completed/The.Movie.2024.1080p",
@@ -105,7 +105,7 @@ def test_smb_target_empty_destdir_returns_none():
 
 
 def test_smb_target_accepts_local_completed_root():
-    # A local/mounted path standing in for the SMB share (e.g. an NFS hard
+    # A local/mounted path standing in for the SMB share (for example, an NFS hard
     # mount) works identically -- the mapping is pure string manipulation
     # with no smb:// assumption.
     target = nzbget_smb_target(

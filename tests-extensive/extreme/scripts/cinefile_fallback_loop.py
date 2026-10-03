@@ -2,14 +2,14 @@
 
 For each iteration:
 1. Pick the next CiNEFiLE storage as primary, the rest as fallbacks.
-2. Schedule a ``connection_reset`` fault on fault-proxy at t+10s.
+2. Schedule a ``connection_reset`` fault on fault-proxy at t+10 s.
 3. Tell Kodi (via JSON-RPC) to Player.Open the *primary* URL routed
-   through the fault-proxy. Direct WebDAV play, not addon-routed —
-   the addon's stream_proxy fingerprint cutover requires going through
+   through the fault-proxy. Direct WebDAV play, not addon-routed.
+   The addon's stream_proxy fingerprint cutover requires going through
    resolve_and_play; this runner is a complement that exercises just
    nzbdav-rs's per-storage WebDAV serving and the fault-proxy schedule
    API. When the primary's connection drops, the runner immediately
-   issues a second Player.Open at the next storage so we measure how
+   issues a second Player.Open at the next storage so the runner measures how
    fast a same-content cut-over can land in Kodi when the URLs are
    already known.
 4. Sample Player.GetProperties every 0.25 s; flag any iteration where
@@ -93,7 +93,7 @@ def list_completed_cinefile_storages() -> list[str]:
     ) as r:
         data = json.load(r)
     # nzbdav-rs's SAB-style ``search`` param doesn't actually filter the
-    # response, so we filter client-side: only Completed rows whose name
+    # response, so the script filters client-side: only Completed rows whose name
     # starts with the 12 Angry Men + CiNEFiLE prefix.
     target_prefix = "12.Angry.Men.1957.1080p.BluRay.x264-CiNEFiLE"
     out = []
@@ -112,12 +112,12 @@ def _propfind_mkv_name(storage: str) -> str:
     """PROPFIND nzbdav-rs to find the actual .mkv filename in a storage.
 
     nzbdav-rs writes the playable file under an obfuscated UUID-style
-    basename (e.g. ``2764ae48...mkv``); the folder carries the human
-    name, the file does not. We have to ask the WebDAV server which
-    .mkv lives in the folder before we can build a stream URL.
+    basename (for example, ``2764ae48<hash>.mkv``); the folder carries the human
+    name, the file does not. The script has to ask the WebDAV server which
+    .mkv lives in the folder before it can build a stream URL.
 
     Goes direct to nzbdav-rs (HOST_NZBDAV_URL = ``localhost:8180``) so
-    we don't burn the fault-proxy's per-request control plane on these
+    it doesn't burn the fault-proxy's per-request control plane on these
     setup calls.
     """
     user = os.environ["WEBDAV_USERNAME"]
@@ -135,7 +135,7 @@ def _propfind_mkv_name(storage: str) -> str:
             xml_text = r.read().decode("utf-8", "replace")
     except Exception:  # noqa: BLE001
         return ""
-    # Cheap parse — pull the first `<...mkv` href.
+    # Cheap parse: pull the first href that ends in `.mkv`.
     import re
 
     for href in re.findall(r"<D:href>([^<]+\.mkv)</D:href>", xml_text):
@@ -209,7 +209,7 @@ def play_via_direct_play(primary_url: str, fallback_urls: list[str]):
     Hands the primary URL plus the list of validated fallback URLs to
     the addon's stream_proxy in a single shot. The proxy fingerprint-
     validates each fallback (100×4 KiB SHA256 sweep) before it ever
-    swaps the upstream — Kodi reads from one proxy URL the whole time,
+    swaps the upstream—Kodi reads from one proxy URL the whole time,
     so a primary article failure surfaces to the user as nothing more
     than an extra ~100 ms of buffer wait while the swap completes.
     """
@@ -220,7 +220,7 @@ def play_via_direct_play(primary_url: str, fallback_urls: list[str]):
         }
     )
     plugin_url = "plugin://plugin.video.nzbdav/direct_play?{}".format(qs)
-    # Addons.ExecuteAddon doesn't dispatch a route URL — only Player.Open
+    # Addons.ExecuteAddon doesn't dispatch a route URL—only Player.Open
     # actually triggers setResolvedUrl + start playback for plugin://
     # paths. Match the pattern used by cinefile_proxy_swap_loop.py and
     # cinefile_user_two.py.
@@ -289,8 +289,8 @@ def run_iteration(iteration: int, urls: list[str], log: Path) -> dict:
     play_resp = play_via_direct_play(primary, fallback_pool)
     record("play_response", body=play_resp)
 
-    # Observe-only loop — the addon's stream_proxy is the actor. We just
-    # record whether playback advances past the fault window and whether
+    # Observe-only loop: the addon's stream_proxy is the actor. This loop just
+    # records whether playback advances past the fault window and whether
     # it ever stalls long enough to be visible to the user.
     deadline = time.time() + PRIMARY_PLAY_SECONDS + 30
     last_status = {}

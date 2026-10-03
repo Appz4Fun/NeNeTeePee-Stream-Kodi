@@ -20,7 +20,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
     def _serve_proxy_stall_wait(self, ctx, st, now):
         """Log the stall and wait one abortable backoff. Verbatim move.
 
-        Returns ``"return"`` on a Kodi abort (client teardown) or ``"continue"``
+        Returns ``"return"`` on a Kodi stop request (client teardown) or ``"continue"``
         to re-read after the backoff elapses.
         """
         _sp.xbmc.log(
@@ -59,11 +59,11 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
     def _serve_proxy_capfire_step(self, ctx, st):
         """Close cleanly once the bounded-exhaustion cap fires. Verbatim move."""
         # BOUNDED EXHAUSTION (F4) cap-fire: now that the retry ladder
-        # has run AND the progress-reset above has cleared the count on
+        # has run AND the earlier progress reset has cleared the count on
         # any genuine byte, a still-positive fall-through count at the
         # cap means the primary spent its final ladder attempt with no
         # recovery and no validated candidate. Close cleanly with
-        # fallback_exhausted instead of looping — WITHOUT reintroducing
+        # fallback_exhausted instead of looping—WITHOUT reintroducing
         # e3a74a1's immediate hard-close. A recovering primary's count
         # is 0 here (the SM-1 reset fired), so this won't condemn it.
         # Guard: when the final ladder attempt returned a terminal
@@ -94,7 +94,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         return None
 
     def _serve_proxy_abort_step(self, ctx, st):
-        """Abort on a terminal client/protocol error result. Verbatim move."""
+        """Stop on a terminal client/protocol error result. Verbatim move."""
         if st.result in (
             _sp._UPSTREAM_RANGE_CLIENT_ERROR,
             _sp._UPSTREAM_RANGE_PROTOCOL_MISMATCH,
@@ -244,16 +244,16 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
     def _serve_proxy_classify_disconnect(self, st):
         """Classify a BrokenPipe/timeout teardown. Verbatim move of the except."""
         # socket.timeout has TWO causes here:
-        #   1. Kodi stopped reading from us for longer than
-        #      _REMUX_WRITE_TIMEOUT (DB vacuum, decoder stall) — surfaces
-        #      as terminal_reason="client_disconnected".
+        #   1. Kodi stopped reading from the proxy for longer than
+        #      _REMUX_WRITE_TIMEOUT (DB vacuum, decoder stall)—surfaces
+        #      as ``terminal_reason="client_disconnected"``.
         #   2. The throughput watchdog detected upstream-driven trickle
-        #      that Kodi can't keep up with — surfaces as
-        #      terminal_reason="passthrough_stall". The
+        #      that Kodi can't keep up with—surfaces as
+        #      ``terminal_reason="passthrough_stall"``. The
         #      ``passthrough_stall_detected`` ctx flag is set right
-        #      before the raise so we can tell them apart here.
-        # Either way we unwind the handler and let BaseHTTPServer tear
-        # down the socket; Kodi's CCurlFile will reconnect if it still
+        #      before the raise so this code can tell them apart.
+        # Either way the handler unwinds and BaseHTTPServer tears
+        # down the socket; Kodi's CCurlFile reconnects if it still
         # wants bytes.
         if st.active_ctx.get("passthrough_stall_detected"):
             st.terminal_reason = "passthrough_stall"
@@ -272,7 +272,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         else:
             st.terminal_reason = "client_disconnected"
             # client_disconnected is Kodi closing a connection (a demuxer
-            # probe/seek abandoning a range, or a normal stop) — a
+            # probe/seek abandoning a range, or a normal stop)—a
             # client-side event, never an upstream error. Log at INFO so
             # routine startup-probe churn doesn't masquerade as warnings.
             _sp.xbmc.log(
@@ -288,7 +288,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
 
         Benign reasons log at INFO; failures at WARNING and blame a pending
         candidate. A candidate switched AWAY from is always failed; a still-
-        pending never-delivered candidate too (the F11 hole) — EXCEPT on
+        pending never-delivered candidate too (the F11 hole)—EXCEPT on
         client_disconnected, which (per 4decdd4) can only arise at the client
         body write AFTER a non-empty read, so the candidate WAS serving bytes.
         """
@@ -347,7 +347,7 @@ class _ProxyServeStallMixin:  # pylint: disable=too-few-public-methods
         yet: the long (2, 4, 8) ladder would hold Kodi's initial open silent
         past its first-read patience, so it disconnects at byte 0
         (``streamed=0``). The long ladder is kept for mid-stream rebuffering,
-        where Kodi is already playing and will wait.
+        where Kodi is already playing and waits.
         """
         if ctx.get("upstream_down_notified"):
             _sp.xbmc.log(

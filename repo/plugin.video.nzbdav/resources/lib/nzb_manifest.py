@@ -104,7 +104,7 @@ def _find_video_name(subject):
 
 
 def _subject_may_be_video(subject):
-    """Return whether a subject is worth checking with the video regex."""
+    """Return whether a subject is worth checking with the video pattern."""
     if not isinstance(subject, str):
         return False
     if "." not in subject:
@@ -158,7 +158,7 @@ def _has_rar_volume_extension(lower):
 
 
 def _subject_may_be_archive(subject):
-    """Return whether a subject is worth checking with the archive regex."""
+    """Return whether a subject is worth checking with the archive pattern."""
     if not isinstance(subject, str):
         return False
     lower = subject.lower()
@@ -265,7 +265,7 @@ def _select_healthy_candidate(candidates, health_check, skipped_candidates=None)
 
 
 def _subject_looks_like_metadata(subject):
-    """Return whether a subject names a metadata sidecar (par2/nfo/sfv/...)."""
+    """Return whether a subject names a metadata sidecar (par2, nfo, sfv, and so on)."""
     if not isinstance(subject, str):
         return False
     return _METADATA_EXTENSION_RE.search(subject) is not None
@@ -349,7 +349,7 @@ def _split_payload_video_candidates(file_elems, health_check):
     """Return a synthetic video candidate when the payload is split across many
     quasi-uniform obfuscated files.
 
-    Heavily obfuscated uploads chunk the movie into dozens of similarly-sized
+    Heavily obfuscated uploads chunk the movie into dozens of similarly sized
     files (numeric extensions, ``.7z.NNN``, etc.). When the non-metadata files
     are uniform enough that the largest is at most ``_SPLIT_PAYLOAD_MAX_SIZE_RATIO``
     times the smallest and the count clears the floor, sum their bytes and

@@ -36,9 +36,9 @@ def _open_loading_dialog(title):
     which otherwise looks like a frozen/crashed screen. A background
     ``DialogProgressBG`` (top-right) gives a visible "working" indicator.
 
-    We deliberately do NOT use the modal ``xbmcgui.DialogProgress`` here: on
-    CoreELEC/Arctic Fuse it can native-crash Kodi mid-search (the same reason
-    ``_handle_play`` avoids it — see
+    This function deliberately does NOT use the modal
+    ``xbmcgui.DialogProgress`` here: on CoreELEC/Arctic Fuse it can native-crash
+    Kodi mid-search (the same reason ``_handle_play`` avoids it—see
     ``test_handle_play_does_not_open_modal_progress_before_picker``). Any
     failure creating the dialog is swallowed so a missing indicator can never
     break playback. Returns the dialog handle, or ``None``.

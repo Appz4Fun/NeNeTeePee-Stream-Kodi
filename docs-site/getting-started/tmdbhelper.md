@@ -3,7 +3,7 @@
 Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
 
 NeNeTeePee-Stream-Kodi plays titles you choose in **TMDBHelper**. To connect the two, you
-install an NeNeTeePee-Stream-Kodi *player file* into TMDBHelper and set it as your default
+install a NeNeTeePee-Stream-Kodi *player file* into TMDBHelper and set it as your default
 player.
 
 ## Install the player file
@@ -17,17 +17,17 @@ This writes a small `nzbdav.json` player file into TMDBHelper's players folder
 (`addon_data/plugin.video.themoviedb.helper/players/`) and registers
 **NeNeTeePee-Stream-Kodi** as a selectable playback source. It also turns on TMDBHelper's
 `only_resolve_strm` setting. Without that setting, TMDBHelper doesn't run
-NeNeTeePee-Stream-Kodi's script action directly (see [below](#why-neneteepee-stream-kodi-uses-a-script-player)).
+NeNeTeePee-Stream-Kodi's script action directly (see [Why NeNeTeePee-Stream-Kodi uses a script player](#why-neneteepee-stream-kodi-uses-a-script-player)).
 You get a **Player installed to: TMDBHelper** notification.
 
 NeNeTeePee-Stream-Kodi protects your data while doing this:
 
 - It refuses to write anywhere outside Kodi's add-on data folder.
-- If a player file with the same schema version is already present, it's kept
-  as is, so your manual edits survive. A file from an older schema version is
-  backed up to `nzbdav.bak` and then replaced. If the backup can't be written,
-  the install stops and your existing file stays in place.
-- If the write fails, you get a **Failed to install to: …** message rather than
+- If a player file with the same schema version is already present, NeNeTeePee-Stream-Kodi
+  keeps it as is, so your manual edits survive. NeNeTeePee-Stream-Kodi backs up a file from an
+  older schema version to `nzbdav.bak` and then replaces it. If it can't write
+  the backup, the install stops and your existing file stays in place.
+- If the write fails, you get a **Failed to install to: …** message instead of
   a false success.
 
 !!! tip "Re-run the install after updating NeNeTeePee-Stream-Kodi"
@@ -72,7 +72,7 @@ The NeNeTeePee-Stream-Kodi player file launches playback with a `RunScript` acti
 `plugin://` URL. This is deliberate: on CoreELEC and Kodi 21, asking Kodi to
 open a `plugin://` URL as a playable item can crash the player before NeNeTeePee-Stream-Kodi's
 code even runs. `RunScript` enters the add-on directly, shows the source picker,
-and then starts playback. which is stable on those devices. You don't need to
+and then starts playback, which is stable on those devices. You don't need to
 configure anything for this; the installed player file already does it.
 
 ## Verify

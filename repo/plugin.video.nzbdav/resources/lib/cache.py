@@ -11,7 +11,7 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
-MAX_CACHE_SIZE_BYTES = 52428800  # 50MB
+MAX_CACHE_SIZE_BYTES = 52428800  # 50 MB
 MAX_CACHE_ENTRY_COUNT = 1000
 DEFAULT_CACHE_TTL_SECONDS = 60
 MAX_CACHE_TTL_SECONDS = 86400
@@ -47,9 +47,7 @@ def _cache_key(
     import hashlib
 
     parts = [search_type, title, year, imdb, season, episode, tvdb, tmdb_id]
-    joined = "\x1f".join(
-        str(p) for p in parts
-    )  # unit-separator — can't appear in inputs
+    joined = "\x1f".join(str(p) for p in parts)  # unit-separator—can't appear in inputs
     digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
     legible = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:40]
     return "{}_{}_{}".format(search_type, legible or "untitled", digest)
@@ -108,7 +106,7 @@ def _read_fresh_cache(path, cache_ttl, title):
     try:
         os.utime(path, None)
     except OSError:
-        # Best-effort mtime touch; still return the cache hit if it fails.
+        # Best-effort mtime update; still return the cache hit if it fails.
         pass
     xbmc.log("NeNeTeePee-Stream-Kodi: Cache hit for '{}'".format(title), xbmc.LOGDEBUG)
     return data.get("results", [])
@@ -147,7 +145,7 @@ def set_cached(search_type, title, results, **kwargs):
     try:
         data = {"timestamp": time.time(), "results": results}
         # Atomic write: dump to a sibling temp file then os.replace onto the
-        # final path. A concurrent get_cached() will see either the old file
+        # final path. A concurrent get_cached() sees either the old file
         # or the new file, never a half-written JSON blob that would
         # JSONDecodeError.
         tmp_path = path + ".tmp"
@@ -183,7 +181,7 @@ def _cache_size_from_stat(stat):
 
 
 def _scan_cache_entries(cache_dir):
-    """Return (total_bytes, [(mtime, path, size), ...]) for cache JSON files."""
+    """Return (total_bytes, [(mtime, path, size)]) for cache JSON files."""
     total = 0
     entries = []
     for f in os.listdir(cache_dir):
@@ -243,7 +241,7 @@ def _evict_oldest():
 def clear_cache():
     """Delete all cached results.
 
-    Tolerate a missing cache directory — `clear_cache` is exposed via
+    Tolerate a missing cache directory—`clear_cache` is exposed via
     the addon's settings menu and a user can hit it on a fresh install
     where the directory was never created. The previous unguarded
     ``os.listdir`` raised FileNotFoundError that bubbled up to the

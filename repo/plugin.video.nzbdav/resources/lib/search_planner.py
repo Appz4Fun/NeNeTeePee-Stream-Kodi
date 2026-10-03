@@ -243,8 +243,8 @@ def _imdb_digits(imdb):
 def _digits(value):
     """Return only the decimal digits of ``value`` (TVDB ids are numeric).
 
-    Defensive against a decorated id (e.g. ``"tvdb-305288"``); returns ``""``
-    for empty/None input so callers can treat it as "no id".
+    Defensive against a decorated id (for example, ``"tvdb-305288"``); returns ``""``
+    for empty/None input so callers can treat it as `no id`.
     """
     if not value:
         return ""

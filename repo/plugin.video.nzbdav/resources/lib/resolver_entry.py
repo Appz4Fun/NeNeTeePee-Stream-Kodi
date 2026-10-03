@@ -244,7 +244,7 @@ def resolve(handle, params):
     """Handle plugin:// URL resolution (TMDBHelper integration).
 
     Decodes parameters, polls until the stream is ready, then calls
-    setResolvedUrl() — True on success, False on any failure — so Kodi
+    setResolvedUrl()—True on success, False on any failure—so Kodi
     always receives a resolution response and does not hang.
 
     Settings reads and the DialogProgress create call live inside the
@@ -330,15 +330,15 @@ def resolve_and_play(nzb_url, title, params=None):
     Settings reads and `dialog.create()` live inside the try block so
     a raise from either still routes through `_handle_resolve_exception`
     and lets the user see a notification rather than silently no-op'ing
-    on the RunPlugin path. Same fix as `resolve()` — TODO.md §H.2-H9.
+    on the RunPlugin path. Same fix as `resolve()`—TODO.md §H.2-H9.
     """
     dialog = None
     effects = None
     try:
         _resolver._resolve_stage("enter resolve_and_play")
         # NZBGet backend toggle (handle-less path). resolve_and_play has no
-        # plugin handle — TMDBHelper /resolve, the in-addon search picker,
-        # and script-play all reach here — so play_nzbget starts playback
+        # plugin handle—TMDBHelper /resolve, the in-addon search picker,
+        # and script-play all reach here—so play_nzbget starts playback
         # via xbmc.Player() rather than setResolvedUrl. The nzbdav
         # streaming/fallback machinery below is bypassed.
         resolve_params = params or {}

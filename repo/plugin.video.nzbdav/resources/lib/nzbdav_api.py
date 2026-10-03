@@ -38,7 +38,7 @@ from resources.lib.nzbdav_api_parsing import (
 )
 
 # Re-exported for backwards compatibility / static analysis: these names are
-# imported above purely so ``resources.lib.nzbdav_api.<name>`` keeps resolving
+# imported earlier purely so ``resources.lib.nzbdav_api.<name>`` keeps resolving
 # for existing callers and tests after the parsing split.
 __all__ = [
     "_cancel_job_outcome",
@@ -69,8 +69,8 @@ __all__ = [
 # REMUX this can routinely exceed 30 s. 300 s gives nzbdav real headroom
 # while remaining below the 10 minute clamp for truly stuck requests.
 _DEFAULT_SUBMIT_TIMEOUT = 300
-# Status/history queries should be fast; 10s timeout prevents dialog freeze
-# on slow/unresponsive SABnzbd. Polling loop retries every 1-2s anyway.
+# Status/history queries should be fast; 10 seconds timeout prevents dialog freeze
+# on slow/unresponsive SABnzbd. Polling loop retries every 1-2 seconds anyway.
 _API_READ_TIMEOUT = 10
 
 
@@ -87,7 +87,7 @@ def _get_settings(settings_getter=None):
 
 # Hard min/max clamp for submit_timeout. The setting is exposed as
 # free-form text in the Kodi UI, so a typo can produce wildly wrong
-# values (we hit ``submit_timeout=300000`` once — 83 hours, which
+# values (``submit_timeout=300000`` once appeared—83 hours, which
 # would let a hung connection block the resolver effectively forever
 # before timing out). 5 s is the absolute minimum that still gives
 # nzbdav time to respond on a healthy LAN; 600 s (10 min) is the
@@ -98,7 +98,7 @@ _SUBMIT_TIMEOUT_MAX = 600
 
 
 def _get_submit_timeout(settings_getter=None):
-    """Read the configurable submit timeout from settings, default 300s.
+    """Read the configurable submit timeout from settings, default 300 seconds.
 
     Clamped to [_SUBMIT_TIMEOUT_MIN, _SUBMIT_TIMEOUT_MAX] so a typo
     in the Kodi settings UI can't produce a 83-hour timeout."""
@@ -118,8 +118,8 @@ def _dump_submitted_nzb(nzb_url, nzb_name):
 
     No-op unless ``NZBDAV_DUMP_NZBS_DIR`` is set in the environment. Used
     by the extreme functional test to inspect the bytes that went into
-    nzbdav-rs's deobfuscator when a job fails with "no importable video
-    file found", so we can tell whether the NZB itself is malformed (or
+    nzbdav-rs's deobfuscator when a job fails with ``no importable video file
+    found``, so the test can tell whether the NZB itself is malformed (or
     just unsupported by nzbdav-rs).
     """
     import os
@@ -156,7 +156,7 @@ def _dump_submitted_nzb(nzb_url, nzb_name):
 def _build_submit_request(
     base_url, api_key, nzb_url, nzb_name, settings_getter, submit_timeout
 ):
-    """Return the (url, timeout) for an addurl submit and log the request."""
+    """Return the (URL, timeout) for an addurl submit and log the request."""
     params = {
         "mode": "addurl",
         "name": nzb_url,
@@ -196,15 +196,15 @@ def submit_nzb(nzb_url, nzb_name="", settings_getter=None, submit_timeout=None):
           "message": str}). The caller classifies by status code to
           decide retry vs surface.
         - On **client-side timeout** (socket.timeout, or URLError
-          wrapping one): (None, {"status": "timeout", "message": str}).
-          A timeout does NOT mean the submit failed — nzbdav may well
+          wrapping one): (None, {"message": str, "status": "timeout"}).
+          A timeout does NOT mean the submit failed—nzbdav may well
           have accepted the request and be processing it right now.
           The caller should check nzbdav's queue / history for a job
           matching ``nzb_name`` before retrying; a fresh submit would
           risk either a duplicate rejection or orphaning the
           in-progress job with a second nzo_id.
         - On non-HTTP errors (network unreachable, JSON decode failure,
-          truthy-but-empty response, anything else): (None, None) —
+          truthy-but-empty response, anything else): (None, None)—
           caller may retry.
 
     Side effects:
@@ -229,7 +229,7 @@ def submit_nzb(nzb_url, nzb_name="", settings_getter=None, submit_timeout=None):
     # NZBDAV_DUMP_NZBS_DIR is set, fetch the NZB body the addon is about
     # to ask nzbdav-rs to download and write it to disk. Lets the test
     # post-mortem inspect the exact bytes that went into nzbdav-rs's
-    # deobfuscator (e.g. for "no importable video file found" failures).
+    # deobfuscator (for example, for "no importable video file found" failures).
     _dump_submitted_nzb(nzb_url, nzb_name)
     return _execute_submit(url, timeout, nzb_name)
 
@@ -242,11 +242,11 @@ def _execute_submit(url, timeout, nzb_name):
     except HTTPError as e:
         return _submit_http_error_result(e)
     except Exception as e:  # pylint: disable=broad-except
-        # ``Exception`` intentionally — the prior ``(socket.timeout, URLError,
+        # ``Exception`` intentionally—the prior ``(socket.timeout, URLError,
         # json.JSONDecodeError, Exception)`` tuple made the three named
         # classes dead code because ``Exception`` is their base. This path
         # is the last-chance safety net for an nzbdav submit, so catching
-        # the full family (including things we haven't anticipated) keeps
+        # the full family (including failures nobody anticipated) keeps
         # the resolver from crashing while still letting caller-level
         # queue/history probes retry.
         return _submit_request_error_result(e, timeout, nzb_name)
@@ -279,7 +279,7 @@ def cancel_job(nzo_id, timeout=30, settings_getter=None):
 
     Issues a single SABnzbd-compatible queue DELETE
     (mode=queue&name=delete&value=<nzo_id>). This is "cancel" semantics,
-    not "delete everywhere" — completed and failed jobs that have already
+    not "delete everywhere"—completed and failed jobs that have already
     moved to nzbdav's history are deliberately left intact so the user
     can still inspect failure history in nzbdav's web UI.
 
@@ -288,17 +288,17 @@ def cancel_job(nzo_id, timeout=30, settings_getter=None):
         timeout: HTTP timeout in seconds. Defaults to 30 for slower
             nzbdav queue cleanup on loaded boxes.
         settings_getter: Optional callable for reading addon settings.
-            Required from script-mode contexts (e.g. TMDBHelper's
+            Required from script-mode contexts (for example, TMDBHelper's
             tmdb_play hook) where ``xbmcaddon.Addon()`` would SIGSEGV
             because the GUI dispatcher hasn't been initialized.
 
     Returns:
         True if nzbdav reported the queue DELETE succeeded (job was
-        found in the active queue and removed). False otherwise — which
+        found in the active queue and removed). False otherwise—which
         includes the legitimate "job not in queue anymore" case (it
         either completed, failed, or was already manually cancelled).
         Callers should treat False as a non-error: the next play
-        attempt's find_completed_by_name() check will pick up any job
+        attempt's find_completed_by_name() check picks up any job
         that genuinely raced into history.
 
     Side effects:
@@ -330,7 +330,7 @@ def _fetch_cancel_response(url, nzo_id, timeout):
         response_text = _http_get(url, timeout=timeout)
         return _coerce_response_dict(json.loads(response_text))
     except Exception as e:  # pylint: disable=broad-except
-        # cancel_job is a "make the mess go away" path — anything that
+        # cancel_job is a "make the mess go away" path—anything that
         # prevents the cancel from reaching nzbdav should just get logged
         # and swallowed so the caller doesn't cascade into error dialogs.
         xbmc.log(
@@ -349,7 +349,7 @@ def get_queue_slots(settings_getter=None, timeout=15):
     at least ``nzo_id`` and ``status`` (and usually ``filename``/``name`` and
     ``percentage``). The active download is the head slot (status
     ``Downloading``); waiting jobs follow. Returns an empty list on any error
-    or when the queue is empty, so callers can treat it as "nothing to clear".
+    or when the queue is empty, so callers can treat it as "nothing to clear."
     """
     try:
         base_url, api_key = _get_settings(settings_getter=settings_getter)
@@ -362,7 +362,7 @@ def get_queue_slots(settings_getter=None, timeout=15):
         )
         return []
     # SAB/nzbdav paginate the queue by start/limit; without a limit a small
-    # default page would hide later jobs from a "clear the whole queue". Mirror
+    # default page would hide later jobs from a "clear the whole queue." Mirror
     # find_queued_by_names's limit=200 so the probe sees the full queue.
     params = {"mode": "queue", "apikey": api_key, "output": "json", "limit": 200}
     url = "{}/api?{}".format(base_url, urlencode(params))
@@ -382,14 +382,14 @@ def get_queue_slots(settings_getter=None, timeout=15):
 def clear_queue(settings_getter=None, slots=None, timeout=None):
     """Cancel every job in the nzbdav queue and return the count cancelled.
 
-    Removes BOTH the actively-downloading job (the queue head) and any waiting
+    Removes BOTH the actively downloading job (the queue head) and any waiting
     jobs by issuing one queue DELETE per ``nzo_id`` through ``cancel_job``.
     History (completed/failed) is left intact, matching ``cancel_job``'s
-    queue-only semantics. Best-effort — a slot that fails to cancel is logged
+    queue-only semantics. Best-effort—a slot that fails to cancel is logged
     by ``cancel_job`` and skipped.
 
     ``slots`` lets the caller pass the exact queue listing it already probed
-    (e.g. the one shown to the user): those jobs are cancelled rather than
+    (for example, the one shown to the user): those jobs are cancelled rather than
     re-fetching, so a job that appeared between the probe and the clear is
     never cancelled unseen. When ``slots`` is None the current queue is
     fetched.
@@ -426,9 +426,9 @@ def get_job_history(nzo_id, settings_getter=None):
 
     Returns dict with keys ``status``, ``storage``, ``name``, ``nzo_id``,
     ``fail_message`` when the nzo_id is found, or ``None`` when it
-    hasn't appeared yet (or on any network / settings / parse error —
-    the resolver's poll loop treats None as "keep polling", so
-    transient failures don't abort the resolve).
+    hasn't appeared yet (or on any network / settings / parse error—
+    the resolver's poll loop treats None as "keep polling," so
+    transient failures don't cancel the resolve).
     """
     try:
         base_url, api_key = _get_settings(settings_getter=settings_getter)
@@ -577,7 +577,7 @@ def find_terminal_by_name(name, settings_getter=None):
     """Return the most recent terminal (Completed or Failed) history slot by name.
 
     Used by the resolver's poll loop to detect that nzbdav-rs has finished
-    a job — pass or fail — when its history slot carries a different
+    a job—pass or fail—when its history slot carries a different
     nzo_id than the addon submitted (the queue→history nzo_id remap).
     Distinct from ``find_completed_by_name`` which intentionally matches
     only ``Completed`` rows so callers looking for a ready-to-play stream
@@ -700,11 +700,11 @@ def find_queued_by_name(name, settings_getter=None):
         ``None``. ``None`` also covers every error path: missing
         settings, network failure, malformed response. The caller
         should treat ``None`` as "not yet in the queue, keep waiting
-        or retry the submit".
+        or retry the submit."
 
     Side effects:
         One HTTP GET to nzbdav /api?mode=queue with a bounded timeout
-        (10 s — this is a recovery-path probe, not the main submit).
+        (10 s—this is a recovery-path probe, not the main submit).
         No retries; the resolver calls this in a short loop after a
         submit timeout and handles its own pacing.
     """
@@ -752,7 +752,7 @@ def find_queued_by_names(names, settings_getter=None):
             return found
 
     # Some nzbdav builds report the user-supplied nzbname under "filename"
-    # only after the fetch/parse phase finishes, so a freshly-submitted job
+    # only after the fetch/parse phase finishes, so a freshly submitted job
     # may appear under a different slot key during the first few seconds.
     # Fall back to the "name" slot key (the third and last key nzbdav uses
     # for the submitted name; see resolver_queueclear._queue_slot_is_title).
@@ -831,12 +831,12 @@ def get_job_status(nzo_id, settings_getter=None):
         nzo_id: SABnzbd-compatible job identifier returned by submit_nzb.
 
     Returns:
-        A dict with keys ``status`` (e.g. "Queued", "Downloading",
-        "Fetching NZB", "Failed"), ``percentage`` (string, 0-100), and
+        A dict with keys ``status`` (for example, ``Queued``, ``Downloading``,
+        ``Fetching NZB``, ``Failed``), ``percentage`` (string, 0-100), and
         ``filename`` when the slot is known, or ``None`` on any network
         / parse / settings failure. The resolver's poll loop treats None
         as "no data this tick" and re-polls, so transient failures do
-        not abort the resolve.
+        not cancel the resolve.
     """
     try:
         base_url, api_key = _get_settings(settings_getter=settings_getter)
@@ -866,11 +866,11 @@ def get_job_status(nzo_id, settings_getter=None):
         response_text = _http_get(url, timeout=_API_READ_TIMEOUT)
         response = _coerce_response_dict(json.loads(response_text))
     except Exception as e:  # pylint: disable=broad-except
-        # ``Exception`` intentionally — the prior ``(URLError, json.JSONDecodeError,
+        # ``Exception`` intentionally—the prior ``(URLError, json.JSONDecodeError,
         # Exception)`` tuple was dead code (Exception subsumes the first two).
         # Resolver polls this every second while a download is active; any
-        # crash here would kill the poll loop, so we log and return None
-        # so the caller treats the tick as "no data, try again".
+        # crash here would end the poll loop, so this code logs and returns None
+        # so the caller treats the tick as "no data, try again."
         xbmc.log(
             (
                 "NeNeTeePee-Stream-Kodi: Job status request failed for nzo_id={}: {}"

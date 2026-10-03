@@ -24,18 +24,18 @@ def _submit_dupe_backups(
 ):
     """Submit the release's duplicate backups to NZBGet (#372, Smart Duplicates).
 
-    ``backups`` is the picker-computed list of ``{"link","title","score"}`` for
-    the same-release-name reposts. Each is appended with the shared ``dupe_key``,
-    its own DupeScore (all below the pick's), and DupeMode=SCORE, so NZBGet keeps
-    the pick (highest score) downloading and parks each backup in history as a
-    duplicate -- failing over to the best remaining one if the pick is
+    ``backups`` is the picker-computed list of dicts with keys ``link``, ``title``, and
+    ``score`` for the same-release-name reposts. Each is appended with the shared
+    ``dupe_key``, its own DupeScore (all below the pick's), and DupeMode=SCORE, so
+    NZBGet keeps the pick (highest score) downloading and parks each backup in history
+    as a duplicate -- failing over to the best remaining one if the pick is
     unrepairable. Because NZBGet decides by score, submission order does not
     matter: a backup submitted even after the pick has already succeeded is put
     into history as a backup (not deleted). Best-effort: a bad/duplicate URL or a
     failed fetch/append for one backup never aborts the rest or the pick. Stops
     early if ``cancel_event`` fires (the user canceled the resolve). Returns the
     list of LIVE submitted NZBIDs -- a ``DELETED/COPY``-vetoed backup (NZBGet's
-    content-fingerprint duplicate check refusing to re-touch content already in
+    content-fingerprint duplicate check refusing to re-add content already in
     history, #372 r6) is excluded so the fleet can backfill that slot, though it
     still lands in ``submitted_sink`` for cancel cleanup. ``submitted_sink`` (the
     resolve-shared ``ctx.submitted_nzbids``) receives each NZBID AS ITS APPEND
@@ -243,10 +243,10 @@ def _extra_backups_from_loader(
     #372 round 2 widening: beyond the picker's exact same-name rows, the fallback
     loader (an indexer search, already threaded for the nzbdav path) surfaces the
     same-content mirrors and NZBHydra duplicate uploads that were collapsed into a
-    single picker row. Returns ``[{"link","title","score"}]`` deduped against
-    ``seen_links``, scored DESCENDING from ``score_base`` (the fleet's
-    wall-clock base) so they OUTRANK any prior same-key success while sitting
-    BELOW every same-name backup, which start at ``score_base + 1`` (a
+    single picker row. Returns a list of dicts with keys ``link``, ``title``, and
+    ``score``, deduped against ``seen_links``, scored DESCENDING from ``score_base``
+    (the fleet's wall-clock base) so they OUTRANK any prior same-key success while
+    sitting BELOW every same-name backup, which start at ``score_base + 1`` (a
     last-resort failover, keyed under the pick's DupeKey). Bounded by
     ``limit`` (the standby cap's remaining slots) so the total backup count
     honors the user's "Maximum standby fallback streams" as configured -- no
@@ -256,7 +256,7 @@ def _extra_backups_from_loader(
     when a candidate is ``DELETED/COPY``-vetoed (#372 r6). Scores keep
     descending across the whole widened list; the default ``reserve=0``
     leaves every existing caller byte-identical. Best-effort: a
-    missing/erroring loader, its "disabled" sentinel (a non-list), or
+    missing/erroring loader, its turned-off sentinel (a non-list), or
     ``limit <= 0`` yields ``[]``.
     """
     cap = limit
@@ -282,7 +282,7 @@ def _load_extra_candidates(loader):
     """Run the fallback loader, absorbing every failure mode (#372 r2).
 
     Returns the candidate list, or ``[]`` for an erroring loader or its
-    "disabled" sentinel (a non-list) -- the extras are best-effort widening
+    turned-off sentinel (a non-list) -- the extras are best-effort widening
     only, so a broken indexer search must never surface past here.
     """
     try:
@@ -317,11 +317,11 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
     Widens with same-content / Hydra-deferred candidates (#372 r2) as
     lowest-priority backups keyed under the same (pick's) DupeKey. Bounds them
     by the standby cap's REMAINING slots so same-name backups + extras never
-    exceed "Maximum standby fallback streams", and rides them on the fleet's
+    exceed ``Maximum standby fallback streams``, and rides them on the fleet's
     ``score_base`` so they outrank prior same-key successes (#372 r4). A
     loader-only fleet (``backups`` empty, NZBHydra collapsed every mirror into
     one row) submits just the extras. Reads ONLY the snapshot ``getter`` --
-    this runs on the worker thread, which must never touch Kodi. Every
+    this runs on the worker thread, which must never call into Kodi. Every
     appended NZBID is recorded into ``submitted_ids`` AS IT LANDS so the
     post-cancel cleanup can delete exactly this resolve's submissions.
     """
@@ -336,7 +336,7 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
     if cancel_event.is_set():
         return
     # Extras budget = the standby cap's slots the LIVE same-name backups left
-    # free; a COPY-vetoed (or entirely-failed) same-name append frees its slot
+    # free; a COPY-vetoed (or entirely failed) same-name append frees its slot
     # for a loader replacement (#372 r6).
     max_backups = dupe.get("max_backups")
     remaining = (
@@ -470,7 +470,7 @@ def _spawn_dupe_backups(ctx):
     download regardless of when the backups land -- so submission order is not a
     concern and a backup arriving after the pick already succeeded is still put
     into history as a backup, not deleted. Skips entirely when the server has
-    DupeCheck disabled (backups would download in parallel), and warns once if
+    DupeCheck turned off (backups would download in parallel), and warns once if
     HealthCheck=Pause would block automatic failover. Reads settings from a
     main-thread snapshot so the worker never touches Kodi off-thread. All errors
     are swallowed -- backups are pure insurance and must never break playback.
@@ -533,7 +533,7 @@ def _spawn_dupe_backups(ctx):
         )
         thread.start()
     except Exception as exc:  # pylint: disable=broad-except
-        # e.g. RuntimeError "can't start new thread" under thread exhaustion.
+        # for example, RuntimeError "can't start new thread" under thread exhaustion.
         # The backups are pure insurance -- never let them break the already-
         # queued pick's playback.
         _core.xbmc.log(
@@ -549,11 +549,11 @@ def _spawn_dupe_backups(ctx):
 # ---------------------------------------------------------------------------
 # #372 round 6: recover from NZBGet's content-fingerprint DELETED/COPY veto.
 #
-# NZBGet has its OWN content-fingerprint duplicate check (separate from our
+# NZBGet has its OWN content-fingerprint duplicate check (separate from the
 # DupeKey/DupeScore fleet handling) that silently vetoes ANY re-submission of
 # content it has seen before -- the item lands straight in history as
 # ``DELETED/COPY`` with zero bytes, never entering the queue, so the existing
-# promotion machinery (which only sees actively-queued siblings) is blind to it.
+# promotion machinery (which only sees actively queued siblings) is blind to it.
 # The append RPC's DupeMode=FORCE overrides this check, so a confirmed dead end
 # (pick died DELETED/COPY, group otherwise exhausted) is recovered by re-appending
 # the pick once with FORCE. Reactive, not preemptive: FORCE from the start would
@@ -766,7 +766,7 @@ def _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids):
     it was adopted -- #372 r6), any paused-promoted members (a promotion that
     landed while NZBGet was paused never becomes tracked), the worker's
     submitted backups (the parked hidden DUP rows -- ``cancel_jobs`` deletes
-    history before queue, so nothing of OURS is left to promote; a manual
+    history before queue, so nothing from this fleet is left to promote; a manual
     final-delete does not trigger NZBGet's failover), and the original pick. An
     append still in flight at cancel is covered by the worker's own drain
     cleanup. Relocated from nzbget_resolver to keep that module under the Codacy

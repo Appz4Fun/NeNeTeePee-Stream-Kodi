@@ -64,8 +64,8 @@ class _RangeParseMixin:  # pylint: disable=too-few-public-methods
                 status = getattr(resp, "status", None) or resp.getcode()
                 if status not in (200, 206):
                     return _PROBE_UNAVAILABLE
-                # Validate the probe actually returned bytes — an upstream
-                # that 206s with an empty body would otherwise be accepted
+                # Validate the probe actually returned bytes: an upstream
+                # that returns 206 with an empty body would otherwise be accepted
                 # as recovered, sending the main loop straight back into the
                 # same bad region on the next range read.
                 try:

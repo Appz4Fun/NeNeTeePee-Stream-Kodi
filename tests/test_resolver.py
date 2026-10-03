@@ -3,7 +3,7 @@
 # pylint: disable=too-many-arguments,too-many-positional-arguments
 # ^ 9-14-arg test signatures come from stacked @patch decorators; scheduled for
 #   fixture consolidation in the complexity-reduction Phase C1 wave, after
-#   which this module-level disable comes off.
+#   which this module-level pylint suppression comes off.
 
 import sys
 import threading
@@ -66,10 +66,10 @@ def _no_resume_store_disk_writes():
 
     The real cancel path calls ``_preserve_resume_on_cancel`` ->
     ``resume_store.save_resume`` with the default path, which resolves through
-    the mocked ``xbmcvfs.translatePath`` to a constant ``MagicMock/...`` path
+    the mocked ``xbmcvfs.translatePath`` to a constant ``MagicMock``-derived path
     and writes ``resume.json`` there -- the same location ``cache`` later uses
     as its base dir, so the stray file makes ``cache.set_cached`` fail with
-    ``NotADirectoryError`` in unrelated tests (e.g. test_router). The
+    ``NotADirectoryError`` in unrelated tests (for example, test_router). The
     ``_preserve_resume_on_cancel`` behavior is asserted directly in its own
     unit tests, which mock ``resume_store`` explicitly.
     """
@@ -136,7 +136,7 @@ def test_storage_to_webdav_path_trailing_slash():
 
 
 def test_storage_to_webdav_path_nzbdav_rs_passthrough():
-    """nzbdav-rs returns the WebDAV path directly — pass through with
+    """nzbdav-rs returns the WebDAV path directly—pass through with
     a trailing slash; do NOT re-root it under /content/ a second time."""
     result = _storage_to_webdav_path("/content/uncategorized/Movie Name")
     assert result == "/content/uncategorized/Movie Name/"
@@ -145,7 +145,7 @@ def test_storage_to_webdav_path_nzbdav_rs_passthrough():
 def test_storage_to_webdav_path_nzbdav_rs_passthrough_no_category():
     """nzbdav-rs with no category: storage is /content/Name/. The prior
     fallback-by-last-two-components would have produced
-    /content/content/Name/ — the passthrough branch must win first."""
+    /content/content/Name/—the passthrough branch must win first."""
     result = _storage_to_webdav_path("/content/Movie Name/")
     assert result == "/content/Movie Name/"
 
@@ -317,7 +317,7 @@ def test_get_submit_timeout_seconds_uses_requested_default_for_empty_setting():
 
 
 def test_get_fallback_submit_delay_seconds_defaults_to_prewarm_constant():
-    """An empty setting falls back to the documented 120s prewarm default."""
+    """An empty setting falls back to the documented 120 s prewarm default."""
 
     def settings_getter(_key, default=""):
         return ""
@@ -338,7 +338,7 @@ def test_get_fallback_submit_delay_seconds_uses_configured_value():
 
 
 def test_get_fallback_submit_delay_seconds_allows_zero():
-    """Zero means submit right at playback start — a valid configuration."""
+    """Zero means submit right at playback start—a valid configuration."""
 
     def settings_getter(key, default=""):
         return "0" if key == "fallback_submit_delay" else default
@@ -497,7 +497,7 @@ def test_completed_job_stream_passes_settings_getter_to_webdav_lookup(mock_find_
         {"Authorization": "Basic x"},
     )
 
-    # Body probe sees a large, fully-served file (HEAD length + mid-file bytes).
+    # Body probe sees a large, fully served file (HEAD length + mid-file bytes).
     with patch(
         "urllib.request.urlopen",
         return_value=_probe_response(content_length=85_000_000, body=b"\x00"),
@@ -513,7 +513,7 @@ def test_completed_job_stream_passes_settings_getter_to_webdav_lookup(mock_find_
         "/content/uncategorized/movie/",
         settings_getter=settings_getter,
         title_hint="movie.mkv",
-        min_video_size=0,  # no download_size -> floor disabled
+        min_video_size=0,  # no download_size -> floor turned off
     )
 
 
@@ -1488,7 +1488,7 @@ def test_completed_job_stream_rejected_by_fault_env(mock_find_stream):
 @patch("resources.lib.resolver._find_video_stream_for_folder")
 def test_completed_job_stream_fails_open_when_probe_inconclusive(mock_find_stream):
     """A timeout / network error during the probe is ambiguous, not proof of
-    a bad file — fail open and stream rather than block a slow-but-valid file.
+    a bad file—fail open and stream rather than block a slow-but-valid file.
     """
     from urllib.error import URLError
 
@@ -1683,7 +1683,7 @@ def test_finish_direct_playback_applies_resume_start_offset(
     mock_gui.Window.return_value.setProperty.assert_any_call(
         "nzbdav.resume_offset", "123.0"
     )
-    # The lookup moved earlier; the finish func must not touch resume_store.
+    # The lookup moved earlier; the finish func must not modify resume_store.
     mock_resume_store.get_resume.assert_not_called()
     mock_plugin.setResolvedUrl.assert_called_once_with(7, True, li)
 
@@ -1838,7 +1838,7 @@ def test_resolve_resume_choice_merges_store_and_bookmark(
 def test_resolve_resume_choice_empty_id_skips_store_lookup(
     mock_resume_store, mock_resume_choice
 ):
-    """An empty release identity must not touch resume_store (caller skips)."""
+    """An empty release identity must not modify resume_store (caller skips)."""
     mock_resume_choice.release_identity.return_value = ""
     mock_resume_choice.choose_resume_seconds.return_value = 0.0
 
@@ -2047,7 +2047,7 @@ def test_clear_kodi_playback_state_deletes_tmdb_helper_url(mock_xbmc, tmp_path):
     urls = [
         tmdb_base + "&tmdb_type=movie&tmdb_id=389",
         tmdb_base + "&tmdb_id=389&tmdb_type=movie",
-        tmdb_base + "&tmdb_type=movie&tmdb_id=3891",  # different id — keep
+        tmdb_base + "&tmdb_type=movie&tmdb_id=3891",  # different id—keep
         "plugin://plugin.video.nzbdav/play?type=movie&title=Other",  # unrelated
     ]
     for i, url in enumerate(urls, start=1):
@@ -2081,7 +2081,7 @@ def test_clear_kodi_playback_state_deletes_tmdb_helper_url(mock_xbmc, tmp_path):
 
     conn = sqlite3.connect(str(db))
     cur = conn.cursor()
-    # files rows must all still be present — we only touch bookmark.
+    # files rows must all still be present—only the bookmark changes.
     cur.execute("SELECT strFilename FROM files ORDER BY idFile")
     remaining = [row[0] for row in cur.fetchall()]
     assert set(remaining) == set(
@@ -2294,7 +2294,7 @@ def test_clear_kodi_playback_state_movie_does_not_match_episode_url(
 
 @patch("resources.lib.resolver.xbmc")
 def test_clear_kodi_playback_state_deletes_own_plugin_url(mock_xbmc, tmp_path):
-    """Clearing without tmdb_id deletes the bookmark for our own plugin URL.
+    """Clearing without tmdb_id deletes the bookmark for the add-on's own plugin URL.
 
     The ``files`` row is preserved; only the ``bookmark`` row is removed.
     Regression test for TODO.md §H.2 C5 (was ISSUE_REPORT.md C5 before merge).
@@ -2406,7 +2406,7 @@ def test_clear_kodi_playback_state_handles_db_busy(mock_xbmc, tmp_path):
     mock_xbmc.Player.return_value.isPlayingVideo.return_value = False
     db = _build_fake_videos_db(tmp_path)
 
-    # Hold an exclusive lock on the DB so our short-timeout connection
+    # Hold an exclusive lock on the DB so the add-on's short-timeout connection
     # hits OperationalError.
     blocker = sqlite3.connect(str(db), isolation_level=None)
     blocker_cur = blocker.cursor()
@@ -2441,7 +2441,7 @@ def test_clear_kodi_playback_state_skips_when_video_playing(mock_xbmc, tmp_path)
     """If a video is playing, skip DB cleanup to avoid vacuum contention."""
     mock_xbmc.Player.return_value.isPlayingVideo.return_value = True
     _clear_kodi_playback_state()
-    # Should have checked isPlayingVideo and returned early — no DB access.
+    # Should have checked isPlayingVideo and returned early—no DB access.
     mock_xbmc.Player.return_value.isPlayingVideo.assert_called_once()
     mock_xbmc.log.assert_called()
     log_calls = [c[0][0] for c in mock_xbmc.log.call_args_list]
@@ -2455,7 +2455,7 @@ def test_clear_kodi_playback_state_swallows_db_errors(mock_xbmc, tmp_path):
     with patch("resources.lib.resolver.xbmcvfs") as mock_vfs:
         mock_vfs.translatePath.side_effect = RuntimeError("boom")
         _clear_kodi_playback_state()
-    # Verify we logged a warning (via xbmc.log).
+    # Verify the add-on logged a warning (via xbmc.log).
     mock_xbmc.log.assert_called()
 
 
@@ -2924,7 +2924,7 @@ def test_resolve_overlaps_bookmark_cleanup_with_post_submit_poll(
     assert timing["cleanup_end"] <= timing["play"]
     # Intervals [cleanup_start, cleanup_end] and [poll_start, poll_end] intersect
     # => cleanup ran in parallel with the post-submit poll (serial would not overlap).
-    # cleanup_start < poll_end is already asserted (with a message) above.
+    # cleanup_start < poll_end is already asserted (with a message) earlier.
     assert timing["poll_start"] < timing["cleanup_end"]
 
 
@@ -3133,7 +3133,7 @@ def test_resolve_overlaps_proxy_prepare_with_bookmark_cleanup_after_ready(
     assert timing["cleanup_end"] <= timing["resolved"]
     # Intervals [prepare_start, prepare_end] and [cleanup_start, cleanup_end]
     # intersect => proxy prepare overlapped the in-flight cleanup (not serial).
-    # prepare_start < cleanup_end is already asserted above.
+    # prepare_start < cleanup_end is already asserted earlier.
     assert timing["cleanup_start"] < timing["prepare_end"]
 
 
@@ -4423,12 +4423,13 @@ def test_start_direct_playback_prepare_snapshots_settings_in_worker(
     # live worker thread. If thread.start() raised and prepare ran synchronously
     # (or a refactor dropped the handle / took the ready-state path), state
     # carries "thread": None. This goes red even when the in-flight gate timing
-    # below stays green (e.g. a dropped ``state["thread"] = thread`` assignment).
+    # below stays green (for example, a dropped ``state["thread"] = thread``
+    # assignment).
     assert state["thread"] is not None
 
     try:
         # The worker is genuinely in-flight (it has entered the blocked settings
-        # read) but cannot have finished prepare while the gate above is closed
+        # read) but cannot have finished prepare while the earlier gate is closed
         # => structural proof prepare runs off the caller's thread. A
         # synchronous-prepare regression sets ``done`` before this point.
         assert slow_started.wait(2)
@@ -5355,7 +5356,7 @@ def test_submit_fallback_candidates_passes_settings_getter_to_nzbdav_calls(
 def test_resolve_submit_failure(
     mock_poll, mock_submit, mock_plugin, mock_gui, mock_xbmc, mock_find_completed
 ):
-    """All submit retries fail — setResolvedUrl called with False."""
+    """All submit retries fail—setResolvedUrl called with False."""
     mock_poll.return_value = (2, 60)
     mock_submit.return_value = (None, None)
     mock_find_completed.return_value = None
@@ -5489,7 +5490,7 @@ def test_submit_ui_pump_uses_nonblocking_abort_check_after_submit_result(
 def test_submit_ui_pump_continues_when_probe_threads_cannot_start(
     mock_submit, _mock_find_queued, _mock_find_completed
 ):
-    """Thread exhaustion in optional probes must not abort an active submit."""
+    """Thread exhaustion in optional probes must not cancel an active submit."""
     real_thread = threading.Thread
     allow_submit = threading.Event()
 
@@ -5548,7 +5549,7 @@ def test_submit_ui_pump_terminal_error_does_not_wait_for_probe_cleanup(
         return None, {"status": 400, "message": "TooManyRequests"}
 
     def slow_probe(*_args, **_kwargs):
-        # Mark in-flight, then block until the test releases us in its finally
+        # Mark in-flight, then block until the test releases the thread in its finally
         # (AFTER the snapshot), with no timer -- load-independent. The bounded
         # wait caps the regression case (a terminal path that DOES await probe
         # cleanup) so the test cannot hang.
@@ -5579,10 +5580,10 @@ def test_submit_ui_pump_terminal_error_does_not_wait_for_probe_cleanup(
         # an UNBOUNDED await of the still-parked probe threads.
         assert not probe_completed
         # Bounded-join guard (test-analyzer): dropping the terminal-error
-        # early-skip would let cleanup fall through to t.join(timeout=1) on each
-        # still-parked probe, pinning the return at ~1-2s. The healthy terminal
-        # path returns in ~ms (>=10x margin); this generous 0.5s ceiling sits
-        # well below the ~1s+ regression, staying load-independent while still
+        # early skip would let cleanup fall through to t.join(timeout=1) on each
+        # still-parked probe, pinning the return at ~1-2 s. The healthy terminal
+        # path returns in ~ms (>=10x margin); this generous 0.5 s ceiling sits
+        # well below the ~1 s+ regression, staying load-independent while still
         # going red on the bounded join that `not probe_completed` alone misses.
         assert elapsed < 0.5
         assert nzo_id is None
@@ -5664,11 +5665,12 @@ def test_wait_direct_playback_prepare_waits_for_local_proxy_when_prepare_stalls(
     state = _start_direct_playback_prepare(stream_url, stream_headers)
     prepared = _wait_direct_playback_prepare(state, wait_seconds=0.01)
 
-    # The returned proxy_url is the SLOW prepare's own output (".../stream/slow"),
-    # which only exists once the stalled 0.04s prepare ran to completion -- so a
-    # correct result proves _wait_direct_playback_prepare waited for it. The old
+    # The returned proxy_url is the SLOW prepare's own output (the
+    # ``/stream/slow`` path), which only exists once the stalled 0.04 s prepare ran
+    # to completion -- so a correct result proves _wait_direct_playback_prepare
+    # waited for it. The old
     # `elapsed >= 0.03` lower bound was redundant with that AND flaked under load
-    # (the worker's 0.04s sleep can begin before `started` is captured, so the
+    # (the worker's 0.04 s sleep can begin before `started` is captured, so the
     # measured span dips below 0.03 even though the wait happened).
     assert prepared["service_port"] == 57800
     assert prepared["stream_url"] == stream_url
@@ -5742,9 +5744,9 @@ def test_submit_ui_pump_adopts_existing_queue_without_initial_probe_delay(
     def delayed_submit(_nzb_url, _title):
         assert queue_seen.wait(timeout=1)
         # Released only in the finally below (AFTER the snapshot), with no
-        # early timer, so the slow submit worker cannot finish before we
-        # record whether adoption waited for it -- load-independent. The
-        # 0.75s cap only bounds a regression that blocks on this submit.
+        # early timer, so the slow submit worker cannot finish before the
+        # test records whether adoption waited for it -- load-independent. The
+        # 0.75 s cap only bounds a regression that blocks on this submit.
         submit_can_finish.wait(timeout=0.75)
         submit_completed[0] = True
         return "SABnzbd_nzo_submitted_late", None
@@ -5778,27 +5780,27 @@ def test_submit_ui_pump_adopts_existing_queue_without_initial_probe_delay(
     monitor.waitForAbort.assert_not_called()
     # Structural proof (load-independent): the existing-queue hit must be
     # adopted before the slow submit worker is released (only the finally
-    # above releases it, after the snapshot). If adoption wrongly waited out
+    # preceding finally releases it, after the snapshot). If adoption wrongly waited out
     # a fixed grace, delayed_submit would finish its bounded wait and set
     # submit_completed -> submit_completed_at_return True.
     assert submit_completed_at_return is False
     # No-initial-probe-delay guard (CodeRabbit): the load-independent PRIMARY
     # check is that the production constant is still zero -- it catches ANY
-    # reintroduced non-zero initial grace, including a small one (e.g. 0.05) that
-    # the coarse runtime ceiling below would let slip. The worker does
+    # reintroduced non-zero initial grace, including a small one (for example,
+    # 0.05) that the coarse runtime ceiling below would let slip. The worker does
     # `queue_stop.wait(_SUBMIT_QUEUE_PROBE_INITIAL_DELAY_SECONDS)` before its
     # first find_queued_by_name, so a non-zero value delays the FIRST probe --
-    # which the submit_completed snapshot above cannot see.
+    # which the earlier submit_completed snapshot cannot see.
     from resources.lib.resolver import (  # pylint: disable=import-outside-toplevel
         _SUBMIT_QUEUE_PROBE_INITIAL_DELAY_SECONDS,
     )
 
     assert _SUBMIT_QUEUE_PROBE_INITIAL_DELAY_SECONDS == 0
-    # Non-vacuity: the queue probe actually ran, so the adoption above was
-    # genuinely exercised. The previous 0.1s wall-clock ceiling on the first
+    # Non-vacuity: the queue probe actually ran, so the earlier adoption was
+    # genuinely exercised. The previous 0.1 s wall-clock ceiling on the first
     # probe was removed (Codex P2): it measured thread creation + worker
     # scheduling, so a loaded runner could exceed it even with a healthy zero
-    # initial delay -- the constant pin above is the load-independent guard.
+    # initial delay -- the earlier constant pin is the load-independent guard.
     assert first_probe_at, "queue probe never ran"
 
 
@@ -5818,7 +5820,7 @@ def test_submit_ui_pump_rechecks_queue_quickly_after_initial_fast_miss(
         # finally (AFTER snapshotting the flag below). submit_completed flips
         # True only once this wait returns, so a fast path that adopts the
         # queue hit without awaiting the worker observes it still False --
-        # load-independent. The 0.75s cap only bounds a regression that waits.
+        # load-independent. The 0.75 s cap only bounds a regression that waits.
         submit_can_finish.wait(timeout=0.75)
         submit_completed[0] = True
         return "SABnzbd_nzo_submitted", None
@@ -5864,9 +5866,9 @@ def test_submit_ui_pump_rechecks_queue_quickly_after_initial_fast_miss(
     # Cadence guard (CodeRabbit Major + Codex P2): two probes happening is not
     # enough -- the second probe must have been paced by the FAST retry interval,
     # not the normal slow poll. A regression dropping the recheck to the slow poll
-    # (still < the 0.75s submit timeout) keeps len == 2 and the submit-not-
+    # (still < the 0.75 s submit timeout) keeps len == 2 and the submit-not-
     # completed snapshot green. Instead of measuring the scheduler-delayed inter-
-    # probe wall-clock gap (which flakes under load), the recording Event above
+    # probe wall-clock gap (which flakes under load), the earlier recording Event
     # captured the actual interval the worker passed to queue_stop.wait(); assert
     # the slow interval was never used to pace a reprobe.
     from resources.lib.resolver import (  # pylint: disable=import-outside-toplevel
@@ -5882,7 +5884,7 @@ def test_submit_ui_pump_rechecks_queue_quickly_after_initial_fast_miss(
 
     # Every reprobe-pacing wait must be the fast interval. Waits below it (the
     # 0.0 initial-delay wait and the <=0.01 history-probe coordination polls) are
-    # not cadence; any wait at or above the fast interval that isn't exactly the
+    # not cadence; any wait at or over the fast interval that isn't exactly the
     # fast interval -- the slow poll OR an intermediate value like 0.1 -- is a
     # cadence regression (CodeRabbit). The healthy run records only [~0.003, 0.01,
     # 0.05], so the fast interval is the sole >= -fast value.
@@ -5905,7 +5907,7 @@ def test_submit_ui_pump_rechecks_queue_quickly_after_initial_fast_miss(
     )
     # Structural proof (load-independent): the second queue probe's hit is
     # adopted and returned while the submit worker is still blocked on
-    # submit_can_finish (released only in the finally above, after this
+    # submit_can_finish (released only in the preceding finally, after this
     # snapshot). A regression that waits for the submit worker would let it
     # complete first -> submit_completed_at_return True.
     assert submit_completed_at_return is False
@@ -5946,7 +5948,7 @@ def test_submit_ui_pump_starts_history_probe_after_fast_queue_miss(
     monitor.waitForAbort.side_effect = lambda seconds: (_time.sleep(seconds) or False)
 
     try:
-        # Push the parallel grace far above the submit worker's 0.75s timeout
+        # Push the parallel grace far over the submit worker's 0.75 s timeout
         # so the completed-history probe cannot adopt by waiting the grace out:
         # it can only fire (and win adoption) via the fast queue-miss handoff
         # (first_queue_probe_done). A regression that waits the grace would
@@ -5962,9 +5964,9 @@ def test_submit_ui_pump_starts_history_probe_after_fast_queue_miss(
     finally:
         submit_can_finish.set()
 
-    # Structural handoff guard (replaces wall-clock bounds that sat only ~0.02s
-    # below the grace): with the grace disabled, history can only have fired —
-    # and adoption can only resolve to the completed row — via the queue-miss
+    # Structural handoff guard (replaces wall-clock bounds that sat only ~0.02 s
+    # below the grace): with the grace turned off, history can only have fired—
+    # and adoption can only resolve to the completed row—via the queue-miss
     # handoff, not by waiting out the grace.
     assert history_probe_times, (
         "completed-history probe never fired; it waited out the grace instead "
@@ -6061,7 +6063,7 @@ def test_timeout_adoption_overlaps_completed_history_with_slow_queue_miss(
 
     assert nzo_id == "SABnzbd_nzo_completed_timeout"
     # Structural overlap guard (replaces a flake-prone wall-clock bound: the
-    # 0.12s queue miss sits below the ~0.09-0.15s jitter floor). History runs
+    # 0.12 s queue miss sits below the ~0.09-0.15 s jitter floor). History runs
     # concurrently with the in-flight queue miss, not serialized after it.
     assert history_during_queue == [True], (
         "completed-history probe ran only after the slow queue miss finished "
@@ -6168,8 +6170,8 @@ def test_submit_ui_pump_rechecks_queue_while_history_miss_is_slow(
     assert (nzo_id, submit_error) == ("SABnzbd_nzo_second_fast_probe", None)
     assert len(queue_probe_times) == 2
     # Structural cadence guard (replaces a flake-prone wall-clock bound: the
-    # 0.05s fast interval and the 0.18s history miss are too close given
-    # ~0.09s jitter). The second queue probe runs while the history miss is
+    # 0.05 s fast interval and the 0.18 s history miss are too close given
+    # ~0.09 s jitter). The second queue probe runs while the history miss is
     # still in flight, proving the queue cadence is not serialized behind it.
     assert second_probe_during_history == [
         True
@@ -6360,7 +6362,7 @@ def test_submit_ui_pump_overlaps_completed_history_probe_with_slow_queue_miss(
 
     assert (nzo_id, submit_error) == ("SABnzbd_nzo_completed_probe", None)
     # Structural overlap guard (replaces a flake-prone wall-clock bound: the
-    # 0.14s queue miss sits below the ~0.09-0.15s jitter floor). The visible
+    # 0.14 s queue miss sits below the ~0.09-0.15 s jitter floor). The visible
     # history hit is adopted while the queue miss is still running.
     assert history_during_queue == [True], (
         "completed-history probe ran only after the slow queue miss finished "
@@ -6528,7 +6530,7 @@ def test_resolve_submit_timeout_adopts_queued_nzo_id(
     bounce as a duplicate or orphan the first job."""
     mock_poll.return_value = (2, 60)
     mock_submit.return_value = (None, {"status": "timeout", "message": "Timed out"})
-    # First call: pre-submit "already completed" check — nothing there.
+    # First call: pre-submit "already completed" check—nothing there.
     # Subsequent calls from the adopt helper also return None, so the
     # queue hit is what ends up winning.
     mock_find_completed.return_value = None
@@ -6560,7 +6562,7 @@ def test_resolve_submit_timeout_adopts_queued_nzo_id(
 
     resolve(1, {"nzburl": "http://hydra/getnzb/abc", "title": "movie.mkv"})
 
-    # Only ONE submit — the adoption path must prevent further retries.
+    # Only ONE submit—the adoption path must prevent further retries.
     assert mock_submit.call_count == 1
     # The queue probe fires at least once with the title as its argument.
     assert mock_find_queued.called
@@ -6589,7 +6591,7 @@ def test_resolve_submit_timeout_retries_when_queue_empty(
     mock_find_completed,
 ):
     """If the queue probe comes up empty after a submit timeout, the
-    resolver falls through to a genuine retry of submit_nzb — the
+    resolver falls through to a genuine retry of submit_nzb—the
     first submit may have actually failed at the network level."""
     mock_poll.return_value = (2, 60)
     mock_submit.return_value = (None, {"status": "timeout", "message": "Timed out"})
@@ -6850,9 +6852,9 @@ def test_resolve_poll_interval_respected(
     poll_interval = 7
     # Tiny download_timeout. status stays "Downloading" forever here, so resolve()
     # only stops at its deadline. Its per-poll wait (_wait_for_abort_or_timeout)
-    # is mocked instant, so the loop does NOT pace on poll_interval — it busy-spins
+    # is mocked instant, so the loop does NOT pace on poll_interval—it busy-spins
     # until the real-monotonic download_timeout deadline (or MAX_POLL_ITERATIONS).
-    # 3600s meant ~17s of spinning before the iteration cap; a fractional deadline
+    # 3600 s meant ~17 s of spinning before the iteration cap; a fractional deadline
     # bounds the wall clock directly. resolve() still calls the wait with
     # poll_interval each pass, so assert_called_with(monitor, poll_interval) is
     # unchanged. The wall time is the deadline, not the (machine-dependent)
@@ -6958,7 +6960,7 @@ def test_resolve_dialog_closed_on_submit_exception(
     must not strand Kodi on the plugin handle. The worker-thread
     isolation added with the UI-pump helper now catches the exception
     inside the worker, logs it, and surfaces as a normal submit
-    failure — so the specific 'Error: <message>' dialog that the
+    failure—so the specific 'Error: <message>' dialog that the
     old propagate-to-outer-try path produced no longer fires.
     What's still asserted: dialog.close, handle resolved False, and
     the final failure dialog (string 30098) did fire."""
@@ -7015,7 +7017,7 @@ def test_resolve_max_iterations_safeguard(
     mock_find,
 ):
     """Resolve loop exits after MAX_POLL_ITERATIONS even without timeout."""
-    mock_poll.return_value = (0, 999999)  # Very long timeout, 0s interval
+    mock_poll.return_value = (0, 999999)  # Very long timeout, 0 s interval
     mock_find.return_value = None
     mock_submit.return_value = ("SABnzbd_nzo_stuck", None)
     mock_status.return_value = {"status": "Queued", "percentage": "0"}
@@ -7205,11 +7207,11 @@ def test_poll_once_returns_full_progress_queue_before_slow_history(
 ):
     """A 100% queue row should not block behind a slow history request."""
 
-    # Slow path is pushed far above the bound so the assertion stays
-    # red-on-regression: the legitimate path returns after the ~0.14s
+    # Slow path is pushed far over the bound so the assertion stays
+    # red-on-regression: the legitimate path returns after the ~0.14 s
     # full-progress grace, while a regression that blocks on history would
-    # take ~2s and fail the widened bound. The wide gap (0.14s grace vs 2.0s
-    # block, bound 1.0s) makes the wall-clock check load-robust.
+    # take ~2 s and fail the widened bound. The wide gap (0.14 s grace vs 2.0 s
+    # block, bound 1.0 s) makes the wall-clock check load-robust.
     def slow_history(_nzo_id):
         _time.sleep(2.0)
 
@@ -7245,7 +7247,7 @@ def test_poll_until_ready_success(
     mock_validate,
     mock_find_completed,
 ):
-    """_poll_until_ready returns (url, headers) when download completes."""
+    """_poll_until_ready returns (URL, headers) when download completes."""
     mock_submit.return_value = ("nzo_abc", None)
     mock_status.return_value = {"status": "Downloading", "percentage": "100"}
     mock_history.return_value = {
@@ -7474,8 +7476,8 @@ def test_poll_until_ready_graces_nearly_complete_queue_for_history(
     assert url == "http://webdav/movie.mkv"
     assert headers == {"Authorization": "x"}
     # Grace-hit-on-first-poll (replaces a flake-prone wall-clock bound: the
-    # ~0.05s grace hit and the ~0.15s extra-poll regression are too close given
-    # ~0.09s jitter). The completed history is caught within the nearly-complete
+    # ~0.05 s grace hit and the ~0.15 s extra-poll regression are too close given
+    # ~0.09 s jitter). The completed history is caught within the nearly complete
     # grace on the FIRST poll, so neither API is polled twice; a missed grace
     # forces a second poll (2 calls each) before WebDAV discovery.
     assert (
@@ -7487,10 +7489,10 @@ def test_poll_until_ready_graces_nearly_complete_queue_for_history(
         len(history_calls)
     )
     # The count asserts alone cannot see a regression that poll-waits the full
-    # 0.2s interval and then reads history in-place (counts stay 1 while the
+    # 0.2 s interval and then reads history in-place (counts stay 1 while the
     # forbidden startup delay returns, since waitForAbort sleeps in-band). Assert
     # no full poll-interval wait happened: the grace path reaches history via the
-    # 0.1s grace / fast-repoll, never the 0.2s poll passed to _poll_until_ready.
+    # 0.1 s grace / fast-repoll, never the 0.2 s poll passed to _poll_until_ready.
     poll_waits = [c.args[0] for c in monitor.waitForAbort.call_args_list if c.args]
     assert 0.2 not in poll_waits, (
         "nearly-complete grace waited a full 0.2s poll before history; "
@@ -7527,8 +7529,8 @@ def test_poll_until_ready_waits_for_full_progress_history_before_poll_tick(
         history_calls.append(_time.perf_counter())
         # Simulate a small history-arrival latency that lands comfortably inside
         # _POLL_FULL_PROGRESS_HISTORY_GRACE_SECONDS (0.14). The earlier 0.12 sleep
-        # sat only 0.02s under the grace, so under CPU load it stretched past 0.14
-        # and forced a false 2nd poll. ~0.02 keeps a wide margin while still
+        # sat only 0.02 s under the grace, so under CPU load it stretched past 0.14
+        # and forced a false second poll. ~0.02 keeps a wide margin while still
         # exercising the grace-wait path.
         if len(history_calls) == 1:
             _time.sleep(0.02)
@@ -7559,9 +7561,9 @@ def test_poll_until_ready_waits_for_full_progress_history_before_poll_tick(
         "full-progress grace missed history on poll 1 and slept a poll wait "
         "before resolving; waitForAbort delays={}".format(poll_waits)
     )
-    # Premise pin (load-independent): the structural proof above rides on the
-    # ~0.02s simulated history latency landing inside the documented grace. An
-    # intermediate grace reduction (e.g. 0.07) would still sit above 0.02 and
+    # Premise pin (load-independent): the earlier structural proof rides on the
+    # ~0.02 s simulated history latency landing inside the documented grace. An
+    # intermediate grace reduction (for example, 0.07) would still sit over 0.02 and
     # keep the len==1 / no-poll-wait snapshot green, yet shrink the real-world
     # safety margin. Pin the documented grace so such a drift goes red here.
     from resources.lib.resolver import (  # pylint: disable=import-outside-toplevel
@@ -7890,16 +7892,16 @@ def test_poll_until_ready_rechecks_completed_webdav_before_full_poll_interval(
     assert url == "http://webdav/content/uncategorized/movie/movie.mkv"
     assert headers == {"Authorization": "Basic primary"}
     # Completed-WebDAV recheck guard (replaces a flake-prone wall-clock bound).
-    # The first find_video_file miss must recheck inline on the graduated 0.025s
+    # The first find_video_file miss must recheck inline on the graduated 0.025 s
     # fast recheck delay AND return the video on that recheck -- it must NOT fall
-    # through to a full poll_interval (1s) tick before consuming the second lookup.
+    # through to a full poll_interval (1 s) tick before consuming the second lookup.
     wait_delays = [c.args[0] for c in monitor.waitForAbort.call_args_list if c.args]
     assert 0.025 in wait_delays, "inline 0.025s fast recheck was not requested"
     # The full poll tick is requested two ways and BOTH must be absent before the
     # recheck resolves (Codex P2): monitor.waitForAbort(poll_interval), and the
     # helper _wait_for_abort_or_timeout(monitor, poll_interval), which waits on a
-    # threading.Event rather than waitForAbort. A 0.025s recheck followed by
-    # either would delay playback ~1s while still returning the right URL.
+    # threading.Event rather than waitForAbort. A 0.025 s recheck followed by
+    # either would delay playback ~1 s while still returning the right URL.
     assert 1 not in wait_delays, (
         "completed-WebDAV path waited a full poll tick (waitForAbort) before "
         "consuming the recheck result; delays={}".format(wait_delays)
@@ -7952,9 +7954,9 @@ def test_poll_until_ready_rechecks_completed_webdav_quickly_after_first_miss(
     assert url == "http://webdav/content/uncategorized/movie/movie.mkv"
     assert headers == {"Authorization": "Basic primary"}
     # Fast-recheck-delay guard (replaces a flake-prone wall-clock bound: the
-    # forbidden fixed 0.1s wait overlaps the ~0.06-0.09s jitter floor). The
-    # first WebDAV miss must recheck on the graduated 0.025s fast delay; a
-    # reintroduced fixed-100ms wait would call waitForAbort(0.1) instead.
+    # forbidden fixed 0.1 s wait overlaps the ~0.06-0.09 s jitter floor). The
+    # first WebDAV miss must recheck on the graduated 0.025 s fast delay; a
+    # reintroduced fixed-100 ms wait would call waitForAbort(0.1) instead.
     monitor.waitForAbort.assert_any_call(0.025)
     waited = [c.args[0] for c in monitor.waitForAbort.call_args_list if c.args]
     assert 0.1 not in waited, (
@@ -7974,7 +7976,7 @@ def test_poll_until_ready_submit_http_500_no_retry(
     mock_xbmc, mock_submit, mock_gui, mock_find_completed
 ):
     """When submit_nzb returns an HTTP 500 tuple, the retry loop must
-    NOT retry — it must show the dialog with the error body and abort
+    NOT retry—it must show the dialog with the error body and stop
     after a single submit attempt."""
     mock_submit.return_value = (
         None,
@@ -8050,7 +8052,7 @@ def test_poll_until_ready_submit_http_400_no_retry(
 def test_poll_until_ready_submit_connection_error_still_retries(
     mock_xbmc, mock_submit, mock_gui, mock_find_completed
 ):
-    """(None, None) — non-HTTP transient — still retries 3x as before
+    """(None, None)—non-HTTP transient—still retries 3x as before
     and shows the generic dialog after exhausting."""
     mock_submit.return_value = (None, None)
     mock_xbmc.Monitor.return_value = _make_monitor()
@@ -8061,7 +8063,7 @@ def test_poll_until_ready_submit_connection_error_still_retries(
     mock_gui.Dialog.return_value.ok.assert_called_once()
 
 
-# --- cleanup-on-abort tests (Group A) ---
+# --- cleanup-on-cancel tests (Group A) ---
 
 
 @patch("resources.lib.resolver.cancel_job")
@@ -8140,7 +8142,7 @@ def test_poll_until_ready_cleanup_on_kodi_shutdown(
     must fire."""
     mock_status.return_value = {"status": "Downloading", "percentage": "10"}
     monitor = MagicMock()
-    # First abort flag check returns False (initial poll wait), second returns
+    # First stop-flag check returns False (initial poll wait), second returns
     # True (Kodi shutdown signal). The resolver intentionally does not call
     # waitForAbort here because that can wedge Kodi's RunScript resolver path.
     monitor.abortRequested.side_effect = [False, True]
@@ -8193,7 +8195,7 @@ def test_poll_until_ready_cleanup_on_max_iterations(
     mock_cancel_job.assert_called_once_with("nzo_xyz")
 
 
-# --- negative cleanup tests (Group B — cleanup must NOT fire) ---
+# --- negative cleanup tests (Group B—cleanup must NOT fire) ---
 
 
 @patch("resources.lib.resolver.cancel_job")
@@ -8213,7 +8215,7 @@ def test_poll_until_ready_no_cleanup_on_job_failed_status(
     mock_cancel_job,
 ):
     """When job_status returns Failed, the resolver aborts but does NOT
-    call cancel_job — Group B paths leave nzbdav's history alone."""
+    call cancel_job—Group B paths leave nzbdav's history alone."""
     mock_status.return_value = {"status": "Failed", "percentage": "0"}
     mock_xbmc.Monitor.return_value = _make_monitor()
 
@@ -8275,8 +8277,8 @@ def test_poll_until_ready_no_cleanup_on_completed_no_video(
     mock_cancel_job,
 ):
     """When history reports Completed but find_video_file returns None
-    after max retries, the resolver aborts but does NOT call cancel_job
-    — the job actually completed, this is a WebDAV layer issue."""
+    after max retries, the resolver aborts but does NOT call cancel_job.
+    The job actually completed, so this is a WebDAV layer issue."""
     mock_xbmc.Monitor.return_value = _make_monitor()
 
     _poll_until_ready("http://hydra/nzb", "movie", _make_dialog(), 0, 3600)
@@ -8310,7 +8312,7 @@ def test_handle_history_result_rejects_context_with_legacy_options():
 def test_handle_history_result_rejects_completed_when_body_unavailable(
     mock_find_stream, mock_probe
 ):
-    """A freshly-Completed history row whose mid-file body is unavailable must
+    """A freshly Completed history row whose mid-file body is unavailable must
     NOT be streamed to Kodi (the missing-articles empty-stream crash class).
     The pre-submit shortcut already probes; the normal submit/poll path through
     _handle_history_result must too. On a failed probe it falls through to the
@@ -8348,7 +8350,7 @@ def test_handle_history_result_streams_completed_when_body_available(
     mock_find_stream, mock_probe
 ):
     """When the mid-file body probe passes, the Completed history row streams
-    directly — the pre-existing happy-path behavior is preserved."""
+    directly—the pre-existing happy-path behavior is preserved."""
     mock_find_stream.return_value = (
         "/content/uncategorized/movie/movie.mkv",
         "http://webdav/movie.mkv",
@@ -8458,7 +8460,7 @@ def test_handle_history_result_body_unavailable_exhaustion_message(
 
 # ---------------------------------------------------------------------------
 # #282: reject nzbdav's job-start stub .mp4. The completed WebDAV scan can
-# return a tiny placeholder seconds after submit; serving it plays ~30s of a
+# return a tiny placeholder seconds after submit; serving it plays ~30 s of a
 # stub instead of the feature. A single-file release whose discovered video is
 # far below the indexer-advertised size is rejected and the poll loop keeps
 # waiting. Packs are exempt (one episode is legitimately a pack fraction).
@@ -8473,8 +8475,8 @@ def test_handle_history_result_rejects_stub_far_below_advertised(
 ):
     """A single-file release whose discovered video (362 MB) is a tiny fraction
     of the advertised size (~81 GB) is nzbdav's job-start stub. It must NOT be
-    streamed; keep polling for the real download. The body probe is skipped —
-    the size mismatch alone rejects it — and the no-video retry budget is NOT
+    streamed; keep polling for the real download. The body probe is skipped—
+    the size mismatch alone rejects it—and the no-video retry budget is NOT
     consumed (the poll loop's download_timeout is the stop authority, #340).
     """
     mock_find_stream.return_value = (
@@ -8607,7 +8609,7 @@ def test_handle_history_result_stub_keeps_polling_and_defers_to_timeout(
 ):
     """#340: nzbdav reports Completed the instant its job-start stub lands while
     the real file is still fetching. A stub rejection never self-fails and never
-    consumes the short symlink-visibility budget — even far past it — so the
+    consumes the short symlink-visibility budget—even far past it—so the
     poll loop's own download_timeout stays the stop authority and a configured
     long wait is honored. No user dialog is shown for a stub."""
     mock_find_stream.return_value = (
@@ -8642,7 +8644,7 @@ def test_handle_history_result_stub_keeps_polling_and_defers_to_timeout(
 def test_handle_history_result_stub_does_not_starve_symlink_budget(
     mock_find_stream, _mock_size, mock_gui
 ):
-    """#340: because a stub rejection does not touch no_video_retries, a later
+    """#340: because a stub rejection does not modify no_video_retries, a later
     genuine 'Completed but no video visible yet' gap still has its full
     symlink-visibility budget instead of failing immediately (the exact case the
     retries exist for)."""
@@ -8756,7 +8758,7 @@ def test_stub_min_size_floor_non_finite_advertised_is_zero():
 #   stage 2 -- a small/unknown picked file is a stub OR a pack episode; sum the
 #           folder's TOTAL video bytes and reject only if the WHOLE folder is
 #           below the floor. This gives packs real stub protection (the old
-#           title-based release_is_pack exemption disabled the guard for them).
+#           title-based release_is_pack exemption turned off the guard for them).
 # ---------------------------------------------------------------------------
 
 
@@ -8781,11 +8783,11 @@ def test_discovered_video_is_stub_fast_path_skips_folder_walk(mock_picked, mock_
     extra folder-total walk -- the latency-cheap common-movie path."""
     from resources.lib.resolver import _discovered_video_is_stub
 
-    # advertised ~81 GB -> floor ~40.8 GB; picked 80 GB is above it.
+    # advertised ~81 GB -> floor ~40.8 GB; picked 80 GB is over it.
     is_stub = _discovered_video_is_stub("/folder", "/folder/movie.mkv", "81610612736")
 
     assert is_stub is False
-    mock_total.assert_not_called()  # no second walk for an obviously-real file
+    mock_total.assert_not_called()  # no second walk for an obviously real file
 
 
 @patch("resources.lib.webdav.folder_video_total_bytes", return_value=362_076_665)
@@ -8808,7 +8810,7 @@ def test_discovered_video_is_stub_accepts_real_pack_via_folder_total(
 ):
     """THE pack-agnostic win: a picked episode (3 GB) is far below the advertised
     pack size (30 GB, floor 15 GB), but the FOLDER total (30 GB of episodes) is
-    at/above the floor -> a real pack, accept. The old title-based guard would
+    at/over the floor -> a real pack, accept. The old title-based guard would
     have had to special-case this; the folder total handles it with no title."""
     from resources.lib.resolver import _discovered_video_is_stub
 
@@ -8844,7 +8846,7 @@ def test_discovered_video_is_stub_fails_open_when_folder_scan_empty(
     mock_picked, mock_total
 ):
     """Picked file is small but the folder walk returns nothing (scan failed or
-    raced) -> fail OPEN rather than reject a possibly-real stream."""
+    raced) -> fail OPEN rather than reject a possibly real stream."""
     from resources.lib.resolver import _discovered_video_is_stub
 
     is_stub = _discovered_video_is_stub("/folder", "/folder/x.mkv", "81610612736")
@@ -8968,7 +8970,7 @@ def test_discovered_video_is_stub_accepts_short_pack_special(mock_total, _mock_h
     """#355 Codex review: a legitimately SHORT requested pack item (a 300 MB
     recap/special, ~7% of the 4 GB longest episode) must still stream -- it is real
     content, not a job-start stub. The folder total proves the pack is present; the
-    picked file at ~7% of the largest is above the stub fraction (0.05), so it is
+    picked file at ~7% of the largest is over the stub fraction (0.05), so it is
     accepted. (At the original 0.1 fraction this was wrongly rejected.)"""
     from resources.lib.resolver import _discovered_video_is_stub
 
@@ -9161,7 +9163,7 @@ def test_poll_once_byname_fallback_skips_rejected_completed_row(
 ):
     """The by-name terminal fallback must not surface a Completed row whose
     nzo_id was already rejected by the body probe (PR #219 review): otherwise
-    the poll loop latches onto the stale bad row inside the 5s tolerance
+    the poll loop latches onto the stale bad row inside the 5 s tolerance
     instead of waiting for the fresh re-download."""
     bad_row = {
         "status": "Completed",
@@ -9276,7 +9278,7 @@ def test_maybe_clear_queue_always_clears_without_prompt(
         mock_slots.call_args.kwargs.get("timeout")
         == resolver._CLEAR_QUEUE_PROBE_TIMEOUT
     )
-    # The clear reuses the exact slots that were probed — no second fetch — so
+    # The clear reuses the exact slots that were probed—no second fetch—so
     # a job added between the probe and the clear is never cancelled unseen.
     assert mock_clear.call_args.kwargs.get("slots") == mock_slots.return_value
     # Each delete is bounded by the same short timeout so a stalled nzbdav
@@ -9338,7 +9340,7 @@ def test_maybe_clear_queue_skips_when_title_already_completed(
 ):
     """If the title is already downloaded AND its body is streamable, playback
     adopts the completed copy (no new download), so other active jobs must NOT
-    be cancelled for a replay — even when there are other jobs queued."""
+    be cancelled for a replay—even when there are other jobs queued."""
     from resources.lib.resolver import _maybe_clear_queue_before_submit
 
     # A truthy stream tuple means the completed copy is body-validated/adoptable.
@@ -9349,7 +9351,7 @@ def test_maybe_clear_queue_skips_when_title_already_completed(
 
     mock_slots.assert_called_once()  # probe runs first
     mock_find.assert_called_once()  # then the completed-stream guard (other jobs exist)
-    mock_clear.assert_not_called()  # ... which skips the clear
+    mock_clear.assert_not_called()  # which skips the clear
 
 
 @patch("resources.lib.resolver.clear_queue", return_value=1)
@@ -9361,8 +9363,8 @@ def test_maybe_clear_queue_skips_when_title_already_completed(
 def test_maybe_clear_queue_clears_when_completed_row_body_unavailable(
     mock_find, mock_slots, mock_clear
 ):
-    """A Completed history row whose mid-file body is missing is NOT adoptable —
-    playback will resubmit a fresh download, so the queue guard must still clear
+    """A Completed history row whose mid-file body is missing is NOT adoptable—
+    playback resubmits a fresh download, so the queue guard must still clear
     the other jobs rather than skip on mere history existence."""
     from resources.lib.resolver import _maybe_clear_queue_before_submit
 
@@ -9413,7 +9415,7 @@ def test_maybe_clear_queue_completed_probe_is_time_bounded(
         release.set()
 
     assert started.is_set()  # the probe really ran
-    assert elapsed < 1.0  # bounded — did not block on the full probe
+    assert elapsed < 1.0  # bounded—did not block on the full probe
     mock_clear.assert_not_called()  # uncertain within budget -> leave queue intact
 
 
@@ -9443,7 +9445,7 @@ def test_maybe_clear_queue_only_current_title_skips_clear(
     mock_slots, mock_clear, mock_find
 ):
     """If the only queued job is the current title's own, there is nothing else
-    to clear: don't cancel it (it will be resumed) and don't run the
+    to clear: don't cancel it (it is resumed) and don't run the
     completed-stream guard."""
     from resources.lib.resolver import _maybe_clear_queue_before_submit
 
@@ -9463,8 +9465,8 @@ def test_maybe_clear_queue_only_current_title_skips_clear(
 def test_maybe_clear_queue_skips_completed_probe_when_picker_already_checked(
     mock_find, mock_slots, mock_clear
 ):
-    """When the picker already ran a completed lookup and we still reached the
-    submit path, a submit is certain — the guard must NOT do a redundant
+    """When the picker already ran a completed lookup and the resolver still reached the
+    submit path, a submit is certain—the guard must NOT do a redundant
     _existing_completed_stream probe (that dedup is a resolve-flow perf
     contract)."""
     from resources.lib.resolver import _maybe_clear_queue_before_submit
@@ -9544,7 +9546,7 @@ def test_poll_until_ready_does_not_record_ledger_when_poll_fails(
     mock_record,
 ):
     """A submit that succeeds but whose poll returns (None, None) (job failed /
-    timed out / cancelled) must NOT record a ledger pubdate — otherwise a
+    timed out / cancelled) must NOT record a ledger pubdate—otherwise a
     different repost's same-name completed row could later look adopted."""
     mock_xbmc.Monitor.return_value = _make_monitor()
     mock_history.return_value = (False, None, None, 0)
@@ -9569,7 +9571,7 @@ def test_poll_until_ready_does_not_record_ledger_when_poll_fails(
 
 
 def test_fallback_worker_stop_event_during_prewarm_aborts_submit():
-    """Sanity check of the pre-existing in-process stop-event abort (held across
+    """Sanity check of the pre-existing in-process stop-event cancellation (held across
     the J fix). The nzbdav.playing regression itself is guarded by
     test_fallback_worker_submits_when_playback_stays_live and
     test_fallback_worker_inactive_property_during_prewarm_aborts_submit."""
@@ -9605,7 +9607,7 @@ def test_fallback_worker_stop_event_during_prewarm_aborts_submit():
 def test_fallback_worker_inactive_property_during_prewarm_aborts_submit():
     """After playback is signaled and the cross-process ``nzbdav.playing``
     liveness flag has been observed live, it going non-"true" (service.py
-    cleared it on stop/end) must abort the prewarm wait so no standby NZBs are
+    cleared it on stop/end) must cancel the prewarm wait so no standby NZBs are
     submitted for a dead session."""
     from resources.lib.resolver import (
         _signal_fallback_playback_started,
@@ -9637,7 +9639,7 @@ def test_fallback_worker_inactive_property_during_prewarm_aborts_submit():
         _time.sleep(0.05)
         # Simulate service.py clearing nzbdav.playing on stop/end (cross-process).
         playing_value["v"] = ""
-        # prewarm_delay is 5s but the worker must abort well before that once the
+        # prewarm_delay is 5 s but the worker must stop well before that once the
         # liveness flag clears; a short join proves it returned early rather than
         # the join merely timing out before a still-pending submit.
         state["thread"].join(timeout=2)
@@ -9695,7 +9697,7 @@ def test_fallback_worker_submits_when_playback_stays_live():
 
 
 def test_fallback_worker_submits_when_liveness_never_set():
-    """When ``nzbdav.playing`` is never set (e.g. the await-playback cap path /
+    """When ``nzbdav.playing`` is never set (for example, the await-playback cap path /
     an unusual handoff where service never marked liveness), the seen-live latch
     never engages, so the worker degrades to a late submit rather than being
     wrongly stranded."""
@@ -9743,7 +9745,7 @@ def test_resolve_delegates_to_nzbget_when_enabled():
     ) as resume_choice:
         resolve(7, {"nzburl": "http%3A%2F%2Fi%2Fx.nzb", "title": "X"})
     # Assert the exact handle + params payload is forwarded, plus the chosen
-    # resume offset and the release identity the monitor keys on — so a
+    # resume offset and the release identity the monitor keys on—so a
     # regression in handle/params routing or in carrying the resume choice is
     # caught.
     nzbget_entry.assert_called_once_with(
@@ -9836,7 +9838,7 @@ def test_resolve_and_play_delegates_to_nzbget_when_enabled():
 
 def test_resolve_and_play_nzbget_cancel_prompt_does_not_play():
     # On the handle-less path there is no plugin handle, so a cancelled resume
-    # prompt (chosen is None) must simply not start playback — no setResolvedUrl
+    # prompt (chosen is None) must simply not start playback—no setResolvedUrl
     # in this path, matching its contract.
     addon = MagicMock()
     addon.getSetting.side_effect = lambda key: (

@@ -17,7 +17,7 @@ import re
 
 import resources.lib.resolver as _resolver  # noqa: F401  pylint: disable=unused-import
 
-# Pre-compile the MyVideos DB schema version regex at the module level.
+# Pre-compile the MyVideos DB schema version regular expression at the module level.
 # `_kodi_video_db_version` is used as a sort key (`key=_kodi_video_db_version`)
 # against a potentially large list of DB files. Pre-compiling avoids a CPython
 # dictionary lookup in the `re` module cache for every file during the sort loop,
@@ -43,8 +43,8 @@ def _resolve_stage(message):
             stage_file.flush()
             os.fsync(stage_file.fileno())
     except OSError:
-        # Best-effort stage breadcrumb only (debug aid). The xbmc.log line
-        # above is the real record; a missing/unwritable temp path must never
+        # Best-effort stage breadcrumb only (debug aid). The preceding
+        # xbmc.log line is the real record; a missing/unwritable temp path must never
         # break resolve.
         pass
 
@@ -97,7 +97,7 @@ def _validate_stream_url(url, headers):
             req.add_header(key, value)
     try:
         # nosemgrep
-        with urlopen(  # nosec B310 — URL from user-configured stream
+        with urlopen(  # nosec B310—URL from user-configured stream
             req, timeout=10
         ) as resp:
             return resp.getcode() == 206 or "bytes" in resp.headers.get(
@@ -108,20 +108,20 @@ def _validate_stream_url(url, headers):
 
 
 def _completed_stream_body_available(url, headers, probe_bytes=65536, timeout=20):
-    """Best-effort: can a supposedly-Completed stream serve its mid-file body?
+    """Best-effort: can a supposedly Completed stream serve its mid-file body?
 
     nzbdav sometimes reports a download ``Completed`` when its middle article
     bodies are actually missing/unretained on the backend. The container header
     (byte 0) and the tail (cues) still read, so the file *looks* valid and
-    playback starts — then the demuxer EOFs the instant it reaches the body.
+    playback starts—then the demuxer EOFs the instant it reaches the body.
     That empty-stream playback is what preceded the Kodi crash on
-    "The Good, the Bad and the Ugly". A byte-0 check can't catch it (the header
+    "The Good, the Bad and the Ugly." A byte-0 check can't catch it (the header
     is present), so this probes an actual byte range from the middle of the file.
 
     Returns ``False`` ONLY on a definitive failure: the mid-file range GET
-    returns HTTP >= 400 or yields zero body bytes. On any ambiguity — unknown
+    returns HTTP >= 400 or yields zero body bytes. On any ambiguity—unknown
     length, a file too small to have a meaningful middle, a timeout, or any
-    other network error — returns ``True`` (fail-open) so a slow-but-valid
+    other network error—returns ``True`` (fail-open) so a slow-but-valid
     stream is never blocked from playing.
 
     Env-gated fault injection: NZBDAV_FAULT_REJECT_COMPLETED forces this to
@@ -137,7 +137,7 @@ def _completed_stream_body_available(url, headers, probe_bytes=65536, timeout=20
     length = _completed_stream_head_length(url, headers, timeout)
     if length is None or length <= probe_bytes * 2:
         # Unknown length, or too small to distinguish a missing "middle" from
-        # header/tail — fail open.
+        # header/tail—fail open.
         return True
     return _completed_stream_midfile_present(url, headers, length, probe_bytes, timeout)
 
@@ -152,7 +152,7 @@ def _completed_stream_head_length(url, headers, timeout):
     """Return the Content-Length via HEAD, or None on any ambiguous failure."""
     from urllib.request import Request, urlopen
 
-    # Any failure here is ambiguous (e.g. server rejects HEAD) — don't block.
+    # Any failure here is ambiguous (for example, server rejects HEAD)—don't block.
     try:
         head = Request(url, method="HEAD")
         _add_request_headers(head, headers)
@@ -182,11 +182,11 @@ def _completed_stream_midfile_present(url, headers, length, probe_bytes, timeout
             # gone even though the metadata claims the file exists.
             return bool(resp.read(1))
     except HTTPError:
-        # Definitive: the backend cannot serve the mid-file body (e.g. the
+        # Definitive: the backend cannot serve the mid-file body (for example, the
         # 404/500 seen when articles are missing).
         return False
     except (OSError, ValueError, _resolver.http.client.HTTPException):
-        # Ambiguous (timeout, connection reset) — fail open.
+        # Ambiguous (timeout, connection reset)—fail open.
         return True
 
 
@@ -213,7 +213,7 @@ def _cache_bust_url(url):
     """
     # Insert the cache-buster BEFORE any `#fragment`. Otherwise the
     # `?nzbdav_play=N` ends up after the fragment marker and the
-    # server never sees it (fragments are client-side only) — defeating
+    # server never sees it (fragments are client-side only)—defeating
     # the cache-bust intent. Closes TODO.md §H.2-L4.
     if "#" in url:
         base, fragment = url.split("#", 1)
@@ -221,7 +221,7 @@ def _cache_bust_url(url):
         base, fragment = url, ""
     separator = "&" if "?" in base else "?"
     # Use nanosecond precision (3.7+) so rapid replays don't collide on
-    # platforms whose `time.time()` clock is coarser than 1 ms (e.g. older
+    # platforms whose `time.time()` clock is coarser than 1 ms (for example, older
     # CoreELEC kernels with HZ=100). Falls back to ms*1000 if the function
     # is unavailable.
     counter = (
@@ -236,7 +236,7 @@ def _cache_bust_url(url):
 def _clear_kodi_playback_state(params=None):
     """Delete Kodi's stored resume bookmark for this play.
 
-    Kodi saves a bookmark (resume point) keyed on the *outer* plugin URL —
+    Kodi saves a bookmark (resume point) keyed on the *outer* plugin URL—
     the URL Kodi first tried to play, not the resolved stream URL. When the
     user replays the same plugin URL, Kodi auto-resumes from the bookmark,
     which triggers a bug where CVideoPlayer tries to reopen the plugin URL
@@ -248,18 +248,19 @@ def _clear_kodi_playback_state(params=None):
     as a fresh first play, which bypasses the broken resume pipeline.
 
     Called from the resolve flow with the params that led to this play so
-    we can also target the TMDBHelper URL (not just our own plugin URL).
+    the cleanup can also target the TMDBHelper URL (not just the add-on's own
+    plugin URL).
 
     Safety model: this code mutates Kodi's primary video database, so the
     mutation surface is kept as narrow as possible:
 
     * Only the ``bookmark`` table is modified. The ``files``, ``settings``,
-      and ``streamdetails`` tables are left alone — a row in ``files``
+      and ``streamdetails`` tables are left alone—a row in ``files``
       without a matching ``bookmark`` row is the "fresh play" state Kodi
       already handles correctly, and not touching the foreign-key parent
       avoids cascading into unrelated library state.
-    * The SQLite busy timeout is short (2s). If Kodi is actively writing we
-      bail out rather than contend — a missed cleanup is recoverable; a
+    * The SQLite busy timeout is short (2 seconds). If Kodi is actively writing the
+      cleanup bails out rather than contend—a missed cleanup is recoverable; a
       long stall on the resolve path is not.
     * LIKE wildcards (``%``, ``_``, ``\\``) in ``tmdb_id`` are escaped so
       an odd TMDBHelper param value cannot match unrelated rows.
@@ -278,7 +279,7 @@ def _clear_kodi_playback_state(params=None):
         # ``sqlite3.connect`` as a context manager only commits/rolls-back;
         # it does NOT call ``conn.close()``. Wrap in contextlib.closing
         # so the connection's file descriptor is released deterministically
-        # instead of hanging on for GC — matters on every resolve() call.
+        # instead of hanging on for GC—matters on every resolve() call.
         with contextlib.closing(sqlite3.connect(db_path, timeout=2.0)) as conn:
             with conn:
                 cur = conn.cursor()
@@ -288,9 +289,9 @@ def _clear_kodi_playback_state(params=None):
                     return 0.0
 
                 # Narrowest possible mutation: only clear bookmark rows. The
-                # files/settings/streamdetails rows stay intact — Kodi will
-                # treat the file as "never resumed" on the next play, which is
-                # exactly the state we want.
+                # files/settings/streamdetails rows stay intact—Kodi
+                # treats the file as "never resumed" on the next play, which is
+                # exactly the wanted state.
                 bookmark_columns = _bookmark_columns(cur)
                 resume_seconds = 0.0
                 for id_file in target_ids:
@@ -310,8 +311,8 @@ def _clear_kodi_playback_state(params=None):
         )
         return resume_seconds
     except sqlite3.OperationalError as e:
-        # "database is locked" / busy timeout. Kodi holds the writer; we
-        # skip this cleanup and let the next resolve retry.
+        # "database is locked" / busy timeout. Kodi holds the writer; the
+        # code skips this cleanup and let the next resolve retry.
         _resolver.xbmc.log(
             (
                 "NeNeTeePee-Stream-Kodi: MyVideos DB busy, skipping "
@@ -341,7 +342,7 @@ def _bookmark_resume_query(bookmark_columns):
     )
     type_filter = " AND type = 1" if "type" in bookmark_columns else ""
     return (
-        "SELECT timeInSeconds, "  # nosec B608 — params bound, trusted local DB
+        "SELECT timeInSeconds, "  # nosec B608—params bound, trusted local DB
         + total_col
         + " FROM bookmark WHERE idFile = ?"
         + type_filter
@@ -361,7 +362,7 @@ def _captured_bookmark_resume_seconds(cur, id_file, bookmark_columns):
             resume_seconds = max(resume_seconds, float(time_in_seconds))
         except (TypeError, ValueError):
             # A non-numeric/NULL bookmark row is simply skipped; resume falls
-            # back to other rows (or 0.0). Best-effort — never abort cleanup.
+            # back to other rows (or 0.0). Best-effort—never stop the cleanup.
             pass
     return resume_seconds
 
@@ -573,11 +574,11 @@ def _arm_live_fallback_push(prepared, fallback_state, primary_stream_url, dead=N
     """Push fallbacks adopted AFTER /prepare into the live proxy session.
 
     The /prepare fallback snapshot is one-shot: when the primary resolves
-    instantly (e.g. an already-downloaded copy), the fallback submit worker
+    instantly (for example, an already-downloaded copy), the fallback submit worker
     hasn't adopted the alternate copies yet, so the session starts with an
     empty fallback list and the live cutover has nothing to switch to. The
     worker keeps adopting for tens of seconds afterward. This installs an
-    ``on_append`` hook so each newly-adopted job is POSTed to
+    ``on_append`` hook so each newly adopted job is POSTed to
     ``/stream/<id>/fallbacks``, and flushes whatever was already adopted
     between the snapshot and now. No-ops for non-service (direct) playback.
     """
@@ -640,8 +641,8 @@ def _make_playable_listitem(url, headers):
         ("NeNeTeePee-Stream-Kodi: Play URL set (redacted)"), _resolver.xbmc.LOGDEBUG
     )
     li = _resolver.xbmcgui.ListItem(path=play_url)
-    # Skip HEAD request — nzbdav doesn't advertise Accept-Ranges on HEAD
-    # which causes CFileCache to fail. Kodi will discover range support
+    # Skip HEAD request—nzbdav doesn't advertise Accept-Ranges on HEAD
+    # which causes CFileCache to fail. Kodi discovers range support
     # on the first GET request instead.
     li.setContentLookup(False)
     # Set mime type based on file extension so Kodi doesn't need HEAD.

@@ -47,13 +47,13 @@ def _episode_info_from_listitem(expected_title=""):
     When ``expected_title`` is given, prefer the InfoLabel root whose show
     matches it: a stale/bare root that happens to carry S/E for a *different*
     show must not short-circuit the probe (the caller's same-show guard would
-    reject it and the correct later root — e.g. ``Container.ListItem.*`` —
+    reject it and the correct later root—for example, ``Container.ListItem.*``—
     would never be read).
     """
     # Widget/RunScript plays expose the focused item through different
     # InfoLabel roots depending on the skin/window (bare ``ListItem.*`` vs
     # ``Container.ListItem.*`` vs ``VideoPlayer.*``), so probe the same set the
-    # handle-based ``_handle_play`` does — reading only bare ``ListItem.*``
+    # handle-based ``_handle_play`` does—reading only bare ``ListItem.*``
     # returns blank for many widget sources and broadens the search.
     label_sources = (
         ("ListItem.TVShowTitle", "ListItem.Season", "ListItem.Episode"),
@@ -114,7 +114,7 @@ def _listitem_episode_candidate(labels):
 def _numeric_infolabel(label):
     """Read an InfoLabel that carries a season/episode number, else "".
 
-    "0" is a real season (specials) and episode (pilot/E0) value — only
+    "0" is a real season (specials) and episode (pilot/E0) value—only
     "" / "-1" mean Kodi has no selection. The previous filter dropped specials
     entirely. TODO.md §H.2-M30.
     """

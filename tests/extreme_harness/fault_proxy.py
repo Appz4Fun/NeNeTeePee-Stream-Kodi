@@ -259,7 +259,7 @@ def _apply_slow_upstream(handler, resp, range_header, state) -> None:
             resp.close()
             return
         time.sleep(sleep_per_chunk)
-    # Past throttle window — drain at full speed.
+    # Past throttle window—drain at full speed.
     while True:
         chunk = resp.read(65536)
         if not chunk:
@@ -282,7 +282,7 @@ def _apply_truncated_response(handler, resp, range_header, state) -> None:
     handler.end_headers()
     # Record state early (right after end_headers) so test threads observing
     # fired_events after the client unblocks on IncompleteRead see the entry
-    # deterministically — same early-record convention as _apply_slow_upstream.
+    # deterministically (the same convention as _apply_slow_upstream).
     state.record_fired("truncated_response", range_header)
     _log_event(
         {
@@ -317,7 +317,7 @@ def _apply_corrupted_bytes(handler, resp, range_header, state) -> None:
     handler.end_headers()
     # Record state early (right after end_headers) so test threads observing
     # fired_events after the client's read() returns see the entry deterministically
-    # — same early-record convention as _apply_slow_upstream.
+    # (the same convention as _apply_slow_upstream).
     state.record_fired("corrupted_bytes", range_header)
     _log_event(
         {

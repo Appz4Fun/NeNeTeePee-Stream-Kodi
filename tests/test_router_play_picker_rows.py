@@ -93,7 +93,7 @@ def test_deleted_prompt_helpers_are_gone():
 # widening the auto-select/backup pool to all_rows could let a filter-
 # rejected upload back in as an automatic fallback the user never chose).
 # The dialog's all_results kwarg and DL-availability tagging are unaffected
-# by this — those stay on the all-rows superset (Task 3-6 behavior).
+# by this—those stay on the all-rows superset (Task 3-6 behavior).
 # ---------------------------------------------------------------------------
 
 

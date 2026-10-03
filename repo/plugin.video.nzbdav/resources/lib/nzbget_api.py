@@ -23,10 +23,10 @@ _RPC_TIMEOUT = 30
 
 # settings.xml schema defaults. The injected ``settings_getter``
 # (``_get_script_setting`` on the RunScript/widget path) reads the raw profile
-# XML, where a setting left at its displayed default is simply absent — so it
-# returns the fallback we pass. Mirror the schema defaults here, or a user who
+# XML, where a setting left at its displayed default is simply absent—so it
+# returns the fallback passed in. Mirror the schema defaults here, or a user who
 # enables NZBGet + sets the SMB root but leaves the URL/username untouched is
-# sent down the NZBGet path only to fail "not configured".
+# sent down the NZBGet path only to fail "not configured."
 _DEFAULT_URL = "http://localhost:6789"
 _DEFAULT_USER = "nzbget"
 
@@ -109,7 +109,7 @@ def _append_params(
     modern append signature (nzbget.com v16+, verified against a live 26.1
     box): dropping them makes NZBGet reject the whole call with
     ``Invalid parameter (Parameters)`` (JSON-RPC code 2) and the NZB never
-    enters the queue. AutoCategory=False keeps the explicit category we pass
+    enters the queue. AutoCategory=False keeps the explicit category passed in
     (the SMB completed-path mapping in nzbget_resolver depends on it rather
     than NZBGet auto-reassigning one); PPParameters=[] = no extra
     post-processing parameters.
@@ -182,9 +182,9 @@ def config_option(name, settings_getter=None):
     """Read one running-config option's value via the ``config`` RPC.
 
     NZBGet's ``config`` returns the live merged config as a list of
-    ``{"Name","Value"}`` structs (options with fixed value sets come back
-    lower-cased). Returns the matched value lower-cased, or ``None`` when the
-    option is absent or the RPC fails -- callers treat it as best-effort (e.g.
+    ``{"Name": <name>, "Value": <value>}`` structs (options with fixed value sets come
+    back lower-cased). Returns the matched value lower-cased, or ``None`` when the
+    option is absent or the RPC fails -- callers treat it as best-effort (for example,
     the #372 HealthCheck=pause warning, per nzbget.com/documentation/rss).
     """
     rows, error = _rpc_call("config", [], settings_getter=settings_getter)
@@ -229,7 +229,7 @@ def group_status(nzbid, settings_getter=None):
 
     Returns a dict: {"present": bool, "status": str, "percent": int}.
     "present" is False once the job leaves the active queue (moved to
-    history). On RPC error, returns present=False with status="ERROR".
+    history). On RPC error, returns status="ERROR" with present=False.
     """
     groups, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
     if error is not None or not isinstance(groups, list):
@@ -258,7 +258,7 @@ def history_status(nzbid, settings_getter=None):
     spec's completion guarantee (full post-processing = a repaired, unpacked,
     playable file). WARNING/* (incl. WARNING/REPAIRABLE / WARNING/DAMAGED,
     where par2 repair did not run) is deliberately treated as a failure
-    rather than risk playing a corrupt file — the job is left in history so
+    rather than risk playing a corrupt file—the job is left in history so
     it can be retried.
     """
     hist, error = _rpc_call("history", [False], settings_getter=settings_getter)
@@ -397,8 +397,8 @@ def _history_item_bytes(item):
 # Picker-render RPC bound: ``completed_history`` runs synchronously right
 # before the results dialog opens, so cap the wait the way the nzbdav picker
 # path does (nzbdav_api._API_READ_TIMEOUT = 10, "prevent dialog freeze")
-# instead of the resolver-path _RPC_TIMEOUT — a silently-unreachable NZBGet
-# box must not freeze the picker for 30s.
+# instead of the resolver-path _RPC_TIMEOUT—a silently unreachable NZBGet
+# box must not freeze the picker for 30 seconds.
 _PICKER_RPC_TIMEOUT = 10
 
 
@@ -412,9 +412,9 @@ def completed_history(settings_getter=None):
     of a SUCCESS item, failing the resolve). Values carry the same
     ``name``/``bytes`` shape as nzbdav completed jobs so the router reuses
     its size gate. Returns a lookup_done-marked mapping on RPC success (even
-    when empty) and a plain empty dict on any failure — never raises (the
+    when empty) and a plain empty dict on any failure—never raises (the
     picker render path has no try/except around tagging). One ``history`` RPC
-    per call — same visible-only view as ``history_status``; avoid calling in
+    per call—same visible-only view as ``history_status``; avoid calling in
     tight loops.
     """
     try:
@@ -426,8 +426,8 @@ def completed_history(settings_getter=None):
         )
     except Exception as exc:  # pylint: disable=broad-except
         # _rpc_call reads settings before its own try block; a raising
-        # injected getter (or an early-startup Addon read) must degrade to
-        # "no tags", not crash the picker render.
+        # injected getter (or an early startup Addon read) must degrade to
+        # "no tags," not crash the picker render.
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: NZBGet completed_history failed: {}".format(
                 _redact_text(str(exc))
@@ -443,7 +443,7 @@ def completed_history(settings_getter=None):
         if entry is None:
             continue
         # History is newest-first; for same-name SUCCESS rows keep the newest
-        # one — that's the row a replay's dupe handling would land on.
+        # one—that's the row a replay's dupe handling would land on.
         if entry["name"] not in jobs:
             jobs[entry["name"]] = entry
     return jobs
@@ -479,7 +479,7 @@ def completed_base_dir(settings_getter=None):
     Lets ``nzbget_smb_target`` map a history ``DestDir`` *relative* to NZBGet's
     completed base onto the SMB root, which is exact for any category/custom
     DestDir layout. Best-effort: any RPC failure or a value that isn't an
-    absolute path (e.g. an unexpanded ``${MainDir}`` template) degrades to None
+    absolute path (for example, an unexpanded ``${MainDir}`` template) degrades to None
     so the caller falls back to its folder heuristic.
     """
     cfg, error = _rpc_call("config", [], settings_getter=settings_getter)
@@ -504,7 +504,7 @@ def _is_absolute_path(value):
 
 
 def test_connection(settings_getter=None):
-    """Probe NZBGet via the version method. Returns (ok, error)."""
+    """Probe NZBGet via the version method. Returns ``(success, error)``."""
     result, error = _rpc_call("version", [], settings_getter=settings_getter)
     if error is not None:
         return False, error
@@ -516,9 +516,9 @@ def cancel_job(nzbid, settings_getter=None):
 
     Tries the active-queue delete first (GroupFinalDelete removes the job
     and downloaded files), then a history delete in case it already moved
-    to history. Best-effort — errors are logged, not raised.
+    to history. Best-effort—errors are logged, not raised.
     """
-    # editqueue(Command, Args, IDs) — NZBGet v18+ dropped the legacy int
+    # editqueue(Command, Args, IDs)—NZBGet v18+ dropped the legacy int
     # ``Offset`` parameter (pre-v18 was ``Command, Offset, Text, IDs``). The
     # target boxes run nzbget.com 16+/26.x, which reject the 4-arg shape and
     # would leave a "canceled" download running; matches the modern 11-arg
@@ -571,7 +571,7 @@ def _dupekey_match(item, dupe_key):
 
 # Sentinel returned by _promoted_group_entry for a same-key member that is
 # queued but PAUSED: not a promotion to track, yet not an exhausted group
-# either (e.g. NZBGet globally paused when the backup was promoted).
+# either (for example, NZBGet globally paused when the backup was promoted).
 _PAUSED_MATCH = object()
 
 
@@ -608,9 +608,10 @@ def active_group_by_dupekey(dupe_key, exclude_nzbid=None, settings_getter=None):
     After the pick fails, NZBGet promotes a duplicate backup from history into
     the queue -- it appears in listgroups under the SAME DupeKey with its OWN new
     NZBID and an un-paused status (other backups stay PAUSED). Returns
-    ``{"present","nzbid","status","percent"}`` for that promoted download, else
+    a dict with keys ``present``, ``nzbid``, ``status``, and ``percent`` for that
+    promoted download, else
     ``{"present": False, "paused_present": <bool>}`` -- ``paused_present`` flags
-    a same-key member queued PAUSED (e.g. NZBGet globally paused when the
+    a same-key member queued PAUSED (for example, NZBGet globally paused when the
     promotion happened), which the poll must treat as "not exhausted yet"
     rather than a failed group.
     """
@@ -681,8 +682,8 @@ def history_success_by_dupekey(dupe_key, exclude_nzbids=None, settings_getter=No
     out STALE successes that predate the resolve (#372 round 4): their files
     may be long gone -- the reuse probe already declined them -- and playing
     one would fail "No video file found" instead of waiting for the fleet's
-    own member. Returns ``{"present","nzbid","job_name","dest_dir"}`` or
-    ``{"present": False}``.
+    own member. Returns a dict with keys ``present``, ``nzbid``, ``job_name``,
+    and ``dest_dir``, or ``{"present": False}``.
     """
     if not dupe_key:
         return {"present": False}
@@ -726,9 +727,9 @@ def _success_history_entry(item, dupe_key):
     """Build the completed-member entry for one history row, or None.
 
     Keeps ``history_success_by_dupekey`` a flat scan: the DupeKey match and
-    the SUCCESS/* gate (same completion guarantee as ``history_status`` — only
+    the SUCCESS/* gate (same completion guarantee as ``history_status``—only
     a fully post-processed row is playable) live here so the caller only
-    decides "match or keep scanning".
+    decides "match or keep scanning."
     """
     if not isinstance(item, dict) or not _dupekey_match(item, dupe_key):
         return None
@@ -745,7 +746,7 @@ def _success_history_entry(item, dupe_key):
 def _final_delete(command, ids, settings_getter):
     """One best-effort ``editqueue`` final-delete for all ``ids`` at once.
 
-    Skips the RPC entirely when the scan matched nothing — an empty-IDs
+    Skips the RPC entirely when the scan matched nothing—an empty-IDs
     editqueue would be a pointless round-trip on every cancel.
     """
     if not ids:

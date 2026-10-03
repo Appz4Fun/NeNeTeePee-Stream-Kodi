@@ -25,13 +25,13 @@ flowchart TD
 
 ## Query planning
 
-A shared planner builds each provider's query from the title and any ids:
+A shared planner builds each provider's query from the title and any IDs:
 
-- **Episodes** prefer a **TVDB id**, then an **IMDb id**, then fall back to a
-  cleaned title, plus season and episode numbers.
-- **Movies** use the **IMDb id**, else a cleaned title.
+- **Episodes** prefer a **TVDB ID**, then an **IMDb ID**, then fall back to a
+  cleaned title plus season and episode numbers.
+- **Movies** use the **IMDb ID**, else a cleaned title.
 - When an indexer advertises its capabilities (caps), the planner honors the
-  supported parameters for each search type; without caps it uses sensible
+  supported parameters for each search type. Without caps, it uses sensible
   defaults.
 - If an id-based query returns nothing, NeNeTeePee-Stream-Kodi retries by title so a missing or
   mismatched id never leaves you empty-handed.
@@ -41,12 +41,12 @@ A shared planner builds each provider's query from the title and any ids:
   the same way.
 
 **Prowlarr** is a special case: its native search API doesn't take id parameters,
-so NeNeTeePee-Stream-Kodi embeds them as tokens inside the query text. `{tvdbid:…}`,
-`{imdbid:…}`, `{season:…}`, `{episode:…}`.
+so NeNeTeePee-Stream-Kodi embeds them as tokens inside the query text: `{tvdbid:…}`,
+`{imdbid:…}`, `{season:…}`, and `{episode:…}`.
 
 ## Provider fan-out
 
-Each enabled provider runs as a job. A single provider runs inline; multiple
+Each enabled provider runs as a job. A single provider runs inline. Multiple
 providers run concurrently, one worker thread each. Direct indexers additionally
 fan out across themselves in parallel with a bounded pool (at most four
 workers) and a fan-out deadline, so one slow indexer can't stall the search.
@@ -74,8 +74,8 @@ Every provider maps its response into one common shape:
 
 ## De-duplication
 
-Results are de-duplicated by **download link**. first occurrence wins, and a
-result with no link is dropped as unplayable. The same release offered by two
+Results are de-duplicated by **download link**: the first occurrence wins, and the add-on
+drops a result with no link as unplayable. The same release offered by two
 providers with *different* download URLs is intentionally kept as two rows,
 because they are genuinely different downloads.
 
@@ -96,11 +96,11 @@ corrects audio families, HDR aliases, dimensions, and language names without
 editing vendored PTT. See [Quality filtering](../features/quality-filtering.md).
 
 `filter_results()` returns both the surviving rows and the full parsed list.
-Every row is tagged with the **first** filter that rejected it, checked in this
+It tags every row with the **first** filter that rejected it, checked in this
 order: resolution, HDR, audio, codec, language, keyword, group, size. The
 `max_results` cap applies only to the filtered list.
 
-Under **Relevance** sort, results are ordered by this priority tuple:
+Under **Relevance** sort, NeNeTeePee-Stream-Kodi orders results by this priority tuple:
 
 ```mermaid
 flowchart LR
@@ -117,7 +117,7 @@ bypasses the relevance priorities.
 
 ## Tagging and the picker
 
-When the picker is going to open, results already present in your download
+When the picker is about to open, results already present in your download
 backend get a **DL** tag. A tag needs a name match plus a size match (and a consistent post
 date) against nzbdav's completed history, or NZBGet's history in NZBGet mode.
 An episode request can also get an already-downloaded season-pack row
@@ -125,8 +125,8 @@ prepended (see
 [Playback pipeline](playback-pipeline.md#remembering-completed-season-packs)).
 
 With **Auto-select best match (skip result list)** on (**Sorting › Auto-Select**),
-the top filtered result plays straight away, with no picker and no
-picker-wide tagging pass. Otherwise
+the top filtered result plays straight away. There's no picker and no
+picker-wide tagging pass. Otherwise,
 `results_dialog.py` opens the full-screen picker on the filtered view.
 
 The picker receives the unfiltered rows as well as the filtered ones. Pressing
@@ -135,13 +135,13 @@ view. Rows that a filter rejected carry a `FILTERED: <reason>` chip naming that
 filter. On Linux and CoreELEC, where `results_input.py` can read the OK-key
 state from `/dev/input`, holding **OK** for five seconds also switches to
 show-all. If nothing survives
-filtering, the picker opens straight into show-all. DL tags are computed over
-the full row set, so rows revealed by show-all keep them.
+filtering, the picker opens straight into show-all. NeNeTeePee-Stream-Kodi computes DL tags
+over the full row set, so rows revealed by show-all keep them.
 
 ## Caching
 
-The merged, **pre-filter** results are cached on disk, keyed by a SHA-256 of the
-search type, title, year, season/episode, and ids. That means:
+NeNeTeePee-Stream-Kodi caches the merged, **pre-filter** results on disk, keyed by a SHA-256 of
+the search type, title, year, season/episode, and IDs. That means:
 
 - Re-opening the same title is instant within the cache duration (default 60 s,
   capped at 86400 s).
@@ -150,7 +150,7 @@ search type, title, year, season/episode, and ids. That means:
 - The cache self-limits to 50 MB and 1000 entries, evicting the oldest first,
   and writes atomically.
 
-The cache is used by the `plugin://` play and search routes. The TMDBHelper
+The `plugin://` play and search routes use the cache. The TMDBHelper
 RunScript path always queries providers fresh.
 
 Set **Cache duration (seconds, 0=disabled)** (**Advanced › Search Cache**) to

@@ -163,7 +163,7 @@ def test_season_pack_picker_strings_have_fallbacks_and_po_entries():
 
 def test_fmt_returns_id_and_args_for_missing_template():
     """When the resolved template is the ``#<id>`` sentinel, fmt() must
-    surface both the missing id AND the args the caller passed —
+    surface both the missing id AND the args the caller passed;
     previously the empty-template + suffix path produced a
     leading-space gibberish like ` ('foo',)`."""
     import xbmcaddon
@@ -178,7 +178,7 @@ def test_fmt_returns_id_and_args_for_missing_template():
 
 def test_strings_po_has_added_orphan_ids():
     """Settings.xml references 30160 / 30183 / 30184 / 30185 as labels
-    but no msgctxt entry existed before this fix — Kodi rendered them
+    but no msgctxt entry existed before this fix—Kodi rendered them
     as raw numbers. Verify the .po file now defines them."""
     import os
 
@@ -222,7 +222,7 @@ def test_strings_po_has_readahead_buffer_label():
 
 def test_settings_xml_uses_30129_for_prowlarr_api_key():
     """The orphan #30129 ("Prowlarr API Key") msgctxt previously had
-    no consumer — settings.xml reused the generic #30003 ("API Key")
+    no consumer—settings.xml reused the generic #30003 ("API Key")
     label for prowlarr_api_key. Verify the renumbering took effect so
     the existing translation actually lights up."""
     import os
@@ -244,8 +244,8 @@ def test_settings_xml_uses_30129_for_prowlarr_api_key():
 def test_settings_category_help_strings_are_defined():
     """Every <category> in settings.xml must have a non-empty help= id, and
     that id must resolve to a real msgctxt in strings.po. Highlighting a
-    category tab in the Options sidebar should never show
-    "No information available"."""
+    category tab in the Options sidebar should never show the
+    "No information available" placeholder."""
     import os
     import re
     import xml.etree.ElementTree as ET

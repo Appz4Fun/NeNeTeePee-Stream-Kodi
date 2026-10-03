@@ -31,7 +31,7 @@ class _ThreadedHTTPServer(_ThreadingMixIn, HTTPServer):
     connection cleanly (Kodi reconnects) instead of escaping as an unhandled
     traceback while the listener stays up but unanswering. Stdlib
     ``ThreadingMixIn`` does neither, which is what let a playback burst wedge
-    the proxy into "background service unreachable on 127.0.0.1:<port>".
+    the proxy into ``"background service unreachable on 127.0.0.1:<port>"``.
     """
 
     allow_reuse_address = True
@@ -53,7 +53,7 @@ class _ThreadedHTTPServer(_ThreadingMixIn, HTTPServer):
         """Spawn a bounded, RuntimeError-tolerant handler thread.
 
         ``__new__``-built test doubles (and any subclass that skips __init__)
-        have no ``_worker_slots`` — fall back to an unbounded-but-guarded spawn
+        have no ``_worker_slots``—fall back to an unbounded-but-guarded spawn
         in that case rather than erroring.
         """
         slots = getattr(self, "_worker_slots", None)
@@ -71,7 +71,7 @@ class _ThreadedHTTPServer(_ThreadingMixIn, HTTPServer):
         try:
             super().process_request(request, client_address)
         except RuntimeError:
-            # Out of OS thread/stack budget. Release the slot we reserved and
+            # Out of OS thread/stack budget. Release the slot it reserved and
             # close the accepted socket so the client sees a reset and retries,
             # instead of leaking the connection behind an unhandled traceback.
             if slots is not None:

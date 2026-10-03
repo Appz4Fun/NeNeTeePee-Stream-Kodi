@@ -106,7 +106,7 @@ def _start_direct_playback_service_config_lookup():
         "done": done,
         "error": None,
         "service_port": None,
-        "prepare_token": "",  # nosec B105 — empty init value, not a secret
+        "prepare_token": "",  # nosec B105—empty init value, not a secret
         "thread": None,
     }
 
@@ -202,7 +202,7 @@ def _ready_direct_playback_prepare_state(prepared):
 
 
 def _monitor_abort_requested(monitor):
-    """Return Kodi's abort flag without entering a wait call."""
+    """Return Kodi's ``abortRequested`` flag without entering a wait call."""
     try:
         return monitor.abortRequested() is True
     except (AttributeError, RuntimeError, TypeError):

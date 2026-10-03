@@ -23,14 +23,14 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
 
         Two strategies, tried in order:
 
-        1. ``ffprobe -show_entries format=duration`` — the clean path. One
+        1. ``ffprobe -show_entries format=duration``—the clean path. One
            number on stdout, no stream-probe warnings. This is the only
            reliable approach for files with many subtitle streams: a 30-
            subtitle Blu-ray remux produces a wall of ``Could not find
            codec parameters for stream N (Subtitle: hdmv_pgs_subtitle)``
            warnings from ffmpeg that can trivially push ``Duration:`` past
            any stderr buffer budget before it gets a chance to print.
-        2. ``ffmpeg -i <url> -f null -`` parsed out of stderr — the
+        2. ``ffmpeg -i <url> -f null -`` parsed out of stderr—the
            fallback path when ffprobe isn't installed. Budget is 64 KB
            (up from the original 8 KB) so the subtitle-warning wall
            doesn't evict the Duration line on pathological inputs.
@@ -123,8 +123,8 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
         is exhausted. The main thread waits on the Event with a
         hard wall-clock deadline of ``_PROBE_DEADLINE_SECONDS`` so a
         stuck ffmpeg (slow upstream, stalled header parse, auth hang)
-        can't wedge the probe forever. Either way — match, budget,
-        deadline — the ffmpeg process is killed before returning.
+        can't wedge the probe forever. Either way—match, budget,
+        deadline—the ffmpeg process is killed before returning.
         """
         return _sp.StreamProxy._probe_ffmpeg_stderr(
             ffmpeg_path,
@@ -213,7 +213,7 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
                 if len(collected[0]) > budget:
                     return
         except Exception as exc:  # pylint: disable=broad-except
-            # Log the failure mode rather than swallowing silently —
+            # Log the failure mode rather than swallowing silently—
             # a stderr decode error or pipe close that hides a real
             # probe failure used to surface as duration=None with no
             # diagnostic in kodi.log. Closes TODO.md §H.3 silent
@@ -229,7 +229,7 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _finish_probe(proc, reader, parser, collected, budget, label):
-        """Kill the probe proc, join its reader, and return the parsed result."""
+        """Stop the probe proc, join its reader, and return the parsed result."""
         try:
             proc.kill()
         except OSError:
@@ -239,11 +239,11 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
         except (_sp.subprocess.TimeoutExpired, OSError):
             pass
 
-        # Join the reader thread now that the proc is dead — its EOF on
-        # stderr is the loop-exit condition, so once kill() takes effect
-        # the thread should terminate within milliseconds. Joining here
+        # Join the reader thread now that the proc is dead—its EOF on
+        # stderr is the loop-exit condition, so once the process stops
+        # the thread should exit within milliseconds. Joining here
         # (with a small timeout safety net) prevents probe threads from
-        # accumulating in long-running services that probe a lot, e.g. a
+        # accumulating in long-running services that probe a lot, for example, a
         # search session that prepares many candidate streams.
         # daemon=True still covers the pathological case where stderr
         # never EOFs. Closes TODO.md §H.3 probe-reader thread leak.
@@ -285,7 +285,7 @@ class _MgrProbeMixin:  # pylint: disable=too-few-public-methods
 
     @staticmethod
     def _detect_content_type(url):
-        """Detect content type from URL extension."""
+        """Detect the Content-Type from the URL extension."""
         lower = url.lower()
         if lower.endswith(".mkv"):
             return "video/x-matroska"

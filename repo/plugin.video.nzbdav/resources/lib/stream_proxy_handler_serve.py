@@ -22,11 +22,11 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
 
         Output format is driven by ``ctx["output_format"]``:
 
-        - ``"mpegts"`` — force-remux path for huge MKVs that overflow
+        - ``"mpegts"``—force-remux path for huge MKVs that overflow
           32-bit Kodi's CFileCache. No subtitles (MPEG-TS can't carry
           PGS/HDMV), no duration metadata (TS has no container-level
           duration field), seek is handled HTTP-side via restart-on-Range.
-        - ``"matroska"`` (default) — MP4 fallback path. Subtitles copy
+        - ``"matroska"`` (default)—MP4 fallback path. Subtitles copy
           through, duration is written into the MKV header so Kodi's
           progress bar is accurate.
         """
@@ -68,19 +68,19 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
         if output_format == "mpegts":
             # MPEG-TS can carry DVB subs/teletext but not PGS or HDMV
             # bitmap subs, and ffmpeg can't transcode between those. Drop
-            # subtitles entirely for the TS path — simpler, robust, and
+            # subtitles entirely for the TS path—simpler, robust, and
             # external .srt files still work via Kodi's own loader.
             return self._append_mpegts_output_args(cmd)
 
         # Subtitle handling (toggleable via setting).
-        # For MP4 input we convert text subs (mov_text/TX3G) to SRT so MKV
-        # output is more compatible.  For MKV input we must use `copy` —
+        # For MP4 input the proxy converts text subs (mov_text/TX3G) to SRT so MKV
+        # output is more compatible. For MKV input it must use `copy`—
         # PGS/DVD/HDMV bitmap subs can't be re-encoded to SRT and would
-        # abort the remux; ASS/SSA/SRT all copy fine into MKV anyway.
+        # stop the remux; ASS/SSA/SRT all copy fine into MKV anyway.
         self._append_subtitle_args(cmd, input_url)
 
         # Write duration into MKV Segment Info so Kodi knows the total
-        # length.  Without this, piped MKV has no Duration element and
+        # length. Without this, piped MKV has no Duration element and
         # Kodi treats the stream as live (no progress bar, no seeking,
         # no pause).  -metadata DURATION= makes ffmpeg's matroska muxer
         # write the Duration element in the header.
@@ -265,7 +265,7 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
             _sp._notify_error(e)
 
     def _resolve_seek(self, ctx, requested_start, total_bytes):
-        """Compute seek position and kill prior ffmpeg if needed.
+        """Compute seek position and stop the prior ffmpeg if needed.
 
         Returns the seek offset in seconds, or None.
         """
@@ -296,13 +296,13 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
         return seek_seconds
 
     def _kill_active_ffmpeg_for_seek(self, ctx):
-        """Kill + async-reap the tracked ffmpeg before a seek respawn."""
+        """Stop and async-reap the tracked ffmpeg before a seek respawn."""
         active_ffmpeg = ctx.get(
             "active_ffmpeg", getattr(self.server, "active_ffmpeg", None)
         )
         if not active_ffmpeg:
             return
-        # kill() is cheap, but wait(timeout=2) under the session lock adds
+        # Sending the signal is cheap, but wait(timeout=2) under the session lock adds
         # visible latency to every seek. Send the signal now, clear the
         # tracked handle below, and reap the old child on a daemon thread
         # while the replacement ffmpeg can spawn immediately.
@@ -314,7 +314,7 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
         # Compare-and-swap on BOTH storage locations. The prior unconditional
         # ``= None`` assignments raced with a concurrent _start_remux_process
         # on another handler thread that had just written its own proc into
-        # server.active_ffmpeg — we'd zero out that fresh reference, leaving
+        # server.active_ffmpeg—that would zero out that fresh reference, leaving
         # ``B`` streaming with no tracked handle for later cleanup. Use the
         # same ``is proc`` CAS pattern that _finish_remux uses.
         if ctx.get("active_ffmpeg") is active_ffmpeg:
@@ -351,7 +351,7 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
             return
 
         # Drain stderr in a background thread to prevent ffmpeg from blocking
-        # when the stderr pipe buffer fills up (~64KB).  Without this, ffmpeg
+        # when the stderr pipe buffer fills up (~64KB). Without this, ffmpeg
         # stalls mid-stream, the proxy stops sending data, and Kodi freezes
         # once its playback buffer drains.
         # Thread safety: list.append() is atomic under CPython's GIL, and
@@ -368,18 +368,18 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
         total = 0
         try:
             # Matroska-only response. Piped MKV has no Cues so advertising
-            # byte-range would only disable Kodi's cache-based fallback
+            # byte-range would only turn off Kodi's cache-based fallback
             # without enabling real seek. Stay on live-stream semantics;
             # duration is still embedded in the MKV header so Kodi's
             # progress bar is accurate.
             self._send_close_response_headers(200, "video/x-matroska", "none")
 
-            # Give the socket a write timeout.  If Kodi stops consuming
-            # bytes without closing the TCP connection — which happens
+            # Give the socket a write timeout. If Kodi stops consuming
+            # bytes without closing the TCP connection—which happens
             # when Kodi's decoder is stalled by a long operation like a
             # DB vacuum and the player enters limbo instead of firing
-            # onPlayBackStopped — the socket send buffer fills up and
-            # wfile.write() would block forever.  A timeout here
+            # onPlayBackStopped—the socket send buffer fills up and
+            # wfile.write() would block forever. A timeout here
             # guarantees the loop eventually raises, runs the finally
             # block, and kills ffmpeg instead of leaving a zombie.
             try:
@@ -387,7 +387,7 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
             except (OSError, AttributeError):
                 pass
 
-            # Stream ffmpeg output to Kodi.  Duration is written into the
+            # Stream ffmpeg output to Kodi. Duration is written into the
             # MKV header by ffmpeg via -metadata DURATION= (see
             # _build_ffmpeg_cmd).
             total = self._stream_remux_output(ctx, proc, lock, requested_start)

@@ -23,8 +23,8 @@ Smart Duplicates failover instead.
   were watching: the length must match exactly, and sampled SHA-256
   fingerprints must match too. If it can't verify a backup, it won't switch.
 - Mid-stream switching happens on the byte pass-through path, which is the
-  default for MKV and other non-MP4 files. Streams served through the MP4
-  faststart rewrite or an ffmpeg remux tier aren't switched mid-stream. See
+  default for MKV and other non-MP4 files. NeNeTeePee-Stream-Kodi doesn't switch streams
+  served through the MP4 faststart rewrite or an ffmpeg remux tier mid-stream. See
   [Playback, remux, and seeking](playback-and-remux.md).
 - When a switch happens, a brief notification tells you which backup it
   switched to ("fall back to candidate #N successful"). Playback doesn't pause
@@ -32,7 +32,7 @@ Smart Duplicates failover instead.
 
 ## Settings
 
-These are in the **Fallback Streams** group on the **Advanced** tab:
+These settings are in the **Fallback Streams** group on the **Advanced** tab:
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
@@ -59,19 +59,19 @@ can also find same-release uploads that Hydra collapsed into one row. Before
 NeNeTeePee-Stream-Kodi reads any NZB, it prefetches only candidates whose indexer size is
 within 25% of your pick.
 
-A candidate is admitted only when it's a plausible copy of the **same file**:
+NeNeTeePee-Stream-Kodi admits a candidate only when it's a plausible copy of the **same file**:
 
 - It's **the same content**: the same title, year, season and episodes,
   part number, edition, and PROPER/REPACK status.
 - It's from the **same release group at the same resolution**. Both must be
-  parsed and equal. If either is unknown, the candidate is rejected.
+  parsed and equal. If either is unknown, NeNeTeePee-Stream-Kodi rejects the candidate.
 - Its codec, container, quality, HDR format, audio, and channels are
   compatible.
 - It's a different upload. Its NZB link and article set must differ from your
   pick's.
 - The video payload in its NZB is within about 10% of your pick's size.
 
-The admitted candidates are then ranked:
+NeNeTeePee-Stream-Kodi then ranks the admitted candidates:
 
 1. **Exact same video filename** first.
 2. Then by **similarity tier**. Every candidate already has the same release
@@ -82,9 +82,9 @@ The admitted candidates are then ranked:
     - **Tier 2:** codec not recognized on one side.
 3. Then by **smallest size difference**.
 
-Uploads posted within an hour of each other are treated as the same upload
-and collapse to the single best-ranked copy. Candidates posted within an hour
-of your pick are dropped, because they're the same upload as the one you're
+NeNeTeePee-Stream-Kodi treats uploads posted within an hour of each other as the same upload
+and collapses them to the single best-ranked copy. It drops candidates posted
+within an hour of your pick, because they're the same upload as the one you're
 watching.
 
 !!! info "Beta feature"
@@ -108,14 +108,14 @@ strong evidence that the files match, not proof. In practice a different
 encode or a corrupted upload almost always fails the length check or one of
 the samples.
 
-Backups are checked in the background as soon as they're ready, so a switch
-can happen instantly when it's needed. A candidate that fails the check is
-discarded and never used.
+NeNeTeePee-Stream-Kodi checks backups in the background as soon as they're ready, so a switch
+can happen instantly when it's needed. It discards a candidate that fails the
+check and never uses it.
 
 ## When the source can't be saved
 
-A switch is triggered by upstream read errors, recoverable short reads, or a
-stretch where the source stops delivering new data. If a backup is attached
+Upstream read errors, recoverable short reads, or a stretch where the source
+stops delivering new data trigger a switch. If a backup is attached
 but none has been verified yet, the current source first gets another pass
 through its retry ladder. If no verified backup can resume from the exact
 byte position and the retries are used up, NeNeTeePee-Stream-Kodi closes the stream cleanly.

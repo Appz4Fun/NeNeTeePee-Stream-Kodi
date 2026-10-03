@@ -7,7 +7,7 @@ Pure helpers split out of ``webdav.py``: they turn release names into
 ``(season, episode)`` tag sets and loose token sets, and score how strongly a
 discovered file name matches a requested title/episode hint. This module
 imports nothing from ``webdav`` (no import cycle); ``webdav`` re-exports the
-public names (e.g. ``_episode_tags``, used by ``webdav_discovery``).
+public names (for example, ``_episode_tags``, used by ``webdav_discovery``).
 """
 
 import re
@@ -15,20 +15,20 @@ from urllib.parse import unquote
 
 # Capture a season followed by one or more episode numbers so a multi-episode
 # file like "S01E01E02E03" yields every episode it contains, not just the
-# first. The episode run allows light separators (e.g. "E01-E02", "E01.E02")
-# between consecutive episode numbers within the same Sxx tag.
+# first. The episode run allows light separators (for example, ``E01-E02`` or
+# ``E01.E02``) between consecutive episode numbers within the same Sxx tag.
 _EPISODE_TAG_RE = re.compile(r"s(\d{1,3})[. _-]*((?:e\d{1,4}[. _-]*)+)", re.IGNORECASE)
 _EPISODE_NUM_RE = re.compile(r"e(\d{1,4})", re.IGNORECASE)
-# Episode RANGE notation "SxxEaa-Ebb" / "SxxEaa-bb" (e.g. S01E01-E03,
+# Episode RANGE notation "SxxEaa-Ebb" / "SxxEaa-bb" (for example, S01E01-E03,
 # S01E01-03). The base _EPISODE_TAG_RE only records the literal endpoints
 # (E01 and E03) and drops a bare "-03" half entirely, so a request for a
-# covered middle episode (E02) would be scored as a different episode. We
-# expand the inclusive span below. _EPISODE_RANGE_MAX_SPAN caps expansion so
-# a malformed/absurd range (e.g. S01E01-E999) can't balloon the tag set --
-# beyond the cap we leave the literal endpoints from _EPISODE_TAG_RE intact.
+# covered middle episode (E02) would be scored as a different episode. The
+# code expands the inclusive span below. _EPISODE_RANGE_MAX_SPAN caps expansion so
+# a malformed/absurd range (for example, S01E01-E999) can't balloon the tag set --
+# beyond the cap the code leaves the literal endpoints from _EPISODE_TAG_RE intact.
 # The optional `(?:s\1[. _-]*)?` before the final episode number accepts the
 # repeated full-season form "S01E01-S01E03" in addition to "S01E01-E03" /
-# "S01E01-03". The `\1` backreference forces the SAME season, so a cross-season
+# "S01E01-03." The `\1` backreference forces the SAME season, so a cross-season
 # range like "S01E10-S02E02" does NOT satisfy the repeated-season branch and
 # only the literal endpoints (E10, E02) survive via _EPISODE_TAG_RE.
 _EPISODE_RANGE_RE = re.compile(
@@ -36,9 +36,9 @@ _EPISODE_RANGE_RE = re.compile(
     re.IGNORECASE,
 )
 _EPISODE_RANGE_MAX_SPAN = 64
-# Older/scene-alternate "NxNN" / "NNxNN" episode notation (e.g. 2x05,
+# Older/scene-alternate "NxNN" / "NNxNN" episode notation (for example, 2x05,
 # 02x05) that PTT's parse_title recognizes (ptt/handlers.py:1444 season
-# handler) but the SxxExx regex above does not. Zero-width `(?<!\d)` /
+# handler) but the earlier SxxExx regular expression does not. Zero-width `(?<!\d)` /
 # `(?!\d)` digit-lookarounds anchor the tag without CONSUMING the
 # surrounding separator, so adjacent tags ("2x05.2x06") both register
 # instead of the boundary eating the gap and dropping the second (and the
@@ -47,12 +47,12 @@ _EPISODE_RANGE_MAX_SPAN = 64
 # x264/x265 from registering as episodes. Accepts the Cyrillic 'х' the PTT
 # handler also allows.
 _EPISODE_NXN_RE = re.compile(r"(?<!\d)(\d{1,2})[xх](\d{1,3})(?!\d)", re.IGNORECASE)
-# Well-known display aspect ratios that share the NxN shape (16x9, 4x3, ...)
+# Well-known display aspect ratios that share the NxN shape (16x9, 4x3, and so on)
 # but are NOT episodes. The season cap on _EPISODE_NXN_RE already rejects
 # resolutions (1920x1080) and codecs (x264), but these small ratios slip
-# through and would mis-parse as episode (16, 9) / (4, 3). We FILTER these
-# exact pairs out of the NxN extraction rather than tightening the regex, so
-# real un-padded single-digit episodes like 2x3 or 1x9 still register.
+# through and would mis-parse as episode (16, 9) / (4, 3). The code FILTERS these
+# exact pairs out of the NxN extraction rather than tightening the regular expression,
+# so real un-padded single-digit episodes like 2x3 or 1x9 still register.
 _ASPECT_RATIO_PAIRS = frozenset(
     {
         (16, 9),
@@ -71,10 +71,10 @@ _ASPECT_RATIO_PAIRS = frozenset(
     }
 )
 # NxN RANGE notation "1x01-03" / "1x01-1x03" -- the NxN sibling of
-# _EPISODE_RANGE_RE (SxxEaa-Ebb). The standalone _EPISODE_NXN_RE above only
+# _EPISODE_RANGE_RE (SxxEaa-Ebb). The standalone _EPISODE_NXN_RE defined earlier only
 # records the literal endpoints (1x01 and 1x03) and drops a bare "-03" half
 # entirely, so a request for a covered middle episode (1x02) would mis-score
-# and a larger non-covering sibling could win. We expand the inclusive span
+# and a larger non-covering sibling could win. The code expands the inclusive span
 # below, capped by _EPISODE_RANGE_MAX_SPAN. The `\d{1,2}` season cap and the
 # trailing `(?!\d)` are the resolution/codec guard (1920x1080, 1280x720,
 # 3840x2160, 1920x1080-1920x1200 and 1x01-1080 all register nothing). The
@@ -144,7 +144,7 @@ def _add_nxn_tags(tags, value):
     # double-count.
     for match in _EPISODE_NXN_RE.finditer(value):
         pair = (int(match.group(1)), int(match.group(2)))
-        # Skip well-known display aspect ratios (16x9, 4x3, ...) that share the
+        # Skip well-known display aspect ratios (16x9, 4x3, and so on) that share the
         # NxN shape but are not episodes. Real un-padded episodes (2x3, 1x9)
         # are not in the set, so they still register.
         if pair in _ASPECT_RATIO_PAIRS:
@@ -170,10 +170,10 @@ def _episode_tags(value):
 
 
 def _title_hint_match_score(file_path, hint_tokens, hint_episode_tags):
-    """Return how strongly a video file name matches the requested title hint.
+    """Return how strongly a video filename matches the requested title hint.
 
     Returns a 2-tuple ``(episode_score, token_score)`` so callers can rank
-    episode identity ABOVE size but raw token overlap BELOW it:
+    episode identity AHEAD of size but raw token overlap BELOW it:
 
     * ``episode_score`` is the strongest signal -- ``1000`` when the requested
       SxxExx episode is present, ``-1000`` when the file names a different
@@ -215,16 +215,16 @@ def _resolve_file_episode_tags(name, parent_path):
     """Resolve the authoritative episode tags for a file via a layered fallback.
 
     Basename FIRST: the file's own episode tag is authoritative. Only when the
-    basename carries no episode tag (a generically-named file like "video.mkv")
-    do we fall back to the directory -- this is a LAYERED fallback, NOT a union:
-    a matching dir tag must never mask a wrong-episode FILENAME, or the
+    basename carries no episode tag (a generically named file like "video.mkv")
+    does the lookup fall back to the directory -- this is a LAYERED fallback, NOT a
+    union: a matching dir tag must never mask a wrong-episode FILENAME, or the
     wrong-episode gate would regress.
 
     The fallback scores the NEAREST parent SEGMENT and treats it as
     authoritative when it carries its OWN episode tag (most-specific identity),
     so a wrong nearer dir like "Show.S01E03" is correctly wrong and is NOT
     rescued by an ancestor pack folder ("Show.S01E02.Pack"). It widens to scan
-    the FULL ancestor path only when the nearest dir is generic (e.g. "1080p"),
+    the FULL ancestor path only when the nearest dir is generic (for example, "1080p"),
     so a grandparent's tag ("Show.S01E02/1080p/video.mkv") still supplies the
     match. A season-complete parent ("Show.S01.Complete") yields no tag, so
     largest-wins is preserved there.

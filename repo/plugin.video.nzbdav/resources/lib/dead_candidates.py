@@ -56,8 +56,8 @@ def is_provably_dead_submit_error(submit_error):
     submit path retries (``408/502/503/504``) are NOT provably dead -- they
     signal a slow or hiccuping backend, so the candidate stays eligible. Any
     other status (HTTP 5xx like ``500``, ``"rejected"``, or an unknown status)
-    is treated as provably dead -- conservatively dead so we do not loop on a
-    doomed candidate. A bare ``None`` (or any non-dict) is not a classified
+    is treated as provably dead (conservatively dead, so the caller does not loop on a
+    doomed candidate). A bare ``None`` (or any non-dict) is not a classified
     submit error, so it is not provably dead.
     """
     if not isinstance(submit_error, dict):

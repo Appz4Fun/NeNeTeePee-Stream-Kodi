@@ -128,7 +128,7 @@ def attach_fallback_candidates(results):
     """Attach duplicate fallback candidates to each result in-place.
 
     Every result receives ``_fallback_candidates``. When fallback streams are
-    disabled, the cap is zero, or a result cannot be conservatively matched,
+    turned off, the cap is zero, or a result cannot be conservatively matched,
     the attached list is empty.
     """
     for result in results:

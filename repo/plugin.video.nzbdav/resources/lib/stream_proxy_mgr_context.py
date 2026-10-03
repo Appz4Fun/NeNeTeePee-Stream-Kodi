@@ -197,7 +197,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
     ):
         """Tier 2 decision: temp-file faststart path, or None to skip.
 
-        Skip for large files (>4GB) — temp remux would take too long and
+        Skip for large files (over 4 GB)—temp remux would take too long and
         would time out the prepare_stream_via_service call.
         """
         _TEMP_FASTSTART_MAX = 4 * 1073741824  # 4 GB
@@ -360,7 +360,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
 
         Force-remux exists for 32-bit Kodi builds (Amlogic CoreELEC and
         similar) that throw ``Open - Unhandled exception`` on pass-through
-        HTTP above ~4 GB Content-Length. force_remux_mode picks the shape:
+        HTTP over ~4 GB Content-Length. force_remux_mode picks the shape:
         "matroska" (default, piped MKV, cache-bounded seek) or "hls_fmp4"
         (experimental fragmented-MP4 HLS VOD, full random seek, DV-capable).
         """

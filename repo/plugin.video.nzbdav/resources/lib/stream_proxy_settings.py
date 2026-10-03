@@ -9,7 +9,7 @@ Kodi addon settings, build/normalize the immutable settings snapshot consumed
 on the proxy thread, and derive the per-stream runtime knobs (force-remux
 threshold/mode, contract mode, density/zero-fill/retry toggles, stall wait,
 read-ahead buffer size). All names are re-exported by ``stream_proxy`` so
-existing references and test patches (e.g. ``stream_proxy._get_addon_setting``)
+existing references and test patches (for example, ``stream_proxy._get_addon_setting``)
 keep resolving.
 
 Plain constants are imported from ``stream_proxy``; every parent-namespace
@@ -38,7 +38,7 @@ from resources.lib.stream_proxy import (  # noqa: E402
 
 
 def _get_addon_setting(setting_id, default=None):
-    """Best-effort Kodi addon setting lookup safe for tests and CLI.
+    """Best-effort Kodi addon setting lookup safe for tests and command-line use.
 
     Prefer the Kodi API when it is available, so tests and live settings
     overrides win. Fall back to reading the addon's ``settings.xml``
@@ -90,7 +90,7 @@ def build_settings_snapshot(settings_getter=None):
 
 
 def _set_addon_setting(setting_id, value):
-    """Best-effort Kodi addon setting write safe for tests and CLI."""
+    """Best-effort Kodi addon setting write safe for tests and command-line use."""
     if _sp.xbmcaddon is None:
         return False
     try:
@@ -229,7 +229,7 @@ def _get_server_context_lock(server):
 
 
 def _get_force_remux_threshold_bytes():
-    """Return the remux-force threshold in bytes, or 0 to disable."""
+    """Return the remux-force threshold in bytes, or 0 for off."""
     raw = _sp._get_addon_setting("force_remux_threshold_mb")
     try:
         mb = int(raw) if raw not in (None, "") else _DEFAULT_FORCE_REMUX_THRESHOLD_MB

@@ -15,7 +15,7 @@ A Kodi 21 (Omega) player/resolver add-on that streams Usenet media through
 browse a movie or TV episode in TMDBHelper, NeNeTeePee-Stream-Kodi searches your indexers, you
 pick a release, and NeNeTeePee-Stream-Kodi streams it through
 [nzbdav](https://github.com/nzbdav-dev/nzbdav) or
-[InfiniDysk](https://github.com/infinidysk/infinidysk). with a progress bar,
+[InfiniDysk](https://github.com/infinidysk/infinidysk), with a progress bar,
 seeking, and automatic recovery when a source goes bad. No manual NZB handling
 required. An optional download-first NZBGet backend is also available.
 
@@ -24,15 +24,15 @@ required. An optional download-first NZBGet backend is also available.
 > NZBGet server, and your own Usenet provider.
 
 StreamNZB is also available in the **Playback backend** dropdown. Enter its
-reachable server URL and stream token and use the existing TMDBHelper player.
+reachable server URL and stream token, and use the existing TMDBHelper player.
 StreamNZB supplies the release list and playback URL, with no NeNeTeePee-Stream-Kodi indexer,
 WebDAV, or proxy configuration required. See the
 [StreamNZB setup and recovery limits](docs-site/features/streamnzb-backend.md).
 
 ## 📖 Full documentation
 
-**This README is the short version. The complete guide. every setting, every
-feature, and a technical breakdown of how it all works. lives at:**
+**This README is the short version. The complete guide, with every setting, every
+feature, and a technical breakdown of how it all works, lives at:**
 
 ### Documentation
 
@@ -58,8 +58,8 @@ flowchart LR
     F -->|range requests, gap recovery| G[Kodi player]
 ```
 
-nzbdav (or InfiniDysk) handles both fetching and serving over WebDAV. no
-separate download client needed. A background stream proxy adds seeking,
+nzbdav (or InfiniDysk) handles both fetching and serving over WebDAV, so you
+don't need a separate download client. A background stream proxy adds seeking,
 on-the-fly remuxing, and mid-playback source switching. With the optional
 NZBGet backend, NZBGet downloads the whole file first and Kodi plays it from an
 SMB share or a local/mounted folder.
@@ -93,7 +93,7 @@ delivers automatic updates on one of two channels:
 
 1. Open [appz4fun.github.io/Appz4Fun-Kodi-Repo](https://appz4fun.github.io/Appz4Fun-Kodi-Repo/)
    and download the channel zip (for example `repository.appz4fun.stable-1.0.1.zip`).
-2. In Kodi: **Settings → System → Add-ons** → enable **Unknown sources**.
+2. In Kodi, go to **Settings → System → Add-ons** → enable **Unknown sources**.
 3. **Settings → Add-ons → Install from zip file** → select the channel zip.
 4. **Settings → Add-ons → Install from repository → Appz4Fun Repository** (or
    **Appz4Fun Repository (Beta)**) → **Video add-ons** → install **NeNeTeePee-Stream-Kodi**.
@@ -234,8 +234,8 @@ version; see [AGENTS.md](AGENTS.md#release-checklist).
 | Python | 3.8+ |
 | OS | CoreELEC, LibreELEC, OSMC, Windows, macOS, Linux |
 | Architecture | ARM64 (aarch64), x86-64 |
-| Dependencies | None. all vendored, no pip required |
+| Dependencies | None (all vendored, no pip required) |
 
 ## License
 
-GPLv3. see [LICENSE](LICENSE) for details.
+GPLv3. See [LICENSE](LICENSE) for details.

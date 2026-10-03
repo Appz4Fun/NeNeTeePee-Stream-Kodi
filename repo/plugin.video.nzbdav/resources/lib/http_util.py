@@ -22,7 +22,7 @@ _REDACT_PARAM_NAMES = frozenset(
         "secret",
         # Extended set per TODO.md §H.2-H2c. `key` (without prefix) is
         # used by some Newznab-style indexers; `access_token` covers
-        # OAuth-style callbacks; `bearer` covers Authorization header
+        # token-based callbacks; `bearer` covers Authorization header
         # values that get spliced into URLs by mistake.
         "key",
         "access_token",
@@ -32,7 +32,7 @@ _REDACT_PARAM_NAMES = frozenset(
     }
 )
 
-# Pattern to catch apikey=... embedded in free-form strings (HTTP error
+# Pattern to catch apikey=<value> embedded in free-form strings (HTTP error
 # bodies, exception messages). Used by redact_text() for the cases where
 # a full URL parse isn't practical.
 _EMBEDDED_CRED_RE = re.compile(
@@ -42,19 +42,19 @@ _EMBEDDED_CRED_RE = re.compile(
 )
 
 # Catch ``scheme://user:password@host`` userinfo embedded in free-form text.
-# urllib / socket / xbmcvfs errors sometimes echo the failing URL — e.g. the
-# NZBGet JSON-RPC URL or the ``smb://user:pass@host/...`` completed-folder
-# root — which carries the password. ``redact_url`` only strips userinfo from
+# urllib / socket / xbmcvfs errors sometimes echo the failing URL—for example, the
+# NZBGet JSON-RPC URL or the ``smb://user:pass@host/path`` completed-folder
+# root—which carries the password. ``redact_url`` only strips userinfo from
 # a parseable URL; this handles the embedded-in-an-error-string case so the
 # password does not leak into logs. TODO.md §H.2 (NZBGet path).
 #
-# We match a whole URL span and reuse ``redact_url``'s ``rpartition('@')``
-# netloc logic rather than a single password-class regex. A naive
+# The pattern matches a whole URL span and reuses ``redact_url``'s ``rpartition('@')``
+# netloc logic rather than a single password-class regular expression. A naive
 # ``user:pass@`` pattern leaks whenever the password itself contains an
-# ``@`` (common in SMB/NZBGet credentials — the match stops at the FIRST
+# ``@`` (common in SMB/NZBGet credentials—the match stops at the FIRST
 # ``@`` and the tail survives) and fails entirely for an empty username
-# (``smb://:pass@host``). Splitting on the LAST ``@`` of the authority — the
-# same way ``redact_url`` does — handles both.
+# (``smb://:pass@host``). Splitting on the LAST ``@`` of the authority—the
+# same way ``redact_url`` does—handles both.
 _EMBEDDED_URL_RE = re.compile(r"(?:smb|https?|ftp)://[^\s\"'<>]+", re.IGNORECASE)
 
 
@@ -64,7 +64,7 @@ def redact_url(url):
     Handles two shapes callers pass:
     - Plain URLs where the key is a direct query parameter.
     - Embedded URLs: a query value that is itself a URL containing a
-      credential query (e.g. ``/api?mode=addurl&name=http://hydra/getnzb/
+      credential query (for example, ``/api?mode=addurl&name=http://hydra/getnzb/
       abc?apikey=SECRET``). The outer ``name=`` value gets recursively
       redacted so the inner ``apikey=`` doesn't leak.
 
@@ -86,7 +86,7 @@ def redact_url(url):
             query.append((k, redact_url(v)))
         else:
             query.append((k, v))
-    # Redact `user:password@host` userinfo in the netloc — Basic-auth-in-URL
+    # Redact `user:password@host` userinfo in the netloc—Basic-auth-in-URL
     # is a real shape some users hand-paste into settings (and that the
     # WebDAV stack used to accept). Strip the password half before
     # logging. TODO.md §H.2-H2d.
@@ -109,7 +109,7 @@ def _redact_netloc_userinfo(netloc):
     if ":" in userinfo:
         user, _, _password = userinfo.partition(":")
         return "{}:REDACTED@{}".format(user, host)
-    # No `:password` half — userinfo is just a username.
+    # No `:password` half—userinfo is just a username.
     return "{}@{}".format(userinfo, host)
 
 
@@ -135,7 +135,7 @@ def redact_text(text):
     """Redact apikey-style tokens from free-form text (error bodies, logs).
 
     ``redact_url`` requires a parseable URL. Use this helper when the
-    payload is a string that might embed credentials — upstream HTTP
+    payload is a string that might embed credentials—upstream HTTP
     error pages, exception messages, etc. Replaces each matched
     ``<key>=<value>`` pair with ``<key>=REDACTED`` so the structure of
     the surrounding text is preserved, and scrubs the password half of any
@@ -155,10 +155,10 @@ _WHITESPACE_RE = re.compile(r"\s+")
 def clean_search_query(title):
     """Normalize a title for use as a Newznab/Prowlarr keyword query.
 
-    Indexers tokenize the ``q``/``query`` text and AND each term against
-    release names. A literal ``&`` (e.g. "Your Friends & Neighbors") becomes a
-    term that no release name carries — releases spell it "and" or drop it
-    entirely — so the search matches nothing and returns zero results (#294).
+    Indexers tokenize the ``q``/``query`` text and combine each term with AND against
+    release names. A literal ``&`` (for example, "Your Friends & Neighbors") becomes a
+    term that no release name carries—releases spell it "and" or drop it
+    entirely—so the search matches nothing and returns zero results (#294).
     Replace ``&`` with a space and collapse the surrounding whitespace so the
     remaining words still match; ``&``-free titles are returned unchanged.
     """
@@ -260,7 +260,7 @@ def http_post_json(url, payload, timeout=15, headers=None, basic_auth=None):
 
     Mirrors ``http_get``'s scheme allowlist (urllib would otherwise honor
     ``file://``/``ftp://``). ``basic_auth`` is an optional ``(user, pass)``
-    tuple sent as an HTTP Basic ``Authorization`` header — used by the
+    tuple sent as an HTTP Basic ``Authorization`` header—used by the
     NZBGet JSON-RPC client.
     """
     import base64
@@ -303,8 +303,8 @@ def format_request_error(error):
     the same error text for the same underlying failure. Output is run
     through ``redact_text`` because some urllib error shapes (notably
     ``URLError`` wrapping a socket error and the rare ``HTTPError`` with
-    a URL-bearing reason) can echo the failing URL — which embeds the
-    indexer's ``apikey=...`` query — into a string that then surfaces
+    a URL-bearing reason) can echo the failing URL—which embeds the
+    indexer's ``apikey=<value>`` query—into a string that then surfaces
     to the user via ``Dialog().notification()``. TODO.md §H.2-H2e/H2f.
     """
     reason = getattr(error, "reason", None)
@@ -354,7 +354,7 @@ def pubdate_to_epoch(pubdate_str):
         return None
 
 
-# Trailing fractional seconds in an ISO-8601 timestamp (e.g. ``.1234567``).
+# Trailing fractional seconds in an ISO-8601 timestamp (for example, ``.1234567``).
 # Compiled once at import; see :func:`iso8601_to_rfc2822`.
 _ISO_FRACTIONAL_SECONDS_RE = re.compile(r"\.\d+")
 
@@ -363,12 +363,12 @@ def iso8601_to_rfc2822(value):
     """Convert an ISO-8601 datetime string to an RFC-2822 string.
 
     Prowlarr's native JSON API reports ``publishDate`` in ISO-8601
-    (e.g. ``"2026-06-25T11:00:00Z"``), but every ``pubdate`` consumer in
+    (for example, ``"2026-06-25T11:00:00Z"``), but every ``pubdate`` consumer in
     this addon parses RFC-2822 via ``email.utils.parsedate_to_datetime``:
     :func:`pubdate_to_epoch` (the stable identity key behind the picker's
     DL/repost gate and the fallback same-window dedup) and
     ``filter._pubdate_sort_key`` (the "Age" sort). ISO-8601 makes both
-    silently fail — epoch ``None`` / sort key ``0`` — so we normalize at
+    silently fail—epoch ``None`` / sort key ``0``—so the value is normalized at
     the source and keep the ``pubdate`` field format uniform rather than
     teaching every consumer a second grammar.
 
@@ -459,7 +459,7 @@ def format_size(size_bytes):
             are coerced via ``int()`` so Newznab-style size="1234567"
             fields work without explicit conversion at every call
             site. ``None`` / ``0`` / ``""`` all map to an empty
-            string — the caller renders "unknown size" in that slot.
+            string—the caller renders "unknown size" in that slot.
 
     Returns:
         One of:
@@ -494,7 +494,7 @@ def _escape_builtin_arg(text):
     similar Unicode lookalikes so the user-visible text stays legible
     while the parser sees only inert characters. Newlines are also
     flattened to spaces because some Kodi builds let an embedded newline
-    terminate the builtin and run the next line as code.
+    end the builtin and run the next line as code.
 
     See TODO.md §H.2-H15 / §H.3 for the original audit finding.
     """
@@ -502,7 +502,7 @@ def _escape_builtin_arg(text):
         return ""
     return (
         str(text)
-        .replace(",", "،")  # Arabic comma U+060C — visually similar, parser-inert
+        .replace(",", "،")  # Arabic comma U+060C—visually similar, parser-inert
         .replace(")", "❩")  # medium right parenthesis ornament U+2769
         .replace("\n", " ")
         .replace("\r", " ")

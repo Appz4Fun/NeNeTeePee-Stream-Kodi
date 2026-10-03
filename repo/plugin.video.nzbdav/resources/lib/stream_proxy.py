@@ -5,7 +5,7 @@
 """Local HTTP proxy for nzbdav WebDAV streams.
 
 For MP4 files, remuxes on the fly to MKV using ffmpeg (-c copy, no
-re-encoding).  This bypasses a Kodi CFileCache bug where parsing large
+re-encoding). This bypasses a Kodi CFileCache bug where parsing large
 MP4 moov atoms over HTTP fails with 'corrupted STCO atom'.
 
 For MKV and other files, proxies range requests directly to the remote
@@ -17,7 +17,7 @@ WebDAV server with proper 206 responses.
 # the handler methods that used them moved into the stream_proxy_handler_*
 # mixins, which reach them via ``_sp.<name>`` against this module's namespace.
 # They are kept imported on this module so that indirection (and any test patch
-# of e.g. ``stream_proxy.urlopen``) keeps resolving.
+# of for example, ``stream_proxy.urlopen``) keeps resolving.
 import hashlib  # noqa: F401  pylint: disable=unused-import
 import hmac  # noqa: F401  pylint: disable=unused-import
 import math
@@ -80,9 +80,9 @@ except ImportError:
     xbmcaddon = None
 
 # mp4_parser functions are imported here so tests can patch them at this
-# module's namespace.  They have no Kodi dependencies, so the import is safe
-# at module load time.  If mp4_parser is unavailable (e.g. during a partial
-# install) we fall back gracefully to None, which prepare_stream treats as a
+# module's namespace. They have no Kodi dependencies, so the import is safe
+# at module load time. If mp4_parser is unavailable (for example, during a partial
+# install) it falls back gracefully to None, which prepare_stream treats as a
 # failed faststart parse.
 try:
     from resources.lib.mp4_parser import (  # noqa: E402,F401  pylint: disable=unused-import
@@ -127,7 +127,8 @@ _HLS_PRIVATE_TEMP_ROOT_LOCK = threading.Lock()
 # and tests ``@patch`` them on this module. The names are imported
 # EXPLICITLY (not ``import *``) so static analysers can follow the re-export chain
 # from ``from resources.lib.stream_proxy import _NAME`` in tests. This import MUST
-# stay above ``class _StreamHandler`` and the sibling mixin imports so load order holds.
+# stay before ``class _StreamHandler`` and the sibling mixin imports so load order
+# holds.
 from resources.lib.stream_proxy_const import (  # noqa: F401,E402  pylint: disable=cyclic-import,unused-import
     _AUTH_HEADER_NOT_PROVIDED,
     _AWAITING_DOWNLOAD_NO_PROGRESS_MAX,
@@ -241,7 +242,7 @@ from resources.lib.stream_proxy_const import (  # noqa: F401,E402  pylint: disab
 # Stage-2 mixin split: _StreamHandler's request-handling methods live in the
 # stream_proxy_handler_<area> sibling modules and are composed back here via
 # MRO. These imports sit after the module-level constants the mixins capture
-# in default arguments (e.g. _AUTH_HEADER_NOT_PROVIDED) so the partially
+# in default arguments (for example, _AUTH_HEADER_NOT_PROVIDED) so the partially
 # initialized module already exposes them when each mixin class body runs.
 from resources.lib.stream_proxy_handler_conceal import (  # noqa: E402
     _EbmlConcealMixin,
@@ -336,7 +337,7 @@ class HlsProducer(_HlsProduceMixin, _HlsSegmentMixin):
     ran out of buffered data every time. The fix is to keep one
     ffmpeg running using the ``segment`` muxer, writing
     ``seg_000000.ts`` files directly to a session directory on disk.
-    Kodi's segment requests become simple file reads — no cold start
+    Kodi's segment requests become simple file reads—no cold start
     between consecutive segments, just once per seek.
 
     Seeks are handled by killing the current ffmpeg and restarting
@@ -380,16 +381,15 @@ class HlsProducer(_HlsProduceMixin, _HlsSegmentMixin):
         # Kodi request, ignoring whatever ffmpeg writes to the disk
         # file on subsequent generations. Rationale: on a seek
         # respawn, ffmpeg produces a new init.mp4 with a different
-        # edit list (``elst`` box) — the codec config (``hvcC``,
+        # edit list (``elst`` box)—the codec config (``hvcC``,
         # ``mp4a``) is byte-identical, so from a decoder
         # compatibility standpoint the first init works for every
         # generation. But HLS fmp4 clients only load ``EXT-X-MAP``
         # once per playlist, so Kodi has already cached the first
-        # init's bytes. Serving a different init on a later request
-        # — or worse, letting Kodi re-parse a half-written disk
-        # file mid-respawn — would be either a no-op (if Kodi
-        # ignores the second fetch) or a decoder stall (if it
-        # accepts it). Caching the bytes here makes the behavior
+        # init's bytes. Serving a different init on a later request (or worse,
+        # letting Kodi re-parse a half-written disk file mid-respawn) would be
+        # either a no-op (if Kodi ignores the second fetch) or a decoder stall
+        # (if it accepts it). Caching the bytes here makes the behavior
         # deterministic regardless of what Kodi does.
         self._canonical_init_bytes = None
         # Session-wide stderr log. Opened once at session construction,
@@ -402,7 +402,7 @@ class HlsProducer(_HlsProduceMixin, _HlsSegmentMixin):
             self._ffmpeg_log_path, "ab", buffering=0
         )
 
-    # How long prepare() will wait for ffmpeg to actually produce
+    # How long prepare() waits for ffmpeg to actually produce
     # init.mp4 + the first segment before declaring the fmp4 path
     # broken and falling back to matroska. Has to comfortably exceed
     # ffmpeg's analyzeduration (15 s) plus header write time, plus a
@@ -481,7 +481,7 @@ def get_proxy():
     global _proxy
     with _proxy_lock:
         if _proxy is None or not _proxy.is_alive():
-            # Reset the singleton if a previous instance died (e.g. service
+            # Reset the singleton if a previous instance died (for example, service
             # was restarted, the prior thread crashed). Without this, every
             # subsequent get_proxy() returns a stale handle whose
             # serve_forever loop has already exited and clients get
@@ -511,14 +511,14 @@ def reset_proxy_singleton():
 # ``stream_proxy_*`` modules. They are imported here, at the END of module
 # load, so every name stays resolvable as ``stream_proxy.<name>`` for callers
 # and for test ``@patch`` targets (including ``_StreamHandler``, which is still
-# defined above and calls these helpers as bare module globals). The siblings
+# defined earlier and calls these helpers as bare module globals). The siblings
 # import the constants they need back from this module (a deliberate, documented
-# import cycle: the constants are all defined above, before these imports
+# import cycle: the constants are all defined earlier, before these imports
 # execute) and reach this module's helpers / patched names at call time via
 # ``import resources.lib.stream_proxy as _sp`` so monkeypatching keeps working.
 #
 # These are re-exports for external callers / test patches, so pylint's
-# unused-import is expected and disabled for the block.
+# unused-import is expected and turned off for the block.
 # ---------------------------------------------------------------------------
 # pylint: disable=unused-import
 from resources.lib.stream_proxy_buffer import ReadAheadBuffer  # noqa: E402,F401

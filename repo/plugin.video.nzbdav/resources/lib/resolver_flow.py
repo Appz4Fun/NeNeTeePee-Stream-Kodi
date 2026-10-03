@@ -38,7 +38,7 @@ def _scrub_bookmark_for_nzbget(params):
     """Clear the TMDBHelper/plugin bookmark before an NZBGet handoff.
 
     NZBGet bypasses the nzbdav playback-state cleanup, so scrub the stale
-    bookmark here or the next replay reopens plugin://... instead of the
+    bookmark here or the next replay reopens a ``plugin://`` URL instead of the
     resolved stream (TODO.md §H.3). Guarded so a cleanup failure can't escape
     before the resolve completes; returns the scrubbed resume offset.
     """
@@ -63,8 +63,8 @@ def _reject_resolve_handle(handle, notify_message=None):
     False)`` completion signal Kodi waits on, then clearing the video playlist.
     """
     if notify_message is not None:
-        # The notification is optional UI; if Dialog().ok() raises (e.g. during
-        # shutdown) the handle-based resolve must still receive its False
+        # The notification is optional UI; if `Dialog().ok()` raises (for example,
+        # during shutdown) the handle-based resolve must still receive its False
         # resolution below or Kodi hangs (TODO.md §H.2-H9 no-hang guarantee).
         try:
             _resolver.xbmcgui.Dialog().ok(_resolver._addon_name(), notify_message)
@@ -223,7 +223,7 @@ def _resolve_submit_and_poll(
     )
     dialog = _resolver.xbmcgui.DialogProgress()
     dialog.create(_resolver._addon_name(), _resolver._string(30097))
-    # Own the modal locally until we hand it back. A raise before the return
+    # Own the modal locally until it is handed back. A raise before the return
     # would otherwise leave the caller's dialog None, so its outer finally
     # could never close this modal (no-hang invariant; AGENTS.md).
     owner = dialog
@@ -257,7 +257,7 @@ def _resolve_finish_or_reject(
 ):
     """Run the success/failure tail of the handle-based ``resolve`` path.
 
-    Extracted verbatim from ``resolve``'s ``if stream_url: ... else: ...`` block.
+    Extracted verbatim from the ``if stream_url`` and ``else`` branches of ``resolve``.
     ``stream`` is ``(stream_url, stream_headers, dead)``; ``fallback`` is
     ``(fallback_state, start_fallback_after_primary)`` where the second item is
     the closure that lazily starts the fallback worker and assigns the outer
@@ -298,8 +298,8 @@ def _resolve_play_ready_stream(
 
     Extracted verbatim from the ``if stream_url:`` success block of
     ``resolve``: prepare the proxy, wait for the bookmark-cleanup scrub,
-    resolve the resume choice, then finish with ``setResolvedUrl(handle, True)``
-    — or, on a cancelled resume prompt, ``setResolvedUrl(handle, False)``.
+    resolve the resume choice, then finish with ``setResolvedUrl(handle, True)``,
+    or, on a canceled resume prompt, ``setResolvedUrl(handle, False)``.
     Returns the (possibly ``None``) progress dialog so the caller's ``finally``
     close stays a no-op after this closed it.
     """
@@ -340,7 +340,7 @@ def _resolve_and_play_nzbget_delegate(nzb_url, title, params, resolve_params):
     setResolvedUrl, matching this path's contract). Same bookmark scrub as the
     handle-based resolve() NZBGet branch: the nzbdav playback-state cleanup is
     bypassed, so clear the stale TMDBHelper/plugin bookmark before handoff or
-    the next replay resumes plugin://... instead of the resolved stream
+    the next replay resumes a ``plugin://`` URL instead of the resolved stream
     (TODO.md §H.3).
     """
     from resources.lib.nzbget_resolver import play_nzbget
@@ -392,7 +392,7 @@ def _resolve_and_play_submit_and_poll(
     dialog = _resolver.xbmcgui.DialogProgress()
     dialog.create(_resolver._addon_name(), _resolver._string(30097))
     _resolver._resolve_stage("progress create done")
-    # Own the modal locally until we hand it back; see _resolve_submit_and_poll.
+    # Own the modal locally until it is handed back; see _resolve_submit_and_poll.
     owner = dialog
     try:
         if not picker_completed_lookup_done:
@@ -428,8 +428,8 @@ def _resolve_and_play_finish_or_stop(
 ):
     """Run the success/failure tail of the handle-less ``resolve_and_play`` path.
 
-    Extracted verbatim from ``resolve_and_play``'s ``if stream_url: ... else:
-    ...`` block. ``stream`` is ``(stream_url, stream_headers, dead)``;
+    Extracted verbatim from the ``if stream_url`` and ``else`` branches of
+    ``resolve_and_play``. ``stream`` is ``(stream_url, stream_headers, dead)``;
     ``fallback`` is ``(fallback_state, start_fallback_after_primary)`` where the
     second item lazily starts the fallback worker and assigns the outer
     ``fallback_state``. Returns the (possibly ``None``) progress dialog so the

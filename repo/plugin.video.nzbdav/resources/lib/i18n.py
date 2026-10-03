@@ -133,7 +133,7 @@ def addon():
 
     Early in service startup, `xbmcaddon.Addon("plugin.video.nzbdav")` can raise
     RuntimeError ("unknown addon id") because the plugin subsystem hasn't finished
-    registering us. Return None so callers fall through to their fallback
+    registering the addon. Return None so callers fall through to their fallback
     instead of crashing the service entry point.
     """
     try:
@@ -184,8 +184,8 @@ def fmt(msg_id, *args, **kwargs):
     """Format a localized string with arguments.
 
     Wrapped in try/except (TODO.md §H.3): if the localized template's
-    placeholder count is wrong (e.g. translator dropped a `{1}`) or the
-    caller supplies the wrong number of args, we'd otherwise raise
+    placeholder count is wrong (for example, translator dropped a `{1}`) or the
+    caller supplies the wrong number of args, the call would otherwise raise
     IndexError / KeyError out of every dialog and notification site.
     Fall back to the raw template plus a stringified arg list so the
     user still gets something useful, and log the underlying mismatch
@@ -195,7 +195,7 @@ def fmt(msg_id, *args, **kwargs):
     # If string() returned the missing-key sentinel (#<id>) or "" (for
     # the legacy code path), the template has no placeholders. Surface
     # the id and the args the caller passed instead of producing the
-    # leading-space gibberish (e.g. " ('foo',)") that the suffix branch
+    # leading-space gibberish (for example, " ('foo',)") that the suffix branch
     # used to emit on an empty template.
     if not template or template.startswith("#"):
         return "#{} args={}".format(msg_id, args)
