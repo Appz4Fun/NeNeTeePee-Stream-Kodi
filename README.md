@@ -1,5 +1,7 @@
 # NeNeTeePee-Stream-Kodi add-on
 
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
 [![CI](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/ci.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/codeql.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/codeql.yml)
 [![Release](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/release.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/release.yml)
@@ -105,10 +107,10 @@ page → **Versions** and pick the version listed under that repository. See
 for what the beta adds and how to switch.
 
 > **Upgrading from the old repository?** NeNeTeePee-Stream-Kodi used to be distributed from the
-> **legacy Kodi repository** add-on (`repository.nzbdav`) at
+> **NZB-DAV Repository** (legacy) add-on (`repository.nzbdav`) at
 > `https://appz4fun.github.io/nzbdavkodi/`. That address no longer supplies add-on metadata, so installs made from it no longer update. Install an Appz4Fun repository zip using the earlier steps, reinstall NeNeTeePee-Stream-Kodi from it
 > through **Versions** (settings are kept), then remove the old `nzbdav`
-> file-manager source and the old **legacy Kodi repository** add-on.
+> file-manager source and the old **NZB-DAV Repository** (legacy) add-on.
 
 ### Manual install
 

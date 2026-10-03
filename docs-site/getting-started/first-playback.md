@@ -49,7 +49,7 @@ return to the filtered list. Your saved filter settings don't change.
   all-results view.
 - On CoreELEC and other Linux devices where NeNeTeePee-Stream-Kodi can read the remote's
   input device, you can also **hold OK for five seconds** to turn filters off.
-  The footer shows **[Hold OK 5 seconds] Filters off** when this works. A short
+  The footer shows **[Hold OK 5s] Filters off** when this works. A short
   press still selects the row.
 
 See [Quality filtering and sorting](../features/quality-filtering.md) for the

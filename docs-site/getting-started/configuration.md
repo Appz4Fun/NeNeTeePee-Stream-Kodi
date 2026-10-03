@@ -1,5 +1,7 @@
 # Configure connections
 
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
 Open the add-on settings at **Settings → Add-ons → My add-ons → Video add-ons →
 NeNeTeePee-Stream-Kodi → Configure**. Choose and configure your server on **Playback backend**.
 For nzbdav / InfiniDysk or NZBGet, configure a search provider on **Indexers**,

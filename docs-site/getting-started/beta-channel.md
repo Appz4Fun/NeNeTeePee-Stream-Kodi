@@ -1,5 +1,7 @@
 # Beta channel and beta features
 
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
 NeNeTeePee-Stream-Kodi ships through two channels of the
 [Appz4Fun Kodi repository](installation.md#choose-a-channel). **Stable** gets
 only full releases. **Beta** gets every release, including pre-releases. This

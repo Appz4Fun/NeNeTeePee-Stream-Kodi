@@ -1,5 +1,7 @@
 # Troubleshooting
 
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
 Start with the section that matches what you see. Work through the steps in
 order.
 
@@ -16,7 +18,7 @@ order.
 
 ## NeNeTeePee-Stream-Kodi stopped updating
 
-If you installed NeNeTeePee-Stream-Kodi from the old **legacy Kodi repository**
+If you installed NeNeTeePee-Stream-Kodi from the old **NZB-DAV Repository** (legacy)
 (`https://appz4fun.github.io/nzbdavkodi/`), you won't get any more updates. That
 address no longer supplies add-on metadata.
 

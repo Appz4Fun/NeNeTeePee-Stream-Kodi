@@ -1,5 +1,7 @@
 # Backend services
 
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
 Choose a playback backend in **Settings > Add-ons > My add-ons > Video add-ons > NeNeTeePee-Stream-Kodi > Configure > Playback backend**.
 
 Install and configure your server using its project documentation before you connect the add-on. These guides cover the add-on settings.

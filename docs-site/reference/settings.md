@@ -1,5 +1,7 @@
 # Settings reference
 
+Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+
 This page documents every setting in NeNeTeePee-Stream-Kodi, grouped by the tab it appears on
 in Kodi's add-on settings (**My add-ons → Video add-ons → NeNeTeePee-Stream-Kodi → Configure**).
 
