@@ -83,7 +83,7 @@ get updates.
 Because Kodi only updates an add-on from the repository it came from,
 installing the new repository alone isn't enough. To move over:
 
-1. Install the Appz4Fun repository zip for your channel (steps 1–3 preceding).
+1. Install the Appz4Fun repository zip for your channel (preceding steps 1–3).
 2. Open **Settings → Add-ons → My add-ons → Video add-ons → NeNeTeePee-Stream-Kodi** and
    choose **Versions** (called **Update** on some skins). Pick the newest
    version listed under **Appz4Fun Repository** (or **Appz4Fun Repository
@@ -101,7 +101,7 @@ Use this if you'd rather not add a repository, or you want a specific version.
    Each release has one asset named `plugin.video.nzbdav-<version>.zip`, for
    example `plugin.video.nzbdav-2.0.0-beta.2.zip`. Releases marked
    **Pre-release** on GitHub are beta builds.
-2. In Kodi, turn on **Unknown sources** (see step 2 preceding).
+2. In Kodi, turn on **Unknown sources** (see the preceding step 2).
 3. Go to **Settings → Add-ons → Install from zip file** and select the file.
 
 A manual install doesn't update automatically. To start getting updates later,

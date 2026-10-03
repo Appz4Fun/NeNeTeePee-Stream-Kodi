@@ -120,7 +120,7 @@ key*. The URL defaults are the indexers' standard API endpoints:
 Each also has an API-key field (`direct_indexer_<name>_api_key`, stored hidden).
 
 **Custom Newznab Indexers**. *Custom Indexer 1–3*, for any Newznab indexer
-not listed preceding. Each has an enable toggle (`direct_indexer_customN_enabled`),
+not in the preceding list. Each has an enable toggle (`direct_indexer_customN_enabled`),
 *Indexer Name* (`direct_indexer_customN_name`), *API URL*
 (`direct_indexer_customN_url`), and *API Key* (`direct_indexer_customN_api_key`,
 stored hidden). All default to off/empty.
@@ -182,7 +182,7 @@ With **Chinese** enabled, releases tagged Cantonese or Urdu also pass.
 
 | Setting | id | Default | Description |
 |---------|----|---------|-------------|
-| Preferred groups: Tier 1 / 2 / 3 | `filter_remux_tier_1`, `filter_remux_tier_2`, `filter_remux_tier_3` | TRaSH remux tiers 1/2/3 | Editable comma-separated group names; empty disables that tier. Under Relevance, Tier 1 groups rank preceding Tier 2, then Tier 3 (after resolution, HDR, and REMUX). Ranking only. never hides a release. |
+| Preferred groups: Tier 1 / 2 / 3 | `filter_remux_tier_1`, `filter_remux_tier_2`, `filter_remux_tier_3` | TRaSH remux tiers 1/2/3 | Editable comma-separated group names; empty disables that tier. Under Relevance, Tier 1 groups rank higher than Tier 2, then Tier 3 (after resolution, HDR, and REMUX). Ranking only. never hides a release. |
 | Excluded release groups | `filter_exclude_release_group` | *(empty)* | Comma-separated groups to **remove**. Not shown as a field; edit it with *Configure Excluded Groups...*. |
 | Min size (MB, 0=no limit) | `filter_min_size` | `0` | Remove releases smaller than this. A size that can't be read counts as 0 MB. |
 | Max size (MB, 0=no limit) | `filter_max_size` | `0` | Remove releases larger than this. If max < min, the size filter is turned off. |
@@ -254,7 +254,7 @@ See [Playback and remux](../features/playback-and-remux.md) and
 | Setting | id | Default | Description |
 |---------|----|---------|-------------|
 | Convert MP4 subtitles to SRT | `proxy_convert_subs` | `true` | During a Matroska remux, convert MP4 `mov_text` subtitles to SRT so embedded subs survive. MKV subtitle tracks are copied unchanged. |
-| Force ffmpeg remux preceding (MB, 0=off) | `force_remux_threshold_mb` | `15000` | Size at which the chosen remux mode applies to non-MP4 files. `0` turns size-based remux off, so those files always stream pass-through. No effect while the mode is Direct pass-through. |
+| Force ffmpeg remux above (MB, 0=off) | `force_remux_threshold_mb` | `15000` | Size at which the chosen remux mode applies to non-MP4 files. `0` turns size-based remux off, so those files always stream pass-through. No effect while the mode is Direct pass-through. |
 | Large non-MP4 stream mode | `force_remux_mode` | `0` (Direct pass-through) | `0` Direct pass-through (default, no ffmpeg), `1` fMP4 HLS (compatibility, experimental), `2` Matroska remux (compatibility). |
 
 ### Pass-through validation

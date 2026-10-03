@@ -59,7 +59,7 @@ so only change them if you have a specific reason.
 | Setting | Default | What it does |
 |---------|---------|--------------|
 | **Large non-MP4 stream mode** | Direct pass-through (default) | Chooses how large non-MP4 files are served: **Direct pass-through** (no ffmpeg), **fMP4 HLS (compatibility, experimental)** (full random seek), or **Matroska remux (compatibility)**. |
-| **Force ffmpeg remux preceding (MB, 0=off)** | 15000 (~15 GB) | The size where the selected remux mode takes over for non-MP4 files. `0` turns the size-based remux off, so those files always stream pass-through. It has no effect while the mode is Direct pass-through. |
+| **Force ffmpeg remux above (MB, 0=off)** | 15000 (~15 GB) | The size where the selected remux mode takes over for non-MP4 files. `0` turns the size-based remux off, so those files always stream pass-through. It has no effect while the mode is Direct pass-through. |
 | **Convert MP4 subtitles to SRT** | On | During a Matroska remux, converts subtitles from non-MKV sources (MP4 `mov_text`) to SRT so embedded subs survive. MKV subtitle tracks are copied unchanged. |
 
 With a remux mode selected, NeNeTeePee-Stream-Kodi also remuxes any non-MP4 file whose size

@@ -196,7 +196,7 @@ delete a resubmission of a `SUCCESS` item and fail the playback.
 NeNeTeePee-Stream-Kodi also remembers completed folders that hold at least two reliably named
 episodes from one season as season packs. When the exact episode you want is
 in such a pack, later episode pickers show an
-**Already downloaded season pack - Episodes …** row preceding the online releases.
+**Already downloaded season pack - Episodes …** row before the online releases.
 Each record is tied to the `nzbget` backend, the exact NZBGet `NZBID`, and that
 job's `DestDir`. Files from another job are never merged in just because its
 name looks the same. When you select the row, NeNeTeePee-Stream-Kodi checks that exact

@@ -9,7 +9,7 @@ NeNeTeePee-Stream-Kodi's default serving mode for large non-MP4 files is **direc
 pass-through**, which offers native HTTP range seeking. Many CoreELEC and
 Amlogic devices run 32-bit Kodi builds, though. According to NeNeTeePee-Stream-Kodi's design
 notes, those builds can fail (`Open - Unhandled exception`) on pass-through
-streams whose advertised size is preceding roughly 4 GB, and disabling Kodi's
+streams whose advertised size is larger than roughly 4 GB, and disabling Kodi's
 in-memory cache avoids it. This is Kodi behavior: NeNeTeePee-Stream-Kodi doesn't detect your
 Kodi build or test for the problem.
 
@@ -84,7 +84,7 @@ was actually used, the cache isn't already `0`, and you haven't chosen
 ## Verifying
 
 NeNeTeePee-Stream-Kodi reads `special://profile/advancedsettings.xml` only to decide whether
-to show the prompt preceding (`kodi_advancedsettings.py`). It never writes to the
+to show the preceding prompt (`kodi_advancedsettings.py`). It never writes to the
 file, and the result doesn't change how streams are served. The setting counts
 only when `<memorysize>` directly under `<cache>` is exactly `0`.
 

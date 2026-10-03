@@ -75,7 +75,7 @@ flowchart TD
 The classification order is: attached fallback sources force a pass-through
 context (so [cutover](fallback-cutover.md) can run); otherwise `.mp4`/`.m4v`
 URLs take the MP4 branch; everything else takes the default branch, where the
-**Large non-MP4 stream mode** and **Force ffmpeg remux preceding (MB, 0=off)**
+**Large non-MP4 stream mode** and **Force ffmpeg remux above (MB, 0=off)**
 (both in **Advanced › Proxy**) decide between pass-through and a remux tier.
 The mode defaults to **Direct pass-through (default)**; the threshold defaults
 to 15000 MB, and `0` turns force-remux off. A source whose length can't be

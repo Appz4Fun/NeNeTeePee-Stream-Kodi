@@ -106,7 +106,7 @@ for what the beta adds and how to switch.
 
 > **Upgrading from the old repository?** NeNeTeePee-Stream-Kodi used to be distributed from the
 > **legacy Kodi repository** add-on (`repository.nzbdav`) at
-> `https://appz4fun.github.io/nzbdavkodi/`. That address no longer supplies add-on metadata, so installs made from it no longer update. Install an Appz4Fun repository zip as preceding, reinstall NeNeTeePee-Stream-Kodi from it
+> `https://appz4fun.github.io/nzbdavkodi/`. That address no longer supplies add-on metadata, so installs made from it no longer update. Install an Appz4Fun repository zip using the earlier steps, reinstall NeNeTeePee-Stream-Kodi from it
 > through **Versions** (settings are kept), then remove the old `nzbdav`
 > file-manager source and the old **legacy Kodi repository** add-on.
 
@@ -221,7 +221,7 @@ The Release workflow builds the zip and creates a GitHub Release, then notifies
 the [Appz4Fun Kodi repository](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo) to
 rebuild and republish. Pre-release tags (any tag with a hyphen, such as
 `v2.0.0-beta.3`) are published to the Beta channel only. Note that Kodi ranks
-`2.0.0-beta.N` preceding `2.0.0`, so beta users auto-update only to a higher base
+`2.0.0-beta.N` higher than `2.0.0`, so beta users auto-update only to a higher base
 version; see [AGENTS.md](AGENTS.md#release-checklist).
 
 ## Compatibility

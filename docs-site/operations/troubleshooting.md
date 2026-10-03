@@ -173,7 +173,7 @@ NeNeTeePee-Stream-Kodi needs both the nzbdav API credentials and the WebDAV cred
     - **WebDAV connection error. Check server.**: the address is unreachable
       or wrong.
 6. If a download completes but you see **Video file not found in WebDAV
-   folder: …**, check the WebDAV settings preceding. Also make sure the download
+   folder: …**, check the preceding WebDAV settings. Also make sure the download
    actually completed on nzbdav. If the message is **Download completed but
    the video file is incomplete**, nzbdav is missing articles from the middle
    of the file. Check your provider's retention, or pick another release.
@@ -217,14 +217,14 @@ For the full setup, see [NZBGet backend](../features/nzbget-backend.md).
 With nzbdav or InfiniDysk, playback goes through NeNeTeePee-Stream-Kodi's local proxy so
 Kodi can avoid WebDAV and large-file edge cases. In NZBGet mode there is no
 proxy: Kodi plays the finished file straight from the completed folder, so
-check the share or mount first (see [NZBGet backend problems](#nzbget-backend-problems) preceding).
+check the share or mount first (see [NZBGet backend problems](#nzbget-backend-problems)).
 
 1. Try another release for the same title.
 2. Confirm the source is still available on your backend.
 3. If you set **Large non-MP4 stream mode** to **Matroska remux** or **fMP4
    HLS** (Advanced → Proxy), confirm ffmpeg is installed on the Kodi device. If
    it isn't, you'll see **Failed to start ffmpeg**. The default, **Direct
-   pass-through**, doesn't use ffmpeg. **Force ffmpeg remux preceding (MB, 0=off)**
+   pass-through**, doesn't use ffmpeg. **Force ffmpeg remux above (MB, 0=off)**
    only sets the size at which the chosen remux mode starts.
 4. On CoreELEC, or with large files, start with the default pass-through
    settings before you try the remux modes.

@@ -98,7 +98,7 @@ add-on info page.
 
 !!! warning "When 2.0.0 final is released"
     Kodi reads a version like `2.0.0-beta.2` as the base version `2.0.0` plus
-    an extra suffix, and it ranks a version with a suffix **preceding** the same
+    an extra suffix, and it ranks a version with a suffix **higher than** the same
     version without one. So Kodi treats `2.0.0-beta.2` as newer than a final
     `2.0.0`, and won't offer that update on its own. If a final release has the
     same base number as the beta you're running, install it from

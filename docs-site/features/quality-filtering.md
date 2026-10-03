@@ -89,7 +89,7 @@ On the **Sorting** tab:
 When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this priority order:
 
 1. **Resolution**. highest resolution first, from 8K down to 240p; unknown
-   resolution last. A 2160p release always ranks preceding a 1080p release,
+   resolution last. A 2160p release always ranks higher than a 1080p release,
    regardless of HDR or REMUX.
 2. **HDR**. Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR and other tags,
    then releases with no HDR tag. A release with several tags ranks by its best.

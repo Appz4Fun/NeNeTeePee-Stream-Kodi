@@ -41,7 +41,7 @@ lsmod | grep uas                              # expect uas loaded
 
 ## How this relates to NeNeTeePee-Stream-Kodi
 
-NeNeTeePee-Stream-Kodi doesn't apply or depend on any of the OS tuning preceding. Nothing in the
+NeNeTeePee-Stream-Kodi doesn't apply or depend on any of the OS preceding tuning. Nothing in the
 add-on changes kernel, sysctl, or systemd settings. The tuning is a separate
 layer that keeps storage and the network responsive when Kodi and background
 warmup services compete for a small pool of RAM and a single-queue NIC. On a
