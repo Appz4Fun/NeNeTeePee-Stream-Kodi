@@ -170,3 +170,7 @@ adding an integration with Hydra's internal search API that returns duplicate
 group members. The Kodi backend does not change Hydra settings or add that
 integration. Different-release fallback remains owned by StreamNZB and Kodi
 reconnect behavior still needs live testing.
+
+## Archive format limits
+
+Archive streaming does not mean general-purpose unpacking. StreamNZB supports stored, uncompressed media in RAR and 7z archives. Compressed RAR and 7z releases require a download client to download and unpack them before playback. See [StreamNZB’s format documentation](https://github.com/Gaisberg/streamnzb#what-can-and-cannot-be-streamed).
