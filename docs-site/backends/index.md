@@ -36,10 +36,12 @@ Use each project's documentation to install and configure its service. The guide
 | [nzbdav](https://github.com/nzbdav-dev/nzbdav) | SABnzbd-compatible NZB submission and WebDAV streaming |
 | [InfiniDysk](https://www.infinidysk.com/) | An alternative service using the same Kodi nzbdav / InfiniDysk backend selection |
 | [StreamNZB](https://github.com/Gaisberg/streamnzb) | Server-managed search, archive streaming, and recovery |
-| [NZBGet](https://github.com/nzbget/nzbget) | Download and unpack before Kodi reads the completed file |
+| [NZBGet](https://github.com/nzbgetcom/nzbget) | Download and unpack before Kodi reads the completed file |
 | [xbmc4lyfe NZBGet fork and Debian builds](https://github.com/xbmc4lyfe/nzbget/tree/fork-ci) | Optional fork builds; consult the branch and its build artifacts |
 | [NZBGet duplicate-article recovery proposal, PR #850](https://github.com/nzbgetcom/nzbget/pull/850) | Source and review history for the fork's recovery work |
 
 The fork is optional. The Kodi NZBGet backend uses the configured server's JSON-RPC API and completed-folder path; selecting NZBGet does not install a fork or guarantee that its recovery features are present.
 
 [TMDBHelper](https://github.com/jurialmunkey/plugin.video.themoviedb.helper) is required for the documented title-browsing workflow. Connect it with the [player installation guide](../getting-started/tmdbhelper.md).
+
+The [original NZBGet repository](https://github.com/nzbget/nzbget) is archived. Use the maintained nzbgetcom project for current installation instructions and packages.

@@ -43,7 +43,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | Prowlarr URL[^source-prowlarr_host]<br>`prowlarr_host` | http://localhost:9696 | Base URL of your Prowlarr instance. |
 | Prowlarr API Key[^source-prowlarr_api_key]<br>`prowlarr_api_key` | Empty | Prowlarr API key. The dialog masks the value; the profile settings file stores it. |
 | Prowlarr Indexer IDs (comma-separated)[^source-prowlarr_indexer_ids]<br>`prowlarr_indexer_ids` | Empty | Prowlarr indexer IDs to query, comma-separated. Required for Prowlarr search; leaving this blank returns no results. |
-| Test Prowlarr Connection[^source-action_test_prowlarr]<br>`action_test_prowlarr` | Button | Verify the Prowlarr URL, API key, and indexer IDs are reachable. |
+| Test Prowlarr Connection[^source-action_test_prowlarr]<br>`action_test_prowlarr` | Button | Test the Prowlarr URL and API key by requesting its indexer list. This action does not read or validate configured indexer IDs. A successful test can still be followed by empty searches if the IDs are missing or invalid. |
 
 ### Direct Newznab indexers
 
@@ -146,3 +146,5 @@ Labels and schema defaults are from commit [`db07f61`](https://github.com/Appz4F
 [^source-action_manage_indexers]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L651).
 [^source-action_test_direct_indexers]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L661).
 [^source-tmdb_api_key]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L673); [runtime reference](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/tvdb_resolver.py#L52).
+
+The [Prowlarr connection test](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/router_conn.py#L124) checks the indexer-list endpoint, not the selected IDs.

@@ -140,8 +140,11 @@ flowchart LR
 The NZBGet backend downloads the whole release before playback, so it can't
 switch streams live. It relies on NZBGet's own
 [Smart Duplicates](https://nzbget.com/documentation/rss/#duplicates) instead.
-When you pick a release, NeNeTeePee-Stream-Kodi also submits every other result with the
-**same release name**. These are reposts or mirrors of the same release from
+When you pick a release with **Enable fallback streams** on and a positive
+**Maximum standby fallback streams** value, NeNeTeePee-Stream-Kodi also submits
+other results with the **same release name**, up to the configured backup
+count. NZBGet honors counts above five; the five-stream ceiling belongs to the
+nzbdav / InfiniDysk proxy. These are reposts or mirrors of the same release from
 other indexers. Every submission gets:
 
 - a shared **duplicate key** for the release: the normalized release name,

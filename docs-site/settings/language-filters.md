@@ -1,6 +1,6 @@
 # Languages
 
-Each switch allows releases tagged with that language. These are release-title metadata filters, not a choice of the audio track inside the media file. All 48 named languages and Other / Unknown Language start enabled. Spanish includes Latino. The current normalization also lets Chinese admit Cantonese and Urdu; those languages retain their own switches. Turn off Other / Unknown Language if you need explicit language metadata, accepting that untagged titles then disappear.
+With at least one named language on, the enabled switches allow releases tagged with those languages. Turning off every named language removes the restriction for recognized languages; it does not hide them all. Other / Unknown Language independently controls missing or unlisted language metadata.[^empty-selection] These are release-title metadata filters, not a choice of the audio track inside the media file. All 48 named languages and Other / Unknown Language start enabled. Spanish includes Latino. The current normalization also lets Chinese admit Cantonese and Urdu; those languages retain their own switches. Turn off Other / Unknown Language if you need explicit language metadata, accepting that untagged titles then disappear.
 
 ## Kodi screenshots
 
@@ -133,3 +133,5 @@ Labels and schema defaults are from commit [`db07f61`](https://github.com/Appz4F
 [^source-filter_urdu]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L1201).
 [^source-filter_vietnamese]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L1206).
 [^source-filter_unknown_language]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L1211); [runtime reference](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/filter_options.py#L68).
+
+[^empty-selection]: [Shared known-value and empty-selection filtering](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/filter_options.py#L83); [language matching and normalization](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/filter_languages.py).

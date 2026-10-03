@@ -35,4 +35,4 @@ The add-on waits for downloading and processing to finish, then plays the comple
 
 ## Optional recovery fork
 
-The [xbmc4lyfe fork and Debian package work](https://github.com/xbmc4lyfe/nzbget/tree/fork-ci) and [NZBGet recovery proposal #850](https://github.com/nzbgetcom/nzbget/pull/850) are separate from the [upstream NZBGet project](https://github.com/nzbget/nzbget). Follow the fork's build and package instructions if you choose it. Selecting NZBGet in Kodi neither installs the fork nor enables its server recovery features.
+The [xbmc4lyfe fork and Debian package work](https://github.com/xbmc4lyfe/nzbget/tree/fork-ci) and [NZBGet recovery proposal #850](https://github.com/nzbgetcom/nzbget/pull/850) are separate from the [maintained NZBGet project](https://github.com/nzbgetcom/nzbget). Follow the fork's build and package instructions if you choose it. Selecting NZBGet in Kodi neither installs the fork nor enables its server recovery features.

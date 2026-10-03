@@ -45,7 +45,7 @@ In the StreamNZB dashboard, edit the stream and open its **Advanced** tab:
 2. Set **Same-release attempts** to **All copies** so copies supplied by different indexers remain available for recovery.
 3. Set **Preloading** to **5 results** to prepare up to five search results before selection. Each preloaded result uses an indexer NZB download. This prepares candidates; it does not mean five guaranteed fallback streams.[^server-recovery]
 
-These are StreamNZB v6.2.0 labels from the inspected server snapshot. There is no numeric **Fallback = 5** field in that screen. Kodi's **Advanced → Maximum standby fallback streams = 5** controls nzbdav / InfiniDysk and does not configure StreamNZB. See [Advanced settings](../settings/advanced.md) for that separate option.
+These are StreamNZB v6.2.0 labels from the inspected server snapshot. There is no numeric **Fallback = 5** field in that screen. Kodi's **Advanced → Maximum standby fallback streams = 5** controls nzbdav / InfiniDysk proxy backups and NZBGet duplicate backups, and does not configure StreamNZB. See [Advanced settings](../settings/advanced.md) for that separate option.
 
 If NZBHydra2 is StreamNZB's only indexer endpoint, open Hydra's advanced **Searching** settings and set **Duplicate detection → Duplicate age threshold** to **-1**. This keeps Hydra from suppressing copies that StreamNZB could use for recovery. It affects all Hydra clients. See [the Hydra duplicate explanation](../features/streamnzb-backend.md#nzbhydra2-as-the-only-streamnzb-indexer) for the version-specific behavior and timeout guidance.
 

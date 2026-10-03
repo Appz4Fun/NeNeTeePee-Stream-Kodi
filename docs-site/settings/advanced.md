@@ -1,6 +1,6 @@
 # Advanced
 
-These options tune the add-on resolver and proxy. They do not change StreamNZB server recovery, and the NZBGet completed file does not use the WebDAV proxy. Keep the defaults until you have a specific playback problem. Local fallback uses strict donor validation before switching sources. EBML-aware concealment applies to MKV/WebM only when container boundaries are verified; it cannot reconstruct missing frames. Payload-only gaps or unverified structure can still receive plain zeros. See [fallback streams](../features/fallback-streams.md) and [playback and remux](../features/playback-and-remux.md).
+These options tune the add-on resolver and proxy. They do not change StreamNZB server recovery, and the NZBGet completed file does not use the WebDAV proxy. Keep the defaults until you have a specific playback problem. nzbdav / InfiniDysk fallback uses strict donor validation before switching proxy sources. NZBGet also reads the shared fallback enable switch and backup count when submitting duplicate backups. EBML-aware concealment applies to MKV/WebM only when container boundaries are verified; it cannot reconstruct missing frames. Payload-only gaps or unverified structure can still receive plain zeros. See [fallback streams](../features/fallback-streams.md) and [playback and remux](../features/playback-and-remux.md).
 
 ## Kodi screenshots
 
@@ -21,7 +21,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | Poll interval (seconds)[^source-poll_interval]<br>`poll_interval` | 1 | Seconds between checks of the download's status. Clamped to 1-60. |
 | Download timeout (seconds)[^source-download_timeout]<br>`download_timeout` | 3600 | Give up waiting for the download to become ready after this many seconds. Clamped to 60-86400. |
 | NZB submit timeout (seconds)[^source-submit_timeout]<br>`submit_timeout` | 300 | Max seconds to wait for nzbdav to accept the submitted NZB (it fetches and parses the NZB before replying). Clamped to 5-600. |
-| Clear download queue when starting a new download[^source-clear_queue_on_submit]<br>`clear_queue_on_submit` | Ask | Whether to clear other in-progress downloads before starting a new one. Never clears this title's own in-flight job or a completed copy you're about to reuse. Choices: 0 = Ask, 1 = Always clear, 2 = Never. |
+| Clear download queue when starting a new download[^source-clear_queue_on_submit]<br>`clear_queue_on_submit` | Ask | For nzbdav / InfiniDysk only, choose whether to clear other in-progress downloads before starting a new one. This setting does not clear the NZBGet queue. Never clears this title's own in-flight job or a completed copy you're about to reuse. Choices: 0 = Ask, 1 = Always clear, 2 = Never. |
 
 ### Search cache
 
@@ -41,16 +41,16 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
-| Enable fallback streams[^source-fallback_streams_enabled]<br>`fallback_streams_enabled` | On | Allow the nzbdav / InfiniDysk proxy to prepare validated backup streams and try another source when the current source fails. This does not guarantee an uninterrupted switch and does not control StreamNZB. |
-| Maximum standby fallback streams[^source-fallback_streams_max]<br>`fallback_streams_max` | 5 | How many standby fallback streams to keep ready per title. Hard ceiling of 5. |
-| Seconds into playback before submitting fallback backups[^source-fallback_submit_delay]<br>`fallback_submit_delay` | 120 | Seconds into playback to wait before submitting fallback backups. 0 submits immediately. |
+| Enable fallback streams[^source-fallback_streams_enabled]<br>`fallback_streams_enabled` | On | For nzbdav / InfiniDysk, prepare validated proxy backup streams and try another source when the current source fails. For NZBGet, allow duplicate-backup NZB submission. This does not guarantee an uninterrupted switch and does not control StreamNZB. |
+| Maximum standby fallback streams[^source-fallback_streams_max]<br>`fallback_streams_max` | 5 | For nzbdav / InfiniDysk, limit standby proxy streams per title; runtime values are clamped to 0–5. For NZBGet, limit submitted duplicate backups; positive values are honored without an additional ceiling of 5. A value of 0 or less turns off NZBGet duplicate backups. StreamNZB ignores this setting. |
+| Seconds into playback before submitting fallback backups[^source-fallback_submit_delay]<br>`fallback_submit_delay` | 120 | For nzbdav / InfiniDysk, wait this many seconds into playback before submitting proxy fallback backups. 0 submits immediately. This delay does not control NZBGet duplicate-backup submission or StreamNZB. |
 
 ### Proxy
 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
 | Convert MP4 subtitles to SRT[^source-proxy_convert_subs]<br>`proxy_convert_subs` | On | Convert MP4 mov_text subtitles to SRT during remux so embedded subtitles survive. |
-| Force ffmpeg remux above (MB, 0=off)[^source-force_remux_threshold_mb]<br>`force_remux_threshold_mb` | 15000 | Apply the selected remux mode to files larger than this size in MB. 0 turns off this size-triggered remux rule. |
+| Force ffmpeg remux above (MB, 0=off)[^source-force_remux_threshold_mb]<br>`force_remux_threshold_mb` | 15000 | For non-MP4 streams, apply the selected remux mode at or above this size in MB; an unknown length also triggers the selected remux mode when the threshold is positive. MP4/M4V uses a separate playback path and ignores this threshold. 0 turns off this size-triggered remux rule. |
 | Large non-MP4 stream mode[^source-force_remux_mode]<br>`force_remux_mode` | Direct pass-through (default) | How to handle large non-MP4 streams: pass through directly, remux to fMP4/HLS, or remux to Matroska for compatibility. Choices: 0 = Direct pass-through (default), 1 = fMP4 HLS (compatibility, experimental), 2 = Matroska remux (compatibility). |
 | force_remux_mode_v2_migrated[^source-force_remux_mode_v2_migrated]<br>`force_remux_mode_v2_migrated` | Off | Hidden one-time migration flag for remux-mode settings. The add-on manages it; do not change it manually. Hidden from the settings dialog. |
 
@@ -98,3 +98,5 @@ Labels and schema defaults are from commit [`db07f61`](https://github.com/Appz4F
 [^source-cache_warning_shown]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L1504).
 [^source-cache_dialog_dismissed]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L1510); [runtime reference](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/cache_prompt.py#L95).
 [^source-webdav_content_root]: [Setting declaration](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml#L1516); [runtime reference](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/webdav.py#L202).
+
+The NZBGet gate is implemented in [the duplicate-backup limit reader](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/router_play.py#L587). The non-MP4 decision is implemented in [the force-remux selector](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/stream_proxy_mgr_context.py#L445); [MP4 dispatch](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/lib/stream_proxy_mgr_handoff.py#L162) takes the separate path.
