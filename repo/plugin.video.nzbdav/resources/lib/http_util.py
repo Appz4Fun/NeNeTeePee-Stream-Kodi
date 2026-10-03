@@ -168,7 +168,7 @@ def clean_search_query(title):
 
 
 _ALLOWED_HTTP_SCHEMES = frozenset({"http", "https"})
-HTTP_USER_AGENT = "NZB-DAV Kodi Addon"
+HTTP_USER_AGENT = "NeNeTeePee-Stream-Kodi Addon"
 _HTTP_USER_AGENT = HTTP_USER_AGENT
 
 

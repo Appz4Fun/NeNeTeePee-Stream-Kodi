@@ -93,7 +93,10 @@ def record_completed_inventory(
     except Exception as error:  # pylint: disable=broad-except
         try:
             xbmc.log(
-                "NZB-DAV: season-pack record failed (non-fatal): {}".format(error),
+                (
+                    "NeNeTeePee-Stream-Kodi: season-pack record failed "
+                    "(non-fatal): {}"
+                ).format(error),
                 xbmc.LOGDEBUG,
             )
         except (AttributeError, RuntimeError):

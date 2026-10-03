@@ -116,7 +116,7 @@ def _ensure_parent_dir(path):
 def load_indexers(path=None):
     """Load and normalize the stored indexers from ``path`` (default profile path)."""
     path = path or default_indexers_path()
-    data = _read_json(path, {}, "NZB-DAV: Failed to read indexers JSON")
+    data = _read_json(path, {}, "NeNeTeePee-Stream-Kodi: Failed to read indexers JSON")
     indexers = data.get("indexers", []) if isinstance(data, dict) else []
     if not isinstance(indexers, list):
         return []
@@ -153,7 +153,9 @@ def _normalize_provider_caps(data):
 def load_provider_caps(path=None):
     """Load and normalize the stored provider caps from ``path``."""
     path = path or default_provider_caps_path()
-    data = _read_json(path, {}, "NZB-DAV: Failed to read provider caps JSON")
+    data = _read_json(
+        path, {}, ("NeNeTeePee-Stream-Kodi: Failed to read provider caps JSON")
+    )
     if not isinstance(data, dict):
         return {}
     return _normalize_provider_caps(data.get("providers", {}))

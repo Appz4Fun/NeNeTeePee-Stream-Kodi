@@ -69,7 +69,9 @@ def _save(data):
             json.dump(data, handle)
     except OSError as error:
         xbmc.log(
-            "NZB-DAV: Could not persist download ledger: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Could not persist download ledger: {}").format(
+                error
+            ),
             xbmc.LOGWARNING,
         )
 
@@ -120,7 +122,7 @@ def record_download(name, pubdate, size=None):
         # Best-effort bookkeeping must never break a download. Any storage
         # surprise (unwritable profile, odd path) degrades to "not recorded".
         xbmc.log(
-            "NZB-DAV: download-ledger record skipped: {}".format(error),
+            "NeNeTeePee-Stream-Kodi: download-ledger record skipped: {}".format(error),
             xbmc.LOGDEBUG,
         )
 
@@ -137,7 +139,7 @@ def downloaded_pubdate_epochs(name):
         return _coerce_epoch_list(_load().get(name))
     except Exception as error:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: download-ledger read failed: {}".format(error),
+            "NeNeTeePee-Stream-Kodi: download-ledger read failed: {}".format(error),
             xbmc.LOGDEBUG,
         )
         return []

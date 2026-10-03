@@ -27,7 +27,10 @@ def _parse_route_argv(argv):
     """
     if len(argv) < 2:
         xbmc.log(
-            "NZB-DAV: route() called with argv shorter than 2: {!r}".format(argv),
+            (
+                "NeNeTeePee-Stream-Kodi: route() called with argv "
+                "shorter than 2: {!r}"
+            ).format(argv),
             xbmc.LOGERROR,
         )
         return None
@@ -36,7 +39,7 @@ def _parse_route_argv(argv):
         handle = int(argv[1])
     except (TypeError, ValueError):
         xbmc.log(
-            "NZB-DAV: route() got non-numeric handle argv[1]={!r}; "
+            "NeNeTeePee-Stream-Kodi: route() got non-numeric handle argv[1]={!r}; "
             "skipping this invocation".format(argv[1]),
             xbmc.LOGERROR,
         )
@@ -108,7 +111,11 @@ def _route_resolve_v2(params):
     manifest = load_source_manifest(params.get("manifest_url", ""))
     if manifest is None:
         xbmc.log(
-            "NZB-DAV: /resolve-v2 received an invalid source manifest", xbmc.LOGERROR
+            (
+                "NeNeTeePee-Stream-Kodi: /resolve-v2 received an "
+                "invalid source manifest"
+            ),
+            xbmc.LOGERROR,
         )
         return
     title, primary_url, source_urls = manifest

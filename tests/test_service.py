@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
-"""Tests for the NZB-DAV background service."""
+"""Tests for the NeNeTeePee-Stream-Kodi background service."""
 
 import time
 from unittest.mock import MagicMock, patch

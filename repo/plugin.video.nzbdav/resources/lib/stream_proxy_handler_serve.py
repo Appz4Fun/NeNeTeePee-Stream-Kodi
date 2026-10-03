@@ -146,7 +146,8 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
             pass
         except (OSError, ValueError, _sp.HTTPException) as e:
             _sp.xbmc.log(
-                "NZB-DAV: Faststart proxy error: {}".format(e), _sp.xbmc.LOGERROR
+                ("NeNeTeePee-Stream-Kodi: Faststart proxy error: {}").format(e),
+                _sp.xbmc.LOGERROR,
             )
             _sp._notify_error(e)
 
@@ -258,7 +259,8 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
             pass
         except OSError as e:
             _sp.xbmc.log(
-                "NZB-DAV: Temp faststart error: {}".format(e), _sp.xbmc.LOGERROR
+                ("NeNeTeePee-Stream-Kodi: Temp faststart error: {}").format(e),
+                _sp.xbmc.LOGERROR,
             )
             _sp._notify_error(e)
 
@@ -284,7 +286,7 @@ class _ServeMixin:  # pylint: disable=too-few-public-methods
             )
             if is_seek:
                 _sp.xbmc.log(
-                    "NZB-DAV: Seek to byte {} -> {:.1f}s".format(
+                    "NeNeTeePee-Stream-Kodi: Seek to byte {} -> {:.1f}s".format(
                         requested_start, seek_seconds
                     ),
                     _sp.xbmc.LOGINFO,

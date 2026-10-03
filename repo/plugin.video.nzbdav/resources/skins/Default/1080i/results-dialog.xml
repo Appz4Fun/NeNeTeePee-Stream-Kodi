@@ -32,7 +32,7 @@
     <!-- Header: Subtitle -->
     <control type="label" id="2">
       <left>20</left><top>34</top><width>600</width><height>20</height>
-      <label>NZB-DAV · NZBHydra2</label>
+      <label>NeNeTeePee-Stream-Kodi · NZBHydra2</label>
       <font>font10</font>
       <textcolor>FF9CA3AF</textcolor>
     </control>

@@ -109,9 +109,10 @@ def _clamp_int_setting(setting_id, value, lo, hi):
         clamped = hi
     if clamped != value:
         _sp.xbmc.log(
-            "NZB-DAV: Setting {}={} out of range [{}..{}]; clamping to {}".format(
-                setting_id, value, lo, hi, clamped
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Setting {}={} out of range "
+                "[{}..{}]; clamping to {}"
+            ).format(setting_id, value, lo, hi, clamped),
             _sp.xbmc.LOGWARNING,
         )
     return clamped
@@ -375,7 +376,10 @@ def _passthrough_runtime_settings(ctx):
             error = ctx.get(_PASSTHROUGH_RUNTIME_SETTINGS_ERROR_KEY)
             if error is not None:
                 _sp.xbmc.log(
-                    "NZB-DAV: Pass-through settings prefetch failed: {}".format(error),
+                    (
+                        "NeNeTeePee-Stream-Kodi: Pass-through settings prefetch "
+                        "failed: {}"
+                    ).format(error),
                     _sp.xbmc.LOGDEBUG,
                 )
 

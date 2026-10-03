@@ -147,7 +147,9 @@ def _run_ffmpeg_hls_muxer_probe(ffmpeg_path):
             return None
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         _sp.xbmc.log(
-            "NZB-DAV: ffmpeg capability probe failed for {}: {}".format(ffmpeg_path, e),
+            (
+                "NeNeTeePee-Stream-Kodi: ffmpeg capability probe failed for {}: {}"
+            ).format(ffmpeg_path, e),
             _sp.xbmc.LOGWARNING,
         )
         return None
@@ -167,7 +169,9 @@ def _drain_killed_ffmpeg_probe(proc, ffmpeg_path):
     except subprocess.TimeoutExpired:
         pass
     _sp.xbmc.log(
-        "NZB-DAV: ffmpeg capability probe timed out for {}".format(ffmpeg_path),
+        ("NeNeTeePee-Stream-Kodi: ffmpeg capability probe timed out for {}").format(
+            ffmpeg_path
+        ),
         _sp.xbmc.LOGWARNING,
     )
 
@@ -262,7 +266,7 @@ def _reap_process_async(proc, label):
             proc.wait(timeout=2)
         except subprocess.TimeoutExpired:
             _sp.xbmc.log(
-                "NZB-DAV: {} pid={} did not exit within 2 s; "
+                "NeNeTeePee-Stream-Kodi: {} pid={} did not exit within 2 s; "
                 "leaking to OS reap".format(label, getattr(proc, "pid", "?")),
                 _sp.xbmc.LOGWARNING,
             )

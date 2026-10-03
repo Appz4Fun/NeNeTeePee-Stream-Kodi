@@ -59,8 +59,11 @@ class _ThreadedHTTPServer(_ThreadingMixIn, HTTPServer):
         slots = getattr(self, "_worker_slots", None)
         if slots is not None and not slots.acquire(blocking=False):
             _sp.xbmc.log(
-                "NZB-DAV: Proxy at worker cap ({}); dropping connection so the "
-                "client reconnects (reason=worker_cap)".format(_sp._MAX_PROXY_WORKERS),
+                (
+                    "NeNeTeePee-Stream-Kodi: Proxy at worker cap ({}); "
+                    "dropping connection so the client reconnects "
+                    "(reason=worker_cap)"
+                ).format(_sp._MAX_PROXY_WORKERS),
                 _sp.xbmc.LOGWARNING,
             )
             self.shutdown_request(request)
@@ -77,8 +80,11 @@ class _ThreadedHTTPServer(_ThreadingMixIn, HTTPServer):
                 except ValueError:
                     pass
             _sp.xbmc.log(
-                "NZB-DAV: Could not start proxy handler thread; dropping "
-                "connection so the client reconnects (reason=thread_exhausted)",
+                (
+                    "NeNeTeePee-Stream-Kodi: Could not start proxy handler "
+                    "thread; dropping connection so the client reconnects "
+                    "(reason=thread_exhausted)"
+                ),
                 _sp.xbmc.LOGWARNING,
             )
             self.shutdown_request(request)

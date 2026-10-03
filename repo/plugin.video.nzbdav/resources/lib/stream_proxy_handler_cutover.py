@@ -141,12 +141,13 @@ class _FallbackCutoverMixin:  # pylint: disable=too-few-public-methods
         """Log-message template for a live fallback cutover."""
         if stuck_awaiting:
             return (
-                "NZB-DAV: Primary stuck on no-progress AWAITING_DOWNLOAD at "
-                "byte {}; failing over to fallback nzo_id={} (switch_count={})"
+                "NeNeTeePee-Stream-Kodi: Primary stuck on no-progress "
+                "AWAITING_DOWNLOAD at byte {}; failing over to fallback "
+                "nzo_id={} (switch_count={})"
             )
         return (
-            "NZB-DAV: Switched pass-through source at byte {} to fallback "
-            "nzo_id={} (switch_count={})"
+            "NeNeTeePee-Stream-Kodi: Switched pass-through source "
+            "at byte {} to fallback nzo_id={} (switch_count={})"
         )
 
     @staticmethod

@@ -128,7 +128,7 @@ def _append_one_backup(nzb_url, backup, dupe_key, settings_getter):
         )
     except Exception as exc:  # pylint: disable=broad-except
         _core.xbmc.log(
-            "NZB-DAV: NZBGet duplicate backup submit raised: {}".format(
+            "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup submit raised: {}".format(
                 _core._redact_text(str(exc))
             ),
             _core.xbmc.LOGWARNING,
@@ -136,14 +136,17 @@ def _append_one_backup(nzb_url, backup, dupe_key, settings_getter):
         return None
     if nzbid:
         _core.xbmc.log(
-            "NZB-DAV: Queued NZBGet duplicate backup '{}' (score {})".format(
-                job_name, score
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Queued NZBGet duplicate backup "
+                "'{}' (score {})"
+            ).format(job_name, score),
             _core.xbmc.LOGINFO,
         )
         return nzbid
     _core.xbmc.log(
-        "NZB-DAV: NZBGet duplicate backup submit failed: {}".format(error),
+        ("NeNeTeePee-Stream-Kodi: NZBGet duplicate backup submit failed: {}").format(
+            error
+        ),
         _core.xbmc.LOGINFO,
     )
     return None
@@ -174,8 +177,11 @@ def _warn_if_healthcheck_pauses(settings_getter):
     if value != "pause":
         return
     _core.xbmc.log(
-        "NZB-DAV: NZBGet HealthCheck=Pause disables automatic duplicate failover; "
-        "set it to Delete or None to enable it (#372).",
+        (
+            "NeNeTeePee-Stream-Kodi: NZBGet HealthCheck=Pause "
+            "disables automatic duplicate failover; set it to "
+            "Delete or None to enable it (#372)."
+        ),
         _core.xbmc.LOGWARNING,
     )
     with _HEALTHCHECK_LOCK:
@@ -297,7 +303,7 @@ def _dupe_worker_should_skip(getter, cancel_event):
         return True
     if _core._dupe_check_disabled(getter):
         _core.xbmc.log(
-            "NZB-DAV: NZBGet DupeCheck=no -- skipping #372 duplicate "
+            "NeNeTeePee-Stream-Kodi: NZBGet DupeCheck=no -- skipping #372 duplicate "
             "backups (they would download in parallel).",
             _core.xbmc.LOGINFO,
         )
@@ -480,9 +486,9 @@ def _spawn_dupe_backups(ctx):
         # already accepted. Backups are pure insurance -- a settings-read failure
         # here must skip them, never propagate out and fail the primary's playback.
         _core.xbmc.log(
-            "NZB-DAV: NZBGet duplicate backup snapshot failed: {}".format(
-                _core._redact_text(str(exc))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup snapshot failed: {}"
+            ).format(_core._redact_text(str(exc))),
             _core.xbmc.LOGWARNING,
         )
         return None
@@ -505,9 +511,10 @@ def _spawn_dupe_backups(ctx):
             )
         except Exception as exc:  # pylint: disable=broad-except
             _core.xbmc.log(
-                "NZB-DAV: NZBGet duplicate backup worker error: {}".format(
-                    _core._redact_text(str(exc))
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup worker "
+                    "error: {}"
+                ).format(_core._redact_text(str(exc))),
                 _core.xbmc.LOGWARNING,
             )
         finally:
@@ -530,7 +537,7 @@ def _spawn_dupe_backups(ctx):
         # The backups are pure insurance -- never let them break the already-
         # queued pick's playback.
         _core.xbmc.log(
-            "NZB-DAV: NZBGet duplicate backup spawn failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup spawn failed: {}".format(
                 _core._redact_text(str(exc))
             ),
             _core.xbmc.LOGWARNING,
@@ -594,7 +601,7 @@ def _copy_vetoed_after_append(nzbid, settings_getter):
         hist = _core.nzbget_api.history_status(nzbid, settings_getter=settings_getter)
         if hist.get("present") and _is_copy_veto_status(hist.get("status")):
             _core.xbmc.log(
-                "NZB-DAV: NZBGet content-vetoed duplicate backup {} "
+                "NeNeTeePee-Stream-Kodi: NZBGet content-vetoed duplicate backup {} "
                 "(DELETED/COPY) -- backfilling its slot (#372).".format(nzbid),
                 _core.xbmc.LOGINFO,
             )
@@ -631,8 +638,11 @@ def _pick_rescue_callable(ctx, nzb_url, title):
             title, settings_getter=ctx.settings_getter
         ):
             _core.xbmc.log(
-                "NZB-DAV: NZBGet FORCE rescue skipped -- a foreign active "
-                "download of this release is already queued (#372 r6).",
+                (
+                    "NeNeTeePee-Stream-Kodi: NZBGet FORCE rescue skipped -- "
+                    "a foreign active download of this release is already "
+                    "queued (#372 r6)."
+                ),
                 _core.xbmc.LOGINFO,
             )
             return None
@@ -647,9 +657,10 @@ def _pick_rescue_callable(ctx, nzb_url, title):
             )
         except Exception as exc:  # pylint: disable=broad-except
             _core.xbmc.log(
-                "NZB-DAV: NZBGet FORCE rescue re-submit raised: {}".format(
-                    _core._redact_text(str(exc))
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: NZBGet FORCE rescue re-submit "
+                    "raised: {}"
+                ).format(_core._redact_text(str(exc))),
                 _core.xbmc.LOGWARNING,
             )
             return None
@@ -662,13 +673,17 @@ def _pick_rescue_callable(ctx, nzb_url, title):
                 ctx.submitted_nzbids = []
             ctx.submitted_nzbids.append(nzbid)
             _core.xbmc.log(
-                "NZB-DAV: FORCE re-queued content-vetoed pick as NZBID {} "
-                "(#372 r6 rescue).".format(nzbid),
+                (
+                    "NeNeTeePee-Stream-Kodi: FORCE re-queued content-vetoed "
+                    "pick as NZBID {} (#372 r6 rescue)."
+                ).format(nzbid),
                 _core.xbmc.LOGINFO,
             )
             return nzbid
         _core.xbmc.log(
-            "NZB-DAV: NZBGet FORCE rescue re-submit failed: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: NZBGet FORCE rescue re-submit failed: {}").format(
+                error
+            ),
             _core.xbmc.LOGWARNING,
         )
         return None

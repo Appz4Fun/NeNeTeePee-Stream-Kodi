@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
-"""StreamNZB's token-scoped Stremio API, without NZB-DAV submission logic.
+"""StreamNZB's token-scoped API for NeNeTeePee-Stream-Kodi.
 
 StreamEntry contains only returned display text, the exact HTTP URL, and
 request headers from Stremio behaviorHints.proxyHeaders.request (if supplied).

@@ -82,7 +82,7 @@ class _MgrSessionsMixin:  # pylint: disable=too-few-public-methods
                 self._drop_pending_context(session_id)
                 raise RuntimeError("HLS prepare was cancelled") from e
             _sp.xbmc.log(
-                "NZB-DAV: HLS producer setup failed ({}), "
+                "NeNeTeePee-Stream-Kodi: HLS producer setup failed ({}), "
                 "rewriting session to matroska fallback".format(e),
                 _sp.xbmc.LOGWARNING,
             )

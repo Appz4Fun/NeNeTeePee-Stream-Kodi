@@ -335,7 +335,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             st.fallback_pending_fallthroughs = 1
             st.last_fallthrough_streamed = st.total_streamed
         _sp.xbmc.log(
-            "NZB-DAV: No validated fallback source available at "
+            "NeNeTeePee-Stream-Kodi: No validated fallback source available at "
             "byte {}; re-entering retry ladder on the primary "
             "instead of closing (attempt {}/{}) "
             "(reason=fallback_pending_retry_primary)".format(
@@ -514,11 +514,12 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
             # recorded) — otherwise that give-up would be silent.
             ctx["forward_stall_exhausted"] = True
             _sp.xbmc.log(
-                "NZB-DAV: Patient forward-stall budget exhausted at byte "
-                "{} after {}s with no progress (result={}); giving up "
-                "(reason=patient_forward_stall_exhausted)".format(
-                    st.current, st.stall_wait_budget, st.result
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: Patient forward-stall budget "
+                    "exhausted at byte {} after {}s with no progress "
+                    "(result={}); giving up "
+                    "(reason=patient_forward_stall_exhausted)"
+                ).format(st.current, st.stall_wait_budget, st.result),
                 _sp.xbmc.LOGWARNING,
             )
         return None

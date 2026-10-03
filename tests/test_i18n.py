@@ -63,7 +63,7 @@ def test_addon_name_falls_back_when_kodi_returns_empty():
 
     xbmcaddon.Addon().getAddonInfo.return_value = ""
     result = addon_name()
-    assert result == "NZB-DAV"
+    assert result == "NeNeTeePee-Stream-Kodi"
 
 
 def test_addon_returns_none_when_kodi_not_registered():
@@ -99,7 +99,7 @@ def test_addon_name_returns_fallback_when_addon_none():
             raise RuntimeError("unknown addon id")
 
         xbmcaddon.Addon = _raise_runtime
-        assert addon_name() == "NZB-DAV"
+        assert addon_name() == "NeNeTeePee-Stream-Kodi"
     finally:
         xbmcaddon.Addon = original
 

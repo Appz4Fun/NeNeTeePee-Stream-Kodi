@@ -111,7 +111,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             # progress → report a recoverable short read.
             if code == 404 and start > 0:
                 _sp.xbmc.log(
-                    "NZB-DAV: Upstream 404 at byte {} on an established "
+                    "NeNeTeePee-Stream-Kodi: Upstream 404 at byte {} on an established "
                     "stream; treating as awaiting-download (nzbdav past "
                     "its download high-water) "
                     "(reason=client_error_awaiting_download)".format(start),
@@ -121,8 +121,10 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
                     return _sp._UPSTREAM_RANGE_SHORT_READ_RECOVERABLE, written
                 return _sp._UPSTREAM_RANGE_SHORT_READ_AWAITING_DOWNLOAD, 0
             _sp.xbmc.log(
-                "NZB-DAV: Proxy upstream client error at byte {}: HTTP {} "
-                "(reason=upstream_client_error)".format(start, code),
+                (
+                    "NeNeTeePee-Stream-Kodi: Proxy upstream client error at "
+                    "byte {}: HTTP {} (reason=upstream_client_error)"
+                ).format(start, code),
                 _sp.xbmc.LOGERROR,
             )
             if code in (401, 403):
@@ -132,7 +134,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             return _sp._UPSTREAM_RANGE_CLIENT_ERROR, written
         category = _sp._classify_upstream_error(e)
         _sp.xbmc.log(
-            "NZB-DAV: Proxy upstream open failed at byte {}: {} "
+            "NeNeTeePee-Stream-Kodi: Proxy upstream open failed at byte {}: {} "
             "(reason=upstream_open_failed category={})".format(start, e, category),
             _sp.xbmc.LOGWARNING,
         )
@@ -217,15 +219,16 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             chunk = resp.read(_sp._UPSTREAM_READ_CHUNK)
         except (MemoryError, OSError, ValueError) as e:
             _sp.xbmc.log(
-                "NZB-DAV: Proxy upstream read failed at byte {}: {}".format(
-                    start + written, e
-                )
+                (
+                    "NeNeTeePee-Stream-Kodi: Proxy upstream read failed at "
+                    "byte {}: {}"
+                ).format(start + written, e)
                 + " (reason=upstream_read_failed)",
                 _sp.xbmc.LOGWARNING,
             )
             if written:
                 _sp.xbmc.log(
-                    "NZB-DAV: Upstream short read for {}-{} wrote={} "
+                    "NeNeTeePee-Stream-Kodi: Upstream short read for {}-{} wrote={} "
                     "status={} Content-Range={!r} Content-Length={!r} "
                     "(reason=short_read_recoverable)".format(
                         start,
@@ -252,7 +255,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
             return _sp._UPSTREAM_RANGE_OK, written
         _sp.xbmc.log(
             (
-                "NZB-DAV: Upstream short read for {}-{} wrote={} "
+                "NeNeTeePee-Stream-Kodi: Upstream short read for {}-{} wrote={} "
                 "expected={} status={} Content-Range={!r} "
                 "Content-Length={!r} "
                 "(reason=short_read_awaiting_download)"
@@ -319,7 +322,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         # passthrough_stall reconnect + audio-skip holds. #214.
         if ctx.get("fallback_sources"):
             _sp.xbmc.log(
-                "NZB-DAV: Pass-through trickle below floor "
+                "NeNeTeePee-Stream-Kodi: Pass-through trickle below floor "
                 "at byte {} ({:.0f} B/s over {:.1f}s) with "
                 "fallback attached; returning recoverable to "
                 "trigger cutover "
@@ -385,7 +388,7 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         # mid-stream. Inert unless the fault env var is set.
         if _sp._fault_forced_primary_failure(ctx, requested_start + written):
             _sp.xbmc.log(
-                "NZB-DAV: [FAULT] forcing primary upstream failure "
+                "NeNeTeePee-Stream-Kodi: [FAULT] forcing primary upstream failure "
                 "mid-stream at byte {} ({}) (reason=fault_injection)".format(
                     requested_start + written,
                     _sp._FAULT_PRIMARY_FAIL_AFTER_BYTES_ENV,
@@ -437,10 +440,11 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         """
         if _sp._fault_forced_primary_failure(ctx, start):
             _sp.xbmc.log(
-                "NZB-DAV: [FAULT] forcing primary upstream failure at byte {} "
-                "({}) (reason=fault_injection)".format(
-                    start, _sp._FAULT_PRIMARY_FAIL_AFTER_BYTES_ENV
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: [FAULT] forcing primary "
+                    "upstream failure at byte {} ({}) "
+                    "(reason=fault_injection)"
+                ).format(start, _sp._FAULT_PRIMARY_FAIL_AFTER_BYTES_ENV),
                 _sp.xbmc.LOGWARNING,
             )
             return _sp._UPSTREAM_RANGE_UPSTREAM_ERROR, 0
@@ -499,9 +503,12 @@ class _UpstreamRelayMixin:  # pylint: disable=too-few-public-methods
         """
         if ctx.get("upstream_down_notified"):
             _sp.xbmc.log(
-                "NZB-DAV: Skip-probe short-circuited (upstream marked down; "
-                "session will recover on next successful byte-range) "
-                "(reason=skip_probe_circuit_breaker)",
+                (
+                    "NeNeTeePee-Stream-Kodi: Skip-probe short-circuited "
+                    "(upstream marked down; session will recover on next "
+                    "successful byte-range) "
+                    "(reason=skip_probe_circuit_breaker)"
+                ),
                 _sp.xbmc.LOGINFO,
             )
             return None

@@ -32,10 +32,11 @@ def _script_play_recover_episode_info(params, title, season, episode):
 
     li_show, li_season, li_episode = _router._episode_info_from_listitem(title)
     xbmc.log(
-        "NZB-DAV: Episode args missing season/episode; ListItem fallback "
-        "show={!r} season={!r} episode={!r} (search title {!r})".format(
-            li_show, li_season, li_episode, title
-        ),
+        (
+            "NeNeTeePee-Stream-Kodi: Episode args missing "
+            "season/episode; ListItem fallback show={!r} "
+            "season={!r} episode={!r} (search title {!r})"
+        ).format(li_show, li_season, li_episode, title),
         xbmc.LOGINFO,
     )
     same_show = bool(li_show) and (
@@ -92,7 +93,7 @@ def _script_play_log_route(params, search_type, title, imdb):
     import resources.lib.router as _router
 
     xbmc.log(
-        "NZB-DAV: Script play route: type={!r} title={!r} imdb={!r} "
+        "NeNeTeePee-Stream-Kodi: Script play route: type={!r} title={!r} imdb={!r} "
         "tmdb_id={!r}".format(search_type, title, imdb, params.get("tmdb_id", "")),
         xbmc.LOGINFO,
     )
@@ -145,7 +146,9 @@ def _script_play_search_results(
     )
     if search_error:
         xbmc.log(
-            "NZB-DAV: Search stage: provider error - {}".format(search_error),
+            ("NeNeTeePee-Stream-Kodi: Search stage: provider error - {}").format(
+                search_error
+            ),
             xbmc.LOGWARNING,
         )
         if not allow_local_pack:
@@ -155,7 +158,9 @@ def _script_play_search_results(
 
     if not results:
         xbmc.log(
-            "NZB-DAV: Search stage: no results found for '{}'".format(title),
+            ("NeNeTeePee-Stream-Kodi: Search stage: no results found for '{}'").format(
+                title
+            ),
             xbmc.LOGINFO,
         )
         if not allow_local_pack:
@@ -289,9 +294,9 @@ def _script_play_tag_available(filtered):
         from resources.lib.http_util import redact_text
 
         xbmc.log(
-            "NZB-DAV: Script completed-history tagging failed: {}".format(
-                redact_text(str(error))
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Script completed-history tagging failed: {}"
+            ).format(redact_text(str(error))),
             xbmc.LOGDEBUG,
         )
         _router._script_play_stage("tag available failed")

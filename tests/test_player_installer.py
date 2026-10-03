@@ -172,7 +172,8 @@ def test_install_player_enables_tmdbhelper_strm_only_for_script_handoff(
 ):
     """TMDBHelper action players should skip the dummy resolver probe.
 
-    The CoreELEC crash reproduces before NZB-DAV starts when TMDBHelper asks
+    The CoreELEC crash reproduces before NeNeTeePee-Stream-Kodi starts when TMDBHelper
+    asks
     Kodi to open plugin://plugin.video.nzbdav/... as media. Script handoff
     avoids that path, but TMDBHelper only executes non-resolvable actions
     directly when only_resolve_strm is true.

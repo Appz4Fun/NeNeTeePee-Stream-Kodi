@@ -6992,7 +6992,7 @@ def test_resolve_and_play_exception_dialog_preserves_long_message(
     resolve_and_play("http://hydra/getnzb/abc", "movie.mkv")
 
     mock_gui.Dialog.return_value.ok.assert_called_once_with(
-        "NZB-DAV", "Error: {}".format(error_message)
+        "NeNeTeePee-Stream-Kodi", "Error: {}".format(error_message)
     )
 
 

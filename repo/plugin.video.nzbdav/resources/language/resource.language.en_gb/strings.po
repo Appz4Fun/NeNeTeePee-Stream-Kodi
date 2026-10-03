@@ -375,8 +375,8 @@ msgid "Settings"
 msgstr "Settings"
 
 msgctxt "#30093"
-msgid "Install NZB-DAV Player To"
-msgstr "Install NZB-DAV Player To"
+msgid "Install NeNeTeePee-Stream-Kodi Player To"
+msgstr "Install NeNeTeePee-Stream-Kodi Player To"
 
 msgctxt "#30094"
 msgid "Player installed to: {}"
@@ -1123,12 +1123,12 @@ msgid "Master switch for direct Newznab indexers. Use this if you don't run Prow
 msgstr "Master switch for direct Newznab indexers. Use this if you don't run Prowlarr or NZBHydra2."
 
 msgctxt "#30290"
-msgid "Install the NZB-DAV player file into TMDBHelper."
-msgstr "Install the NZB-DAV player file into TMDBHelper."
+msgid "Install the NeNeTeePee-Stream-Kodi player file into TMDBHelper."
+msgstr "Install the NeNeTeePee-Stream-Kodi player file into TMDBHelper."
 
 msgctxt "#30291"
-msgid "Install the NZB-DAV player file into another add-on that has a players folder."
-msgstr "Install the NZB-DAV player file into another add-on that has a players folder."
+msgid "Install the NeNeTeePee-Stream-Kodi player file into another add-on that has a players folder."
+msgstr "Install the NeNeTeePee-Stream-Kodi player file into another add-on that has a players folder."
 
 msgctxt "#30292"
 msgid "Include SDR releases. Missing or unlisted metadata follows the Other / Unknown option in this category."
@@ -1399,8 +1399,8 @@ msgid "Configure NZBHydra2, Prowlarr, or direct Newznab indexers for nzbdav / In
 msgstr "Configure NZBHydra2, Prowlarr, or direct Newznab indexers for nzbdav / InfiniDysk and NZBGet. StreamNZB manages indexers on its server."
 
 msgctxt "#30359"
-msgid "Install the NZB-DAV player file into TMDBHelper or another add-on with a players folder."
-msgstr "Install the NZB-DAV player file into TMDBHelper or another add-on with a players folder."
+msgid "Install the NeNeTeePee-Stream-Kodi player file into TMDBHelper or another add-on with a players folder."
+msgstr "Install the NeNeTeePee-Stream-Kodi player file into TMDBHelper or another add-on with a players folder."
 
 msgctxt "#30360"
 msgid "Resolution, HDR, audio, and video codec filters. All formats and Other / Unknown default to enabled. Language filters are on the following Languages tab."

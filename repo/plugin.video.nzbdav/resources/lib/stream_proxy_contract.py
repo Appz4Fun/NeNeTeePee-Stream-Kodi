@@ -207,7 +207,7 @@ def _classify_contract_mismatch(
 
 def _log_contract_mismatch(start, end, status, content_range, content_length, detail):
     _sp.xbmc.log(
-        "NZB-DAV: Upstream contract mismatch for {}-{} status={} "
+        "NeNeTeePee-Stream-Kodi: Upstream contract mismatch for {}-{} status={} "
         "Content-Range={!r} Content-Length={!r} detail={} "
         "(reason=protocol_mismatch)".format(
             start, end, status, content_range, content_length, detail

@@ -237,7 +237,9 @@ def _save_records_unlocked(records, path=None):
         _discard_temp(fd, tmp_path)
         try:
             xbmc.log(
-                "NZB-DAV: season-pack catalog write failed: {}".format(error),
+                ("NeNeTeePee-Stream-Kodi: season-pack catalog write failed: {}").format(
+                    error
+                ),
                 xbmc.LOGWARNING,
             )
         except (AttributeError, RuntimeError):

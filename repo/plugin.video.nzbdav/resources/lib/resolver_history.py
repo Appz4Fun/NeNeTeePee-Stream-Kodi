@@ -48,9 +48,10 @@ def _abort_poll_before_fetch(
     """Handle the early-return poll abort conditions."""
     if iteration > _resolver.MAX_POLL_ITERATIONS:
         _resolver.xbmc.log(
-            "NZB-DAV: Max poll iterations ({}) reached for nzo_id={}".format(
-                _resolver.MAX_POLL_ITERATIONS, nzo_id
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Max poll iterations ({}) "
+                "reached for nzo_id={}"
+            ).format(_resolver.MAX_POLL_ITERATIONS, nzo_id),
             _resolver.xbmc.LOGERROR,
         )
         # _fmt not _string: 30099 is "Download timed out after {} seconds"
@@ -63,9 +64,12 @@ def _abort_poll_before_fetch(
 
     if elapsed >= download_timeout:
         _resolver.xbmc.log(
-            "NZB-DAV: Download timed out after {}s for nzo_id={} (title='{}'). "
-            "Check the nzbdav queue for stalled jobs or increase the "
-            "download timeout in addon settings.".format(int(elapsed), nzo_id, title),
+            (
+                "NeNeTeePee-Stream-Kodi: Download timed out after {}s "
+                "for nzo_id={} (title='{}'). Check the nzbdav queue for "
+                "stalled jobs or increase the download timeout in addon "
+                "settings."
+            ).format(int(elapsed), nzo_id, title),
             _resolver.xbmc.LOGERROR,
         )
         _resolver.xbmcgui.Dialog().ok(
@@ -76,7 +80,9 @@ def _abort_poll_before_fetch(
 
     if dialog.iscanceled():
         _resolver.xbmc.log(
-            "NZB-DAV: User cancelled resolve for nzo_id={}".format(nzo_id),
+            ("NeNeTeePee-Stream-Kodi: User cancelled resolve for nzo_id={}").format(
+                nzo_id
+            ),
             _resolver.xbmc.LOGINFO,
         )
         _resolver.cancel_job(nzo_id)
@@ -105,7 +111,7 @@ def _handle_job_status(job_status, nzo_id, dialog, last_status):
 
     if dialog.iscanceled():
         _resolver.xbmc.log(
-            "NZB-DAV: User cancelled job {}".format(nzo_id),
+            "NeNeTeePee-Stream-Kodi: User cancelled job {}".format(nzo_id),
             _resolver.xbmc.LOGINFO,
         )
         _resolver.cancel_job(nzo_id)
@@ -113,7 +119,7 @@ def _handle_job_status(job_status, nzo_id, dialog, last_status):
 
     if status != last_status:
         _resolver.xbmc.log(
-            "NZB-DAV: Job {} status changed: {} -> {}".format(
+            "NeNeTeePee-Stream-Kodi: Job {} status changed: {} -> {}".format(
                 nzo_id, last_status, status
             ),
             _resolver.xbmc.LOGINFO,
@@ -122,7 +128,9 @@ def _handle_job_status(job_status, nzo_id, dialog, last_status):
 
     if status.lower() in ("failed", "deleted"):
         _resolver.xbmc.log(
-            "NZB-DAV: Job {} failed/deleted (status={})".format(nzo_id, status),
+            ("NeNeTeePee-Stream-Kodi: Job {} failed/deleted (status={})").format(
+                nzo_id, status
+            ),
             _resolver.xbmc.LOGERROR,
         )
         _resolver.xbmcgui.Dialog().ok(_resolver._addon_name(), _resolver._string(30100))
@@ -359,7 +367,7 @@ def _report_history_failed(history, title, modal_failures):
 
     fail_msg = redact_text(history.get("fail_message", "") or "")
     _resolver.xbmc.log(
-        "NZB-DAV: Download failed for nzo_id={} (title='{}'): {}".format(
+        "NeNeTeePee-Stream-Kodi: Download failed for nzo_id={} (title='{}'): {}".format(
             history.get("nzo_id", "unknown"), title, fail_msg or "unknown reason"
         ),
         _resolver.xbmc.LOGERROR,
@@ -378,7 +386,7 @@ def _report_no_video_exhaustion(
     """Log and surface the terminal "no playable video" dialog after retries."""
     if body_unavailable:
         _resolver.xbmc.log(
-            "NZB-DAV: '{}' completed but its mid-file body stayed "
+            "NeNeTeePee-Stream-Kodi: '{}' completed but its mid-file body stayed "
             "unavailable after {} attempts (storage='{}')".format(
                 title, no_video_retries, storage
             ),
@@ -392,7 +400,7 @@ def _report_no_video_exhaustion(
         ).format(webdav_folder)
     else:
         _resolver.xbmc.log(
-            "NZB-DAV: Download completed but no video file found "
+            "NeNeTeePee-Stream-Kodi: Download completed but no video file found "
             "at '{}' after {} attempts (storage='{}')".format(
                 webdav_folder, no_video_retries, storage
             ),
@@ -570,15 +578,19 @@ def _classify_completed_video(
         webdav_folder, video_path, download_size, settings_getter
     ):
         _resolver.xbmc.log(
-            "NZB-DAV: '{}' discovered video '{}' is far smaller than the "
-            "advertised release size; treating as nzbdav job-start stub and "
-            "awaiting the real download".format(title, video_path),
+            (
+                "NeNeTeePee-Stream-Kodi: '{}' discovered video '{}' is "
+                "far smaller than the advertised release size; treating "
+                "as nzbdav job-start stub and awaiting the real download"
+            ).format(title, video_path),
             _resolver.xbmc.LOGWARNING,
         )
         return "stub", None, None
     if _resolver._completed_stream_body_available(stream_url, stream_headers):
         _resolver.xbmc.log(
-            "NZB-DAV: File available, streaming '{}' via WebDAV".format(video_path),
+            (
+                "NeNeTeePee-Stream-Kodi: File available, streaming '{}' via WebDAV"
+            ).format(video_path),
             _resolver.xbmc.LOGINFO,
         )
         return "available", stream_url, stream_headers
@@ -588,7 +600,7 @@ def _classify_completed_video(
     # missing-articles crash this guard prevents, mirroring the pre-submit
     # _completed_job_stream probe. Caller falls through to the retry budget.
     _resolver.xbmc.log(
-        "NZB-DAV: '{}' is marked Completed but its mid-file body is "
+        "NeNeTeePee-Stream-Kodi: '{}' is marked Completed but its mid-file body is "
         "unavailable; awaiting download instead of streaming".format(title),
         _resolver.xbmc.LOGWARNING,
     )
@@ -612,7 +624,7 @@ def _advance_no_video_retry(
         return True, None, None, no_video_retries
 
     _resolver.xbmc.log(
-        "NZB-DAV: Completed but no video found at '{}', "
+        "NeNeTeePee-Stream-Kodi: Completed but no video found at '{}', "
         "retry {}/{} (storage='{}')...".format(
             webdav_folder,
             no_video_retries,
@@ -628,7 +640,7 @@ def _handle_webdav_error(nzo_id, webdav_error):
     """Handle terminal WebDAV auth failures and retryable server errors."""
     if webdav_error == "auth_failed":
         _resolver.xbmc.log(
-            "NZB-DAV: WebDAV authentication failed for nzo_id={}. "
+            "NeNeTeePee-Stream-Kodi: WebDAV authentication failed for nzo_id={}. "
             "Check WebDAV username and password in addon settings.".format(nzo_id),
             _resolver.xbmc.LOGERROR,
         )
@@ -640,7 +652,7 @@ def _handle_webdav_error(nzo_id, webdav_error):
 
     if webdav_error == "server_error":
         _resolver.xbmc.log(
-            "NZB-DAV: WebDAV server error, will retry on next poll",
+            "NeNeTeePee-Stream-Kodi: WebDAV server error, will retry on next poll",
             _resolver.xbmc.LOGWARNING,
         )
     return False
@@ -653,7 +665,7 @@ def _handle_resolve_exception(label, error, handle=None):
     message = redact_text(str(error))
     _resolver._resolve_stage("handle_resolve_exception {} {}".format(label, message))
     _resolver.xbmc.log(
-        "NZB-DAV: Unexpected error in {}: {}".format(label, message),
+        "NeNeTeePee-Stream-Kodi: Unexpected error in {}: {}".format(label, message),
         _resolver.xbmc.LOGERROR,
     )
     # The error dialog is best-effort UI; if it raises, the handle-based
@@ -664,7 +676,9 @@ def _handle_resolve_exception(label, error, handle=None):
         )
     except (RuntimeError, OSError, TypeError) as dialog_error:
         _resolver.xbmc.log(
-            "NZB-DAV: resolve error dialog failed: {}".format(dialog_error),
+            ("NeNeTeePee-Stream-Kodi: resolve error dialog failed: {}").format(
+                dialog_error
+            ),
             _resolver.xbmc.LOGWARNING,
         )
     if handle is not None:

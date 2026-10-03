@@ -274,7 +274,7 @@ def _extract_session_id_from_proxy_url(proxy_url):
 def _notify_error(message):
     """Best-effort notification helper safe to call from proxy threads."""
     try:
-        _sp._notify("NZB-DAV", str(message)[:80])
+        _sp._notify("NeNeTeePee-Stream-Kodi", str(message)[:80])
     except (RuntimeError, OSError):
         pass
 

@@ -77,7 +77,7 @@ def _install_addon_defaults() -> None:
 
     _fake_info = {
         "id": "plugin.video.nzbdav",
-        "name": "NZB-DAV",
+        "name": "NeNeTeePee-Stream-Kodi",
         "version": "0.0.0",
         "path": "",
         "profile": "",

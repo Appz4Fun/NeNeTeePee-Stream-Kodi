@@ -380,9 +380,10 @@ def _poll_once(
         error_type[0] = error
 
     _resolver.xbmc.log(
-        "NZB-DAV: Poll result - job_status={} history_status={} error_type={}".format(
-            job_status[0], history_status[0], error_type[0]
-        ),
+        (
+            "NeNeTeePee-Stream-Kodi: Poll result - job_status={} "
+            "history_status={} error_type={}"
+        ).format(job_status[0], history_status[0], error_type[0]),
         _resolver.xbmc.LOGDEBUG,
     )
     return job_status[0], history_status[0], error_type[0]

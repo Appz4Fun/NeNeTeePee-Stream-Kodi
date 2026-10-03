@@ -30,7 +30,8 @@ def _resolve_stage(message):
     # label; redact before it reaches the Kodi log AND the persisted stage file.
     safe_message = _redact_log(message)
     _resolver.xbmc.log(
-        "NZB-DAV: Resolve stage: {}".format(safe_message), _resolver.xbmc.LOGINFO
+        ("NeNeTeePee-Stream-Kodi: Resolve stage: {}").format(safe_message),
+        _resolver.xbmc.LOGINFO,
     )
     try:
         import os
@@ -72,9 +73,10 @@ def _clamp_int_setting(setting_id, value, lo, hi):
         if key not in _resolver._CLAMP_LOGGED:
             _resolver._CLAMP_LOGGED.add(key)
             _resolver.xbmc.log(
-                "NZB-DAV: Setting {}={} out of range [{}..{}]; clamping to {}".format(
-                    setting_id, value, lo, hi, clamped
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: Setting {}={} out of range "
+                    "[{}..{}]; clamping to {}"
+                ).format(setting_id, value, lo, hi, clamped),
                 _resolver.xbmc.LOGWARNING,
             )
     return clamped
@@ -301,7 +303,9 @@ def _clear_kodi_playback_state(params=None):
                     cur.execute("DELETE FROM bookmark WHERE idFile = ?", (id_file,))
 
         _resolver.xbmc.log(
-            "NZB-DAV: Cleared bookmark for {} file(s)".format(len(target_ids)),
+            ("NeNeTeePee-Stream-Kodi: Cleared bookmark for {} file(s)").format(
+                len(target_ids)
+            ),
             _resolver.xbmc.LOGINFO,
         )
         return resume_seconds
@@ -309,12 +313,17 @@ def _clear_kodi_playback_state(params=None):
         # "database is locked" / busy timeout. Kodi holds the writer; we
         # skip this cleanup and let the next resolve retry.
         _resolver.xbmc.log(
-            "NZB-DAV: MyVideos DB busy, skipping bookmark cleanup: {}".format(e),
+            (
+                "NeNeTeePee-Stream-Kodi: MyVideos DB busy, skipping "
+                "bookmark cleanup: {}"
+            ).format(e),
             _resolver.xbmc.LOGDEBUG,
         )
     except sqlite3.Error as e:
         _resolver.xbmc.log(
-            "NZB-DAV: SQLite error during bookmark cleanup: {}".format(e),
+            ("NeNeTeePee-Stream-Kodi: SQLite error during bookmark cleanup: {}").format(
+                e
+            ),
             _resolver.xbmc.LOGWARNING,
         )
     return 0.0
@@ -368,7 +377,10 @@ def _start_playback_state_cleanup(params=None):
         except Exception as error:  # pylint: disable=broad-except
             state["error"] = error
             _resolver.xbmc.log(
-                "NZB-DAV: Playback-state cleanup worker failed: {}".format(error),
+                (
+                    "NeNeTeePee-Stream-Kodi: Playback-state cleanup worker "
+                    "failed: {}"
+                ).format(error),
                 _resolver.xbmc.LOGWARNING,
             )
         finally:
@@ -396,7 +408,7 @@ def _wait_playback_state_cleanup(
     if done:
         if not done.wait(max(0, wait_seconds)):
             _resolver.xbmc.log(
-                "NZB-DAV: Playback-state cleanup still running; "
+                "NeNeTeePee-Stream-Kodi: Playback-state cleanup still running; "
                 "continuing playback handoff",
                 _resolver.xbmc.LOGWARNING,
             )
@@ -435,7 +447,10 @@ def _locate_kodi_video_db():
         # which can stall the decoder and freeze playback.
         if _resolver.xbmc.Player().isPlayingVideo():
             _resolver.xbmc.log(
-                "NZB-DAV: Skipping playback-state cleanup — video is playing",
+                (
+                    "NeNeTeePee-Stream-Kodi: Skipping playback-state "
+                    "cleanup — video is playing"
+                ),
                 _resolver.xbmc.LOGDEBUG,
             )
             return None
@@ -450,9 +465,10 @@ def _locate_kodi_video_db():
         )
     except _resolver._DB_DISCOVERY_ERRORS as error:
         _resolver.xbmc.log(
-            "NZB-DAV: Failed to locate MyVideos DB for bookmark cleanup: {}".format(
-                error
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Failed to locate MyVideos DB "
+                "for bookmark cleanup: {}"
+            ).format(error),
             _resolver.xbmc.LOGWARNING,
         )
         return None
@@ -594,7 +610,7 @@ def _arm_live_fallback_push(prepared, fallback_state, primary_stream_url, dead=N
             )
         except Exception as error:  # pylint: disable=broad-except
             _resolver.xbmc.log(
-                "NZB-DAV: live fallback push failed: {}".format(error),
+                "NeNeTeePee-Stream-Kodi: live fallback push failed: {}".format(error),
                 _resolver.xbmc.LOGWARNING,
             )
 
@@ -620,7 +636,9 @@ def _make_playable_listitem(url, headers):
     """
     play_url = _build_play_url(url, headers)
 
-    _resolver.xbmc.log("NZB-DAV: Play URL set (redacted)", _resolver.xbmc.LOGDEBUG)
+    _resolver.xbmc.log(
+        ("NeNeTeePee-Stream-Kodi: Play URL set (redacted)"), _resolver.xbmc.LOGDEBUG
+    )
     li = _resolver.xbmcgui.ListItem(path=play_url)
     # Skip HEAD request — nzbdav doesn't advertise Accept-Ranges on HEAD
     # which causes CFileCache to fail. Kodi will discover range support
@@ -649,19 +667,21 @@ def _apply_proxy_mime(li, stream_url, stream_info):
     proxy_url = li.getPath()
     if stream_info.get("remux"):
         _resolver.xbmc.log(
-            "NZB-DAV: Playing via remux proxy: {}".format(proxy_url),
+            "NeNeTeePee-Stream-Kodi: Playing via remux proxy: {}".format(proxy_url),
             _resolver.xbmc.LOGINFO,
         )
         _apply_remux_proxy_mime(li, stream_info)
     elif stream_info.get("faststart"):
         _resolver.xbmc.log(
-            "NZB-DAV: Playing via faststart proxy: {}".format(proxy_url),
+            "NeNeTeePee-Stream-Kodi: Playing via faststart proxy: {}".format(proxy_url),
             _resolver.xbmc.LOGINFO,
         )
         li.setMimeType("video/mp4")
     else:
         _resolver.xbmc.log(
-            "NZB-DAV: Playing via pass-through proxy: {}".format(proxy_url),
+            ("NeNeTeePee-Stream-Kodi: Playing via pass-through proxy: {}").format(
+                proxy_url
+            ),
             _resolver.xbmc.LOGINFO,
         )
         li.setMimeType(_video_mime_for_path(_url_path(stream_url)))

@@ -35,7 +35,7 @@ def _fallback_settings(settings_getter=None):
     max_candidates = _fs._setting_int(addon, "fallback_streams_max", 5)
     if max_candidates < 0 or max_candidates > _fs._MAX_FALLBACKS:
         _fs.xbmc.log(
-            "NZB-DAV: fallback_streams_max={} clamped to 0..{}".format(
+            "NeNeTeePee-Stream-Kodi: fallback_streams_max={} clamped to 0..{}".format(
                 max_candidates, _fs._MAX_FALLBACKS
             ),
             _fs.xbmc.LOGWARNING,

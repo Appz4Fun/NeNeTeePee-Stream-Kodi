@@ -32,10 +32,10 @@ TMDBHELPER_PLAYER_PATH = _player_path_for(TMDBHELPER_ADDON_ID)
 # Bump this when PLAYER_JSON's shape changes in a way that requires the
 # installer to overwrite an older generation. We ignore the user's manual
 # edits only when the stored schema_version differs from ours.
-_PLAYER_SCHEMA_VERSION = 8
+_PLAYER_SCHEMA_VERSION = 9
 
 PLAYER_JSON = {
-    "name": "NZB-DAV",
+    "name": "NeNeTeePee-Stream-Kodi",
     "plugin": "plugin.video.nzbdav",
     "priority": 100,
     "is_resolvable": "false",
@@ -60,7 +60,9 @@ def _addon_label(addon_id):
         name = xbmcaddon.Addon(addon_id).getAddonInfo("name")
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Could not read addon name for {}: {}".format(addon_id, e),
+            ("NeNeTeePee-Stream-Kodi: Could not read addon name for {}: {}").format(
+                addon_id, e
+            ),
             xbmc.LOGDEBUG,
         )
         name = ""
@@ -76,7 +78,10 @@ def discover_other_player_targets():
         addon_dirs, _files = xbmcvfs.listdir(ADDON_DATA_ROOT)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Failed to list addon_data for player targets: {}".format(e),
+            (
+                "NeNeTeePee-Stream-Kodi: Failed to list addon_data for "
+                "player targets: {}"
+            ).format(e),
             xbmc.LOGWARNING,
         )
         return []
@@ -143,7 +148,7 @@ def _existing_player_is_current(file_path, target_name):
 
     if existing.get("schema_version") == _PLAYER_SCHEMA_VERSION:
         xbmc.log(
-            "NZB-DAV: Player already installed at schema v{}; "
+            "NeNeTeePee-Stream-Kodi: Player already installed at schema v{}; "
             "preserving existing file".format(_PLAYER_SCHEMA_VERSION),
             xbmc.LOGINFO,
         )
@@ -159,7 +164,9 @@ def _existing_player_is_current(file_path, target_name):
         xbmcvfs.copy(file_path, backup_path)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Could not back up {} to {}: {}".format(file_path, backup_path, e),
+            ("NeNeTeePee-Stream-Kodi: Could not back up {} to {}: {}").format(
+                file_path, backup_path, e
+            ),
             xbmc.LOGWARNING,
         )
         raise
@@ -171,7 +178,9 @@ def _install_player_to_path(target_name, target_path):
     player_content = json.dumps(PLAYER_JSON, indent=4)
 
     xbmc.log(
-        "NZB-DAV: Installing player to {} at {}".format(target_name, target_path),
+        ("NeNeTeePee-Stream-Kodi: Installing player to {} at {}").format(
+            target_name, target_path
+        ),
         xbmc.LOGINFO,
     )
     try:
@@ -179,7 +188,7 @@ def _install_player_to_path(target_name, target_path):
 
         if not _player_path_inside_profile(real_path):
             xbmc.log(
-                "NZB-DAV: Refusing to install player outside addon_data "
+                "NeNeTeePee-Stream-Kodi: Refusing to install player outside addon_data "
                 "(resolved {} from {})".format(real_path, target_path),
                 xbmc.LOGERROR,
             )
@@ -189,7 +198,10 @@ def _install_player_to_path(target_name, target_path):
         if not xbmcvfs.exists(real_path):
             if not xbmcvfs.mkdirs(real_path):
                 xbmc.log(
-                    "NZB-DAV: Failed to create player directory {}".format(real_path),
+                    (
+                        "NeNeTeePee-Stream-Kodi: Failed to create player "
+                        "directory {}"
+                    ).format(real_path),
                     xbmc.LOGERROR,
                 )
                 _notify(_addon_name(), _fmt(30095, target_name))
@@ -208,7 +220,10 @@ def _install_player_to_path(target_name, target_path):
 
         _write_player_file(file_path, player_content, target_name)
     except Exception as e:
-        xbmc.log("NZB-DAV: Failed to install player: {}".format(e), xbmc.LOGERROR)
+        xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: Failed to install player: {}").format(e),
+            xbmc.LOGERROR,
+        )
         _notify(_addon_name(), _fmt(30095, target_name))
 
 
@@ -229,7 +244,7 @@ def _write_player_file(file_path, player_content, target_name):
             raise OSError(
                 "xbmcvfs.File.write returned False (disk-full or permission failure)"
             )
-        xbmc.log("NZB-DAV: Player installed successfully", xbmc.LOGINFO)
+        xbmc.log("NeNeTeePee-Stream-Kodi: Player installed successfully", xbmc.LOGINFO)
         _notify(_addon_name(), _fmt(30094, target_name))
     finally:
         f.close()
@@ -241,9 +256,10 @@ def _enable_tmdbhelper_action_player_mode():
         xbmcaddon.Addon(TMDBHELPER_ADDON_ID).setSetting("only_resolve_strm", "true")
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Could not enable TMDBHelper STRM-only resolver mode: {}".format(
-                e
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Could not enable TMDBHelper "
+                "STRM-only resolver mode: {}"
+            ).format(e),
             xbmc.LOGWARNING,
         )
 

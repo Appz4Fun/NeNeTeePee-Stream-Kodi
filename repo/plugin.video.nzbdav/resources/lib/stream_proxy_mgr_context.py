@@ -31,7 +31,10 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             )
             if layout_info:
                 _sp.xbmc.log(
-                    "NZB-DAV: MP4 layout: moov_before_mdat={}, moov={}B".format(
+                    (
+                        "NeNeTeePee-Stream-Kodi: MP4 layout: "
+                        "moov_before_mdat={}, moov={}B"
+                    ).format(
                         layout_info.get("moov_before_mdat"),
                         len(layout_info.get("moov_data", b"")),
                     ),
@@ -40,16 +43,22 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
                 faststart = _sp.build_faststart_layout(layout_info)
                 if faststart is None:
                     _sp.xbmc.log(
-                        "NZB-DAV: stco overflow — moov relocation failed "
-                        "(file >4GB with 32-bit chunk offsets)",
+                        (
+                            "NeNeTeePee-Stream-Kodi: stco overflow — moov "
+                            "relocation failed (file >4GB with 32-bit chunk offsets)"
+                        ),
                         _sp.xbmc.LOGWARNING,
                     )
                 return faststart
-            _sp.xbmc.log("NZB-DAV: MP4 layout fetch returned None", _sp.xbmc.LOGWARNING)
+            _sp.xbmc.log(
+                ("NeNeTeePee-Stream-Kodi: MP4 layout fetch returned None"),
+                _sp.xbmc.LOGWARNING,
+            )
             return None
         except _sp._PARSE_ERRORS as e:
             _sp.xbmc.log(
-                "NZB-DAV: MP4 faststart parse failed: {}".format(e), _sp.xbmc.LOGWARNING
+                ("NeNeTeePee-Stream-Kodi: MP4 faststart parse failed: {}").format(e),
+                _sp.xbmc.LOGWARNING,
             )
             return None
 
@@ -64,7 +73,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             )
         except Exception as exc:  # pylint: disable=broad-except
             _sp.xbmc.log(
-                "NZB-DAV: DV probe crashed -- failing safe to "
+                "NeNeTeePee-Stream-Kodi: DV probe crashed -- failing safe to "
                 "matroska: {!r}".format(exc),
                 _sp.xbmc.LOGWARNING,
             )
@@ -72,7 +81,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
 
             dv_result = DolbyVisionSourceResult("dv_unknown", "probe_crashed")
         _sp.xbmc.log(
-            "NZB-DAV: dv_probe classification={} reason={} "
+            "NeNeTeePee-Stream-Kodi: dv_probe classification={} reason={} "
             "profile={} el_type={}".format(
                 dv_result.classification,
                 dv_result.reason,
@@ -93,7 +102,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
         dv_result = self._probe_dv_source(remote_url, auth_header, content_length)
         if dv_result.classification == "dv_profile_7_fel":
             _sp.xbmc.log(
-                "NZB-DAV: dv_route=matroska reason={} "
+                "NeNeTeePee-Stream-Kodi: dv_route=matroska reason={} "
                 "profile={} el_type={}".format(
                     dv_result.reason,
                     dv_result.profile,
@@ -108,7 +117,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             and dv_result.el_type == "MEL"
         ):
             _sp.xbmc.log(
-                "NZB-DAV: dv_route=fmp4 reason={} profile=7 "
+                "NeNeTeePee-Stream-Kodi: dv_route=fmp4 reason={} profile=7 "
                 "el_type=MEL (experimental -- metadata-only EL "
                 "does not exercise CAMLCodec dual-layer init)".format(dv_result.reason),
                 _sp.xbmc.LOGINFO,
@@ -121,7 +130,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
         """Tail of the DV routing matrix: non-P7 fmp4, non_dv, unknown."""
         if dv_result.classification == "dv_allowed_for_fmp4":
             _sp.xbmc.log(
-                "NZB-DAV: dv_route=matroska reason={} "
+                "NeNeTeePee-Stream-Kodi: dv_route=matroska reason={} "
                 "profile={} (non-P7 DV hangs CAMLCodec "
                 "onAVStarted on fmp4 per 2026-04-15 "
                 "testing)".format(dv_result.reason, dv_result.profile),
@@ -130,12 +139,14 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             return False
         if dv_result.classification == "non_dv":
             _sp.xbmc.log(
-                "NZB-DAV: dv_route=fmp4 reason={}".format(dv_result.reason),
+                ("NeNeTeePee-Stream-Kodi: dv_route=fmp4 reason={}").format(
+                    dv_result.reason
+                ),
                 _sp.xbmc.LOGDEBUG,
             )
             return True
         _sp.xbmc.log(
-            "NZB-DAV: dv_route=matroska reason={} "
+            "NeNeTeePee-Stream-Kodi: dv_route=matroska reason={} "
             "profile={} el_type={} (unknown DV state -- "
             "failing safe)".format(
                 dv_result.reason,
@@ -167,8 +178,11 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             "seekable": True,
         }
         _sp.xbmc.log(
-            "NZB-DAV: Fallback streams attached; using pass-through proxy "
-            "before MP4 repair or remux rescue tiers",
+            (
+                "NeNeTeePee-Stream-Kodi: Fallback streams attached; "
+                "using pass-through proxy before MP4 repair or remux "
+                "rescue tiers"
+            ),
             _sp.xbmc.LOGINFO,
         )
         return ctx
@@ -189,13 +203,16 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
         _TEMP_FASTSTART_MAX = 4 * 1073741824  # 4 GB
         if content_length_unknown:
             _sp.xbmc.log(
-                "NZB-DAV: MP4 content length unknown; skipping temp-file faststart",
+                (
+                    "NeNeTeePee-Stream-Kodi: MP4 content length unknown; "
+                    "skipping temp-file faststart"
+                ),
                 _sp.xbmc.LOGWARNING,
             )
             return None
         if content_length > _TEMP_FASTSTART_MAX:
             _sp.xbmc.log(
-                "NZB-DAV: File too large for temp-file faststart "
+                "NeNeTeePee-Stream-Kodi: File too large for temp-file faststart "
                 "({}B > {}B), skipping to MKV remux".format(
                     content_length, _TEMP_FASTSTART_MAX
                 ),
@@ -235,7 +252,9 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
                 "content_length": temp_size,
             }
             _sp.xbmc.log(
-                "NZB-DAV: MP4 temp-file faststart ({}B)".format(temp_size),
+                ("NeNeTeePee-Stream-Kodi: MP4 temp-file faststart ({}B)").format(
+                    temp_size
+                ),
                 _sp.xbmc.LOGINFO,
             )
             return ctx
@@ -272,7 +291,9 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             "duration_seconds": duration,
             "seekable": duration is not None and content_length > 0,
         }
-        _sp.xbmc.log("NZB-DAV: MP4 fallback to MKV remux", _sp.xbmc.LOGWARNING)
+        _sp.xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: MP4 fallback to MKV remux"), _sp.xbmc.LOGWARNING
+        )
         return ctx
 
     def _build_ctx_mp4(self, remote_url, auth_header, content_length_hint):
@@ -298,15 +319,19 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
                 "range_cache": _sp.RangeCache(),
             }
             _sp.xbmc.log(
-                "NZB-DAV: MP4 faststart proxy (virtual={}B, header={}B)".format(
-                    faststart["virtual_size"], len(faststart["header_data"])
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: MP4 faststart proxy "
+                    "(virtual={}B, header={}B)"
+                ).format(faststart["virtual_size"], len(faststart["header_data"])),
                 _sp.xbmc.LOGINFO,
             )
             return ctx
         if faststart is not None and faststart.get("already_faststart"):
             _sp.xbmc.log(
-                "NZB-DAV: MP4 already faststart; using pass-through proxy",
+                (
+                    "NeNeTeePee-Stream-Kodi: MP4 already faststart; using "
+                    "pass-through proxy"
+                ),
                 _sp.xbmc.LOGINFO,
             )
             return {
@@ -349,7 +374,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
         )
         if force_mode == "hls_fmp4" and not ffmpeg_caps.get("hls_fmp4", False):
             _sp.xbmc.log(
-                "NZB-DAV: ffmpeg lacks required fmp4 HLS flags; "
+                "NeNeTeePee-Stream-Kodi: ffmpeg lacks required fmp4 HLS flags; "
                 "falling back to piped Matroska",
                 _sp.xbmc.LOGWARNING,
             )
@@ -383,7 +408,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             "hls_segment_format": "fmp4",
         }
         _sp.xbmc.log(
-            "NZB-DAV: Force-remuxing {}B file via fMP4 HLS "
+            "NeNeTeePee-Stream-Kodi: Force-remuxing {}B file via fMP4 HLS "
             "(experimental, duration={:.1f}s)".format(content_length, duration),
             _sp.xbmc.LOGWARNING,
         )
@@ -406,7 +431,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
             "seekable": duration is not None and content_length > 0,
         }
         _sp.xbmc.log(
-            "NZB-DAV: Force-remuxing large {}B file via piped MKV "
+            "NeNeTeePee-Stream-Kodi: Force-remuxing large {}B file via piped MKV "
             "(duration={}, threshold={}B)".format(
                 content_length,
                 "{:.1f}s".format(duration) if duration else "unknown",
@@ -436,7 +461,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
         )
         if needs_remux and content_length_unknown:
             _sp.xbmc.log(
-                "NZB-DAV: Content length unknown; forcing live remux "
+                "NeNeTeePee-Stream-Kodi: Content length unknown; forcing live remux "
                 "instead of zero-byte pass-through",
                 _sp.xbmc.LOGWARNING,
             )
@@ -475,7 +500,7 @@ class _MgrContextBuildMixin:  # pylint: disable=too-few-public-methods
                     "and ffmpeg unavailable"
                 )
             _sp.xbmc.log(
-                "NZB-DAV: {}B file exceeds remux threshold but no "
+                "NeNeTeePee-Stream-Kodi: {}B file exceeds remux threshold but no "
                 "ffmpeg found — falling back to pass-through, "
                 "playback may fail on 32-bit Kodi".format(content_length),
                 _sp.xbmc.LOGWARNING,

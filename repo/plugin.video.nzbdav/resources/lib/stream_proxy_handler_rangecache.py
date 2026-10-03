@@ -51,7 +51,10 @@ class _RangeCacheMixin:  # pylint: disable=too-few-public-methods
             )
         except Exception as exc:  # defensive guard for probe helpers
             _sp.xbmc.log(
-                "NZB-DAV: Fallback range probe failed at bytes {}-{}: {}".format(
+                (
+                    "NeNeTeePee-Stream-Kodi: Fallback range probe failed at "
+                    "bytes {}-{}: {}"
+                ).format(
                     start,
                     end,
                     exc,
@@ -186,7 +189,10 @@ class _RangeCacheMixin:  # pylint: disable=too-few-public-methods
             )
         except Exception as exc:  # defensive guard for probe helpers
             _sp.xbmc.log(
-                "NZB-DAV: Fallback range body probe failed at bytes {}-{}: {}".format(
+                (
+                    "NeNeTeePee-Stream-Kodi: Fallback range body probe "
+                    "failed at bytes {}-{}: {}"
+                ).format(
                     start,
                     end,
                     exc,

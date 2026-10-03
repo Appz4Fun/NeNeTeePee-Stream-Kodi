@@ -140,13 +140,14 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
         cmd = self._build_ffmpeg_cmd(ctx, seek_seconds=seek_seconds)
         if not self._is_safe_ffmpeg_cmd(cmd):
             _sp.xbmc.log(
-                "NZB-DAV: Refusing to start unsafe ffmpeg command", _sp.xbmc.LOGERROR
+                ("NeNeTeePee-Stream-Kodi: Refusing to start unsafe ffmpeg command"),
+                _sp.xbmc.LOGERROR,
             )
             _sp._notify_error("Failed to start ffmpeg")
             self.send_error(500)
             return None, None
         _sp.xbmc.log(
-            "NZB-DAV: Remuxing to MKV (seek={})".format(seek_seconds),
+            "NeNeTeePee-Stream-Kodi: Remuxing to MKV (seek={})".format(seek_seconds),
             _sp.xbmc.LOGINFO,
         )
         proc = self._spawn_remux_proc(cmd)
@@ -178,7 +179,8 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
             )
         except OSError as error:
             _sp.xbmc.log(
-                "NZB-DAV: Failed to start ffmpeg: {}".format(error), _sp.xbmc.LOGERROR
+                ("NeNeTeePee-Stream-Kodi: Failed to start ffmpeg: {}").format(error),
+                _sp.xbmc.LOGERROR,
             )
             _sp._notify_error("Failed to start ffmpeg")
             self.send_error(500)
@@ -197,7 +199,7 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
         except (_sp.subprocess.TimeoutExpired, OSError):
             pass
         _sp.xbmc.log(
-            "NZB-DAV: CAS-killed duplicate ffmpeg pid={} "
+            "NeNeTeePee-Stream-Kodi: CAS-killed duplicate ffmpeg pid={} "
             "(winner pid={})".format(
                 getattr(proc, "pid", "?"),
                 getattr(existing, "pid", "?"),
@@ -264,7 +266,7 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
             if isinstance(exc, _sp._socket.timeout):
                 ctx["remux_stdout_idle_detected"] = True
             _sp.xbmc.log(
-                "NZB-DAV: Remux client disconnected after {} MB".format(
+                "NeNeTeePee-Stream-Kodi: Remux client disconnected after {} MB".format(
                     total // 1048576
                 ),
                 _sp.xbmc.LOGDEBUG,
@@ -281,7 +283,7 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
             # TODO.md §H.3 (proc.stdout.read() too narrow) + ffmpeg-
             # mid-stream-crash scenario.
             _sp.xbmc.log(
-                "NZB-DAV: Remux ffmpeg pipe failed after {} MB: {!r} "
+                "NeNeTeePee-Stream-Kodi: Remux ffmpeg pipe failed after {} MB: {!r} "
                 "(reason=ffmpeg_pipe_closed)".format(total // 1048576, exc),
                 _sp.xbmc.LOGWARNING,
             )
@@ -312,11 +314,13 @@ class _RemuxMixin:  # pylint: disable=too-few-public-methods
             # any apikey=... query and user:pass@ userinfo — into stderr on
             # 4xx/5xx errors. Run through redact_text before logging.
             _sp.xbmc.log(
-                "NZB-DAV: ffmpeg: {}".format(_sp._redact_text(stderr[:300])),
+                ("NeNeTeePee-Stream-Kodi: ffmpeg: {}").format(
+                    _sp._redact_text(stderr[:300])
+                ),
                 _sp.xbmc.LOGDEBUG,
             )
         _sp.xbmc.log(
-            "NZB-DAV: Remux done: {} MB sent".format(total // 1048576),
+            "NeNeTeePee-Stream-Kodi: Remux done: {} MB sent".format(total // 1048576),
             _sp.xbmc.LOGINFO,
         )
 

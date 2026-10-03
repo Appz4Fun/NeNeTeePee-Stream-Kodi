@@ -199,7 +199,10 @@ def _execute_prowlarr_search(url):
     """
     from resources.lib.http_util import redact_text, redact_url
 
-    xbmc.log("NZB-DAV: Prowlarr search URL: {}".format(redact_url(url)), xbmc.LOGDEBUG)
+    xbmc.log(
+        ("NeNeTeePee-Stream-Kodi: Prowlarr search URL: {}").format(redact_url(url)),
+        xbmc.LOGDEBUG,
+    )
 
     try:
         xml_text = _http_get(url, timeout=300)
@@ -208,7 +211,9 @@ def _execute_prowlarr_search(url):
         # (which embeds the apikey query param). Mirrors the redaction
         # already in nzbdav_api's submit error path.
         xbmc.log(
-            "NZB-DAV: Prowlarr search request failed: {}".format(redact_text(str(e))),
+            ("NeNeTeePee-Stream-Kodi: Prowlarr search request failed: {}").format(
+                redact_text(str(e))
+            ),
             xbmc.LOGERROR,
         )
         return [], _prowlarr_unavailable_error(e)
@@ -234,8 +239,10 @@ def _title_fallback_search(
 
     imdb, tvdb = ids
     xbmc.log(
-        "NZB-DAV: Prowlarr: no results with id (tvdb={} imdb={}), retrying "
-        "by title '{}'".format(tvdb or "-", imdb or "-", title),
+        (
+            "NeNeTeePee-Stream-Kodi: Prowlarr: no results with id "
+            "(tvdb={} imdb={}), retrying by title '{}'"
+        ).format(tvdb or "-", imdb or "-", title),
         xbmc.LOGINFO,
     )
     params["query"] = _build_prowlarr_query(
@@ -250,7 +257,9 @@ def _title_fallback_search(
         return results, None
     except Exception as e:
         xbmc.log(
-            "NZB-DAV: Prowlarr title fallback failed: {}".format(redact_text(str(e))),
+            ("NeNeTeePee-Stream-Kodi: Prowlarr title fallback failed: {}").format(
+                redact_text(str(e))
+            ),
             xbmc.LOGERROR,
         )
         return [], _prowlarr_unavailable_error(e)
@@ -284,7 +293,8 @@ def _read_prowlarr_settings(settings_getter):
         return _get_settings(settings_getter), None
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Failed to read Prowlarr settings: {}".format(e), xbmc.LOGERROR
+            ("NeNeTeePee-Stream-Kodi: Failed to read Prowlarr settings: {}").format(e),
+            xbmc.LOGERROR,
         )
         return None, "Failed to read Prowlarr settings"
 
@@ -329,7 +339,10 @@ def search_prowlarr(
 
     if not indexer_ids:
         xbmc.log(
-            "NZB-DAV: Prowlarr: no indexer IDs configured, skipping search",
+            (
+                "NeNeTeePee-Stream-Kodi: Prowlarr: no indexer IDs "
+                "configured, skipping search"
+            ),
             xbmc.LOGINFO,
         )
         return [], None
@@ -378,7 +391,9 @@ def _apply_title_fallback(results, base_url, params, indexer_ids, search_args):
 def _log_and_return(results, title):
     """Log the result count and return ``(results, None)``."""
     xbmc.log(
-        "NZB-DAV: Prowlarr returned {} results for '{}'".format(len(results), title),
+        ("NeNeTeePee-Stream-Kodi: Prowlarr returned {} results for '{}'").format(
+            len(results), title
+        ),
         xbmc.LOGINFO,
     )
     return results, None
@@ -465,9 +480,10 @@ def _json_payload_error(data):
         raw_message = data.get("error") or data.get("message") or ""
         message = redact_text(str(raw_message)) if raw_message else ""
     xbmc.log(
-        "NZB-DAV: Unexpected Prowlarr JSON payload (not an array): {}".format(
-            message or type(data).__name__
-        ),
+        (
+            "NeNeTeePee-Stream-Kodi: Unexpected Prowlarr JSON "
+            "payload (not an array): {}"
+        ).format(message or type(data).__name__),
         xbmc.LOGERROR,
     )
     detail = ": {}".format(message) if message else ": expected a JSON array"
@@ -487,7 +503,9 @@ def _parse_json_results(text):
         data = json.loads(text)
     except (ValueError, TypeError) as e:
         xbmc.log(
-            "NZB-DAV: Failed to parse Prowlarr JSON response: {}".format(e),
+            (
+                "NeNeTeePee-Stream-Kodi: Failed to parse Prowlarr JSON response: {}"
+            ).format(e),
             xbmc.LOGERROR,
         )
         return [], "Prowlarr returned an invalid response: {}".format(e)
@@ -617,14 +635,19 @@ def _parse_xml_results(xml_text):
         root = _safe_fromstring(xml_text)
     except (_XmlParseError, _UnsafeXmlError, TypeError) as e:
         xbmc.log(
-            "NZB-DAV: Failed to parse Prowlarr XML response: {}".format(e),
+            (
+                "NeNeTeePee-Stream-Kodi: Failed to parse Prowlarr XML response: {}"
+            ).format(e),
             xbmc.LOGERROR,
         )
         return [], "Prowlarr returned an invalid response: {}".format(e)
 
     if root.tag != "rss":
         xbmc.log(
-            "NZB-DAV: Unexpected Prowlarr XML root: {}".format(root.tag), xbmc.LOGERROR
+            ("NeNeTeePee-Stream-Kodi: Unexpected Prowlarr XML root: {}").format(
+                root.tag
+            ),
+            xbmc.LOGERROR,
         )
         return [], "Prowlarr returned an invalid response: expected RSS feed"
 

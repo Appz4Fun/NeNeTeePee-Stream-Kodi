@@ -1053,7 +1053,7 @@ def test_handle_play_shows_hydra_errors_in_modal_dialog(
     _handle_play(1, {"type": "movie", "title": "The Matrix"})
 
     mock_dialog.return_value.ok.assert_called_once_with(
-        "NZB-DAV", "NZBHydra unavailable"
+        "NeNeTeePee-Stream-Kodi", "NZBHydra unavailable"
     )
     mock_resolved.assert_called_once()
 
@@ -1068,7 +1068,7 @@ def test_handle_search_shows_hydra_errors_in_modal_dialog(
     _handle_search(1, {"type": "movie", "title": "The Matrix"})
 
     mock_dialog.return_value.ok.assert_called_once_with(
-        "NZB-DAV", "NZBHydra unavailable"
+        "NeNeTeePee-Stream-Kodi", "NZBHydra unavailable"
     )
     mock_end.assert_called_once_with(1, succeeded=False)
 
@@ -3943,7 +3943,9 @@ def test_test_webdav_connection_uses_localized_notifications(
 
         router._test_webdav_connection()
 
-        mock_notify.assert_called_once_with("NZB-DAV", labels[msg_id], duration)
+        mock_notify.assert_called_once_with(
+            ("NeNeTeePee-Stream-Kodi"), labels[msg_id], duration
+        )
 
 
 @patch("resources.lib.router._test_webdav_connection", create=True)

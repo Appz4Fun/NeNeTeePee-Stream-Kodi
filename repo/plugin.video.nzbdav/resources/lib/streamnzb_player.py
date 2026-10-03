@@ -64,7 +64,7 @@ def _recover_episode_numbers(params):
     """Use the existing same-show focused-item recovery for missing numbers.
 
     Never substitute an unrelated focused show when only an id was supplied.
-    ep_* are fallback aliases, as on the existing NZB-DAV paths.
+    ep_* are fallback aliases, as on the existing NeNeTeePee-Stream-Kodi paths.
     """
     clean = {key: ("" if value == "_" else value) for key, value in params.items()}
     season = clean.get("season") or clean.get("ep_season", "")
@@ -158,11 +158,13 @@ def _finish_resume_state(key, captured, succeeded):
         else:
             resolver._preserve_resume_on_cancel(key, captured)
     except Exception:  # pylint: disable=broad-except
-        xbmc.log("NZB-DAV: StreamNZB resume cleanup failed", xbmc.LOGWARNING)
+        xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: StreamNZB resume cleanup failed"), xbmc.LOGWARNING
+        )
 
 
 def _capture_resume(params):
-    """Reuse native resume choice, without arming NZB-DAV's retry monitor."""
+    """Reuse resume choice without arming the add-on retry monitor."""
     from resources.lib import resolver
 
     kind, identity = content_identity(params)
@@ -230,6 +232,9 @@ def play_streamnzb(params, settings_getter, handle=None):
     except Exception:  # pylint: disable=broad-except
         # Kodi/urllib errors may embed a token-bearing URL: never echo them.
         notify("StreamNZB", string(30610))
-        xbmc.log("NZB-DAV: StreamNZB playback failed (details redacted)", xbmc.LOGERROR)
+        xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: StreamNZB playback failed (details redacted)"),
+            xbmc.LOGERROR,
+        )
     finally:
         _complete_playback(handle, succeeded, item, resume_key, captured)

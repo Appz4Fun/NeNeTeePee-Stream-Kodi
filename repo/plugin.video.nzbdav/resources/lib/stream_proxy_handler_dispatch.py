@@ -90,7 +90,7 @@ class _DispatchMixin:  # pylint: disable=too-few-public-methods
             if session_id is not None:
                 proxy.cleanup_session_by_id(session_id)
             _sp.xbmc.log(
-                "NZB-DAV: /prepare client disconnected before response "
+                "NeNeTeePee-Stream-Kodi: /prepare client disconnected before response "
                 "write; cleaned up session={} (reason={})".format(
                     session_id, e.__class__.__name__
                 ),
@@ -147,9 +147,10 @@ class _DispatchMixin:  # pylint: disable=too-few-public-methods
             return None
         except Exception as e:  # noqa: BLE001 — keep loopback handler alive
             _sp.xbmc.log(
-                "NZB-DAV: /prepare failed: {} (reason=prepare_exception)".format(
-                    _sp._redact_text(e)
-                ),
+                (
+                    "NeNeTeePee-Stream-Kodi: /prepare failed: {} "
+                    "(reason=prepare_exception)"
+                ).format(_sp._redact_text(e)),
                 _sp.xbmc.LOGERROR,
             )
             try:

@@ -128,7 +128,9 @@ def _get_addon_setting(addon, key, default="", runtime_default=None):
         value = addon.getSetting(key)
     except RuntimeError as exc:
         xbmc.log(
-            "NZB-DAV: setting '{}' unavailable; using default: {}".format(key, exc),
+            (
+                "NeNeTeePee-Stream-Kodi: setting '{}' unavailable; using default: {}"
+            ).format(key, exc),
             xbmc.LOGWARNING,
         )
         return default if runtime_default is None else runtime_default
@@ -142,8 +144,10 @@ def _snapshot_settings_getter(settings_getter, defaults):
             snapshot[key] = settings_getter(key, default)
         except Exception as error:  # pylint: disable=broad-exception-caught
             xbmc.log(
-                "NZB-DAV: setting '{}' unavailable during provider snapshot; "
-                "using default: {}".format(key, error),
+                (
+                    "NeNeTeePee-Stream-Kodi: setting '{}' unavailable "
+                    "during provider snapshot; using default: {}"
+                ).format(key, error),
                 xbmc.LOGWARNING,
             )
             snapshot[key] = default

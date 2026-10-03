@@ -195,7 +195,9 @@ _SCRIPT_SETTINGS_PATH = (
 
 
 def _script_play_stage(message):
-    xbmc.log("NZB-DAV: Script play stage: {}".format(message), xbmc.LOGINFO)
+    xbmc.log(
+        ("NeNeTeePee-Stream-Kodi: Script play stage: {}").format(message), xbmc.LOGINFO
+    )
     for stage_path in _script_stage_paths():
         try:
             parent = os.path.dirname(stage_path)
@@ -282,7 +284,10 @@ def route(argv):
 
     safe_params = _redact_route_params(params)
     xbmc.log(
-        "NZB-DAV: Routing path='{}' params={}".format(path, safe_params), xbmc.LOGDEBUG
+        ("NeNeTeePee-Stream-Kodi: Routing path='{}' params={}").format(
+            path, safe_params
+        ),
+        xbmc.LOGDEBUG,
     )
 
     # /play, /search, /direct_play, and the main menu call setResolvedUrl /
@@ -297,7 +302,9 @@ def route(argv):
         _dispatch_action_route(path, params)
     except Exception as e:
         xbmc.log(
-            "NZB-DAV: Unhandled error in route for path='{}': {}".format(path, e),
+            (
+                "NeNeTeePee-Stream-Kodi: Unhandled error in route for path='{}': {}"
+            ).format(path, e),
             xbmc.LOGERROR,
         )
         _safe_resolve_handle(handle)
@@ -423,7 +430,9 @@ def _script_completed_job_for_selection(selected):
         return None
     except Exception as error:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Script completed lookup failed for '{}': {}".format(title, error),
+            (
+                "NeNeTeePee-Stream-Kodi: Script completed lookup failed for '{}': {}"
+            ).format(title, error),
             xbmc.LOGDEBUG,
         )
         return None
@@ -519,7 +528,9 @@ def _collect_provider_outcomes(provider_outcomes):
         provider_results, provider_error = outcome
         if provider_error:
             xbmc.log(
-                "NZB-DAV: {} search error: {}".format(provider_label, provider_error),
+                ("NeNeTeePee-Stream-Kodi: {} search error: {}").format(
+                    provider_label, provider_error
+                ),
                 xbmc.LOGWARNING,
             )
             errors.append(provider_error)
@@ -591,7 +602,10 @@ def _handle_direct_play(handle, params):
     primary_url_raw = params.get("primary_url", "")
     fallback_urls_raw = params.get("fallback_urls", "[]")
     if not primary_url_raw:
-        xbmc.log("NZB-DAV: /direct_play missing primary_url", xbmc.LOGERROR)
+        xbmc.log(
+            ("NeNeTeePee-Stream-Kodi: /direct_play missing primary_url"),
+            xbmc.LOGERROR,
+        )
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
     primary_url, primary_auth = _direct_play_split_auth(primary_url_raw)
@@ -601,7 +615,7 @@ def _handle_direct_play(handle, params):
         _validate_url(primary_url)
     except (ValueError, TypeError):
         xbmc.log(
-            "NZB-DAV: /direct_play rejecting non-http(s) primary",
+            "NeNeTeePee-Stream-Kodi: /direct_play rejecting non-http(s) primary",
             xbmc.LOGERROR,
         )
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
@@ -610,7 +624,9 @@ def _handle_direct_play(handle, params):
     _primary_len, primary_err = _direct_play_head_length(primary_url, primary_auth)
     if primary_err:
         xbmc.log(
-            "NZB-DAV: /direct_play primary HEAD failed: {}".format(primary_err),
+            ("NeNeTeePee-Stream-Kodi: /direct_play primary HEAD failed: {}").format(
+                primary_err
+            ),
             xbmc.LOGERROR,
         )
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
@@ -666,7 +682,9 @@ def _handle_play(handle, params):
 
     if not results and pack_result is None:
         xbmc.log(
-            "NZB-DAV: Search stage: no results found for '{}'".format(title),
+            ("NeNeTeePee-Stream-Kodi: Search stage: no results found for '{}'").format(
+                title
+            ),
             xbmc.LOGINFO,
         )
         notify(_addon_name(), _fmt(30087, title), 3000)
@@ -728,7 +746,9 @@ def _handle_search(handle, params):
 
     if not results and pack_result is None:
         xbmc.log(
-            "NZB-DAV: Search stage: no results found for '{}'".format(title),
+            ("NeNeTeePee-Stream-Kodi: Search stage: no results found for '{}'").format(
+                title
+            ),
             xbmc.LOGINFO,
         )
         notify(_addon_name(), _fmt(30087, title), 3000)

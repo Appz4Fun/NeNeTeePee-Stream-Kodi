@@ -42,7 +42,7 @@ def test_http_get_sends_user_agent(mock_urlopen):
     http_get("http://example.com/api")
 
     request = mock_urlopen.call_args[0][0]
-    assert request.get_header("User-agent") == "NZB-DAV Kodi Addon"
+    assert request.get_header("User-agent") == "NeNeTeePee-Stream-Kodi Addon"
 
 
 @patch("resources.lib.http_util.urlopen")
@@ -102,7 +102,7 @@ def test_http_get_passes_extra_headers_and_reads_with_max_bytes(mock_urlopen):
     assert result == "ok"
 
     request = mock_urlopen.call_args[0][0]
-    assert request.get_header("User-agent") == "NZB-DAV Kodi Addon"
+    assert request.get_header("User-agent") == "NeNeTeePee-Stream-Kodi Addon"
     assert request.get_header("X-test") == "1"
     mock_resp.read.assert_called_once_with(3)
 

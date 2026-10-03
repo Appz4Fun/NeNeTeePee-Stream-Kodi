@@ -145,9 +145,10 @@ def _scan_subdir_worker(
             subdir = pending[index]
             next_index[0] += 1
         xbmc.log(
-            "NZB-DAV: No video at depth {}, checking subfolder: {}".format(
-                depth, subdir
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: No video at depth {}, checking "
+                "subfolder: {}"
+            ).format(depth, subdir),
             xbmc.LOGDEBUG,
         )
         try:
@@ -161,7 +162,7 @@ def _scan_subdir_worker(
             )
         except Exception as e:  # pylint: disable=broad-except
             xbmc.log(
-                "NZB-DAV: Error scanning WebDAV subfolder in parallel: "
+                "NeNeTeePee-Stream-Kodi: Error scanning WebDAV subfolder in parallel: "
                 "{} ({})".format(e, type(e).__name__),
                 xbmc.LOGWARNING,
             )
@@ -269,7 +270,7 @@ def _extract_href_path(href_text, base_host):
         if href_text.startswith("//"):
             if parsed_href_obj.netloc != base_host:
                 xbmc.log(
-                    "NZB-DAV: cross-host href '{}' — using path "
+                    "NeNeTeePee-Stream-Kodi: cross-host href '{}' — using path "
                     "portion only".format(href_text),
                     xbmc.LOGDEBUG,
                 )
@@ -277,7 +278,7 @@ def _extract_href_path(href_text, base_host):
         if parsed_href_obj.scheme:
             if parsed_href_obj.netloc != base_host:
                 xbmc.log(
-                    "NZB-DAV: cross-origin href '{}' — using path "
+                    "NeNeTeePee-Stream-Kodi: cross-origin href '{}' — using path "
                     "portion only".format(href_text),
                     xbmc.LOGDEBUG,
                 )
@@ -285,7 +286,9 @@ def _extract_href_path(href_text, base_host):
         return href_text
     except Exception as e:
         xbmc.log(
-            "NZB-DAV: Skipping malformed href '{}': {}".format(href_text, e),
+            ("NeNeTeePee-Stream-Kodi: Skipping malformed href '{}': {}").format(
+                href_text, e
+            ),
             xbmc.LOGWARNING,
         )
         return None
@@ -305,7 +308,9 @@ def _collect_subdir(href_path, request_path, subdirs):
     segment = child.rsplit("/", 1)[-1]
     if segment.startswith("."):
         xbmc.log(
-            "NZB-DAV: Skipping hidden WebDAV subfolder '{}'".format(child),
+            ("NeNeTeePee-Stream-Kodi: Skipping hidden WebDAV subfolder '{}'").format(
+                child
+            ),
             xbmc.LOGDEBUG,
         )
     else:
@@ -324,7 +329,7 @@ def _parse_content_length(response, href_path):
         # silently cause every file to be reported as size 0 (and thus never
         # selected as "largest").
         xbmc.log(
-            "NZB-DAV: Non-numeric getcontentlength '{}' for "
+            "NeNeTeePee-Stream-Kodi: Non-numeric getcontentlength '{}' for "
             "href '{}'; treating as 0".format(size_el.text[:40], href_path),
             xbmc.LOGWARNING,
         )
@@ -386,7 +391,7 @@ def _classify_propfind_response(response, base_host, request_path, subdirs):
     href_text = (href.text or "").strip()
     if not href_text:
         xbmc.log(
-            "NZB-DAV: Skipping response with empty href in PROPFIND",
+            "NeNeTeePee-Stream-Kodi: Skipping response with empty href in PROPFIND",
             xbmc.LOGWARNING,
         )
         return None
@@ -567,7 +572,9 @@ def _resolve_best_or_recurse(
         return _accept_current_level(
             best_file,
             best_size,
-            "NZB-DAV: Found video file: {} ({} bytes)".format(best_file, best_size),
+            ("NeNeTeePee-Stream-Kodi: Found video file: {} ({} bytes)").format(
+                best_file, best_size
+            ),
         )
 
     if best_file:
@@ -597,7 +604,7 @@ def _fallback_to_current_level(best_file, best_size):
     return _accept_current_level(
         best_file,
         best_size,
-        "NZB-DAV: No matching episode in sibling subfolders; falling "
+        "NeNeTeePee-Stream-Kodi: No matching episode in sibling subfolders; falling "
         "back to current-level video: {} ({} bytes)".format(best_file, best_size),
     )
 
@@ -606,7 +613,7 @@ def _log_defer_reason(best_file, best_is_stub):
     """Log why the current-level best is being deferred for a sibling scan."""
     reason = "an undersized stub" if best_is_stub else "a wrong-episode match"
     xbmc.log(
-        "NZB-DAV: Current-level video '{}' is {} for the requested "
+        "NeNeTeePee-Stream-Kodi: Current-level video '{}' is {} for the requested "
         "title; checking sibling subfolders first".format(best_file, reason),
         xbmc.LOGDEBUG,
     )
@@ -680,7 +687,9 @@ def _mark_visited(folder_path, visited):
     normalized = (folder_path or "").rstrip("/")
     if normalized in visited:
         xbmc.log(
-            "NZB-DAV: Skipping already-visited WebDAV folder '{}'".format(folder_path),
+            (
+                "NeNeTeePee-Stream-Kodi: Skipping already-visited WebDAV folder '{}'"
+            ).format(folder_path),
             xbmc.LOGDEBUG,
         )
         return None

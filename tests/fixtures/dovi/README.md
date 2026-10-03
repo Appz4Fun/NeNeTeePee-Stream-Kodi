@@ -14,7 +14,7 @@ The three binary files in this directory are vendored byte-for-byte from
 **Pinned upstream commit (last re-verified):**
 `e7bef8d979a3a975a5eb6930c25e07e554cecee9` (2026-04-23).
 
-Git-blob SHA1s match upstream exactly — verify with `git hash-object`
+Git-blob SHA1s match upstream exactly. verify with `git hash-object`
 against `gh api repos/quietvoid/dovi_tool/contents/assets/tests/<file>.bin
 --jq .sha` when refreshing. Fixtures are frozen; any content change in this
 directory means either upstream rewrote them (re-verify against the new
@@ -29,7 +29,7 @@ upstream semantics. To re-verify manually after a parser change, install
 ```bash
 brew install dovi_tool        # macOS, or `cargo install dovi_tool`
 dovi_tool info --frame 0 tests/fixtures/dovi/mel_orig.bin
-# Should report dovi_profile=7, el_type=MEL — matches our parser output.
+# Should report dovi_profile=7, el_type=MEL. matches our parser output.
 ```
 
 ## License

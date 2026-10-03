@@ -35,7 +35,7 @@ def _search_with_cache(search_type, title, cache_kwargs):
     from resources.lib.cache import get_cached, set_cached
 
     xbmc.log(
-        "NZB-DAV: Search stage: checking cache for '{}' ({})".format(
+        "NeNeTeePee-Stream-Kodi: Search stage: checking cache for '{}' ({})".format(
             title, search_type
         ),
         xbmc.LOGDEBUG,
@@ -43,9 +43,10 @@ def _search_with_cache(search_type, title, cache_kwargs):
     results = get_cached(search_type, title, **cache_kwargs)
     if results is not None:
         xbmc.log(
-            "NZB-DAV: Search stage: loaded {} results from cache for '{}'".format(
-                len(results), title
-            ),
+            (
+                "NeNeTeePee-Stream-Kodi: Search stage: loaded {} "
+                "results from cache for '{}'"
+            ).format(len(results), title),
             xbmc.LOGDEBUG,
         )
         return results, None
@@ -64,7 +65,9 @@ def _query_and_cache_providers(search_type, title, cache_kwargs, set_cached):
 
     addon = xbmcaddon.Addon("plugin.video.nzbdav")
     xbmc.log(
-        "NZB-DAV: Search stage: querying providers for '{}'".format(title),
+        ("NeNeTeePee-Stream-Kodi: Search stage: querying providers for '{}'").format(
+            title
+        ),
         xbmc.LOGDEBUG,
     )
     query = SearchQuery(search_type=search_type, title=title, **cache_kwargs)
@@ -78,13 +81,15 @@ def _query_and_cache_providers(search_type, title, cache_kwargs, set_cached):
     )
     if search_error:
         xbmc.log(
-            "NZB-DAV: Search stage: provider error — {}".format(search_error),
+            ("NeNeTeePee-Stream-Kodi: Search stage: provider error — {}").format(
+                search_error
+            ),
             xbmc.LOGWARNING,
         )
         return results, search_error
     if results:
         xbmc.log(
-            "NZB-DAV: Search stage: caching {} results for '{}'".format(
+            "NeNeTeePee-Stream-Kodi: Search stage: caching {} results for '{}'".format(
                 len(results), title
             ),
             xbmc.LOGDEBUG,
@@ -332,7 +337,7 @@ def _handle_play_filter_and_select(
     import resources.lib.router as _router
 
     xbmc.log(
-        "NZB-DAV: Search stage: filtering {} results for '{}'".format(
+        "NeNeTeePee-Stream-Kodi: Search stage: filtering {} results for '{}'".format(
             len(results), title
         ),
         xbmc.LOGDEBUG,
@@ -399,7 +404,10 @@ def _ensure_nzbget_completed_hint(selected, settings_getter=None):
         _router._tag_available_nzbget([selected], settings_getter=settings_getter)
     except Exception as error:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: NZBGet completed lookup for auto-select failed: {}".format(error),
+            (
+                "NeNeTeePee-Stream-Kodi: NZBGet completed lookup for "
+                "auto-select failed: {}"
+            ).format(error),
             xbmc.LOGDEBUG,
         )
 
@@ -780,7 +788,7 @@ def _handle_search_filter_and_select(
     import resources.lib.router as _router
 
     xbmc.log(
-        "NZB-DAV: Search stage: filtering {} results for '{}'".format(
+        "NeNeTeePee-Stream-Kodi: Search stage: filtering {} results for '{}'".format(
             len(results), title
         ),
         xbmc.LOGDEBUG,

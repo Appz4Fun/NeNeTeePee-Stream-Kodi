@@ -257,7 +257,9 @@ def _safe_dialog_update(dialog, progress, message):
             dialog.update(progress, message)
         except Exception as error:  # pylint: disable=broad-except
             _resolver.xbmc.log(
-                "NZB-DAV: progress dialog update failed: {}".format(error),
+                ("NeNeTeePee-Stream-Kodi: progress dialog update failed: {}").format(
+                    error
+                ),
                 _resolver.xbmc.LOGDEBUG,
             )
         finally:
@@ -271,7 +273,9 @@ def _safe_dialog_update(dialog, progress, message):
     except RuntimeError as error:
         _release_dialog_update_slot(key, done)
         _resolver.xbmc.log(
-            "NZB-DAV: progress dialog update thread failed: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: progress dialog update thread failed: {}").format(
+                error
+            ),
             _resolver.xbmc.LOGDEBUG,
         )
         return False
@@ -357,7 +361,7 @@ def _wait_direct_playback_prepare(
     if done:
         if not done.wait(max(0, wait_seconds)):
             _resolver.xbmc.log(
-                "NZB-DAV: Proxy prepare still running; "
+                "NeNeTeePee-Stream-Kodi: Proxy prepare still running; "
                 "waiting for local proxy handoff",
                 _resolver.xbmc.LOGWARNING,
             )

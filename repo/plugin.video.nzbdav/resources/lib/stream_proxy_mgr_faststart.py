@@ -76,7 +76,8 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
         proc = None
         try:
             _sp.xbmc.log(
-                "NZB-DAV: Temp-file faststart remux starting", _sp.xbmc.LOGINFO
+                ("NeNeTeePee-Stream-Kodi: Temp-file faststart remux starting"),
+                _sp.xbmc.LOGINFO,
             )
             proc = _sp.subprocess.Popen(  # nosec B603 — argv list, shell=False
                 cmd,
@@ -102,15 +103,18 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
             # for hours. Kill + drain the pipe before the exception
             # propagates; .communicate() on the killed proc reaps it.
             _sp.xbmc.log(
-                "NZB-DAV: Temp faststart timed out after 600s; killing ffmpeg "
-                "(reason=temp_faststart_timeout)",
+                (
+                    "NeNeTeePee-Stream-Kodi: Temp faststart timed out after "
+                    "600s; killing ffmpeg (reason=temp_faststart_timeout)"
+                ),
                 _sp.xbmc.LOGWARNING,
             )
             _sp.StreamProxy._kill_and_reap_faststart(proc)
             _ = e  # keep linters quiet; exception detail already logged
         except (OSError, _sp.subprocess.SubprocessError) as e:
             _sp.xbmc.log(
-                "NZB-DAV: Temp faststart error: {}".format(e), _sp.xbmc.LOGWARNING
+                ("NeNeTeePee-Stream-Kodi: Temp faststart error: {}").format(e),
+                _sp.xbmc.LOGWARNING,
             )
             # Non-timeout subprocess errors usually mean Popen itself
             # failed or communicate() hit a pipe error. Still try to
@@ -134,7 +138,7 @@ class _MgrFaststartMixin:  # pylint: disable=too-few-public-methods
             # apikey=... query strings. Strip those before they land in
             # kodi.log. Closes TODO.md §H.2-H2b.
             _sp.xbmc.log(
-                "NZB-DAV: Temp faststart failed: {}".format(
+                "NeNeTeePee-Stream-Kodi: Temp faststart failed: {}".format(
                     _sp._redact_text(stderr.decode(errors="replace")[:300])
                 ),
                 _sp.xbmc.LOGWARNING,

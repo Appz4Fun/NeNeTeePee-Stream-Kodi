@@ -839,7 +839,7 @@ def test_get_content_length_sends_addon_user_agent():
         sp._get_content_length("http://host/file.mp4", None)
 
     req = mocked.call_args[0][0]
-    assert _request_header(req, "User-Agent") == "NZB-DAV Kodi Addon"
+    assert _request_header(req, "User-Agent") == "NeNeTeePee-Stream-Kodi Addon"
 
 
 def test_get_content_length_returns_zero_on_failure():
@@ -11808,7 +11808,7 @@ def test_stream_upstream_range_sends_addon_user_agent():
         handler._stream_upstream_range(ctx, 0, 0)
 
     req = mocked.call_args[0][0]
-    assert _request_header(req, "User-Agent") == "NZB-DAV Kodi Addon"
+    assert _request_header(req, "User-Agent") == "NeNeTeePee-Stream-Kodi Addon"
 
 
 def test_serve_proxy_aborts_terminal_http_client_error_without_zero_fill():
@@ -11831,7 +11831,7 @@ def test_serve_proxy_aborts_terminal_http_client_error_without_zero_fill():
 
     mock_skip.assert_not_called()
     handler.wfile.write.assert_not_called()
-    assert mock_notify.call_args[0][0] == "NZB-DAV"
+    assert mock_notify.call_args[0][0] == "NeNeTeePee-Stream-Kodi"
     assert "HTTP 401" in mock_notify.call_args[0][1]
 
 
@@ -12529,7 +12529,7 @@ def test_serve_proxy_notifies_first_recovery_with_bytes_and_count():
         sys.modules["xbmcaddon"].Addon.return_value = original
 
     mock_notify.assert_called_once()
-    assert mock_notify.call_args[0][0] == "NZB-DAV"
+    assert mock_notify.call_args[0][0] == "NeNeTeePee-Stream-Kodi"
     assert "1048576" in mock_notify.call_args[0][1]
     assert "1" in mock_notify.call_args[0][1]
 

@@ -47,13 +47,15 @@ def _lookup_episode_info(imdb, tmdb_id=""):
                 title = results[0].get("l", "")
                 if title:
                     xbmc.log(
-                        "NZB-DAV: Looked up title '{}' for {}".format(title, imdb),
+                        ("NeNeTeePee-Stream-Kodi: Looked up title '{}' for {}").format(
+                            title, imdb
+                        ),
                         xbmc.LOGDEBUG,
                     )
                     return {"title": title}
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: Episode lookup failed for {}: {}".format(imdb, e),
+            "NeNeTeePee-Stream-Kodi: Episode lookup failed for {}: {}".format(imdb, e),
             xbmc.LOGDEBUG,
         )
     return None
@@ -115,13 +117,17 @@ def _fetch_imdb_suggestion_poster(imdb_id):
                 poster = results[0]["i"].get("imageUrl", "")
             if poster:
                 xbmc.log(
-                    "NZB-DAV: Got poster for {}: {}".format(imdb_id, poster[:80]),
+                    ("NeNeTeePee-Stream-Kodi: Got poster for {}: {}").format(
+                        imdb_id, poster[:80]
+                    ),
                     xbmc.LOGDEBUG,
                 )
             return poster
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: TMDB poster lookup failed for {}: {}".format(imdb_id, e),
+            ("NeNeTeePee-Stream-Kodi: TMDB poster lookup failed for {}: {}").format(
+                imdb_id, e
+            ),
             xbmc.LOGDEBUG,
         )
         return ""
@@ -137,7 +143,9 @@ def _get_tmdb_poster(imdb_id):
         return _fetch_imdb_suggestion_poster(imdb_id)
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
-            "NZB-DAV: TMDB poster lookup aborted for {}: {}".format(imdb_id, e),
+            ("NeNeTeePee-Stream-Kodi: TMDB poster lookup aborted for {}: {}").format(
+                imdb_id, e
+            ),
             xbmc.LOGDEBUG,
         )
         return ""

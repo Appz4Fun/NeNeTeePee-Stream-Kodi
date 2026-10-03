@@ -68,7 +68,7 @@ class _MgrPrepareMixin:  # pylint: disable=too-few-public-methods
 
         local_url = self._register_session(ctx)
         _sp.xbmc.log(
-            "NZB-DAV: Proxy ready (remux={}, faststart={}): {}".format(
+            "NeNeTeePee-Stream-Kodi: Proxy ready (remux={}, faststart={}): {}".format(
                 ctx.get("remux", False), ctx.get("faststart", False), local_url
             ),
             _sp.xbmc.LOGINFO,

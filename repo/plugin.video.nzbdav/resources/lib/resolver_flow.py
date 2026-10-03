@@ -48,7 +48,7 @@ def _scrub_bookmark_for_nzbget(params):
         )
     except Exception as cleanup_error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: NZBGet pre-handoff bookmark cleanup failed: "
+            "NeNeTeePee-Stream-Kodi: NZBGet pre-handoff bookmark cleanup failed: "
             "{}".format(cleanup_error),
             _resolver.xbmc.LOGWARNING,
         )
@@ -70,7 +70,10 @@ def _reject_resolve_handle(handle, notify_message=None):
             _resolver.xbmcgui.Dialog().ok(_resolver._addon_name(), notify_message)
         except (RuntimeError, OSError, TypeError) as error:
             _resolver.xbmc.log(
-                "NZB-DAV: resolve rejection notification failed: {}".format(error),
+                (
+                    "NeNeTeePee-Stream-Kodi: resolve rejection notification "
+                    "failed: {}"
+                ).format(error),
                 _resolver.xbmc.LOGWARNING,
             )
     _resolver.xbmcplugin.setResolvedUrl(handle, False, _resolver.xbmcgui.ListItem())
@@ -112,7 +115,7 @@ def _resolve_nzbget_delegate(handle, params):
         from resources.lib.http_util import redact_text
 
         _resolver.xbmc.log(
-            "NZB-DAV: NZBGet delegation failed: {}".format(
+            "NeNeTeePee-Stream-Kodi: NZBGet delegation failed: {}".format(
                 redact_text(str(nzbget_error))
             ),
             _resolver.xbmc.LOGERROR,

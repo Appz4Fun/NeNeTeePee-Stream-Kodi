@@ -73,29 +73,32 @@ class _RangeParseMixin:  # pylint: disable=too-few-public-methods
                 except (OSError, ValueError) as e:
                     body = b""
                     _sp.xbmc.log(
-                        "NZB-DAV: Probe at +{} bytes read failed ({}): {}".format(
-                            skip, type(e).__name__, e
-                        ),
+                        (
+                            "NeNeTeePee-Stream-Kodi: Probe at +{} bytes read failed "
+                            "({}): {}"
+                        ).format(skip, type(e).__name__, e),
                         _sp.xbmc.LOGDEBUG,
                     )
                 if not body:
                     _sp.xbmc.log(
-                        "NZB-DAV: Probe at +{} bytes returned status={} but "
-                        "no data; data missing there, trying the next "
-                        "skip".format(skip, status),
+                        (
+                            "NeNeTeePee-Stream-Kodi: Probe at +{} bytes returned "
+                            "status={} but no data; data missing there, trying the "
+                            "next skip"
+                        ).format(skip, status),
                         _sp.xbmc.LOGWARNING,
                     )
                     return _PROBE_MISSING
                 elapsed = _sp.time.monotonic() - start_time
                 _sp.xbmc.log(
-                    "NZB-DAV: Probe succeeded at +{} bytes after "
+                    "NeNeTeePee-Stream-Kodi: Probe succeeded at +{} bytes after "
                     "{:.1f}s".format(skip, elapsed),
                     _sp.xbmc.LOGINFO,
                 )
                 return _PROBE_OK
         except (OSError, ValueError) as e:
             _sp.xbmc.log(
-                "NZB-DAV: Probe at +{} bytes failed ({}): {}".format(
+                "NeNeTeePee-Stream-Kodi: Probe at +{} bytes failed ({}): {}".format(
                     skip, type(e).__name__, e
                 ),
                 _sp.xbmc.LOGDEBUG,

@@ -548,7 +548,9 @@ def _digest8(value):
 
 
 def _primary_job_name(selected):
-    title = "NZBDAV Functional Primary {}".format(selected.get("title", "Matrix"))
+    title = ("NeNeTeePee-Stream-Kodi Functional Primary {}").format(
+        selected.get("title", "Matrix")
+    )
     return build_fallback_job_name(title, selected.get("link", ""), 0).replace(
         "[fallback-0-", "[primary-"
     )

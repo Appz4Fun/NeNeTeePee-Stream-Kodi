@@ -48,7 +48,10 @@ def _record_download_soft(title, download_pubdate, download_size):
         _resolver.record_download(title, download_pubdate, download_size)
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: download-ledger record failed (non-fatal): {}".format(error),
+            (
+                "NeNeTeePee-Stream-Kodi: download-ledger record failed "
+                "(non-fatal): {}"
+            ).format(error),
             _resolver.xbmc.LOGDEBUG,
         )
 
@@ -89,7 +92,9 @@ def _notify_primary_submitted(on_primary_submitted, nzo_id):
         on_primary_submitted(nzo_id)
     except Exception as error:  # pylint: disable=broad-except
         _resolver.xbmc.log(
-            "NZB-DAV: Fallback submit worker start failed: {}".format(error),
+            ("NeNeTeePee-Stream-Kodi: Fallback submit worker start failed: {}").format(
+                error
+            ),
             _resolver.xbmc.LOGWARNING,
         )
 
@@ -97,7 +102,8 @@ def _notify_primary_submitted(on_primary_submitted, nzo_id):
 def _cancel_job_on_shutdown(nzo_id, settings_getter):
     """Cancel the job on Kodi shutdown, matching the settings-getter contract."""
     _resolver.xbmc.log(
-        "NZB-DAV: Kodi shutdown detected, aborting resolve", _resolver.xbmc.LOGINFO
+        ("NeNeTeePee-Stream-Kodi: Kodi shutdown detected, aborting resolve"),
+        _resolver.xbmc.LOGINFO,
     )
     if settings_getter is None:
         _resolver.cancel_job(nzo_id)
@@ -169,9 +175,10 @@ def _poll_until_ready(
         return None, None
 
     _resolver.xbmc.log(
-        "NZB-DAV: NZB submitted, nzo_id={}, polling every {}s (timeout={}s)".format(
-            nzo_id, poll_interval, download_timeout
-        ),
+        (
+            "NeNeTeePee-Stream-Kodi: NZB submitted, nzo_id={}, "
+            "polling every {}s (timeout={}s)"
+        ).format(nzo_id, poll_interval, download_timeout),
         _resolver.xbmc.LOGINFO,
     )
     # Monotonic clock for elapsed-time tracking — wall-clock NTP jumps
