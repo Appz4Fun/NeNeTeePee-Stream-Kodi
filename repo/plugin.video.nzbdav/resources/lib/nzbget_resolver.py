@@ -25,11 +25,7 @@ from resources.lib.http_util import redact_text as _redact_text
 from resources.lib.i18n import addon_name as _addon_name
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
-from resources.lib.nzbget_fleet_dedup import (  # noqa: E402,F401
-    FleetDedup,
-    posting_fingerprint,
-    prefetched_clusters,
-)
+from resources.lib.nzbget_fleet_dedup import posting_fingerprint
 from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _HEALTHCHECK_LOCK,
     _HEALTHCHECK_WARNED,

@@ -17,6 +17,11 @@ moved name is re-exported from ``nzbget_resolver``.
 import threading
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
+from resources.lib.nzbget_fleet_dedup import (
+    FleetDedup,
+    posting_fingerprint,
+    prefetched_clusters,
+)
 
 
 def _submit_dupe_backups(
@@ -89,7 +94,7 @@ def _submit_candidates(
     """
     live_limit, max_attempts = limits
     if dedup is None:
-        dedup = _core.FleetDedup()
+        dedup = FleetDedup()
     seen = set()
     usable = []
     for candidate in candidates or []:
@@ -99,14 +104,14 @@ def _submit_candidates(
             usable.append(candidate)
     live = []
     attempts = 0
-    stream = _core.prefetched_clusters(
+    stream = prefetched_clusters(
         dedup.clusters(usable), _core.nzbget_api.fetch_nzb_bytes, cancel_event
     )
     try:
         for candidate, body in stream:
             if _fill_done(live, live_limit, attempts, max_attempts, cancel_event):
                 break
-            fingerprint = _core.posting_fingerprint(body) if body else None
+            fingerprint = posting_fingerprint(body) if body else None
             if fingerprint and dedup.known_posting(fingerprint):
                 _core.xbmc.log(
                     "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
@@ -419,7 +424,7 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
     """
     backups = list(dupe.get("backups") or [])
     unlimited = _fleet_is_unlimited(dupe)
-    dedup = _core.FleetDedup(pick=dupe.get("pick"))
+    dedup = FleetDedup(pick=dupe.get("pick"))
     dedup.remember_posting(dupe.get("pick_fingerprint"))
     live = _core._submit_dupe_backups(
         backups,

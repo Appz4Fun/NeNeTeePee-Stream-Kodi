@@ -249,7 +249,6 @@ def _posting_bodies(mapping):
 
 
 def test_submit_candidates_skips_same_posting_and_appends_bodies():
-    from resources.lib.nzbget_resolver import FleetDedup as CoreDedup
     from resources.lib.nzbget_resolver import _submit_dupe_backups
 
     shared = _ids("s", 200)
@@ -264,7 +263,7 @@ def test_submit_candidates_skips_same_posting_and_appends_bodies():
         _APPEND, side_effect=[(1, None), (2, None)]
     ) as append, patch(_VETO, return_value=False) as veto:
         live = _submit_dupe_backups(
-            backups, "k", lambda *_a: "", submitted_sink=sink, dedup=CoreDedup()
+            backups, "k", lambda *_a: "", submitted_sink=sink, dedup=FleetDedup()
         )
     assert [c.args[0] for c in append.call_args_list] == ["a", "c"]
     assert append.call_args_list[0].kwargs["nzb_bytes"] == _nzb(bodies["a"])
