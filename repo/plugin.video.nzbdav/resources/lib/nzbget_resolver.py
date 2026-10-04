@@ -25,6 +25,11 @@ from resources.lib.http_util import redact_text as _redact_text
 from resources.lib.i18n import addon_name as _addon_name
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
+from resources.lib.nzbget_fleet_dedup import (  # noqa: E402,F401
+    FleetDedup,
+    posting_fingerprint,
+    prefetched_clusters,
+)
 from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _HEALTHCHECK_LOCK,
     _HEALTHCHECK_WARNED,
@@ -37,6 +42,9 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _dupe_check_disabled,
     _dupe_worker_should_skip,
     _extra_backups_from_loader,
+    _fill_done,
+    _fleet_is_unlimited,
+    _hydra_uploads_for_fleet,
     _is_copy_failure,
     _is_copy_veto_status,
     _load_extra_candidates,
@@ -50,6 +58,7 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _snapshot_conn_getter,
     _spawn_dupe_backups,
     _submit_backup_fleet,
+    _submit_candidates,
     _submit_dupe_backups,
     _submit_extras_until_filled,
     _usable_backup_link,
@@ -795,8 +804,20 @@ def _submit_pick(ctx, nzb_url, title, dupe_key):
     The pick carries the shared DupeKey at the top DupeScore so NZBGet keeps it
     the active download; without a ``dupe_key`` this is a plain single submit
     unchanged from pre-#372. Returns ``append_nzb``'s ``(nzbid, error)``.
+
+    A fleet pick is fetched here (once) so its article fingerprint can seed the
+    backup worker's same-posting dedup -- a relisting of the pick's own posting
+    must never become a backup. A failed fetch falls back to ``append_nzb``
+    fetching the URL itself, exactly as before.
     """
     dupe = ctx.dupe or {}
+    extra = {}
+    if dupe_key:
+        body = _fetch_pick_body(nzb_url)
+        if body:
+            extra["nzb_bytes"] = body
+            if isinstance(ctx.dupe, dict):
+                ctx.dupe["pick_fingerprint"] = posting_fingerprint(body)
     return nzbget_api.append_nzb(
         nzb_url,
         title,
@@ -804,7 +825,16 @@ def _submit_pick(ctx, nzb_url, title, dupe_key):
         dupe_key=dupe_key,
         dupe_score=int(dupe.get("pick_score") or 0) if dupe_key else 0,
         dupe_mode="SCORE",
+        **extra,
     )
+
+
+def _fetch_pick_body(nzb_url):
+    """The pick's NZB body, or None when the fetch fails (fail-soft)."""
+    try:
+        return nzbget_api.fetch_nzb_bytes(nzb_url)
+    except Exception:  # pylint: disable=broad-except
+        return None
 
 
 def _play_completed_download(

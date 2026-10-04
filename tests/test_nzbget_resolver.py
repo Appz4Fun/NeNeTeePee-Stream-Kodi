@@ -23,6 +23,21 @@ from resources.lib.nzbget_resolver import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_real_nzb_prefetch():
+    """Keep the fleet's NZB prefetch off the network (#372).
+
+    A failed prefetch falls back to ``append_nzb`` fetching the URL itself, so
+    tests that patch ``append_nzb`` see exactly the URL-based calls they did
+    before the prefetch existed. Tests of the prefetch patch it explicitly.
+    """
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.fetch_nzb_bytes",
+        side_effect=OSError("no network in unit tests"),
+    ):
+        yield
+
+
 class _Dialog:
     def __init__(self):
         self.canceled = False
@@ -2923,7 +2938,7 @@ def test_spawn_dupe_backups_bounds_extras_by_remaining_standby_slots():
     }
     seen = {}
 
-    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0):
+    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, leading=None):
         seen["limit"] = limit
         return []
 
@@ -2935,7 +2950,8 @@ def test_spawn_dupe_backups_bounds_extras_by_remaining_standby_slots():
         "resources.lib.nzbget_resolver._extra_backups_from_loader", side_effect=_extra
     ):
         _spawn_dupe_backups(_dupe_ctx(dupe))
-    assert seen["limit"] == 0  # 2 cap - 2 live same-name backups = 0 slots left
+    # 2 cap - 2 live backups = 0 slots left: no extras (and no Hydra lookup).
+    assert "limit" not in seen
 
 
 def test_poll_excludes_just_failed_member_from_promotion_scan():
@@ -2987,7 +3003,7 @@ def test_spawn_dupe_backups_cleans_own_submissions_on_cancel_after_submit():
     ctx.cancel_event = ev
     cleaned = []
 
-    def _submit(backups, key, getter, cancel_event=None, submitted_sink=None):
+    def _submit(backups, key, getter, cancel_event=None, submitted_sink=None, **_kw):
         ev.set()  # cancel observed only after this submit's append is already away
         if submitted_sink is not None:
             submitted_sink.append(7)  # published as the append landed
@@ -3046,7 +3062,7 @@ def test_spawn_dupe_backups_threads_score_base_into_extras():
     }
     seen = {}
 
-    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0):
+    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, leading=None):
         seen["limit"] = limit
         seen["score_base"] = score_base
         return []

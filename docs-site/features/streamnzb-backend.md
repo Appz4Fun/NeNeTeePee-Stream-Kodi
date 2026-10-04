@@ -157,7 +157,7 @@ prepares candidates and uses an NZB download per result; it is not a count of
 guaranteed fallback streams. See [the server setting source references](../backends/streamnzb.md#recovery-and-preloading).
 
 Kodi's **Maximum standby fallback streams = 5** controls nzbdav /
-InfiniDysk proxy backups and NZBGet duplicate backups, and does not control StreamNZB. Allow enough
+InfiniDysk proxy backups only, and does not control StreamNZB. Allow enough
 time for Hydra to query its indexers: the default five-second Newznab timeout
 can produce empty StreamNZB responses while Hydra is still searching. The
 OrbStack test deployment uses a 20-second Hydra indexer timeout. If container

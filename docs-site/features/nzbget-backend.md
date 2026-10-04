@@ -140,12 +140,12 @@ flowchart LR
 The NZBGet backend downloads the whole release before playback, so it can't
 switch streams live. It relies on NZBGet's own
 [Smart Duplicates](https://nzbget.com/documentation/rss/#duplicates) instead.
-When you pick a release with **Enable fallback streams** on and a positive
-**Maximum standby fallback streams** value, NeNeTeePee-Stream-Kodi also submits
-other results with the **same release name**, up to the configured backup
-count. NZBGet honors counts above five; the five-stream ceiling belongs to the
-nzbdav / InfiniDysk proxy. These are reposts or mirrors of the same release from
-other indexers. Every submission gets:
+When you pick a release with **Enable fallback streams** on and
+**Maximum duplicate backups** set to anything other than `0`,
+NeNeTeePee-Stream-Kodi also submits other NZBs of the **same release** to
+NZBGet as duplicate backups. By default (`-1`) it sends every same-release NZB it
+finds. A positive value sends at most that many. These are reposts or mirrors
+of the release from other indexers or uploaders. Every submission gets:
 
 - a shared **duplicate key** for the release: the normalized release name,
   prefixed with a content ID when one is known (for example `imdb=<id>`,
@@ -177,9 +177,48 @@ following: the pick, any promoted backup, and the parked backups. NZBGet
 doesn't keep a backup running, and another play of the same release isn't
 affected.
 
-Besides exact same-name reposts, the backup pool also includes
-same-content mirrors and NZBHydra's deferred duplicate uploads. NeNeTeePee-Stream-Kodi
-submits these as the lowest-priority backups.
+### What counts as the same release
+
+A result is a backup when either of these is true:
+
+- It has exactly the same release name as your pick.
+- It has a different name but parses to the same title, year or
+  season and episode, part, edition, PROPER or REPACK flag, release group, and
+  resolution, with no conflicting HDR, audio, or profile tags. 3D, dubbed or
+  MULTi, subbed, hardcoded-subtitle, and cut tags (Extended, Unrated,
+  Uncensored, Remastered) and the language tags must also match, so a
+  failover never plays a different language or a 3D version.
+
+NeNeTeePee-Stream-Kodi never uses file size to decide whether two results are
+the same release. The backup pool also includes the duplicate uploads of your
+picked title that NZBHydra2 hides by default. Exact-name matches rank first,
+then the other same-release results, then the NZBHydra2 duplicate uploads.
+
+### Skipping the same Usenet posting
+
+Several indexers often list one posting. Submitting it twice adds no
+protection, so before it submits anything NeNeTeePee-Stream-Kodi collapses
+listings of the same posting:
+
+- Listings with the same size that were posted within 120 seconds of each
+  other count as one posting. Only one is downloaded from the indexer, which
+  saves indexer grabs. NeNeTeePee-Stream-Kodi uses the others only if that
+  download fails.
+- NZBs that share more than 1% of their article IDs count as one posting.
+- Re-uploads of the same file with different article IDs are kept. They live
+  on different articles, so they're the best backups.
+
+### Speed and indexer limits
+
+NeNeTeePee-Stream-Kodi downloads the NZB files four at a time and sends them
+to NZBGet as fast as it can. It doesn't wait for your pick's download to
+finish first, and your pick's playback is never delayed.
+
+!!! warning "Backups use indexer grabs"
+    With unlimited backups, every backup costs one NZB download from your
+    indexer. Those downloads count against your indexer's API and grab limits.
+    If your indexer has a tight daily grab limit, set **Maximum duplicate
+    backups** to a small number, or to `0` to turn backups off.
 
 !!! note "NZBGet options that affect failover"
     For automatic failover, NZBGet's **HealthCheck** option must be `Delete`,
@@ -190,11 +229,16 @@ submits these as the lowest-priority backups.
     in parallel.
 
 The backups are best-effort. A backup that fails to submit never affects your
-pick's download or playback. Two fallback settings control them:
+pick's download or playback. Two settings control them:
 
 - **Enable fallback streams** turns the backups on or off.
-- **Maximum standby fallback streams** caps how many NeNeTeePee-Stream-Kodi submits. Unlike the
-  nzbdav path, NZBGet mode has no built-in ceiling of 5.
+- **Maximum duplicate backups** (`nzbget_max_backups`, in the NZBGet backend
+  settings) caps how many NeNeTeePee-Stream-Kodi submits. `-1`, the default,
+  sends every same-release NZB it finds. `0` sends none, so the add-on submits
+  only your pick. A positive number sends at most that many.
+
+**Maximum standby fallback streams** doesn't apply to NZBGet. It only affects
+the nzbdav / InfiniDysk backend.
 
 ## Reusing already-downloaded files
 

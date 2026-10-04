@@ -97,11 +97,11 @@ def test_migrate_legacy_once(legacy, expected):
 @pytest.mark.parametrize(
     "values,expected",
     [
-        ({"playback_backend": "1"}, 5),
-        ({"playback_backend": "1", "nzbget_enabled": "false"}, 5),
+        ({"playback_backend": "1"}, -1),
+        ({"playback_backend": "1", "nzbget_enabled": "false"}, -1),
         ({"playback_backend": "0", "nzbget_enabled": "true"}, None),
         ({"playback_backend": "2", "nzbget_enabled": "true"}, None),
-        ({"nzbget_enabled": "true"}, 5),
+        ({"nzbget_enabled": "true"}, -1),
         ({"playback_backend": "1", "fallback_streams_enabled": "false"}, None),
     ],
 )

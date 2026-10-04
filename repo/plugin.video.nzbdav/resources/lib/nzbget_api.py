@@ -97,6 +97,14 @@ def _fetch_nzb_bytes(nzb_url):
     return body
 
 
+def fetch_nzb_bytes(nzb_url):
+    """Public NZB fetch for callers that inspect the body before ``append_nzb``.
+
+    Raises on failure, like ``_fetch_nzb_bytes``.
+    """
+    return _fetch_nzb_bytes(nzb_url)
+
+
 def _append_params(
     nzb_name, nzb_bytes, category, dupe_key="", dupe_score=0, dupe_mode="SCORE"
 ):
@@ -145,16 +153,19 @@ def append_nzb(
     dupe_key="",
     dupe_score=0,
     dupe_mode="SCORE",
+    nzb_bytes=None,
 ):
     """Fetch the NZB and submit it to NZBGet via append.
 
     Returns (nzbid, error). On success (int > 0, None); on failure
     (None, message). ``dupe_key``/``dupe_score``/``dupe_mode`` drive NZBGet
     Smart Duplicates (#372); their defaults reproduce the pre-#372 single submit.
+    ``nzb_bytes`` skips the fetch when the caller already holds the body.
     """
     _base_url, _user, _password, category = _get_settings(settings_getter)
     try:
-        nzb_bytes = _fetch_nzb_bytes(nzb_url)
+        if nzb_bytes is None:
+            nzb_bytes = _fetch_nzb_bytes(nzb_url)
     except Exception as exc:  # pylint: disable=broad-except
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: NZBGet NZB fetch failed: {}").format(

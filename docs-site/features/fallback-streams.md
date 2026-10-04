@@ -9,8 +9,9 @@ Playback then continues from the same byte position, without stopping or
 rewinding.
 
 Fallback streams are on by default. They apply to the nzbdav backend. The
-[NZBGet backend](nzbget-backend.md) uses the same settings to drive NZBGet's
-Smart Duplicates failover instead.
+[NZBGet backend](nzbget-backend.md) uses the **Enable fallback streams** toggle
+to drive NZBGet's Smart Duplicates failover instead. It has its own
+**Maximum duplicate backups** setting.
 
 ## How it behaves
 
