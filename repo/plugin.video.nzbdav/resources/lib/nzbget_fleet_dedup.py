@@ -24,7 +24,9 @@ import collections
 import zlib
 from concurrent.futures import ThreadPoolExecutor
 
-from resources.lib.http_util import pubdate_to_epoch
+import xbmc
+
+from resources.lib.http_util import pubdate_to_epoch, redact_text
 
 SAME_LISTING_WINDOW_SECONDS = 120
 PREFETCH_WINDOW = 4
@@ -214,13 +216,23 @@ def _fetch_cluster(cluster, fetch, cancel_event):
     for member in cluster:
         if cancel_event is not None and cancel_event.is_set():
             break
-        try:
-            body = fetch(member["link"])
-        except Exception:  # pylint: disable=broad-except
-            continue
+        body = _try_fetch(fetch, member["link"])
         if body:
             return member, body
     return cluster[0], None
+
+
+def _try_fetch(fetch, url):
+    """One listing's NZB body, or None (logged) when the indexer fetch fails."""
+    try:
+        return fetch(url)
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup NZB fetch failed, "
+            "trying the next listing: {}".format(redact_text(str(exc))),
+            xbmc.LOGDEBUG,
+        )
+        return None
 
 
 class _Done:  # pylint: disable=too-few-public-methods
