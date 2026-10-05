@@ -64,7 +64,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     if progress.canceled():
         ctx.fleet_aborted = progress.aborted
         return None, None
-    _lift_scores(dupe, max_score)
+    force_pick = not _lift_scores(dupe, max_score)
     held = nzbget_submit_ledger.held(dupe_key, members)
     pick = dict(
         dupe.get("pick") or {},
@@ -75,8 +75,10 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     )
     if ctx.preexisting_successes is None:
         # NZBGet's history couldn't be read: no backups, and the pick's score
-        # can't be lifted above an older same-key item.
+        # can't be lifted above an older same-key item. Same-key jobs seen in
+        # the queue are live (a success they reach later is not stale).
         dupe_check_off = True
+        ctx.queue_era_nzbids = list(members or {})
         if members is not None and not members:
             # The queue WAS read and holds nothing under this key: FORCE (no
             # duplicate checks) can't start a parallel download, and it keeps
@@ -89,6 +91,11 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
             ),
             _core.xbmc.LOGINFO,
         )
+    if force_pick and not dupe_check_off:
+        # The scores can't be lifted above NZBGet's highest same-key score
+        # without leaving its 32-bit range: send the pick alone with FORCE.
+        dupe_check_off = True
+        pick["_dupe_mode"] = "FORCE"
     candidates = [pick]
     if dupe_check_off:
         # Same-key items would download in parallel instead of parking as
@@ -166,6 +173,25 @@ def _park_pick_body(body):
     return None
 
 
+def _park_pick_file(spool_path):
+    """Move the pick's spool file out of the spool folder; its new path or None.
+
+    Same filesystem (the spool folder lives under Kodi's temp folder), so the
+    move is a rename: no second copy. The spool's later ``release`` of the old
+    path is then a harmless no-op.
+    """
+    parent = os.path.dirname(os.path.dirname(spool_path)) or None
+    try:
+        handle, path = tempfile.mkstemp(
+            prefix="nzbdav-pick-", suffix=".nzb", dir=parent
+        )
+        os.close(handle)
+        os.replace(spool_path, path)
+    except (OSError, TypeError, ValueError):
+        return None
+    return path
+
+
 def _write_parked(body, parent):
     """One create-and-write attempt in ``parent`` (None = system temp)."""
     try:
@@ -190,17 +216,26 @@ def _lift_scores(dupe, max_score):
     The picker's scores ride a wall-clock base; after a clock rollback that
     base can fall below an earlier same-key item, and NZBGet would then
     dupe-delete the fresh pick. Shifting the pick, the base, and every backup
-    by the same amount keeps their relative order.
+    by the same amount keeps their relative order. Returns False (scores left
+    as they are) when the lift would push the pick past NZBGet's 32-bit
+    ``DupeScore`` range; True otherwise.
     """
     pick_score = int(dupe.get("pick_score") or 0)
     if max_score is None or max_score < pick_score:
-        return
+        return True
+    if max_score + 1 > _MAX_DUPE_SCORE:
+        return False
     bump = max_score + 1 - pick_score
     dupe["pick_score"] = pick_score + bump
     dupe["score_base"] = int(dupe.get("score_base") or 0) + bump
     for backup in dupe.get("backups") or []:
         if isinstance(backup, dict):
             backup["score"] = int(backup.get("score") or 0) + bump
+    return True
+
+
+# NZBGet's DupeScore is a signed 32-bit int.
+_MAX_DUPE_SCORE = 2**31 - 1
 
 
 def _snapshot_getter(getter):

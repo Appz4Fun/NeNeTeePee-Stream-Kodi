@@ -143,6 +143,9 @@ def _submit_candidates(
             # capped fleet's replacement rounds have room.
             for _candidate, handle, _token in kept:
                 spool.release(handle)
+            # Drop the round's handles NOW: in-memory bodies must not stay
+            # alive while the next round collects its replacements.
+            del kept[:]
             dedup.end_round()
             if need is None or tally.get("pick_failed"):
                 break  # unlimited: everything was collected and sent
@@ -401,8 +404,15 @@ def _park_pick(candidate, handle):
     Only when no temp folder takes it does it stay in memory (``_body``), the
     only good copy.
     """
-    from resources.lib.nzbget_fleet_run import _park_pick_body
+    from resources.lib.nzbget_fleet_run import _park_pick_body, _park_pick_file
 
+    if isinstance(handle, str):
+        # Already on disk: move the spool file instead of writing a second copy
+        # (a nearly full temp disk could hold one but not two).
+        path = _park_pick_file(handle)
+        if path is not None:
+            candidate["_body_path"] = path
+            return
     body = NzbSpool.load(handle)
     path = _park_pick_body(body)
     if path is None:

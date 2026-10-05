@@ -192,8 +192,14 @@ def _stale_successes(dupe_key, settings_getter, fleet):
     if preexisting is None:
         preexisting = _preexisting_success_ids(dupe_key, settings_getter)
     # str/int tolerant: some NZBGet builds serialize history NZBIDs as strings.
+    # Same-key jobs that were still QUEUED when the fleet ran (known only when
+    # its history read failed) finished during this resolve: not stale.
+    live = list(fleet.get("queue_era_nzbids") or [])
     return tuple(
-        nzbid for nzbid in preexisting if not nzbget_api._nzbid_in(nzbid, owned)
+        nzbid
+        for nzbid in preexisting
+        if not nzbget_api._nzbid_in(nzbid, owned)
+        and not nzbget_api._nzbid_in(nzbid, live)
     )
 
 
@@ -393,7 +399,8 @@ def _owned_nzbid(nzbid, fleet):
     owned = (fleet or {}).get("owned_nzbids")
     if owned is None:
         return True
-    return nzbid in tuple(owned())
+    # str/int tolerant: listgroups can serialize a promoted NZBID as a string.
+    return nzbget_api._nzbid_in(nzbid, tuple(owned()))
 
 
 def _promotion_still_pending(promoted, fleet, foreign_active=False):
@@ -849,6 +856,7 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         fleet={
             "owned_nzbids": _owned_fleet_nzbids,
             "preexisting_successes": getattr(ctx, "preexisting_successes", None),
+            "queue_era_nzbids": getattr(ctx, "queue_era_nzbids", None),
             # #372 r6: a confirmed COPY veto (pick died DELETED/COPY, group
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
             # the pick. Built on both the fleet and plain paths (the dict is

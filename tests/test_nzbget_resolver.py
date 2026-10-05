@@ -3618,3 +3618,24 @@ def test_manifest_dupe_key_survives_a_rotated_apikey():
         )
 
     assert _dupe("OLD")["key"] == _dupe("NEW")["key"]
+
+
+def test_owned_promotion_matches_a_string_nzbid():
+    # Codex r35 (P2): listgroups may send the promoted NZBID as a string.
+    from resources.lib.nzbget_resolver import _owned_nzbid
+
+    assert _owned_nzbid("43", {"owned_nzbids": lambda: [42, 43]})
+    assert not _owned_nzbid("44", {"owned_nzbids": lambda: [42, 43]})
+
+
+def test_queue_era_successes_are_never_stale():
+    # Codex r35 (P2): with the preflight history unknown, a same-key job that
+    # was queued during the fleet and finished later stays playable.
+    from resources.lib.nzbget_resolver import _stale_successes
+
+    fleet = {
+        "owned_nzbids": lambda: [42],
+        "preexisting_successes": [7, "9"],
+        "queue_era_nzbids": [9],
+    }
+    assert _stale_successes("k", _settings({}), fleet) == (7,)

@@ -2025,7 +2025,13 @@ def test_pick_body_stays_in_memory_when_no_temp_folder_takes_it(_fleet_env):
     ctx = _fleet_ctx(_fleet_dupe([]))
     with patch(
         "resources.lib.nzbget_fleet_run._park_pick_body", return_value=None
-    ), patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
+    ), patch(
+        "resources.lib.nzbget_fleet_run._park_pick_file", return_value=None
+    ), patch(
+        _FETCH, side_effect=_valid
+    ), patch(
+        _APPEND, return_value=(1, None)
+    ):
         submit_fleet(ctx, "pick", "T", "k")
     assert ctx.pick_nzb_path is None
     assert ctx.pick_nzb_bytes == _valid("pick")
@@ -2189,7 +2195,7 @@ def test_pick_is_parked_before_any_backup_is_sent(_fleet_env):
         events.append("append " + url)
         return len(events), None
 
-    park = patch("resources.lib.nzbget_fleet_run._park_pick_body", side_effect=_park)
+    park = patch("resources.lib.nzbget_fleet_run._park_pick_file", side_effect=_park)
     with park, patch(_FETCH, side_effect=_valid), patch(_APPEND, side_effect=_append):
         submit_fleet(ctx, "pick", "T", "k")
     assert events == ["append pick", "park", "append b0", "append b1"]
@@ -2369,3 +2375,36 @@ def test_a_cached_pick_is_resent_without_an_indexer_grab(_fleet_env, tmp_path):
         assert submit_fleet(ctx, "pick", "T", "k") == (1, None)
     assert [c.args[0] for c in fetch.call_args_list] == ["b0"]
     assert append.call_args_list[0].kwargs["nzb_bytes"] == _valid("pick")
+
+
+def test_a_spooled_pick_is_parked_by_moving_its_file(tmp_path):
+    # Codex r35 (P2): no second copy -- a nearly full disk fits the move.
+    from resources.lib.nzbget_fleet_run import _park_pick_file
+
+    spool = tmp_path / "nzbdav-fleet-x"
+    spool.mkdir()
+    source = spool / "00001.nzb"
+    source.write_bytes(b"<nzb/>")
+    parked = _park_pick_file(str(source))
+    assert parked and not source.exists()
+    assert pathlib.Path(parked).parent == tmp_path
+    assert pathlib.Path(parked).read_bytes() == b"<nzb/>"
+
+
+def test_a_lift_past_the_32_bit_score_range_sends_the_pick_alone_with_force(
+    _fleet_env,
+):
+    # Codex r35 (P2): never emit an out-of-range DupeScore.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.max_dupe_score_by_dupekey",
+        return_value=2**31 - 1,
+    ), patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, return_value=(1, None)
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+    assert append.call_args.kwargs["dupe_mode"] == "FORCE"
+    assert append.call_args.kwargs["dupe_score"] <= 2**31 - 1
