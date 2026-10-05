@@ -17,13 +17,13 @@ moved name is re-exported from ``nzbget_resolver``.
 import threading
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
-from resources.lib.http_util import HttpResponseTooLarge
 from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     PREFETCH_WINDOW,
     FleetDedup,
     NzbSpool,
     call_abortable,
     fetch_cluster_abortable,
+    posting_fingerprint_file,
     prefetched_clusters,
     same_variant,
 )
@@ -96,9 +96,10 @@ def _submit_candidates(
         "pick_pending": bool(usable and usable[0].get("_is_pick")),
     }
     spool = NzbSpool(dedup.spool_base)
+    fetch = _fleet_fetcher(clusters, spool)
     stream = prefetched_clusters(
         clusters,
-        _fleet_fetcher(clusters),
+        fetch,
         cancel_event,
         window=PREFETCH_WINDOW,
         # Never fetch past what the current round can still use.
@@ -113,7 +114,9 @@ def _submit_candidates(
                 tally["live"], live_limit, tally["attempts"], max_attempts, cancel_event
             ):
                 break
-            kept = _collect_unique(stream, (dedup, spool, tally), cancel_event, need)
+            kept = _collect_unique(
+                stream, (dedup, spool, tally, fetch), cancel_event, need
+            )
             if not kept or (cancel_event is not None and cancel_event.is_set()):
                 break
             _send_kept(
@@ -142,35 +145,41 @@ def _submit_candidates(
     return tally["live"]
 
 
-# Per-response ceiling for BACKUP NZBs fetched in parallel: PREFETCH_WINDOW
-# of them can be in flight before any reaches the spool, so this bounds that
-# memory on a CoreELEC box. Real NZBs sit far below it (a 100 GB release is
-# ~25 MB of XML); a larger one is re-fetched at the full nzbget_api ceiling,
-# ONE AT A TIME, so it is never dropped and memory stays bounded (window-1
-# small bodies plus one large one).
+# Per-response ceiling for NZBs fetched in parallel INTO MEMORY -- only when
+# the spool has no writable folder (the normal path streams each NZB straight
+# to disk, so no body is ever held whole). Bounds that degraded path's memory
+# on a CoreELEC box; the pick keeps the full nzbget_api ceiling.
 _FLEET_NZB_MAX_BYTES = 32 * 1024 * 1024
 
 
-def _fleet_fetcher(clusters):
-    """The fleet's NZB fetch: the pick's listings at the full ceiling; the
-    backups' at ``_FLEET_NZB_MAX_BYTES``, retrying an oversized one at the full
-    ceiling behind a lock so only one large body is ever in flight."""
+def _fleet_fetcher(clusters, spool):
+    """The fleet's NZB fetch.
+
+    Normally each NZB streams straight into a spool file and is fingerprinted
+    from disk (``posting_fingerprint_file``): one GET, no body in memory, the
+    full ``nzbget_api`` size ceiling. Returns ``(path, fingerprint)``, or None
+    for a response that isn't an NZB (its file is removed). Without a spool
+    folder it falls back to in-memory bytes, capped for backups.
+    """
     pick_links = {
         row.get("link")
         for cluster in clusters[:1]
         if cluster and cluster[0].get("_is_pick")
         for row in cluster
     }
-    oversized = threading.Lock()
 
     def _fetch(url):
-        if url in pick_links:
-            return _core.nzbget_api.fetch_nzb_bytes(url)
-        try:
-            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
-        except HttpResponseTooLarge:
-            with oversized:
+        path = spool.reserve()
+        if path is None:
+            if url in pick_links:
                 return _core.nzbget_api.fetch_nzb_bytes(url)
+            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+        _core.nzbget_api.download_nzb(url, path)
+        fingerprint = posting_fingerprint_file(path)
+        if not fingerprint:
+            spool.release(path)
+            return None
+        return path, fingerprint
 
     return _fetch
 
@@ -189,38 +198,41 @@ def _open_slots(tally, limits):
 def _collect_unique(stream, state, cancel_event, need):
     """Phase 1: pull from ``stream`` until ``need`` unique NZBs are spooled.
 
-    ``state`` is ``(dedup, spool, tally)``; ``tally["wanted"]`` tells the
+    ``state`` is ``(dedup, spool, tally, fetch)``; ``tally["wanted"]`` tells the
     stream how many more items this round can use. Returns
     ``(candidate, handle)`` entries with an ``NzbSpool`` handle; a backup
     without a stored NZB is dropped, and a pick without one is kept with a
     None handle so the send phase reports its failure. ``need`` None collects
     everything the stream has.
     """
-    dedup, spool, tally = state
+    dedup, spool, tally, fetch = state
     kept = []
     tally["wanted"] = need
-    for candidate, body, fingerprint in stream:
+    for candidate, payload, fingerprint in stream:
         tally["seen"] += 1
         _report(dedup, "download", tally["seen"], tally["total"])
         if cancel_event is not None and cancel_event.is_set():
+            _discard(spool, payload)
             break
-        if body is None and candidate.get("_is_pick"):
+        is_pick = bool(candidate.get("_is_pick"))
+        if payload is None and is_pick:
             # The pick seeds every later dedup decision: one more (abortable)
-            # try at its own URL before falling back to NZBGet fetching it blind.
-            _head, body, fingerprint = fetch_cluster_abortable(
+            # try at its own URL before giving up.
+            _head, payload, fingerprint = fetch_cluster_abortable(
                 [candidate],
-                _core.nzbget_api.fetch_nzb_bytes,
+                fetch,
                 (cancel_event,),
                 lambda: _report(dedup, "wait", None, None),
             )
-        if candidate.get("_is_pick"):
+        if is_pick:
             tally["pick_pending"] = False
-            if not body:
+            if not payload:
                 # No pick, no fleet: stop downloading backups that could
                 # never be sent (each would cost an indexer grab).
                 kept.append((candidate, None, None))
                 break
         if fingerprint and dedup.known_posting(fingerprint):
+            _discard(spool, payload)
             _core.xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
                 "(same Usenet posting as one already kept)".format(
@@ -229,13 +241,8 @@ def _collect_unique(stream, state, cancel_event, need):
                 _core.xbmc.LOGINFO,
             )
             continue
-        # Unique: remember it now so later downloads compare against it, and
-        # move the body to disk so memory holds only the fingerprints.
-        dedup.remember_posting(fingerprint)
-        handle = (
-            spool.save(body, required=bool(candidate.get("_is_pick"))) if body else None
-        )
-        if handle is None and not candidate.get("_is_pick"):
+        handle = _keep_handle(spool, payload, is_pick)
+        if handle is None and not is_pick:
             # No NZB in hand: sending it would make append_nzb fetch it on the
             # resolve thread (uncancelable, a second grab). Drop this backup.
             _core.xbmc.log(
@@ -246,12 +253,28 @@ def _collect_unique(stream, state, cancel_event, need):
                 _core.xbmc.LOGINFO,
             )
             continue
+        # Unique: held for this round so later downloads compare against it;
+        # committed once its append reaches NZBGet.
+        dedup.remember_posting(fingerprint)
         kept.append((candidate, handle, fingerprint))
         if need is not None:
             tally["wanted"] = need - len(kept)
             if len(kept) >= need:
                 break
     return kept
+
+
+def _discard(spool, payload):
+    """Delete a fetched-but-unwanted spool file (bytes need no cleanup)."""
+    if isinstance(payload, str):
+        spool.release(payload)
+
+
+def _keep_handle(spool, payload, is_pick):
+    """The kept handle: a spooled path as-is, or bytes stored via the spool."""
+    if isinstance(payload, str) or not payload:
+        return payload or None
+    return spool.save(payload, required=is_pick)
 
 
 def _report(dedup, phase, done, total):

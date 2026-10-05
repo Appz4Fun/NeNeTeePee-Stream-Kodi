@@ -21,6 +21,27 @@ from resources.lib.nzbget_resolver import (
 
 
 @pytest.fixture(autouse=True)
+def _download_through_fetch_stub():
+    """Route the fleet's streaming ``download_nzb`` through ``fetch_nzb_bytes``.
+
+    Tests stub ``nzbget_api.fetch_nzb_bytes`` (url -> bytes); the fleet now
+    streams each NZB to a spool file via ``download_nzb``. This writes whatever
+    the (patched) fetch returns to the requested path, so every fetch stub keeps
+    working. Resolved at call time, so per-test patches are honored.
+    """
+    from resources.lib import nzbget_api
+
+    def _download(url, dest_path, max_bytes=None):
+        body = nzbget_api.fetch_nzb_bytes(url)
+        with open(dest_path, "wb") as out:
+            out.write(body)
+        return len(body)
+
+    with patch.object(nzbget_api, "download_nzb", side_effect=_download):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def _no_real_nzb_prefetch():
     """Keep the fleet's NZB downloads off the network (#372).
 

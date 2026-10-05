@@ -177,6 +177,34 @@ def posting_fingerprint(nzb_bytes):
     return array("I", sorted(hashes))
 
 
+def posting_fingerprint_file(path):
+    """``posting_fingerprint`` for an NZB on disk, parsed as a stream.
+
+    Each ``<segment>`` is hashed and cleared as soon as it ends, so memory is
+    the fingerprint (4 bytes per article), never the document. None for
+    unparseable or unsafe XML or an NZB without segment Message-IDs.
+    """
+    from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
+
+    hashes = set()
+    try:
+        for _event, elem in safe_iterparse(path):
+            if _local_name(elem.tag) == "segment":
+                msgid = (elem.text or "").strip().strip("<>").lower()
+                if msgid:
+                    hashes.add(zlib.crc32(msgid.encode("utf-8")))
+                elem.clear()
+            elif _local_name(elem.tag) == "file":
+                elem.clear()
+    except (OSError, ParseError, UnsafeXmlError, ValueError):
+        return None
+    return array("I", sorted(hashes)) if hashes else None
+
+
+def _local_name(tag):
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
 def _shares_posting(probe, probe_len, other):
     """Whether set ``probe`` shares more than 1% of the smaller article set."""
     smaller = min(probe_len, len(other))
@@ -295,6 +323,8 @@ class NzbSpool:
         self._dir = None
         self._count = 0
         self._in_memory = 0
+        # reserve() runs on the parallel fetch threads.
+        self._lock = threading.Lock()
         for parent in (base_dir, None):
             try:
                 self._dir = tempfile.mkdtemp(prefix="nzbdav-fleet-", dir=parent)
@@ -310,9 +340,8 @@ class NzbSpool:
         another indexer grab on the resolve thread). ``required`` (the pick)
         is always kept, in memory if need be.
         """
-        if self._dir is not None:
-            self._count += 1
-            path = os.path.join(self._dir, "{:05d}.nzb".format(self._count))
+        path = self.reserve()
+        if path is not None:
             try:
                 with open(path, "wb") as handle:
                     handle.write(body)
@@ -324,6 +353,15 @@ class NzbSpool:
             return None
         self._in_memory += len(body)
         return body
+
+    def reserve(self):
+        """A fresh file path in the spool folder (thread-safe), or None."""
+        if self._dir is None:
+            return None
+        with self._lock:
+            self._count += 1
+            count = self._count
+        return os.path.join(self._dir, "{:05d}.nzb".format(count))
 
     def release(self, handle):
         """Free a handle once its whole send round is done.
@@ -372,23 +410,37 @@ def _stopped(events):
 def _fetch_cluster(cluster, fetch, stop_events):
     """Fetch the first listing of ``cluster`` that returns a valid NZB.
 
-    Returns ``(head, body, fingerprint)``: always the cluster's HEAD (its
+    Returns ``(head, payload, fingerprint)``: always the cluster's HEAD (its
     best-ranked listing), so a mirror that supplies the bytes never changes the
     slot's title or DupeScore -- every listing in a cluster is the same
     posting, only the head's download URL failed. A body counts only when it
     parses as an NZB with article Message-IDs, so an HTTP-200 login or
-    rate-limit page falls through to the next listing. ``body`` and
-    ``fingerprint`` are None when every listing failed. Stops between listings
-    once any of ``stop_events`` fires.
+    rate-limit page falls through to the next listing. ``payload`` is a spool
+    path or NZB bytes; it and ``fingerprint`` are None when every listing
+    failed. Stops between listings once any of ``stop_events`` fires.
     """
     for member in cluster:
         if _stopped(stop_events):
             break
-        body = _try_fetch(fetch, member["link"])
-        fingerprint = posting_fingerprint(body) if body else None
+        payload, fingerprint = _as_payload(_try_fetch(fetch, member["link"]))
         if fingerprint:
-            return cluster[0], body, fingerprint
+            return cluster[0], payload, fingerprint
     return cluster[0], None, None
+
+
+def _as_payload(result):
+    """Normalize a fetch result to ``(payload, fingerprint)``.
+
+    A fetch returns either NZB bytes (fingerprinted here) or an already
+    spooled ``(path, fingerprint)`` pair (streamed to disk and fingerprinted
+    by the fetch itself).
+    """
+    if isinstance(result, tuple):
+        return result
+    if not result:
+        return None, None
+    fingerprint = posting_fingerprint(result)
+    return (result, fingerprint) if fingerprint else (None, None)
 
 
 def _try_fetch(fetch, url):

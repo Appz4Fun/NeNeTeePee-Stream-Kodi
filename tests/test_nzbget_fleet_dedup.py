@@ -14,6 +14,28 @@ from resources.lib.nzbget_fleet_dedup import (
     same_release,
 )
 
+
+@pytest.fixture(autouse=True)
+def _download_through_fetch_stub():
+    """Route the fleet's streaming ``download_nzb`` through ``fetch_nzb_bytes``.
+
+    Tests stub ``nzbget_api.fetch_nzb_bytes`` (url -> bytes); the fleet now
+    streams each NZB to a spool file via ``download_nzb``. This writes whatever
+    the (patched) fetch returns to the requested path, so every fetch stub keeps
+    working. Resolved at call time, so per-test patches are honored.
+    """
+    from resources.lib import nzbget_api
+
+    def _download(url, dest_path, max_bytes=None):
+        body = nzbget_api.fetch_nzb_bytes(url)
+        with open(dest_path, "wb") as out:
+            out.write(body)
+        return len(body)
+
+    with patch.object(nzbget_api, "download_nzb", side_effect=_download):
+        yield
+
+
 _APPEND = "resources.lib.nzbget_resolver.nzbget_api.append_nzb"
 _FETCH = "resources.lib.nzbget_resolver.nzbget_api.fetch_nzb_bytes"
 _VETO = "resources.lib.nzbget_resolver._copy_vetoed_after_append"
@@ -525,9 +547,12 @@ def test_unstorable_backup_is_dropped_not_refetched():
     from resources.lib.nzbget_resolver import _submit_candidates
 
     rows = [{"link": "u0", "title": "t", "score": 1}]
+    # No spool folder (in-memory path) and the memory budget is exhausted.
     with patch(_FETCH, side_effect=_valid) as fetch, patch.object(
-        NzbSpool, "save", return_value=None
-    ), patch(_APPEND, return_value=(1, None)) as append:
+        NzbSpool, "reserve", return_value=None
+    ), patch.object(NzbSpool, "save", return_value=None), patch(
+        _APPEND, return_value=(1, None)
+    ) as append:
         assert not _submit_candidates(rows, "k", lambda *_a: "")
     append.assert_not_called()
     assert fetch.call_count == 1
@@ -1368,9 +1393,9 @@ def test_hung_append_is_abandoned_on_cancel_and_deleted_when_it_lands():
     assert deleted == [55]
 
 
-def test_backup_fetches_are_size_capped_tighter_than_the_pick(_fleet_env):
-    # Codex r15 (P1): four parallel backup fetches must not each buffer the
-    # full 100 MiB ceiling; the pick keeps it.
+def test_in_memory_fallback_caps_backup_fetches_not_the_pick(_fleet_env):
+    # Without a spool folder, parallel backup bodies are held in memory, so
+    # they keep the tighter cap; the pick keeps the full ceiling.
     from resources.lib.nzbget_fleet_run import submit_fleet
     from resources.lib.nzbget_resolver_dupes import _FLEET_NZB_MAX_BYTES
 
@@ -1381,35 +1406,37 @@ def test_backup_fetches_are_size_capped_tighter_than_the_pick(_fleet_env):
         return _valid(url)
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
-    with patch(_FETCH, side_effect=_fetch), patch(
-        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
-    ):
+    with patch.object(NzbSpool, "reserve", return_value=None), patch(
+        _FETCH, side_effect=_fetch
+    ), patch(_APPEND, side_effect=[(1, None), (2, None), (3, None)]):
         submit_fleet(ctx, "pick", "T", "k")
-    assert caps["pick"] is None  # the nzbget_api default ceiling
+    assert caps["pick"] is None
     assert caps["b0"] == caps["b1"] == _FLEET_NZB_MAX_BYTES
 
 
-def test_oversized_backup_is_refetched_serially_not_dropped(_fleet_env):
-    # Codex r16 (P1): a valid backup over the parallel cap is retried at the
-    # full ceiling (one at a time), never dropped.
-    from resources.lib.http_util import HttpResponseTooLarge
+def test_each_nzb_streams_to_disk_in_one_download(_fleet_env, tmp_path):
+    # Codex r17: every NZB is streamed straight to a spool file at the full
+    # ceiling -- one GET each, never held whole in memory, never re-fetched.
+    from resources.lib import nzbget_api
     from resources.lib.nzbget_fleet_run import submit_fleet
 
-    calls = []
+    downloads = []
 
-    def _fetch(url, max_bytes=None):
-        calls.append((url, max_bytes))
-        if url == "big" and max_bytes is not None:
-            raise HttpResponseTooLarge("over the parallel cap")
-        return _valid(url)
+    def _download(url, dest_path, max_bytes=None):
+        downloads.append((url, max_bytes))
+        with open(dest_path, "wb") as out:
+            out.write(_valid(url))
 
-    ctx = _fleet_ctx(_fleet_dupe([{"link": "big"}]))
-    with patch(_FETCH, side_effect=_fetch), patch(
-        _APPEND, side_effect=[(1, None), (2, None)]
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "big"}, {"link": "b1"}]))
+    with patch(
+        "resources.lib.nzbget_resolver._fleet_spool_base", return_value=str(tmp_path)
+    ), patch.object(nzbget_api, "download_nzb", side_effect=_download), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
     ) as append:
         submit_fleet(ctx, "pick", "T", "k")
-    assert [c.args[0] for c in append.call_args_list] == ["pick", "big"]
-    assert ("big", None) in calls
+    assert sorted(downloads) == [("b1", None), ("big", None), ("pick", None)]
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "big", "b1"]
+    assert not list(tmp_path.rglob("*.nzb"))
 
 
 def test_loader_batches_share_the_fleet_replacement_budget(_fleet_env):
@@ -1447,3 +1474,66 @@ def test_dialog_teardown_never_hides_a_kodi_shutdown():
         progress = _FleetProgress(_Broken(), cancel)
         assert progress.canceled() is True
     assert progress.aborted and cancel.is_set()
+
+
+def test_file_fingerprint_matches_the_in_memory_one(tmp_path):
+    from resources.lib.nzbget_fleet_dedup import posting_fingerprint_file
+
+    body = _nzb(_ids("a", 700))
+    path = tmp_path / "x.nzb"
+    path.write_bytes(body)
+    assert posting_fingerprint_file(str(path)) == posting_fingerprint(body)
+    (tmp_path / "bad.nzb").write_bytes(b"<html>rate limited")
+    assert posting_fingerprint_file(str(tmp_path / "bad.nzb")) is None
+
+
+def test_file_fingerprint_refuses_entity_declarations(tmp_path):
+    from resources.lib.nzbget_fleet_dedup import posting_fingerprint_file
+
+    evil = (
+        b'<?xml version="1.0"?><!DOCTYPE nzb [<!ENTITY a "aaaa">]>'
+        b"<nzb><file><segments><segment>&a;</segment></segments></file></nzb>"
+    )
+    path = tmp_path / "evil.nzb"
+    path.write_bytes(evil)
+    assert posting_fingerprint_file(str(path)) is None
+
+
+def test_http_download_streams_caps_and_removes_partial_files(tmp_path):
+    import io
+
+    from resources.lib import http_util
+
+    class _Resp(io.BytesIO):
+        status = 200
+
+    dest = tmp_path / "out.nzb"
+    with patch.object(http_util, "urlopen", return_value=_Resp(b"x" * 200000)):
+        assert http_util.http_download("http://i/a.nzb", str(dest)) == 200000
+    assert dest.read_bytes() == b"x" * 200000
+    with patch.object(http_util, "urlopen", return_value=_Resp(b"x" * 200000)):
+        with pytest.raises(http_util.HttpResponseTooLarge):
+            http_util.http_download("http://i/a.nzb", str(dest), max_bytes=1000)
+    assert not dest.exists()
+
+
+def test_loader_stop_event_prevents_new_manifest_fetches():
+    # Codex r17: the fleet stops the loader's engine on cancel/shutdown.
+    from types import SimpleNamespace
+
+    from resources.lib import fallback_streams_select_streaming as engine
+
+    stop = threading.Event()
+    stop.set()
+    selected = {"title": "T", "link": "p", "_fallback_stop": stop}
+    state = SimpleNamespace(
+        candidates=[],
+        seen_article_digests=set(),
+        max_candidates=3,
+        seen_candidate_links=set(),
+    )
+    with patch.object(engine, "_start_selection_manifest_fetch") as start:
+        engine._attach_selection_candidates_streaming(
+            selected, iter([{"link": "c1"}, {"link": "c2"}]), state, False
+        )
+    start.assert_not_called()

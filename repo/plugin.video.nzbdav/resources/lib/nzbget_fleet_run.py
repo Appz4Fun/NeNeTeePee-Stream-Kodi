@@ -38,7 +38,12 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     """
     dupe = ctx.dupe if isinstance(ctx.dupe, dict) else {}
     getter = ctx.settings_getter
-    progress = _FleetProgress(ctx.dialog, ctx.cancel_event)
+    loader_stop = dupe.get("loader_stop")
+    progress = _FleetProgress(
+        ctx.dialog,
+        ctx.cancel_event,
+        on_cancel=loader_stop.set if loader_stop is not None else None,
+    )
     progress.finding()
     pick = dict(
         dupe.get("pick") or {},
@@ -245,11 +250,13 @@ def _loader_extras(dupe, progress, prior):
 class _FleetProgress:
     """Drives the resolve's progress dialog and turns its cancel into an event."""
 
-    def __init__(self, dialog, cancel_event):
+    def __init__(self, dialog, cancel_event, on_cancel=None):
         self._dialog = dialog
         self._cancel_event = cancel_event
         # Kodi shutdown (vs a user cancel): submitted jobs are left to finish.
         self.aborted = False
+        # Called once a cancel/shutdown is seen (stops the loader's engine).
+        self._on_cancel = on_cancel
 
     @property
     def cancel_event(self):
@@ -283,7 +290,10 @@ class _FleetProgress:
                 self._cancel_event.set()
         except Exception as exc:  # pylint: disable=broad-except
             _log_dialog_error(exc)
-        return self._cancel_event.is_set()
+        canceled = self._cancel_event.is_set()
+        if canceled and self._on_cancel is not None:
+            self._on_cancel()
+        return canceled
 
     def _update(self, percent, message):
         if self._dialog is None:

@@ -152,3 +152,43 @@ def safe_fromstring(xml_text):
     _reject_entity_declarations(xml_text)
     # nosemgrep
     return _ET.fromstring(xml_text)  # nosec B314 — entity declarations refused above
+
+
+# How much of a file ``safe_iterparse`` vets before streaming the rest: the
+# prolog (XML declaration + DOCTYPE) always comes first.
+_PROLOG_SCAN_BYTES = 1024 * 1024
+
+
+def _doctype_unvetted(text):
+    """True when a DOCTYPE carries an internal subset, or doesn't end in view.
+
+    Only an internal subset (``[ ... ]``) can declare entities. NZBs reference
+    an external DTD and never have one, so refusing any internal subset -- or
+    a DOCTYPE whose end lies beyond the scanned prefix -- costs nothing.
+    """
+    match = _DOCTYPE_RE.search(text)
+    if not match:
+        return False
+    end = text.find(">", match.end())
+    return end < 0 or "[" in text[match.end() : end]
+
+
+def safe_iterparse(path, events=("end",)):
+    """Stream-parse an XML file, refusing entity declarations.
+
+    The file-backed twin of ``safe_fromstring`` for large documents: memory
+    stays bounded by the caller clearing elements as it goes. Uses
+    ``defusedxml`` when present; on the stdlib fallback the prolog is vetted
+    first (no entity declaration, no internal DTD subset), which is where any
+    entity must be declared.
+    """
+    if _USING_DEFUSEDXML:
+        # nosemgrep
+        return _ET.iterparse(path, events=events, forbid_dtd=False)
+    with open(path, "rb") as handle:
+        head = handle.read(_PROLOG_SCAN_BYTES)
+    _reject_entity_declarations(head)
+    if any(_doctype_unvetted(text) for text in _entity_scan_texts(head)):
+        raise _UnsafeXmlError("XML internal DTD subsets are not allowed")
+    # nosemgrep
+    return _stdlib_et.iterparse(path, events=events)  # nosec B314 — prolog vetted above

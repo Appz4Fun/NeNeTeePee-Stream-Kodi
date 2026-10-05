@@ -15,6 +15,7 @@ modules (mocked once in conftest) so they are imported normally.
 """
 
 import re
+import threading
 import time
 
 import xbmc
@@ -817,6 +818,10 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     # xbmcaddon.Addon().getSetting off the main thread (a CoreELEC crash class
     # the snapshot design exists to avoid).
     loader_limit = {"n": None}
+    # Lets the fleet stop the loader's manifest engine on cancel/shutdown.
+    loader_stop = threading.Event()
+    if isinstance(selected, dict):
+        selected["_fallback_stop"] = loader_stop
     loader = _router._fallback_candidate_loader_for_selection(
         selected, filtered, settings_getter=_nzbget_loader_getter(loader_limit)
     )
@@ -830,6 +835,7 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     if dupe:
         dupe["loader"] = loader
         dupe["loader_limit"] = loader_limit
+        dupe["loader_stop"] = loader_stop
         dupe["hydra_uploads"] = hydra_uploads
         # The pick's listing evidence: the worker never re-submits another
         # listing of the pick's own posting.

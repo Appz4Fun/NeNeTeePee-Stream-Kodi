@@ -15,6 +15,7 @@ import xbmc
 import xbmcaddon
 
 from resources.lib.exact_job import ExactJobLookup
+from resources.lib.http_util import http_download as _http_download
 from resources.lib.http_util import http_get as _http_get
 from resources.lib.http_util import http_post_json as _http_post_json
 from resources.lib.http_util import redact_text as _redact_text
@@ -109,6 +110,14 @@ def fetch_nzb_bytes(nzb_url, max_bytes=_MAX_NZB_BYTES):
     Raises on failure (or past ``max_bytes``), like ``_fetch_nzb_bytes``.
     """
     return _fetch_nzb_bytes(nzb_url, max_bytes=max_bytes)
+
+
+def download_nzb(nzb_url, dest_path, max_bytes=_MAX_NZB_BYTES):
+    """Stream an NZB straight to ``dest_path`` (never fully in memory).
+
+    Raises on failure or past ``max_bytes``; a partial file is removed.
+    """
+    return _http_download(nzb_url, dest_path, timeout=_RPC_TIMEOUT, max_bytes=max_bytes)
 
 
 def _append_params(
