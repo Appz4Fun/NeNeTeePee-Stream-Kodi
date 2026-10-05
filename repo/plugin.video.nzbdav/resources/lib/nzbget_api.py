@@ -575,19 +575,36 @@ def cancel_jobs(nzbids, settings_getter=None):
     Returns True when both deletes went through (or there was nothing to
     delete), False when either RPC failed.
     """
-    ids = []
-    for nzbid in nzbids or []:
-        try:
-            value = int(str(nzbid).strip())
-        except (TypeError, ValueError):
-            continue
-        if value not in ids:
-            ids.append(value)
+    ids = _int_ids(nzbids)
     if not ids:
         return True
     history_ok = _final_delete("HistoryFinalDelete", ids, settings_getter)
     queue_ok = _final_delete("GroupFinalDelete", ids, settings_getter)
     return history_ok and queue_ok
+
+
+def cancel_queued_jobs(nzbids, settings_getter=None):
+    """Final-delete only the QUEUED members of ``nzbids``; history is kept.
+
+    A canceled play's backups that NZBGet parked in history (``DELETED/DUPE``)
+    stay there for a replay to reuse; any that sit in the queue (downloading
+    or waiting) are removed so a cancel never leaves a download running. A
+    manual final-delete of the pick does not make NZBGet promote a parked
+    backup (verified against NZBGet), so the kept ones stay parked. True when
+    the delete went through or there was nothing to delete.
+    """
+    ids = _int_ids(nzbids)
+    return _final_delete("GroupFinalDelete", ids, settings_getter) if ids else True
+
+
+def _int_ids(nzbids):
+    """``nzbids`` as unique ints, order kept (``editqueue`` wants an int array)."""
+    ids = []
+    for nzbid in nzbids or []:
+        value = _int_nzbid(nzbid)
+        if value is not None and value not in ids:
+            ids.append(value)
+    return ids
 
 
 def _dupekey_match(item, dupe_key):

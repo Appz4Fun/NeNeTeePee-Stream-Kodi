@@ -126,6 +126,9 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     # RPCs before its first waitForAbort) while Kodi is exiting.
     progress.canceled()
     ctx.fleet_aborted = progress.aborted
+    # A cancel deletes the pick but keeps its parked backups (see the
+    # resolver's cancel path), so it needs to know which id is the pick.
+    ctx.fleet_pick_nzbid = pick.get("_nzbid")
     # The pick's downloaded body, parked ON DISK right after its append for
     # the poll's rare FORCE rescue (re-sending it beats re-fetching a dead,
     # mirrored, or single-use URL); the resolve deletes it when it ends, a

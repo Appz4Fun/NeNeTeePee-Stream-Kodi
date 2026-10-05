@@ -34,6 +34,7 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _MAX_VETO_REPLACEMENTS,
     _append_one_backup,
     _canceled_resolve_nzbids,
+    _canceled_resolve_split,
     _copy_vetoed_after_append,
     _dupe_check_disabled,
     _extra_backups_from_loader,
@@ -531,8 +532,11 @@ def _handle_poll_failure(
     paused-promoted member ids; ``submitted_nzbids`` are the fleet's appends.
     ``adopted_nzbids`` are backups an EARLIER play sent (the resubmit ledger):
     the poll may track them, but a cancel never deletes them -- another
-    resolve may still rely on them. The deletes run in the background, so a
-    stalled NZBGet never holds the cancel (or its dialog cleanup) open.
+    resolve may still rely on them. A cancel stops what is downloading (the
+    pick, the tracked or paused-promoted member) and keeps this play's parked
+    backups for a replay to reuse (see ``_canceled_resolve_split``). The
+    deletes run in the background, so a stalled NZBGet never holds the cancel
+    (or its dialog cleanup) open.
     """
     if outcome in ("timeout", "aborted"):
         on_failure(_string(30101))
@@ -540,12 +544,10 @@ def _handle_poll_failure(
     if outcome == "canceled":
         if cancel_event is not None:
             cancel_event.set()  # stop the backup worker first
-        canceled = [
-            job
-            for job in _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids)
-            if not nzbget_api._nzbid_in(job, adopted_nzbids)
-        ]
-        _cancel_jobs_in_background(canceled, settings_getter)
+        running, backups = _canceled_resolve_split(
+            nzbid, poll_result, submitted_nzbids, adopted_nzbids
+        )
+        _cancel_jobs_in_background(running, settings_getter, backups=backups)
         on_failure(None)
         return True, False
     if outcome == "failed":
@@ -798,7 +800,13 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             # this resolve already appended -- in the background, so a stalled
             # NZBGet can't hold the cancel (and the dialog) open -- then exit.
             if ctx.submitted_nzbids:
-                _cancel_jobs_in_background(list(ctx.submitted_nzbids), getter)
+                # The pick goes; its parked backups stay for a replay.
+                pick_id = getattr(ctx, "fleet_pick_nzbid", None)
+                _cancel_jobs_in_background(
+                    [pick_id] if pick_id else [],
+                    getter,
+                    backups=[job for job in ctx.submitted_nzbids if job != pick_id],
+                )
             ctx.on_failure(None)
             return False
     else:
@@ -859,11 +867,15 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
     return leave_job
 
 
-def _cancel_jobs_in_background(nzbids, settings_getter):
-    """Best-effort ``cancel_jobs`` on a daemon thread (never blocks a cancel).
+def _cancel_jobs_in_background(nzbids, settings_getter, backups=()):
+    """Best-effort cancel cleanup on a daemon thread (never blocks a cancel).
 
-    The connection settings are read here, on the resolve thread; the thread
-    only sees that snapshot. A thread that can't start skips the cleanup.
+    ``nzbids`` (the pick and any running member) are final-deleted from
+    history and queue, and forgotten by the resubmit ledger once NZBGet
+    confirms. ``backups`` are final-deleted from the QUEUE only: parked ones
+    stay in history (and in the ledger) for a replay to reuse. The connection
+    settings are read here, on the resolve thread; the thread only sees that
+    snapshot. A thread that can't start skips the cleanup.
     """
     url, user, password, category = nzbget_api._get_settings(settings_getter)
     snapshot = {
@@ -883,6 +895,11 @@ def _cancel_jobs_in_background(nzbids, settings_getter):
                 # Gone from NZBGet: a replay must send them again. A failed
                 # delete keeps the ledger, so a replay still reuses the jobs.
                 nzbget_submit_ledger.forget(nzbids)
+            if backups:
+                nzbget_api.cancel_queued_jobs(
+                    backups,
+                    settings_getter=lambda key, default="": snapshot.get(key, default),
+                )
         except Exception as exc:  # pylint: disable=broad-except
             xbmc.log(
                 "NeNeTeePee-Stream-Kodi: NZBGet cancel cleanup failed: {}".format(

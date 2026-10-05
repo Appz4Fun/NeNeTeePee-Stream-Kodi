@@ -741,7 +741,8 @@ def test_resolve_cancel_during_fleet_deletes_appends_and_exits_silently():
     ctx.on_failure = failures.append
 
     def _fleet(ctx_, *_a):
-        ctx_.submitted_nzbids.append(77)
+        ctx_.submitted_nzbids.extend([77, 78])
+        ctx_.fleet_pick_nzbid = 77
         ctx_.cancel_event.set()
         return None, None
 
@@ -754,7 +755,9 @@ def test_resolve_cancel_during_fleet_deletes_appends_and_exits_silently():
     ) as poll:
         assert _submit_poll_resolve(ctx, "pick", "T", None, None) is False
     cancel.assert_called_once()
+    # The pick is deleted; its parked backup is kept for a replay.
     assert cancel.call_args.args[0] == [77]
+    assert cancel.call_args.kwargs["backups"] == [78]
     assert failures == [None]
     poll.assert_not_called()
 
@@ -1384,7 +1387,7 @@ def test_hung_append_is_abandoned_on_cancel_and_deleted_when_it_lands():
     ):
         start = time.monotonic()
         got = _append_abortably(
-            {"link": "u", "title": "t", "score": 1},
+            {"link": "u", "title": "t", "score": 1, "_is_pick": True},
             b"<nzb/>",
             ("k", lambda *_a: "", False),
             (cancel, dedup),
@@ -1397,6 +1400,39 @@ def test_hung_append_is_abandoned_on_cancel_and_deleted_when_it_lands():
                 break
             time.sleep(0.02)
     assert deleted == [55]
+
+
+def test_a_late_backup_append_is_only_removed_from_the_queue():
+    # A canceled play keeps its parked backups: one that lands late is deleted
+    # only if NZBGet queued it (it would download), never from history.
+    from resources.lib.nzbget_resolver_dupes import _append_abortably
+
+    release = threading.Event()
+    cancel = threading.Event()
+    queued = []
+
+    def _slow_append(*_a, **_k):
+        release.wait(5)
+        return 56, None
+
+    dedup = FleetDedup(progress=lambda *_a: cancel.set())
+    with patch(_APPEND, side_effect=_slow_append), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_queued_jobs",
+        side_effect=lambda ids, settings_getter=None: queued.extend(ids),
+    ), patch("resources.lib.nzbget_resolver.nzbget_api.cancel_jobs") as full:
+        assert _append_abortably(
+            {"link": "u", "title": "t", "score": 1},
+            b"<nzb/>",
+            ("k", lambda *_a: "", False),
+            (cancel, dedup),
+        ) == (None, False)
+        release.set()
+        for _ in range(100):
+            if queued:
+                break
+            time.sleep(0.02)
+    assert queued == [56]
+    full.assert_not_called()
 
 
 def test_in_memory_fallback_caps_backup_fetches_not_the_pick(_fleet_env):

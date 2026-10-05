@@ -421,7 +421,7 @@ def test_adopted_slots_also_shrink_the_attempt_budget():
     assert live == [11] and dedup.attempts_used == 1
 
 
-def _late_append(cancel_ok):
+def _late_append(cancel_ok, is_pick=True):
     """An append that lands after a cancel abandoned its wait."""
     from resources.lib.nzbget_fleet_dedup import FleetDedup
     from resources.lib.nzbget_resolver_dupes import _append_abortably
@@ -439,10 +439,14 @@ def _late_append(cancel_ok):
         return cancel_ok
 
     candidate = {"link": "https://idx/late?apikey=s", "title": "late"}
+    if is_pick:
+        candidate["_is_pick"] = True
     timer = threading.Timer(0.1, cancel.set)
     with patch(
         "resources.lib.nzbget_resolver._append_one_backup", side_effect=_slow
-    ), patch.object(nzbget_api, "cancel_jobs", side_effect=_cancel):
+    ), patch.object(nzbget_api, "cancel_jobs", side_effect=_cancel), patch.object(
+        nzbget_api, "cancel_queued_jobs", side_effect=_cancel
+    ):
         timer.start()
         assert _append_abortably(
             candidate, b"<nzb/>", ("k", lambda *_a: "", False), (cancel, FleetDedup())
@@ -462,3 +466,23 @@ def test_a_late_append_whose_delete_fails_stays_in_the_ledger():
 def test_a_late_append_that_was_deleted_is_forgotten():
     _late_append(cancel_ok=True)
     assert not nzbget_submit_ledger.held("k", {77: "parked"})
+
+
+def test_a_late_backup_append_stays_in_the_ledger_after_a_cancel():
+    # A canceled play keeps its parked backups (only a queued copy is deleted),
+    # so the late backup stays recorded for a replay to reuse.
+    _late_append(cancel_ok=True, is_pick=False)
+    assert nzbget_submit_ledger.held("k", {77: "parked"})
+
+
+def test_cancel_queued_jobs_never_touches_history():
+    calls = []
+
+    def _rpc(_method, params, settings_getter=None):
+        calls.append(params[0])
+        return True, None
+
+    with patch.object(nzbget_api, "_rpc_call", side_effect=_rpc):
+        assert nzbget_api.cancel_queued_jobs(["7", 8, "x"]) is True
+    assert calls == ["GroupFinalDelete"]
+    assert nzbget_api.cancel_queued_jobs([]) is True

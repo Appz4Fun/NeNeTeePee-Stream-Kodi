@@ -1894,7 +1894,9 @@ def test_play_nzbget_submits_every_manifest_source(outcome):
         return_value={"outcome": outcome, "status": "FAILURE/UNPACK"},
     ) as poll, patch(
         "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs"
-    ) as cancel:
+    ) as cancel, patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_queued_jobs"
+    ) as queued:
         play_nzbget(
             "http://i/primary.nzb",
             "The.Road",
@@ -1911,8 +1913,9 @@ def test_play_nzbget_submits_every_manifest_source(outcome):
     assert poll.call_args.kwargs["dupe_key"] == pick.kwargs["dupe_key"]
     assert poll.call_args.kwargs["fleet"]["owned_nzbids"]() == [42, 43]
     if outcome == "canceled":
-        assert _wait_until(lambda: cancel.called)
-        assert set(cancel.call_args.args[0]) == {42, 43}
+        assert _wait_until(lambda: cancel.called and queued.called)
+        assert cancel.call_args.args[0] == [42]  # the pick goes
+        assert queued.call_args.args[0] == [43]  # its backup: queue-only
     else:
         cancel.assert_not_called()
 
@@ -2854,9 +2857,13 @@ def test_cancel_is_scoped_to_this_resolves_nzbids():
     import threading
 
     deleted = []
+    queued = []
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
         side_effect=lambda ids, settings_getter=None: deleted.append(list(ids)),
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_queued_jobs",
+        side_effect=lambda ids, settings_getter=None: queued.append(list(ids)),
     ):
         handled, leave = _handle_poll_failure(
             "canceled",
@@ -2868,10 +2875,11 @@ def test_cancel_is_scoped_to_this_resolves_nzbids():
             submitted_nzbids=[7, 8],
         )
     assert (handled, leave) == (True, False)
-    assert _wait_until(lambda: deleted)
-    assert deleted == [
-        [9, 12, 7, 8, 5]
-    ]  # tracked, paused, submitted, pick -- add-on jobs only
+    assert _wait_until(lambda: deleted and queued)
+    # Running members (tracked, paused, pick) go; this play's other appends
+    # are deleted from the queue only -- parked ones stay for a replay.
+    assert deleted == [[9, 12, 5]]
+    assert queued == [[7, 8]]
 
 
 def test_poll_canceled_carries_paused_nzbids():
@@ -3546,9 +3554,13 @@ def test_poll_cancel_never_deletes_backups_adopted_from_an_earlier_play():
     import threading
 
     deleted = []
+    queued = []
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
         side_effect=lambda ids, settings_getter=None: deleted.append(list(ids)),
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_queued_jobs",
+        side_effect=lambda ids, settings_getter=None: queued.append(list(ids)),
     ):
         _handle_poll_failure(
             "canceled",
@@ -3560,8 +3572,8 @@ def test_poll_cancel_never_deletes_backups_adopted_from_an_earlier_play():
             submitted_nzbids=[7],
             adopted_nzbids=[11, 12],
         )
-    assert _wait_until(lambda: deleted)
-    assert deleted == [[7, 5]]
+    assert _wait_until(lambda: deleted and queued)
+    assert deleted == [[5]] and queued == [[7]]
 
 
 def test_poll_cancel_cleanup_never_blocks_on_a_stalled_nzbget():

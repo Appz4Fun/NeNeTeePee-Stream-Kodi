@@ -426,6 +426,13 @@ def _append_abortably(candidate, body, send, stops):
         aborted = getattr(dedup, "aborted", None)
         if aborted is not None and aborted():
             return
+        if not candidate.get("_is_pick"):
+            # A late BACKUP stays if NZBGet parked it (a replay reuses it); if
+            # it went to the queue it would download, so that copy goes.
+            _core.nzbget_api.cancel_queued_jobs(
+                [result[0]], settings_getter=settings_getter
+            )
+            return
         if _core.nzbget_api.cancel_jobs([result[0]], settings_getter=settings_getter):
             _core.nzbget_submit_ledger.forget([result[0]])
 
@@ -1011,6 +1018,32 @@ def _preexisting_success_ids(dupe_key, settings_getter, history=None):
         )
     except Exception:  # pylint: disable=broad-except
         return ()
+
+
+def _canceled_resolve_split(nzbid, poll_result, submitted_nzbids, adopted_nzbids):
+    """``(running, backups)`` for a user cancel during the poll.
+
+    ``running``: the tracked member, any paused-promoted members, and the
+    pick -- final-deleted outright. ``backups``: this play's other appends,
+    deleted from the queue only (parked ones stay for a replay). Backups
+    adopted from an earlier play are in neither.
+    """
+    result = poll_result or {}
+    running = []
+    for candidate in (result.get("nzbid"), *(result.get("paused_nzbids") or ()), nzbid):
+        if (
+            candidate is not None
+            and candidate not in running
+            and not _core.nzbget_api._nzbid_in(candidate, adopted_nzbids)
+        ):
+            running.append(candidate)
+    backups = [
+        job
+        for job in submitted_nzbids or []
+        if not _core.nzbget_api._nzbid_in(job, running)
+        and not _core.nzbget_api._nzbid_in(job, adopted_nzbids)
+    ]
+    return running, backups
 
 
 def _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids):
