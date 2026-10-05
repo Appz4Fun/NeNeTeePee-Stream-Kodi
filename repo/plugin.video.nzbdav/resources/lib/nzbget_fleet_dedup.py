@@ -21,6 +21,9 @@ Release identity never uses size: postings of one release can differ by GBs.
 """
 
 import collections
+import os
+import shutil
+import tempfile
 import threading
 import zlib
 from array import array
@@ -174,11 +177,16 @@ def same_posting(left, right):
 
 
 class FleetDedup:
-    """Listings and postings already covered by one fleet (the pick included)."""
+    """Listings and postings already covered by one fleet (the pick included).
 
-    def __init__(self, pick=None):
+    ``spool_base`` is the directory the fleet's NzbSpool folders go under
+    (resolved on the resolve thread; None = the system temp directory).
+    """
+
+    def __init__(self, pick=None, spool_base=None):
         self._listings = [pick] if isinstance(pick, dict) else []
         self._fingerprints = []
+        self.spool_base = spool_base
 
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.
@@ -218,6 +226,55 @@ class FleetDedup:
     def remember_posting(self, fingerprint):
         if fingerprint:
             self._fingerprints.append(fingerprint)
+
+
+class NzbSpool:
+    """Unique NZB bodies held on disk until every one has been sent to NZBGet.
+
+    One private ``nzbdav-fleet-*`` folder per batch, under ``base_dir`` (Kodi's
+    temp folder) or the system temp directory. A body that cannot be written
+    (no folder, disk full) is kept in memory instead, so a spool failure never
+    drops a backup. ``close`` deletes the folder and everything in it.
+    """
+
+    def __init__(self, base_dir=None):
+        self._dir = None
+        self._count = 0
+        for parent in (base_dir, None):
+            try:
+                self._dir = tempfile.mkdtemp(prefix="nzbdav-fleet-", dir=parent)
+                break
+            except (OSError, TypeError, ValueError):
+                continue
+
+    def save(self, body):
+        """Store ``body``; returns a handle for ``load`` (a path, or the bytes)."""
+        if self._dir is None:
+            return body
+        self._count += 1
+        path = os.path.join(self._dir, "{:05d}.nzb".format(self._count))
+        try:
+            with open(path, "wb") as handle:
+                handle.write(body)
+        except OSError:
+            return body
+        return path
+
+    @staticmethod
+    def load(handle):
+        """The stored body, or None when it can no longer be read."""
+        if handle is None or isinstance(handle, (bytes, bytearray)):
+            return handle
+        try:
+            with open(handle, "rb") as stored:
+                return stored.read()
+        except OSError:
+            return None
+
+    def close(self):
+        if self._dir is not None:
+            shutil.rmtree(self._dir, ignore_errors=True)
+            self._dir = None
 
 
 def _stopped(events):

@@ -78,8 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   edition, PROPER/REPACK, group, and resolution, and backups include
   NZBHydra2's hidden duplicate uploads. NeNeTeePee-Stream-Kodi skips listings
   of the same Usenet posting (same size posted within 120 seconds, or more than
-  1% shared article IDs), keeps re-uploads with different article IDs, and
-  fetches NZBs four at a time without waiting for the pick. Each backup costs
+  1% shared article IDs), keeps re-uploads with different article IDs,
+  downloads every candidate NZB (four at a time) and spools the unique ones to
+  Kodi's temp folder, then uploads them all to NZBGet and deletes the spool. Each backup costs
   one indexer download. **Maximum standby fallback streams** no longer applies
   to NZBGet.
 - **Backend settings section.** Move backend selection and connection settings

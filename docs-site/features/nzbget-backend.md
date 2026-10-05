@@ -210,9 +210,13 @@ listings of the same posting:
 
 ### Speed and indexer limits
 
-NeNeTeePee-Stream-Kodi downloads the NZB files four at a time and sends them
-to NZBGet as fast as it can. It doesn't wait for your pick's download to
-finish first, and your pick's playback is never delayed.
+NeNeTeePee-Stream-Kodi downloads the backup NZB files itself, four at a time,
+and checks each one against your pick and every NZB it has already kept. Each
+unique NZB is saved to a folder in Kodi's temp directory as soon as it passes
+that check. Once every candidate is downloaded, the saved NZBs are uploaded
+to NZBGet in ranked order, and the folder is deleted only after all of them
+have been sent. This runs in the background: your pick is sent to NZBGet first,
+and its playback is never delayed.
 
 !!! warning "Backups use indexer grabs"
     With unlimited backups, every backup costs one NZB download from your

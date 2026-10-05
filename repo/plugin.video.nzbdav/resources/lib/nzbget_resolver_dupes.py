@@ -20,6 +20,7 @@ import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unu
 from resources.lib.nzbget_fleet_dedup import (
     PREFETCH_WINDOW,
     FleetDedup,
+    NzbSpool,
     prefetched_clusters,
     same_variant,
 )
@@ -85,16 +86,25 @@ def _submit_candidates(
     veto_probe=True,
     limits=(None, None),
 ):
-    """Deduplicate, prefetch, and append fleet candidates in rank order.
+    """Download and dedupe every candidate first, then send the unique ones.
 
-    Same-listing candidates collapse into one fetch (the others are fallbacks
-    for a failed grab); NZB bodies are fetched ``PREFETCH_WINDOW`` ahead in
-    parallel and appended straight from memory; a body that is the same posting
-    as an already-submitted one is skipped. A candidate whose every listing
-    failed to fetch still gets one plain append (NZBGet's own fetch).
-    ``limits`` is ``(live_limit, max_attempts)``: stops once ``live_limit``
-    LIVE backups landed, ``max_attempts`` appends were tried, or
-    ``cancel_event`` fires (``None`` limits are unbounded). Returns the LIVE
+    Two phases, in rank order:
+
+    1. **Collect.** Same-listing candidates collapse into one fetch (the
+       others are fallbacks for a failed grab); NZB bodies are fetched
+       ``PREFETCH_WINDOW`` at a time in parallel, and each is compared with the
+       pick and every NZB already kept. A unique body is saved to an
+       ``NzbSpool`` folder on disk as soon as it is known to be unique; a
+       same-posting body is dropped. A candidate whose every listing failed
+       is kept for one plain append (NZBGet's own fetch).
+    2. **Send.** Every kept NZB is appended to NZBGet, best first. The spool
+       folder is deleted only after the whole batch has been sent (or the
+       batch stopped on a cancel or a met cap).
+
+    ``limits`` is ``(live_limit, max_attempts)``: sending stops once
+    ``live_limit`` LIVE backups landed, ``max_attempts`` appends were tried, or
+    ``cancel_event`` fires (``None`` limits are unbounded); collecting stops
+    once enough unique NZBs are kept to fill those limits. Returns the LIVE
     NZBIDs.
     """
     live_limit, max_attempts = limits
@@ -107,13 +117,35 @@ def _submit_candidates(
         if link:
             seen.add(link)
             usable.append(candidate)
-    live = []
-    attempts = 0
+    keep_cap = max_attempts if max_attempts is not None else live_limit
+    spool = NzbSpool(dedup.spool_base)
+    try:
+        kept = _collect_unique(usable, dedup, spool, cancel_event, keep_cap)
+        return _send_kept(
+            kept,
+            dupe_key,
+            settings_getter,
+            (cancel_event, submitted_sink, veto_probe),
+            limits,
+        )
+    finally:
+        spool.close()
+        # Every inspected row is now decided: the completion ledger records
+        # only rows that really reached NZBGet.
+        for candidate in usable:
+            candidate.setdefault("_submitted", False)
+
+
+def _collect_unique(usable, dedup, spool, cancel_event, keep_cap):
+    """Phase 1: fetch, dedupe, and spool unique NZBs; returns kept entries.
+
+    Each entry is ``(candidate, handle)``: ``handle`` is an ``NzbSpool``
+    handle, or None for a candidate whose every listing failed to fetch.
+    """
+    kept = []
     # Never prefetch more than the cap could still use.
     window = (
-        PREFETCH_WINDOW
-        if live_limit is None
-        else max(1, min(PREFETCH_WINDOW, live_limit))
+        PREFETCH_WINDOW if keep_cap is None else max(1, min(PREFETCH_WINDOW, keep_cap))
     )
     stream = prefetched_clusters(
         dedup.clusters(usable),
@@ -123,47 +155,58 @@ def _submit_candidates(
     )
     try:
         for candidate, body, fingerprint in stream:
-            if _fill_done(live, live_limit, attempts, max_attempts, cancel_event):
+            if cancel_event is not None and cancel_event.is_set():
                 break
             if fingerprint and dedup.known_posting(fingerprint):
                 _core.xbmc.log(
                     "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
-                    "(same Usenet posting as one already queued)".format(
+                    "(same Usenet posting as one already kept)".format(
                         candidate.get("title") or ""
                     ),
                     _core.xbmc.LOGINFO,
                 )
                 continue
-            attempts += 1
-            extra = {"nzb_bytes": body} if body else {}
-            nzbid = _core._append_one_backup(
-                candidate["link"], candidate, dupe_key, settings_getter, **extra
-            )
-            if not nzbid:
-                continue
+            # Unique: remember it now so later downloads compare against it,
+            # and move the body to disk so memory holds only the fingerprints.
             dedup.remember_posting(fingerprint)
-            # Lets the completion ledger record this row under its own title.
-            candidate["_submitted"] = True
-            # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
-            # delete this id immediately, and a COPY-vetoed row still needs deleting.
-            if submitted_sink is not None:
-                submitted_sink.append(nzbid)
-            # A DELETED/COPY veto means the slot was never really filled ->
-            # exclude it from the LIVE return so the fleet can backfill it (#372 r6).
-            if not (
-                veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)
-            ):
-                live.append(nzbid)
-            # Re-check BEFORE pulling the next item: pulling waits on (and
-            # starts) another indexer fetch the satisfied cap no longer needs.
-            if _fill_done(live, live_limit, attempts, max_attempts, cancel_event):
+            kept.append((candidate, spool.save(body) if body else None))
+            if keep_cap is not None and len(kept) >= keep_cap:
                 break
     finally:
         stream.close()
-        # Every inspected row is now decided: the completion ledger records
-        # only rows that really reached NZBGet.
-        for candidate in usable:
-            candidate.setdefault("_submitted", False)
+    return kept
+
+
+def _send_kept(kept, dupe_key, settings_getter, run, limits):
+    """Phase 2: append every kept NZB to NZBGet, best first; returns LIVE ids.
+
+    ``run`` is ``(cancel_event, submitted_sink, veto_probe)``.
+    """
+    cancel_event, submitted_sink, veto_probe = run
+    live_limit, max_attempts = limits
+    live = []
+    attempts = 0
+    for candidate, handle in kept:
+        if _fill_done(live, live_limit, attempts, max_attempts, cancel_event):
+            break
+        attempts += 1
+        body = NzbSpool.load(handle)
+        extra = {"nzb_bytes": body} if body else {}
+        nzbid = _core._append_one_backup(
+            candidate["link"], candidate, dupe_key, settings_getter, **extra
+        )
+        if not nzbid:
+            continue
+        # Lets the completion ledger record this row under its own title.
+        candidate["_submitted"] = True
+        # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
+        # delete this id immediately, and a COPY-vetoed row still needs deleting.
+        if submitted_sink is not None:
+            submitted_sink.append(nzbid)
+        # A DELETED/COPY veto means the slot was never really filled ->
+        # exclude it from the LIVE return so the fleet can backfill it (#372 r6).
+        if not (veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)):
+            live.append(nzbid)
     return live
 
 
@@ -454,7 +497,7 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
     """
     backups = list(dupe.get("backups") or [])
     unlimited = _fleet_is_unlimited(dupe)
-    dedup = FleetDedup(pick=dupe.get("pick"))
+    dedup = FleetDedup(pick=dupe.get("pick"), spool_base=dupe.get("spool_base"))
     dedup.remember_posting(dupe.get("pick_fingerprint"))
     max_backups = dupe.get("max_backups")
     capped = isinstance(max_backups, int) and max_backups > 0
@@ -583,6 +626,21 @@ def _loader_extras_for_fleet(dupe, backups, live_count=None):
     )
 
 
+def _fleet_spool_base():
+    """Kodi's ``special://temp`` folder for the fleet's NZB spool, or None.
+
+    None (the system temp directory) when Kodi can't translate the path.
+    Call on the resolve thread only.
+    """
+    try:
+        import xbmcvfs
+
+        path = xbmcvfs.translatePath("special://temp/")
+    except Exception:  # pylint: disable=broad-except
+        return None
+    return path if isinstance(path, str) and path else None
+
+
 def _cleanup_canceled_submissions(getter, submitted_ids):
     """Delete exactly THIS worker's submissions after a mid-submit cancel (#372).
 
@@ -648,6 +706,9 @@ def _spawn_dupe_backups(ctx):
             _core.xbmc.LOGWARNING,
         )
         return None
+    # Kodi's temp folder, resolved HERE on the resolve thread: the worker
+    # never calls into Kodi.
+    dupe["spool_base"] = _core._fleet_spool_base()
     cancel_event = ctx.cancel_event
     # Share the appended-ids list with the resolve thread: the cancel path
     # deletes exactly these (id-scoped, never a whole-DupeKey sweep).

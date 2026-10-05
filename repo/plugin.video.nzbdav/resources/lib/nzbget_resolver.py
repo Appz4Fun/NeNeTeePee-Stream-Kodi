@@ -40,6 +40,7 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _extra_backups_from_loader,
     _fill_done,
     _fleet_is_unlimited,
+    _fleet_spool_base,
     _hydra_uploads_for_fleet,
     _is_copy_failure,
     _is_copy_veto_status,

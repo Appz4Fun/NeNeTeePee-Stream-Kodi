@@ -6,6 +6,7 @@ from unittest.mock import patch
 import pytest
 from resources.lib.nzbget_fleet_dedup import (
     FleetDedup,
+    NzbSpool,
     posting_fingerprint,
     prefetched_clusters,
     same_listing,
@@ -626,3 +627,46 @@ def test_ledger_skips_backups_the_worker_did_not_submit():
     with patch("resources.lib.nzbget_resolver.record_download") as record:
         _record_fleet_pubdates(dupe, "Pick")
     assert [c.args[0] for c in record.call_args_list] == ["Sent", "Not Reached Yet"]
+
+
+def test_every_nzb_is_downloaded_and_spooled_before_the_first_send(tmp_path):
+    # User design: download + dedupe everything first, keep the unique NZBs on
+    # disk, send them all, and delete the spool only after all were sent.
+    from resources.lib.nzbget_resolver_dupes import _submit_candidates
+
+    events = []
+    spool_files = []
+
+    def _fetch(url):
+        events.append(("fetch", url))
+        return _nzb([url + "@x"])
+
+    def _append(url, name, **kwargs):
+        spool_files.append(sorted(p.name for p in tmp_path.rglob("*.nzb")))
+        events.append(("append", url))
+        return len(events), None
+
+    rows = [{"link": "u{}".format(i), "title": "t", "score": 9 - i} for i in range(6)]
+    with patch(_FETCH, side_effect=_fetch), patch(_APPEND, side_effect=_append):
+        live = _submit_candidates(
+            rows, "k", lambda *_a: "", dedup=FleetDedup(spool_base=str(tmp_path))
+        )
+    kinds = [kind for kind, _url in events]
+    assert kinds == ["fetch"] * 6 + ["append"] * 6
+    assert [url for kind, url in events if kind == "append"] == [
+        r["link"] for r in rows
+    ]
+    assert all(len(files) == 6 for files in spool_files)  # kept until all sent
+    assert not list(tmp_path.rglob("*.nzb"))  # deleted after the batch
+    assert len(live) == 6
+
+
+def test_spool_keeps_bodies_in_memory_when_disk_is_unavailable():
+    spool = NzbSpool(base_dir="/nonexistent/dir")
+    with patch(
+        "resources.lib.nzbget_fleet_dedup.tempfile.mkdtemp", side_effect=OSError
+    ):
+        memory_only = NzbSpool()
+    assert NzbSpool.load(memory_only.save(b"abc")) == b"abc"
+    assert NzbSpool.load(spool.save(b"xyz")) == b"xyz"  # system temp fallback
+    spool.close()
