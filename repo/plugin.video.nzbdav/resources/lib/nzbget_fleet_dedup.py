@@ -325,6 +325,10 @@ def _fetch_cluster(cluster, fetch, stop_events):
         body = _try_fetch(fetch, member["link"])
         fingerprint = posting_fingerprint(body) if body else None
         if fingerprint:
+            # The head keeps its slot, but remember which listing actually
+            # answered: a body that later can't be spooled is re-sent as a
+            # plain URL append of THIS link, not the head's dead one.
+            cluster[0]["_fetched_link"] = member["link"]
             return cluster[0], body, fingerprint
     return cluster[0], None, None
 

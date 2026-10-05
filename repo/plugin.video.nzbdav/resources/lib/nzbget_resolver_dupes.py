@@ -21,6 +21,7 @@ from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     PREFETCH_WINDOW,
     FleetDedup,
     NzbSpool,
+    posting_fingerprint,
     prefetched_clusters,
     same_variant,
 )
@@ -155,6 +156,10 @@ def _collect_unique(stream, state, cancel_event, need):
         _report(dedup, "download", tally["seen"], tally["total"])
         if cancel_event is not None and cancel_event.is_set():
             break
+        if body is None and candidate.get("_is_pick"):
+            # The pick seeds every later dedup decision: one more try at its
+            # own URL before falling back to NZBGet fetching it blind.
+            body, fingerprint = _retry_pick_fetch(candidate)
         if fingerprint and dedup.known_posting(fingerprint):
             _core.xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
@@ -173,6 +178,22 @@ def _collect_unique(stream, state, cancel_event, need):
             if len(kept) >= need:
                 break
     return kept
+
+
+def _retry_pick_fetch(pick):
+    """A second fetch of the pick's own URL; ``(body, fingerprint)`` or Nones."""
+    try:
+        body = _core.nzbget_api.fetch_nzb_bytes(pick["link"])
+    except Exception as exc:  # pylint: disable=broad-except
+        _core.xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet pick NZB retry failed: {}".format(
+                _core._redact_text(str(exc))
+            ),
+            _core.xbmc.LOGDEBUG,
+        )
+        return None, None
+    fingerprint = posting_fingerprint(body) if body else None
+    return (body, fingerprint) if fingerprint else (None, None)
 
 
 def _report(dedup, phase, done, total):
@@ -200,8 +221,14 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         tally["attempts"] += 1
         body = NzbSpool.load(handle)
         extra = {"nzb_bytes": body} if body else {}
+        # Without a body, NZBGet fetches the listing that actually answered.
+        url = (
+            candidate["link"]
+            if body
+            else candidate.get("_fetched_link") or candidate["link"]
+        )
         nzbid = _core._append_one_backup(
-            candidate["link"], candidate, dupe_key, settings_getter, **extra
+            url, candidate, dupe_key, settings_getter, **extra
         )
         if not nzbid:
             if candidate.get("_is_pick"):
@@ -210,8 +237,6 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
                 return
             continue
         candidate["_nzbid"] = nzbid
-        # Lets the completion ledger record this row under its own title.
-        candidate["_submitted"] = True
         dedup.remember_listing(candidate)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
         # delete this id immediately, and a COPY-vetoed row still needs deleting.
@@ -219,7 +244,11 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             submitted_sink.append(nzbid)
         # A DELETED/COPY veto means the slot was never really filled ->
         # exclude it from the LIVE tally so the next round backfills it (#372 r6).
-        if not (veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)):
+        vetoed = veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)
+        # The completion ledger records only rows NZBGet really kept, under
+        # their own titles; a vetoed row never downloads.
+        candidate["_submitted"] = not vetoed
+        if not vetoed:
             tally["live"].append(nzbid)
 
 

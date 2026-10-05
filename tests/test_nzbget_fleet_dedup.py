@@ -806,3 +806,71 @@ def test_fleet_dead_backup_is_rescued_by_a_hydra_mirror(_fleet_env):
     sent = append.call_args_list[1]
     assert sent.args[0] == "dead"  # the head keeps its slot
     assert sent.kwargs["nzb_bytes"] == _valid("mirror")
+
+
+def test_fleet_retries_the_pick_fetch_so_its_relisting_is_still_caught(_fleet_env):
+    # Codex r6: a transient pick fetch failure must not leave the fleet without
+    # the pick's fingerprint (a relisting of it would take a backup slot).
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    shared = _ids("s", 200)
+    attempts = {"pick": 0}
+
+    def _fetch(url):
+        if url == "pick":
+            attempts["pick"] += 1
+            if attempts["pick"] == 1:
+                raise OSError("transient")
+            return _nzb(shared)
+        if url == "relist":
+            return _nzb(shared[:-1] + ["reup@post.example"])
+        return _valid(url)
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "relist"}, {"link": "other"}]))
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "other"]
+    assert append.call_args_list[0].kwargs["nzb_bytes"] == _nzb(shared)
+
+
+def test_copy_vetoed_rows_are_not_ledger_recorded(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    dupe = _fleet_dupe([{"link": "b0"}, {"link": "b1"}], max_backups=2)
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ), patch(_VETO, side_effect=[False, True, False]):
+        submit_fleet(ctx, "pick", "T", "k")
+    flags = {b["link"]: b["_submitted"] for b in dupe["backups"]}
+    assert flags == {"b0": False, "b1": True}
+
+
+def test_unspooled_mirror_body_is_resent_from_the_working_mirror_url(_fleet_env):
+    # Codex r6: head dead, mirror answered, spool unavailable -> the plain
+    # append must use the mirror's URL, not the dead head's.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    dead = {"link": "dead", "title": "t", "size": "200", "pubdate": _PUB}
+    mirror = {"link": "mirror", "size": "200", "pubdate": _PUB_90S}
+    ctx = _fleet_ctx(_fleet_dupe([dead, mirror]))
+
+    def _fetch(url):
+        if url == "dead":
+            raise OSError("gone")
+        return _valid(url)
+
+    real_save = NzbSpool.save
+
+    def _save(self, body):
+        return None if body == _valid("mirror") else real_save(self, body)
+
+    with patch(_FETCH, side_effect=_fetch), patch.object(
+        NzbSpool, "save", _save
+    ), patch(_APPEND, side_effect=[(1, None), (2, None)]) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    sent = append.call_args_list[1]
+    assert sent.args[0] == "mirror"
+    assert "nzb_bytes" not in sent.kwargs
