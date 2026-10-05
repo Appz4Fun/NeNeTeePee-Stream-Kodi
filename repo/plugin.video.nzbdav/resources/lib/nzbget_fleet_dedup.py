@@ -247,9 +247,9 @@ class NzbSpool:
     temp folder) or the system temp directory. A body that cannot be written
     (no folder, disk full) is kept in memory only while the in-memory total
     stays under ``MEMORY_BUDGET``; past it ``save`` returns None and the
-    caller sends that backup as a plain URL append (NZBGet fetches it), so a
-    spool failure never drops a backup and never exhausts a CoreELEC box's
-    RAM. ``close`` deletes the folder and everything in it.
+    caller drops that backup, so a spool failure never exhausts a CoreELEC
+    box's RAM (the pick is always kept). ``close`` deletes the folder and
+    everything in it.
     """
 
     MEMORY_BUDGET = 64 * 1024 * 1024
@@ -265,11 +265,13 @@ class NzbSpool:
             except (OSError, TypeError, ValueError):
                 continue
 
-    def save(self, body):
+    def save(self, body, required=False):
         """Store ``body``; returns a ``load`` handle (a path, the bytes, or None).
 
         None means the body could be neither written nor held within the
-        memory budget: the caller falls back to a plain URL append.
+        memory budget: the caller drops that backup (re-fetching it would cost
+        another indexer grab on the resolve thread). ``required`` (the pick)
+        is always kept, in memory if need be.
         """
         if self._dir is not None:
             self._count += 1
@@ -280,7 +282,7 @@ class NzbSpool:
                 return path
             except OSError:
                 pass
-        if self._in_memory + len(body) > self.MEMORY_BUDGET:
+        if not required and self._in_memory + len(body) > self.MEMORY_BUDGET:
             return None
         self._in_memory += len(body)
         return body
@@ -315,9 +317,8 @@ def _fetch_cluster(cluster, fetch, stop_events):
     posting, only the head's download URL failed. A body counts only when it
     parses as an NZB with article Message-IDs, so an HTTP-200 login or
     rate-limit page falls through to the next listing. ``body`` and
-    ``fingerprint`` are None when every listing failed (the caller can still
-    try a plain append of the head). Stops between listings once any of
-    ``stop_events`` fires.
+    ``fingerprint`` are None when every listing failed. Stops between listings
+    once any of ``stop_events`` fires.
     """
     for member in cluster:
         if _stopped(stop_events):
@@ -325,10 +326,6 @@ def _fetch_cluster(cluster, fetch, stop_events):
         body = _try_fetch(fetch, member["link"])
         fingerprint = posting_fingerprint(body) if body else None
         if fingerprint:
-            # The head keeps its slot, but remember which listing actually
-            # answered: a body that later can't be spooled is re-sent as a
-            # plain URL append of THIS link, not the head's dead one.
-            cluster[0]["_fetched_link"] = member["link"]
             return cluster[0], body, fingerprint
     return cluster[0], None, None
 
@@ -353,8 +350,8 @@ class _Fetch:
     are non-daemon and joined at interpreter exit) keeps an in-flight indexer
     request from delaying Kodi shutdown. When a thread cannot start (thread
     exhaustion on a small box) the fetch is skipped rather than run inline --
-    an inline request could not be canceled -- and the cluster reports no body,
-    so its head is sent as a plain URL append (NZBGet fetches it).
+    an inline request could not be canceled -- and the cluster reports no body
+    (that backup is dropped; for the pick the resolve reports the failure).
     """
 
     def __init__(self, cluster, fetch, stop_events):

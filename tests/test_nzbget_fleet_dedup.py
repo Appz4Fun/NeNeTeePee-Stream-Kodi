@@ -516,18 +516,19 @@ def test_spool_memory_fallback_is_bounded():
         assert spool.save(b"123456") is None  # 12 bytes > 10-byte budget
 
 
-def test_unspoolable_body_is_sent_as_a_url_append():
-    from resources.lib.nzbget_resolver_dupes import _submit_candidates
+def test_unstorable_backup_is_dropped_not_refetched():
+    # Codex r9: a backup body that can't be stored is dropped -- re-sending its
+    # URL would make append_nzb fetch it on the resolve thread (uncancelable,
+    # and a second indexer grab).
+    from resources.lib.nzbget_resolver import _submit_candidates
 
     rows = [{"link": "u0", "title": "t", "score": 1}]
-    with patch(_FETCH, side_effect=_valid), patch.object(
+    with patch(_FETCH, side_effect=_valid) as fetch, patch.object(
         NzbSpool, "save", return_value=None
-    ), patch(_APPEND, return_value=(1, None)) as append, patch(
-        _VETO, return_value=False
-    ):
-        _submit_candidates(rows, "k", lambda *_a: "")
-    assert append.call_args.args[0] == "u0"
-    assert "nzb_bytes" not in append.call_args.kwargs
+    ), patch(_APPEND, return_value=(1, None)) as append:
+        assert not _submit_candidates(rows, "k", lambda *_a: "")
+    append.assert_not_called()
+    assert fetch.call_count == 1
 
 
 # --- foreground fleet (submit_fleet) ----------------------------------------
@@ -821,32 +822,57 @@ def test_copy_vetoed_rows_are_not_ledger_recorded(_fleet_env):
     assert flags == {"b0": False, "b1": True}
 
 
-def test_unspooled_mirror_body_is_resent_from_the_working_mirror_url(_fleet_env):
-    # Codex r6: head dead, mirror answered, spool unavailable -> the plain
-    # append must use the mirror's URL, not the dead head's.
+def test_fleet_never_lets_append_nzb_fetch_on_the_resolve_thread(_fleet_env):
+    # Codex r9: every fleet append carries its body; a backup with none is
+    # dropped and a pick with none fails the resolve with a clear error.
     from resources.lib.nzbget_fleet_run import submit_fleet
 
-    dead = {"link": "dead", "title": "t", "size": "200", "pubdate": _PUB}
-    mirror = {"link": "mirror", "size": "200", "pubdate": _PUB_90S}
-    ctx = _fleet_ctx(_fleet_dupe([dead, mirror]))
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "dead"}, {"link": "ok"}]))
 
     def _fetch(url):
         if url == "dead":
             raise OSError("gone")
         return _valid(url)
 
-    real_save = NzbSpool.save
-
-    def _save(self, body):
-        return None if body == _valid("mirror") else real_save(self, body)
-
-    with patch(_FETCH, side_effect=_fetch), patch.object(
-        NzbSpool, "save", _save
-    ), patch(_APPEND, side_effect=[(1, None), (2, None)]) as append:
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append:
         submit_fleet(ctx, "pick", "T", "k")
-    sent = append.call_args_list[1]
-    assert sent.args[0] == "mirror"
-    assert "nzb_bytes" not in sent.kwargs
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "ok"]
+    assert all("nzb_bytes" in c.kwargs for c in append.call_args_list)
+
+
+def test_fleet_pick_that_cannot_be_downloaded_fails_without_a_blind_fetch(
+    _fleet_env,
+):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+
+    def _fetch(url):
+        if url == "pick":
+            raise OSError("indexer down")
+        return _valid(url)
+
+    with patch(_FETCH, side_effect=_fetch), patch(_APPEND) as append:
+        nzbid, error = submit_fleet(ctx, "pick", "T", "k")
+    append.assert_not_called()
+    assert (nzbid, error) == (None, "NZB download failed")
+
+
+def test_nzbids_compare_across_json_number_formats():
+    # Codex r9: NZBGet history may serialize NZBID as a string.
+    from resources.lib.nzbget_resolver import _record_fleet_pubdates, _stale_successes
+
+    with patch(
+        "resources.lib.nzbget_resolver._preexisting_success_ids",
+        return_value=("5", "6"),
+    ):
+        assert _stale_successes("k", None, {"owned_nzbids": lambda: [6]}) == ("5",)
+    dupe = {"backups": [{"title": "B", "pubdate": _PUB, "_nzbid": 7}]}
+    with patch("resources.lib.nzbget_resolver.record_download") as record:
+        _record_fleet_pubdates(dupe, "Pick", "7")
+    assert [c.args for c in record.call_args_list] == [("B", _PUB)]
 
 
 def test_cancel_during_send_stops_the_remaining_appends(_fleet_env):

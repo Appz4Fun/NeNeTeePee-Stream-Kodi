@@ -48,8 +48,9 @@ def _submit_candidates(
        ``PREFETCH_WINDOW`` at a time in parallel, and each is compared with the
        pick and every NZB already kept. A unique body is saved to an
        ``NzbSpool`` folder on disk as soon as it is known to be unique; a
-       same-posting body is dropped. A candidate whose every listing failed
-       is kept for one plain append (NZBGet's own fetch).
+       same-posting body is dropped. A backup whose every listing failed (or
+       whose body can't be stored) is dropped; the send phase never makes
+       ``append_nzb`` fetch on the resolve thread.
     2. **Send.** Every kept NZB is appended to NZBGet, best first. A failed
        PICK append stops the batch (the resolve reports it); each appended
        row records its ``_nzbid`` and a failed one its ``_append_error``.
@@ -148,9 +149,9 @@ def _collect_unique(stream, state, cancel_event, need):
 
     ``state`` is ``(dedup, spool, tally)``; ``tally["wanted"]`` tells the
     stream how many more items this round can use. Returns
-    ``(candidate, handle)`` entries: ``handle`` is an ``NzbSpool`` handle, or
-    None for a candidate to send as a plain URL append (every listing failed
-    to fetch, or its body could not be spooled). ``need`` None collects
+    ``(candidate, handle)`` entries with an ``NzbSpool`` handle; a backup
+    without a stored NZB is dropped, and a pick without one is kept with a
+    None handle so the send phase reports its failure. ``need`` None collects
     everything the stream has.
     """
     dedup, spool, tally = state
@@ -184,7 +185,21 @@ def _collect_unique(stream, state, cancel_event, need):
         # Unique: remember it now so later downloads compare against it, and
         # move the body to disk so memory holds only the fingerprints.
         dedup.remember_posting(fingerprint)
-        kept.append((candidate, spool.save(body) if body else None))
+        handle = (
+            spool.save(body, required=bool(candidate.get("_is_pick"))) if body else None
+        )
+        if handle is None and not candidate.get("_is_pick"):
+            # No NZB in hand: sending it would make append_nzb fetch it on the
+            # resolve thread (uncancelable, a second grab). Drop this backup.
+            _core.xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Dropped NZBGet duplicate backup '{}' "
+                "(its NZB could not be downloaded or stored)".format(
+                    candidate.get("title") or ""
+                ),
+                _core.xbmc.LOGINFO,
+            )
+            continue
+        kept.append((candidate, handle))
         if need is not None:
             tally["wanted"] = need - len(kept)
             if len(kept) >= need:
@@ -224,16 +239,20 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         if not is_pick:
             tally["attempts"] += 1
         body = NzbSpool.load(handle)
-        extra = {"nzb_bytes": body} if body else {}
-        # Without a body, NZBGet fetches the listing that actually answered.
-        url = (
-            candidate["link"]
-            if body
-            else candidate.get("_fetched_link") or candidate["link"]
-        )
-        nzbid = _core._append_one_backup(
-            url, candidate, dupe_key, settings_getter, **extra
-        )
+        if not body:
+            # Every fleet append carries its body: append_nzb must never fetch
+            # on the resolve thread. A pick without one fails the resolve.
+            candidate["_append_error"] = "NZB download failed"
+            nzbid = None
+        else:
+            nzbid = _core._append_one_backup(
+                candidate["link"],
+                candidate,
+                dupe_key,
+                settings_getter,
+                nzb_bytes=body,
+            )
+
         if not nzbid:
             if candidate.get("_is_pick"):
                 # No pick, no fleet: the resolve fails with NZBGet's error.

@@ -179,11 +179,12 @@ def _stale_successes(dupe_key, settings_getter, fleet):
     must stay playable.
     """
     owned_nzbids = (fleet or {}).get("owned_nzbids")
-    owned = set(owned_nzbids() or []) if owned_nzbids is not None else set()
+    owned = list(owned_nzbids() or []) if owned_nzbids is not None else []
+    # str/int tolerant: some NZBGet builds serialize history NZBIDs as strings.
     return tuple(
         nzbid
         for nzbid in _preexisting_success_ids(dupe_key, settings_getter)
-        if nzbid not in owned
+        if not nzbget_api._nzbid_in(nzbid, owned)
     )
 
 
@@ -881,7 +882,10 @@ def _record_fleet_pubdates(dupe, title, completed_nzbid=None):
     dupe = dupe or {}
     rows = list(dupe.get("backups") or []) + list(dupe.get("extras") or [])
     for row in rows:
-        if row.get("_nzbid") == completed_nzbid and row.get("pubdate"):
+        # str/int tolerant: the terminal history NZBID may be a string.
+        if row.get("pubdate") and nzbget_api._same_nzbid(
+            row.get("_nzbid"), completed_nzbid
+        ):
             record_download(row.get("title") or title, row["pubdate"])
 
 

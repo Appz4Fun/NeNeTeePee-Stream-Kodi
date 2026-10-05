@@ -22,15 +22,23 @@ from resources.lib.nzbget_resolver import (
 
 @pytest.fixture(autouse=True)
 def _no_real_nzb_prefetch():
-    """Keep the fleet's NZB prefetch off the network (#372).
+    """Keep the fleet's NZB downloads off the network (#372).
 
-    A failed prefetch falls back to ``append_nzb`` fetching the URL itself, so
-    tests that patch ``append_nzb`` see exactly the URL-based calls they did
-    before the prefetch existed. Tests of the prefetch patch it explicitly.
+    Every URL "downloads" a small valid NZB unique to that URL, so fleet tests
+    that patch ``append_nzb`` see one append per distinct URL (with the body
+    attached). Tests of the download itself patch it explicitly.
     """
+
+    def _fake_nzb(url):
+        return (
+            '<nzb xmlns="http://www.newzbin.com/DTD/2003/nzb"><file subject="x">'
+            '<segments><segment bytes="1" number="1">{}@t</segment></segments>'
+            "</file></nzb>".format(url)
+        ).encode("utf-8")
+
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.fetch_nzb_bytes",
-        side_effect=OSError("no network in unit tests"),
+        side_effect=_fake_nzb,
     ):
         yield
 
