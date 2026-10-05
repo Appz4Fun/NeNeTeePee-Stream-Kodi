@@ -20,7 +20,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import nzbget_api, nzbget_submit_ledger
+from resources.lib import nzb_cache, nzbget_api, nzbget_submit_ledger
 from resources.lib.download_ledger import record_download
 from resources.lib.http_util import notify as _notify
 from resources.lib.http_util import redact_text as _redact_text
@@ -706,15 +706,28 @@ def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
     try:
         return _submit_poll_resolve(ctx, nzb_url, title, meta[0], meta[1])
     finally:
-        _discard_parked_pick(ctx)
+        _discard_parked_pick(ctx, nzb_url)
 
 
-def _discard_parked_pick(ctx):
-    """Delete the pick NZB ``submit_fleet`` parked for the FORCE rescue."""
+def _discard_parked_pick(ctx, nzb_url=None):
+    """Drop the pick NZB ``submit_fleet`` parked for the FORCE rescue.
+
+    After a USER cancel (not a Kodi shutdown) the file is kept in
+    ``nzb_cache`` for a day instead: the cancel deleted the pick from NZBGet,
+    and a replay re-sends this file rather than grabbing it from the indexer
+    again. Otherwise it is deleted.
+    """
     path = getattr(ctx, "pick_nzb_path", None)
     if path:
-        with contextlib.suppress(OSError):
-            os.remove(path)
+        canceled = getattr(ctx, "cancel_event", None)
+        user_cancel = (
+            canceled is not None
+            and canceled.is_set()
+            and not getattr(ctx, "fleet_aborted", False)
+        )
+        if not (user_cancel and nzb_url and nzb_cache.keep(nzb_url, path)):
+            with contextlib.suppress(OSError):
+                os.remove(path)
         ctx.pick_nzb_path = None
     if getattr(ctx, "pick_nzb_bytes", None) is not None:
         ctx.pick_nzb_bytes = None

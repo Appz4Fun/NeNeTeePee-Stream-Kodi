@@ -233,7 +233,9 @@ NZBGet starts downloading:
 
 Cancel at any step: if you cancel before the upload, nothing is sent to
 NZBGet; if you cancel during it, your pick is removed and the backups already
-parked in NZBGet's history are kept for a replay.
+parked in NZBGet's history are kept for a replay. Your pick's NZB file is kept
+on the Kodi box for a day too, so a replay sends it again without another
+download from the indexer.
 
 Playing the same release again within a day doesn't send the same backups
 again. NeNeTeePee-Stream-Kodi remembers every NZB it sent to NZBGet for 24

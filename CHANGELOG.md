@@ -88,7 +88,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to NZBGet. A replay within 24 hours skips the backups NZBGet still holds from
   the earlier play (no second indexer download or append), and only the NZBGet
   backend ever builds a duplicate fleet. Canceling a play removes the pick (and
-  anything queued) but keeps its parked backups, so a quick replay reuses them.
+  anything queued) but keeps its parked backups, so a quick replay reuses them,
+  and keeps the pick's NZB file on the box for a day so the replay re-sends it
+  without another indexer download.
 - **Backend settings section.** Move backend selection and connection settings
   to the **Playback backend** section in the settings view. Choose nzbdav /
   InfiniDysk, NZBGet, or StreamNZB to show the fields for that backend.

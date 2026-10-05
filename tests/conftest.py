@@ -4,7 +4,10 @@
 """Mock Kodi modules for testing outside of Kodi."""
 
 import contextlib
+import os
+import shutil
 import sys
+import tempfile
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -92,17 +95,26 @@ def _suppress_readahead_daemon(request):
 
 
 @pytest.fixture(autouse=True)
-def _isolated_nzbget_submit_ledger(tmp_path):
-    """Give every test its own NZBGet resubmit ledger file.
+def _isolated_nzbget_submit_ledger():
+    """Give every test its own NZBGet resubmit ledger file and NZB cache.
 
     The mocked ``translatePath`` returns one shared path for the whole run, so
     without this a fleet test's sends would make a later test skip backups.
     """
-    from resources.lib import nzbget_submit_ledger
+    from resources.lib import nzb_cache, nzbget_submit_ledger
 
-    path = str(tmp_path / "nzbget_submitted.json")
-    with patch.object(nzbget_submit_ledger, "_path", return_value=path):
-        yield
+    # Outside tmp_path: some tests assert their tmp_path stays empty.
+    state = tempfile.mkdtemp(prefix="nzbdav-test-state-")
+    path = os.path.join(state, "nzbget_submitted.json")
+    cache_dir = os.path.join(state, "nzb_cache")
+    os.makedirs(cache_dir)
+    try:
+        with patch.object(
+            nzbget_submit_ledger, "_path", return_value=path
+        ), patch.object(nzb_cache, "_cache_dir", return_value=cache_dir):
+            yield
+    finally:
+        shutil.rmtree(state, ignore_errors=True)
 
 
 @pytest.fixture

@@ -2352,3 +2352,20 @@ def test_a_full_spool_disk_falls_back_to_memory_for_backups(_fleet_env):
     assert [c.args[0] for c in ap.call_args_list] == ["pick", "b0", "b1"]
     assert len(downloads) == 1  # spooling stopped after the first failure
     assert {c.args[0] for c in fetch.call_args_list} == {"pick", "b0", "b1"}
+
+
+def test_a_cached_pick_is_resent_without_an_indexer_grab(_fleet_env, tmp_path):
+    # Owner request: a pick canceled within a day re-sends its kept NZB.
+    from resources.lib import nzb_cache
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    source = tmp_path / "pick.nzb"
+    source.write_bytes(_valid("pick"))
+    assert nzb_cache.keep("pick", str(source))
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+    with patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (1, None)
+    assert [c.args[0] for c in fetch.call_args_list] == ["b0"]
+    assert append.call_args_list[0].kwargs["nzb_bytes"] == _valid("pick")

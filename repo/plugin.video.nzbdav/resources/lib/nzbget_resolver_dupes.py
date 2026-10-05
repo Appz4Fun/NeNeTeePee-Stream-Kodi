@@ -198,6 +198,11 @@ def _fleet_fetcher(clusters, spool):
 
     def _fetch(url):
         if url in pick_links:
+            # A pick canceled within the last day kept its NZB on the box:
+            # re-send that instead of another indexer grab.
+            cached = _core.nzb_cache.load(url)
+            if cached:
+                return cached
             # The pick is ONE fetch (memory bounded by the full ceiling) and
             # must not fail just because the temp disk is full: fetch it into
             # memory; ``NzbSpool.save(required=True)`` then keeps it either way.
