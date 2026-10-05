@@ -2408,3 +2408,28 @@ def test_a_lift_past_the_32_bit_score_range_sends_the_pick_alone_with_force(
     assert [c.args[0] for c in append.call_args_list] == ["pick"]
     assert append.call_args.kwargs["dupe_mode"] == "FORCE"
     assert append.call_args.kwargs["dupe_score"] <= 2**31 - 1
+
+
+def test_prefetch_is_serialized_once_the_spool_holds_bodies_in_memory(_fleet_env):
+    # Codex r36 (P1): without a writable temp folder, bodies come back into
+    # memory, so the fleet fetches one at a time instead of four.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    active = {"now": 0, "peak": 0}
+    lock = threading.Lock()
+
+    def _fetch(url, **_kw):
+        with lock:
+            active["now"] += 1
+            active["peak"] = max(active["peak"], active["now"])
+        time.sleep(0.05)
+        with lock:
+            active["now"] -= 1
+        return _valid(url)
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b{}".format(i)} for i in range(5)]))
+    with patch.object(NzbSpool, "on_disk", return_value=False), patch(
+        _FETCH, side_effect=_fetch
+    ), patch(_APPEND, side_effect=[(i, None) for i in range(1, 7)]):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert active["peak"] == 1

@@ -79,3 +79,13 @@ def test_success_or_shutdown_deletes_the_parked_pick(tmp_path):
         _discard_parked_pick(ctx, "https://hydra/getnzb/api/8")
         assert not os.path.exists(path)
     assert nzb_cache.load("https://hydra/getnzb/api/8") is None
+
+
+def test_a_failed_rename_caches_nothing(tmp_path):
+    # Codex r36: cross-device (or any failed) rename never leaves a partial
+    # cache entry; the pick is just not cached.
+    source = _nzb_file(tmp_path)
+    with patch.object(nzb_cache.os, "replace", side_effect=OSError(18, "EXDEV")):
+        assert not nzb_cache.keep("https://hydra/getnzb/api/9", source)
+    assert os.path.exists(source)
+    assert nzb_cache.load("https://hydra/getnzb/api/9") is None

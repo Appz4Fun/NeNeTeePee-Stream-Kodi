@@ -102,7 +102,9 @@ def _submit_candidates(
         clusters,
         fetch,
         cancel_event,
-        window=PREFETCH_WINDOW,
+        # Parallel fetches only while bodies stream to disk: once the spool
+        # can only hold them in memory, one at a time keeps the peak bounded.
+        window=lambda: PREFETCH_WINDOW if spool.on_disk() else 1,
         # Never fetch past what the current round can still use.
         demand=lambda: tally["wanted"],
         # A stalled indexer must not hide a dialog cancel or Kodi shutdown.

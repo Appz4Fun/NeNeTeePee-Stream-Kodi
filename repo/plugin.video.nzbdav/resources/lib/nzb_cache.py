@@ -15,7 +15,6 @@ indexer key lands on disk. Fails soft: any error means "not cached".
 import contextlib
 import hashlib
 import os
-import shutil
 import time
 
 import xbmcvfs
@@ -67,7 +66,10 @@ def keep(link, source_path, now=None):
         target = _cache_path(link)
         if target is None or not source_path or not os.path.isfile(source_path):
             return False
-        shutil.move(source_path, target)
+        # Rename only: atomic, and instant on the resolve thread. A parked
+        # pick on another filesystem (system temp) is simply not cached --
+        # never a slow, possibly partial cross-device copy.
+        os.replace(source_path, target)
         os.utime(target, (now, now))
         _prune(os.path.dirname(target), now)
         return True

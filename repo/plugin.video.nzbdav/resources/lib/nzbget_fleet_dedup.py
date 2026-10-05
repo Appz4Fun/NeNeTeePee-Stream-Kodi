@@ -484,6 +484,10 @@ class NzbSpool:
         self._in_memory += len(body)
         return body
 
+    def on_disk(self):
+        """Whether new bodies still go to disk (else they are held in memory)."""
+        return self._dir is not None and not self._full
+
     def degrade(self):
         """Stop handing out spool paths (the temp disk filled up mid-fleet).
 
@@ -733,15 +737,18 @@ def prefetched_clusters(  # pylint: disable=too-many-arguments
     (a cancel, or the caller's cap being met) stops every in-flight fetch from
     moving on to its cluster's next listing and starts no new ones.
     """
-    window = max(1, window)
+    # ``window`` may be a callable re-read before each refill (the fleet
+    # serializes fetches once its spool can only hold bodies in memory).
+    window_of = window if callable(window) else (lambda: window)
     stop = threading.Event()
     stop_events = (cancel_event, stop)
     pending = collections.deque()
     remaining = iter(clusters)
 
     def _wanted():
+        size = max(1, int(window_of()))
         limit = demand() if demand is not None else None
-        return window if limit is None else max(0, min(window, limit))
+        return size if limit is None else max(0, min(size, limit))
 
     def _refill():
         while len(pending) < _wanted():
