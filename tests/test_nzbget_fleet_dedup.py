@@ -1387,3 +1387,63 @@ def test_backup_fetches_are_size_capped_tighter_than_the_pick(_fleet_env):
         submit_fleet(ctx, "pick", "T", "k")
     assert caps["pick"] is None  # the nzbget_api default ceiling
     assert caps["b0"] == caps["b1"] == _FLEET_NZB_MAX_BYTES
+
+
+def test_oversized_backup_is_refetched_serially_not_dropped(_fleet_env):
+    # Codex r16 (P1): a valid backup over the parallel cap is retried at the
+    # full ceiling (one at a time), never dropped.
+    from resources.lib.http_util import HttpResponseTooLarge
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    calls = []
+
+    def _fetch(url, max_bytes=None):
+        calls.append((url, max_bytes))
+        if url == "big" and max_bytes is not None:
+            raise HttpResponseTooLarge("over the parallel cap")
+        return _valid(url)
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "big"}]))
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "big"]
+    assert ("big", None) in calls
+
+
+def test_loader_batches_share_the_fleet_replacement_budget(_fleet_env):
+    # Codex r16: cap 1 + budget 6; six rejected picker backups exhaust it, so
+    # the loader is never consulted for more appends.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    loader_calls = []
+    rows = [{"link": "b{}".format(i)} for i in range(6)]
+    dupe = _fleet_dupe(
+        rows,
+        max_backups=1,
+        loader=lambda: loader_calls.append(1) or [{"link": "x"}],
+        loader_limit={"n": None},
+    )
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(i, None) for i in range(1, 9)]
+    ) as append, patch(_VETO, side_effect=[False] + [True] * 7):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert append.call_count == 1 + 6  # the pick + the whole budget
+    assert not loader_calls
+
+
+def test_dialog_teardown_never_hides_a_kodi_shutdown():
+    from resources.lib.nzbget_fleet_run import _FleetProgress
+
+    class _Broken:  # pylint: disable=too-few-public-methods
+        def iscanceled(self):
+            raise RuntimeError("dialog gone")
+
+    cancel = threading.Event()
+    monitor = type("M", (), {"abortRequested": lambda self: True})()
+    with patch("resources.lib.nzbget_resolver.xbmc.Monitor", return_value=monitor):
+        progress = _FleetProgress(_Broken(), cancel)
+        assert progress.canceled() is True
+    assert progress.aborted and cancel.is_set()

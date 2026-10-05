@@ -116,7 +116,14 @@ def _fill_from_loader(dupe, progress, run, state):
     cap, live, prior = state
     prior = list(prior)
     limit = dupe.get("loader_limit")
+    dedup = run[3]
+    # One replacement budget for the whole fleet: loader batches continue the
+    # attempts the picker/Hydra pass already spent (never a fresh allowance).
+    budget = cap + _core._MAX_VETO_REPLACEMENTS
     while live < cap and not progress.canceled():
+        attempts_left = budget - getattr(dedup, "attempts_used", 0)
+        if attempts_left <= 0:
+            return
         if isinstance(limit, dict):
             asked = int(limit.get("n") or 0) + (cap - live)
             if limit.get("n") is not None and limit["n"] >= _MAX_FALLBACKS:
@@ -130,7 +137,7 @@ def _fill_from_loader(dupe, progress, run, state):
             _send_batch(
                 run,
                 more,
-                (remaining, remaining + _core._MAX_VETO_REPLACEMENTS),
+                (remaining, budget - getattr(dedup, "attempts_used", 0)),
                 True,
             )
         )
@@ -262,11 +269,15 @@ class _FleetProgress:
 
     def canceled(self):
         """True (and the cancel event set) on a dialog cancel or Kodi shutdown."""
+        # Two independent probes: a dialog Kodi is tearing down (iscanceled
+        # raising) must never suppress the shutdown check. ``is True``: Kodi
+        # returns real bools; anything else (a stub) is not a cancel.
         try:
-            # ``is True``: Kodi returns real bools; anything else (a stub) is
-            # not a cancel.
             if self._dialog is not None and self._dialog.iscanceled() is True:
                 self._cancel_event.set()
+        except Exception as exc:  # pylint: disable=broad-except
+            _log_dialog_error(exc)
+        try:
             if _core.xbmc.Monitor().abortRequested() is True:
                 self.aborted = True
                 self._cancel_event.set()

@@ -17,6 +17,7 @@ moved name is re-exported from ``nzbget_resolver``.
 import threading
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
+from resources.lib.http_util import HttpResponseTooLarge
 from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     PREFETCH_WINDOW,
     FleetDedup,
@@ -130,6 +131,8 @@ def _submit_candidates(
             if need is None or tally.get("pick_failed"):
                 break  # unlimited: everything was collected and sent
     finally:
+        # The fleet-wide append budget: later loader batches continue it.
+        dedup.attempts_used = getattr(dedup, "attempts_used", 0) + tally["attempts"]
         stream.close()
         spool.close()
         # Every inspected row is now decided: the completion ledger records
@@ -141,25 +144,33 @@ def _submit_candidates(
 
 # Per-response ceiling for BACKUP NZBs fetched in parallel: PREFETCH_WINDOW
 # of them can be in flight before any reaches the spool, so this bounds that
-# memory (4 x 32 MiB) on a CoreELEC box. Real NZBs sit far below it (a 100 GB
-# release is ~25 MB of XML); the pick keeps the full nzbget_api ceiling.
+# memory on a CoreELEC box. Real NZBs sit far below it (a 100 GB release is
+# ~25 MB of XML); a larger one is re-fetched at the full nzbget_api ceiling,
+# ONE AT A TIME, so it is never dropped and memory stays bounded (window-1
+# small bodies plus one large one).
 _FLEET_NZB_MAX_BYTES = 32 * 1024 * 1024
 
 
 def _fleet_fetcher(clusters):
-    """The fleet's NZB fetch: the pick's listings at the full ceiling, the
-    backups' at ``_FLEET_NZB_MAX_BYTES``."""
+    """The fleet's NZB fetch: the pick's listings at the full ceiling; the
+    backups' at ``_FLEET_NZB_MAX_BYTES``, retrying an oversized one at the full
+    ceiling behind a lock so only one large body is ever in flight."""
     pick_links = {
         row.get("link")
         for cluster in clusters[:1]
         if cluster and cluster[0].get("_is_pick")
         for row in cluster
     }
+    oversized = threading.Lock()
 
     def _fetch(url):
         if url in pick_links:
             return _core.nzbget_api.fetch_nzb_bytes(url)
-        return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+        try:
+            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+        except HttpResponseTooLarge:
+            with oversized:
+                return _core.nzbget_api.fetch_nzb_bytes(url)
 
     return _fetch
 
