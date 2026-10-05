@@ -89,9 +89,15 @@ def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
     return data.get("result") if isinstance(data, dict) else None, None
 
 
+# Same ceiling as the nzbdav manifest fetch: a broken or hostile indexer
+# response must not be buffered whole on a small CoreELEC box (the duplicate
+# fleet prefetches several at once).
+_MAX_NZB_BYTES = 100 * 1024 * 1024
+
+
 def _fetch_nzb_bytes(nzb_url):
-    """Fetch the NZB body. Returns bytes. Raises on failure."""
-    body = _http_get(nzb_url, timeout=_RPC_TIMEOUT)
+    """Fetch the NZB body. Returns bytes. Raises on failure or over the cap."""
+    body = _http_get(nzb_url, timeout=_RPC_TIMEOUT, max_bytes=_MAX_NZB_BYTES)
     if isinstance(body, str):
         body = body.encode("utf-8")
     return body

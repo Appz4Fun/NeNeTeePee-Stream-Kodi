@@ -128,6 +128,8 @@ def _submit_candidates(
             if not nzbid:
                 continue
             dedup.remember_posting(fingerprint)
+            # Lets the completion ledger record this row under its own title.
+            candidate["_submitted"] = True
             # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
             # delete this id immediately, and a COPY-vetoed row still needs deleting.
             if submitted_sink is not None:
@@ -458,6 +460,8 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
     else:
         remaining = max(0, max_backups - len(live))
     candidates = _core._loader_extras_for_fleet(dupe, backups, live_count=len(live))
+    # Shared with the resolve thread's completion ledger (_record_fleet_pubdates).
+    dupe["extras"] = candidates
     if candidates:
         _core._submit_extras_until_filled(
             candidates,

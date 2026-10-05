@@ -498,3 +498,74 @@ def test_hydra_duplicate_lookup_runs_once_per_selection():
         second = _fetch_fallback_extra_uploads(selected, None)
     assert first == second == uploads
     fetch.assert_called_once()
+
+
+def test_pick_grab_falls_back_to_a_mirror_listing_of_its_posting():
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _submit_pick
+
+    pick = {"link": "http://dead/pick.nzb", "size": "100", "pubdate": _PUB}
+    mirror = {"link": "http://alive/m.nzb", "size": "100", "pubdate": _PUB_90S}
+    other = {"link": "http://alive/o.nzb", "size": "200", "pubdate": _PUB}
+    body = _nzb(_ids("p", 20))
+    ctx = SimpleNamespace(
+        settings_getter=None,
+        dupe={"pick_score": 7, "pick": pick, "backups": [other, mirror]},
+    )
+    fetched = []
+
+    def _fetch(url):
+        fetched.append(url)
+        if url == pick["link"]:
+            raise OSError("indexer down")
+        return body
+
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, return_value=(1, None)
+    ) as append:
+        _submit_pick(ctx, pick["link"], "T", "k")
+    assert fetched == [pick["link"], mirror["link"]]  # never the other posting
+    assert append.call_args.args[0] == pick["link"]
+    assert append.call_args.kwargs["nzb_bytes"] == body
+    assert ctx.dupe["pick_fingerprint"] == posting_fingerprint(body)
+
+
+def test_submitted_extras_are_ledger_recorded_under_their_own_titles():
+    from resources.lib.nzbget_resolver import _record_fleet_pubdates
+
+    dupe = {
+        "backups": [],
+        "extras": [
+            {"title": "Alt Name", "pubdate": _PUB, "_submitted": True},
+            {"title": "Never Sent", "pubdate": _PUB_90S},
+            {"title": "Hydra Upload", "pubdate": "", "_submitted": True},
+        ],
+    }
+    with patch("resources.lib.nzbget_resolver.record_download") as record:
+        _record_fleet_pubdates(dupe, "Pick")
+    assert [c.args for c in record.call_args_list] == [("Alt Name", _PUB)]
+
+
+def test_worker_flags_submitted_extras_for_the_ledger():
+    from resources.lib.nzbget_resolver import _submit_backup_fleet
+
+    dupe = {
+        "key": "k",
+        "backups": [],
+        "max_backups": -1,
+        "loader": lambda: [{"link": "x", "title": "X", "pubdate": _PUB}],
+    }
+    with patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])), patch(
+        _APPEND, return_value=(3, None)
+    ):
+        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
+    assert [e["link"] for e in dupe["extras"] if e.get("_submitted")] == ["x"]
+
+
+def test_nzb_fetch_is_size_capped():
+    from resources.lib import nzbget_api
+
+    with patch.object(nzbget_api, "_http_get", return_value="<nzb/>") as get:
+        nzbget_api.fetch_nzb_bytes("http://i/x.nzb")
+    assert get.call_args.kwargs["max_bytes"] == nzbget_api._MAX_NZB_BYTES

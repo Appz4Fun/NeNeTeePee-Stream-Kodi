@@ -25,7 +25,7 @@ from resources.lib.http_util import redact_text as _redact_text
 from resources.lib.i18n import addon_name as _addon_name
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
-from resources.lib.nzbget_fleet_dedup import posting_fingerprint
+from resources.lib.nzbget_fleet_dedup import posting_fingerprint, same_listing
 from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _HEALTHCHECK_LOCK,
     _HEALTHCHECK_WARNED,
@@ -803,17 +803,19 @@ def _submit_pick(ctx, nzb_url, title, dupe_key):
 
     A fleet pick is fetched here (once) so its article fingerprint can seed the
     backup worker's same-posting dedup -- a relisting of the pick's own posting
-    must never become a backup. A failed fetch falls back to ``append_nzb``
-    fetching the URL itself, exactly as before.
+    must never become a backup. When the pick's indexer fails, another
+    indexer's listing of the SAME posting (equal size, post date within the
+    same-listing window) supplies the identical NZB. If every listing fails,
+    ``append_nzb`` fetches the pick's URL itself, exactly as before.
     """
     dupe = ctx.dupe or {}
     extra = {}
     if dupe_key:
-        body = _fetch_pick_body(nzb_url)
+        body, fingerprint = _fetch_pick_body(nzb_url, dupe)
         if body:
             extra["nzb_bytes"] = body
             if isinstance(ctx.dupe, dict):
-                ctx.dupe["pick_fingerprint"] = posting_fingerprint(body)
+                ctx.dupe["pick_fingerprint"] = fingerprint
     return nzbget_api.append_nzb(
         nzb_url,
         title,
@@ -825,12 +827,35 @@ def _submit_pick(ctx, nzb_url, title, dupe_key):
     )
 
 
-def _fetch_pick_body(nzb_url):
-    """The pick's NZB body, or None when the fetch fails (fail-soft)."""
-    try:
-        return nzbget_api.fetch_nzb_bytes(nzb_url)
-    except Exception:  # pylint: disable=broad-except
-        return None
+def _fetch_pick_body(nzb_url, dupe):
+    """The pick's ``(body, fingerprint)`` from its URL or a mirror listing.
+
+    Mirrors are the fleet's picker backups that list the pick's own posting
+    (``same_listing``); the worker never submits those as backups, so they
+    serve here as fallbacks for the pick's grab. A body counts only when it
+    parses as an NZB. ``(None, None)`` when every listing fails (fail-soft).
+    """
+    pick = dupe.get("pick") or {}
+    mirrors = [
+        backup.get("link")
+        for backup in dupe.get("backups") or []
+        if isinstance(backup, dict) and same_listing(pick, backup)
+    ]
+    for url in [nzb_url] + [link for link in mirrors if link and link != nzb_url]:
+        try:
+            body = nzbget_api.fetch_nzb_bytes(url)
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet pick NZB fetch failed: {}".format(
+                    _redact_text(str(exc))
+                ),
+                xbmc.LOGDEBUG,
+            )
+            continue
+        fingerprint = posting_fingerprint(body) if body else None
+        if fingerprint:
+            return body, fingerprint
+    return None, None
 
 
 def _play_completed_download(
@@ -884,13 +909,19 @@ def _record_fleet_pubdates(dupe, title):
     own title, so each backup is recorded under ITS title (``title``, the
     pick's, only when it has none). Recording the whole fleet keeps the
     repost-guard's purpose intact -- an unrelated same-name repost from
-    another day is still rejected (its pubdate is never recorded). Loader
-    extras need no entries: NZBHydra collapsed them, so no picker row carries
-    their pubdate; their completion tags through the pick's own recorded row.
+    another day is still rejected (its pubdate is never recorded). Extras the
+    worker actually submitted (``dupe["extras"]`` rows it flagged
+    ``_submitted``) are recorded the same way, under their own titles, so a
+    promoted differently named extra keeps its repost guard too; an extra
+    without a pubdate (an NZBHydra duplicate upload) has nothing to record.
     record_download is best-effort and dedups epochs, so double-recording is
     harmless.
     """
-    for backup in (dupe or {}).get("backups") or []:
+    dupe = dupe or {}
+    submitted_extras = [
+        extra for extra in dupe.get("extras") or [] if extra.get("_submitted")
+    ]
+    for backup in list(dupe.get("backups") or []) + submitted_extras:
         pubdate = backup.get("pubdate")
         if pubdate:
             record_download(backup.get("title") or title, pubdate)
