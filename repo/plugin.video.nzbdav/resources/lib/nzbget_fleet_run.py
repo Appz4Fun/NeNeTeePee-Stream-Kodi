@@ -45,6 +45,16 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         on_cancel=loader_stop.set if loader_stop is not None else None,
     )
     progress.finding()
+    # Every NZBGet call below runs off-thread (abortable): read the connection
+    # settings ONCE here on the resolve thread -- no off-thread getSetting.
+    getter = _snapshot_getter(getter)
+    dupe_check_off, ctx.preexisting_successes, max_score = _probe_nzbget_config(
+        getter, progress, dupe_key
+    )
+    if progress.canceled():
+        ctx.fleet_aborted = progress.aborted
+        return None, None
+    _lift_scores(dupe, max_score)
     pick = dict(
         dupe.get("pick") or {},
         link=nzb_url,
@@ -53,15 +63,6 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         _is_pick=True,
     )
     candidates = [pick]
-    # Every NZBGet call below runs off-thread (abortable): read the connection
-    # settings ONCE here on the resolve thread -- no off-thread getSetting.
-    getter = _snapshot_getter(getter)
-    dupe_check_off, ctx.preexisting_successes = _probe_nzbget_config(
-        getter, progress, dupe_key
-    )
-    if progress.canceled():
-        ctx.fleet_aborted = progress.aborted
-        return None, None
     if dupe_check_off:
         # Same-key items would download in parallel instead of parking as
         # backups: send the pick alone.
@@ -91,10 +92,32 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     if capped and not dupe_check_off and pick.get("_nzbid"):
         _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
     ctx.fleet_aborted = progress.aborted
+    # The pick's downloaded body, for the poll's FORCE rescue: re-sending it
+    # beats re-fetching a dead, mirrored, or single-use grab URL.
+    ctx.pick_nzb_bytes = pick.pop("_body", None)
     if ctx.cancel_event.is_set():
         return None, None
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _lift_scores(dupe, max_score):
+    """Raise the whole fleet's scores above NZBGet's highest same-key score.
+
+    The picker's scores ride a wall-clock base; after a clock rollback that
+    base can fall below an earlier same-key item, and NZBGet would then
+    dupe-delete the fresh pick. Shifting the pick, the base, and every backup
+    by the same amount keeps their relative order.
+    """
+    pick_score = int(dupe.get("pick_score") or 0)
+    if max_score is None or max_score < pick_score:
+        return
+    bump = max_score + 1 - pick_score
+    dupe["pick_score"] = pick_score + bump
+    dupe["score_base"] = int(dupe.get("score_base") or 0) + bump
+    for backup in dupe.get("backups") or []:
+        if isinstance(backup, dict):
+            backup["score"] = int(backup.get("score") or 0) + bump
 
 
 def _snapshot_getter(getter):
@@ -158,27 +181,34 @@ def _fill_from_loader(dupe, progress, run, state):
 
 
 def _probe_nzbget_config(getter, progress, dupe_key):
-    """Pre-fleet NZBGet probes, abortably: ``(dupecheck_off, preexisting)``.
+    """Pre-fleet NZBGet probes, abortably: ``(dupecheck_off, preexisting, max)``.
 
-    The same-key preexisting-success snapshot (history), the ``DupeCheck=no``
-    check, and the HealthCheck=Pause warning are RPCs that can each hang for
+    The same-key preexisting-success snapshot (history), the highest same-key
+    DupeScore (``_lift_scores``), the ``DupeCheck=no`` check, and the
+    HealthCheck=Pause warning are RPCs that can each hang for
     the RPC timeout, so they run off-thread behind the cancel/shutdown-aware
     wait, reading only ``getter`` (the caller's settings snapshot). A canceled
-    or failed probe returns ``(False, None)`` (DupeCheck assumed on; the poll
-    then snapshots successes itself).
+    or failed probe returns ``(False, None, None)`` (DupeCheck assumed on; the
+    poll then snapshots successes itself; scores are left as computed).
     """
 
     def _probe():
         # Same-key successes BEFORE this fleet submits anything: one another
         # resolve lands while this fleet downloads/sends is not stale.
         preexisting = _core._preexisting_success_ids(dupe_key, getter)
+        max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
+            dupe_key, settings_getter=getter
+        )
         if _core._dupe_check_disabled(getter):
-            return True, preexisting
+            return True, preexisting, max_score
         _core._warn_if_healthcheck_pauses(getter)
-        return False, preexisting
+        return False, preexisting, max_score
 
     return call_abortable(
-        _probe, (progress.cancel_event,), progress.canceled, default=(False, None)
+        _probe,
+        (progress.cancel_event,),
+        progress.canceled,
+        default=(False, None, None),
     )
 
 

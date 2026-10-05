@@ -735,7 +735,9 @@ def test_resolve_cancel_during_fleet_deletes_appends_and_exits_silently():
 
     with patch(
         "resources.lib.nzbget_fleet_run.submit_fleet", side_effect=_fleet
-    ), patch("resources.lib.nzbget_resolver.nzbget_api.cancel_jobs") as cancel, patch(
+    ), patch(
+        "resources.lib.nzbget_resolver._cancel_jobs_in_background"
+    ) as cancel, patch(
         "resources.lib.nzbget_resolver.poll_nzbget_job"
     ) as poll:
         assert _submit_poll_resolve(ctx, "pick", "T", None, None) is False
@@ -1641,3 +1643,105 @@ def test_loader_widens_past_filtered_out_rows(_fleet_env):
         submit_fleet(ctx, "pick", "The.Matrix.1999.1080p.BluRay.x264-GRP", "k")
     assert asked == [1, 2]
     assert [c.args[0] for c in append.call_args_list] == ["pick", "ok"]
+
+
+def test_cancel_cleanup_runs_off_the_resolve_thread_on_a_snapshot():
+    # Codex r20: a stalled NZBGet must not hold a cancel open.
+    import time
+
+    from resources.lib.nzbget_resolver import _cancel_jobs_in_background
+
+    release = threading.Event()
+    seen = {}
+
+    def _slow_cancel(ids, settings_getter=None):
+        seen["ids"] = ids
+        seen["url"] = settings_getter("nzbget_url")
+        release.wait(5)
+
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api._get_settings",
+        return_value=("http://n", "u", "p", ""),
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs", side_effect=_slow_cancel
+    ):
+        start = time.monotonic()
+        _cancel_jobs_in_background([5, 6], None)
+        assert time.monotonic() - start < 1
+        for _ in range(100):
+            if seen:
+                break
+            time.sleep(0.01)
+        release.set()
+    assert seen == {"ids": [5, 6], "url": "http://n"}
+
+
+def test_fleet_scores_are_lifted_above_nzbgets_highest_same_key_score(_fleet_env):
+    # Codex r20: after a clock rollback the wall-clock base can fall below an
+    # earlier same-key item; the fleet shifts every score above it.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    dupe = _fleet_dupe([{"link": "b0"}, {"link": "b1"}])
+    ctx = _fleet_ctx(dupe)
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.max_dupe_score_by_dupekey",
+        return_value=5000,
+    ), patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    scores = [c.kwargs["dupe_score"] for c in append.call_args_list]
+    assert scores[0] == 5001 and scores == sorted(scores, reverse=True)
+    assert dupe["pick_score"] == 5001  # the FORCE rescue re-sends at this score
+
+
+def test_max_dupe_score_reads_queue_and_history():
+    from resources.lib import nzbget_api
+
+    rows = {
+        "history": [
+            {"DupeKey": "k", "DupeScore": 7},
+            {"DupeKey": "x", "DupeScore": 99},
+        ],
+        "listgroups": [{"DupeKey": "k", "DupeScore": "12"}],
+    }
+    with patch.object(
+        nzbget_api,
+        "_rpc_call",
+        side_effect=lambda m, p, settings_getter=None: (rows[m], None),
+    ):
+        assert nzbget_api.max_dupe_score_by_dupekey("k") == 12
+        assert nzbget_api.max_dupe_score_by_dupekey("none") is None
+
+
+def test_force_rescue_resends_the_fleets_pick_body():
+    # Codex r20: the pick URL may be dead/single-use; re-send the body.
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _pick_rescue_callable
+
+    ctx = SimpleNamespace(
+        settings_getter=lambda *_a: "",
+        dupe={"key": "k", "pick_score": 9},
+        submitted_nzbids=[],
+        dialog=None,
+        cancel_event=threading.Event(),
+        pick_nzb_bytes=b"<nzb/>",
+    )
+    rescue = _pick_rescue_callable(ctx, "http://dead/pick.nzb", "T")
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.active_group_by_name",
+        return_value=False,
+    ), patch(_APPEND, return_value=(42, None)) as append:
+        assert rescue() == 42
+    assert append.call_args.kwargs["nzb_bytes"] == b"<nzb/>"
+    assert append.call_args.kwargs["dupe_mode"] == "FORCE"
+
+
+def test_fleet_hands_the_pick_body_to_the_resolve(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert ctx.pick_nzb_bytes == _valid("pick")

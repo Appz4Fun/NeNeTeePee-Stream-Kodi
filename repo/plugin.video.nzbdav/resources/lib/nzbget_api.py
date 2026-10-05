@@ -729,6 +729,32 @@ def _nzbid_in(nzbid, nzbids):
     return any(_same_nzbid(nzbid, other) for other in nzbids or ())
 
 
+def max_dupe_score_by_dupekey(dupe_key, settings_getter=None):
+    """Highest DupeScore NZBGet holds for ``dupe_key`` (queue + history), or None.
+
+    A fresh fleet must outrank every same-key item NZBGet already has
+    (NZBGet only downloads a SCORE-mode duplicate that beats them), and a
+    wall-clock score base cannot promise that after the box's clock rolls
+    back. Best-effort: RPC errors are skipped; None when nothing matches.
+    """
+    if not dupe_key:
+        return None
+    best = None
+    for method, params in (("history", [False]), ("listgroups", [0])):
+        rows, error = _rpc_call(method, params, settings_getter=settings_getter)
+        if error is not None or not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict) or row.get("DupeKey") != dupe_key:
+                continue
+            try:
+                score = int(row.get("DupeScore"))
+            except (TypeError, ValueError):
+                continue
+            best = score if best is None else max(best, score)
+    return best
+
+
 def success_ids_by_dupekey(dupe_key, settings_getter=None):
     """NZBIDs of every SUCCESS history row sharing ``dupe_key`` (#372 round 4).
 

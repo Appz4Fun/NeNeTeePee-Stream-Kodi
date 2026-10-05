@@ -329,6 +329,9 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
                 return
             continue
         candidate["_nzbid"] = nzbid
+        if is_pick:
+            # Kept for the poll's FORCE rescue (submit_fleet hands it over).
+            candidate["_body"] = NzbSpool.load(handle)
         dedup.remember_listing(candidate)
         dedup.commit_posting(fingerprint)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
@@ -745,6 +748,10 @@ def _pick_rescue_callable(ctx, nzb_url, title):
                 _core.xbmc.LOGINFO,
             )
             return None
+        # Re-send the body the fleet already downloaded when there is one: the
+        # pick URL may be dead (a mirror supplied it) or single-use.
+        body = getattr(ctx, "pick_nzb_bytes", None)
+        extra = {"nzb_bytes": body} if body else {}
         try:
             nzbid, error = _core.nzbget_api.append_nzb(
                 nzb_url,
@@ -753,6 +760,7 @@ def _pick_rescue_callable(ctx, nzb_url, title):
                 dupe_key=dupe.get("key") or "",
                 dupe_score=int(dupe.get("pick_score") or 0),
                 dupe_mode="FORCE",
+                **extra,
             )
         except Exception as exc:  # pylint: disable=broad-except
             _core.xbmc.log(

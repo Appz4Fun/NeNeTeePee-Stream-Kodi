@@ -622,6 +622,8 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # True when the foreground fleet stopped for a Kodi shutdown (vs a
         # user cancel): its appended jobs are left to finish.
         self.fleet_aborted = False
+        # The pick's downloaded NZB, re-sent by the FORCE rescue.
+        self.pick_nzb_bytes = None
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -762,11 +764,10 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
                 ctx.on_failure(_string(30101))
                 return True
             # User cancel while finding/downloading/sending: delete whatever
-            # this resolve already appended, then exit silently.
+            # this resolve already appended -- in the background, so a stalled
+            # NZBGet can't hold the cancel (and the dialog) open -- then exit.
             if ctx.submitted_nzbids:
-                nzbget_api.cancel_jobs(
-                    list(ctx.submitted_nzbids), settings_getter=getter
-                )
+                _cancel_jobs_in_background(list(ctx.submitted_nzbids), getter)
             ctx.on_failure(None)
             return False
     else:
@@ -823,6 +824,47 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         job_name=result.get("job_name") or title,
     )
     return leave_job
+
+
+def _cancel_jobs_in_background(nzbids, settings_getter):
+    """Best-effort ``cancel_jobs`` on a daemon thread (never blocks a cancel).
+
+    The connection settings are read here, on the resolve thread; the thread
+    only sees that snapshot. A thread that can't start skips the cleanup.
+    """
+    url, user, password, category = nzbget_api._get_settings(settings_getter)
+    snapshot = {
+        "nzbget_url": url,
+        "nzbget_username": user,
+        "nzbget_password": password,
+        "nzbget_category": category,
+    }
+
+    def _cleanup():
+        try:
+            nzbget_api.cancel_jobs(
+                nzbids,
+                settings_getter=lambda key, default="": snapshot.get(key, default),
+            )
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet cancel cleanup failed: {}".format(
+                    _redact_text(str(exc))
+                ),
+                xbmc.LOGWARNING,
+            )
+
+    try:
+        threading.Thread(
+            target=_cleanup, name="nzbdav-nzbget-cancel", daemon=True
+        ).start()
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet cancel cleanup thread failed: {}".format(
+                exc
+            ),
+            xbmc.LOGWARNING,
+        )
 
 
 def _submit_pick(ctx, nzb_url, title, dupe_key):
