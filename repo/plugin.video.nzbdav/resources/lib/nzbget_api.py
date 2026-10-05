@@ -95,20 +95,20 @@ def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
 _MAX_NZB_BYTES = 100 * 1024 * 1024
 
 
-def _fetch_nzb_bytes(nzb_url):
+def _fetch_nzb_bytes(nzb_url, max_bytes=_MAX_NZB_BYTES):
     """Fetch the NZB body. Returns bytes. Raises on failure or over the cap."""
-    body = _http_get(nzb_url, timeout=_RPC_TIMEOUT, max_bytes=_MAX_NZB_BYTES)
+    body = _http_get(nzb_url, timeout=_RPC_TIMEOUT, max_bytes=max_bytes)
     if isinstance(body, str):
         body = body.encode("utf-8")
     return body
 
 
-def fetch_nzb_bytes(nzb_url):
+def fetch_nzb_bytes(nzb_url, max_bytes=_MAX_NZB_BYTES):
     """Public NZB fetch for callers that inspect the body before ``append_nzb``.
 
-    Raises on failure, like ``_fetch_nzb_bytes``.
+    Raises on failure (or past ``max_bytes``), like ``_fetch_nzb_bytes``.
     """
-    return _fetch_nzb_bytes(nzb_url)
+    return _fetch_nzb_bytes(nzb_url, max_bytes=max_bytes)
 
 
 def _append_params(

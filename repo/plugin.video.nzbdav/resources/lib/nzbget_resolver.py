@@ -912,8 +912,9 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     """Join explicit manifest sources to the tracked Smart-Duplicates flow.
 
     The manifest already defines the selected group, so include every distinct
-    alternative, bounded by ``nzbget_max_backups`` like any NZBGet fleet (0
-    turns manifest backups off too). The fleet still enforces DupeCheck and
+    alternative, gated by ``fallback_streams_enabled`` and bounded by
+    ``nzbget_max_backups`` like any NZBGet fleet (either can turn manifest
+    backups off). The fleet still enforces DupeCheck and
     cancellation. Hash the exact group to avoid exposing URL credentials in
     NZBGet's DupeKey.
     """
@@ -927,9 +928,12 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     )
     if len(urls) < 2:
         return None
-    cap = _parse_max_backups(
-        _bind_getter(settings_getter)("nzbget_max_backups", "-1") or "-1"
-    )
+    getter = _bind_getter(settings_getter)
+    # Same gates as a picker fleet (_dupe_max_backups): the global fallback
+    # switch, then the NZBGet cap (0 = off).
+    if str(getter("fallback_streams_enabled", "true") or "true").lower() == "false":
+        return None
+    cap = _parse_max_backups(getter("nzbget_max_backups", "-1") or "-1")
     if cap == 0:
         return None
     key = hashlib.sha256("\n".join(sorted(urls)).encode("utf-8")).hexdigest()

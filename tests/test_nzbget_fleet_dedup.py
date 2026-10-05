@@ -192,14 +192,14 @@ def test_only_sent_listings_cover_later_phases():
 # --- prefetched_clusters ----------------------------------------------------
 
 
-def _valid(url):
+def _valid(url, **_kw):
     return _nzb([url + "@x"])
 
 
 def test_prefetch_yields_in_rank_order_and_tries_next_listing():
     clusters = [[{"link": "a"}], [{"link": "b1"}, {"link": "b2"}], [{"link": "c"}]]
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         if url == "b1":
             raise OSError("403")
         return _valid(url)
@@ -242,7 +242,7 @@ def test_prefetch_close_stops_in_flight_fetches_moving_on():
     release = threading.Event()
     fetched = []
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         fetched.append(url)
         if url == "slow1":
             release.wait(5)
@@ -287,14 +287,14 @@ def test_prefetch_never_fetches_inline_when_threads_cannot_start():
         got = list(
             prefetched_clusters(
                 [[{"link": "a"}], [{"link": "b"}]],
-                lambda url: fetched.append(url) or _valid(url),
+                lambda url, **_kw: fetched.append(url) or _valid(url),
             )
         )
     assert got == [({"link": "a"}, None, None), ({"link": "b"}, None, None)]
     assert not fetched
 
 
-def _raise(_url):
+def _raise(_url, **_kw):
     raise OSError("down")
 
 
@@ -331,7 +331,7 @@ def test_same_release_backups_exact_first_then_other_names():
 
 
 def _posting_bodies(mapping):
-    return lambda url: _nzb(mapping[url]) if url in mapping else _raise(url)
+    return lambda url, **_kw: (_nzb(mapping[url]) if url in mapping else _raise(url))
 
 
 def test_hydra_duplicate_upload_carries_posted_epoch():
@@ -364,9 +364,11 @@ def test_capped_submit_stops_fetching_once_the_cap_is_met():
     from resources.lib.nzbget_resolver import _submit_candidates
 
     rows = [{"link": "u{}".format(i), "title": "t", "score": 1} for i in range(10)]
-    with patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])) as fetch, patch(
-        _APPEND, return_value=(1, None)
-    ), patch(_VETO, return_value=False):
+    with patch(
+        _FETCH, side_effect=lambda url, **_kw: _nzb([url + "@x"])
+    ) as fetch, patch(_APPEND, return_value=(1, None)), patch(
+        _VETO, return_value=False
+    ):
         live = _submit_candidates(rows, "k", lambda *_a: "", limits=(1, None))
     assert live == [1]
     # A cap of one prefetches one NZB at a time and never refills after the
@@ -442,7 +444,7 @@ def test_every_nzb_is_downloaded_and_spooled_before_the_first_send(tmp_path):
     events = []
     spool_files = []
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         events.append(("fetch", url))
         return _nzb([url + "@x"])
 
@@ -605,7 +607,7 @@ def test_fleet_downloads_everything_then_sends_pick_first(_fleet_env):
     rows = [{"link": "b{}".format(i), "title": "t{}".format(i)} for i in range(3)]
     ctx = _fleet_ctx(_fleet_dupe(rows))
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         events.append("fetch " + url)
         return _valid(url)
 
@@ -652,7 +654,7 @@ def test_fleet_pick_falls_back_to_a_mirror_of_its_posting(_fleet_env):
     ctx = _fleet_ctx(_fleet_dupe([mirror], hydra_uploads=lambda: hydra))
     fetched = []
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         fetched.append(url)
         if url in ("pick", "mirror"):
             raise OSError("indexer down")
@@ -768,7 +770,7 @@ def test_fleet_dead_backup_is_rescued_by_a_hydra_mirror(_fleet_env):
     mirror = {"link": "mirror", "size": 200, "_posted_epoch": 1791028860}
     ctx = _fleet_ctx(_fleet_dupe([dead], hydra_uploads=lambda: [mirror]))
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         if url == "dead":
             raise OSError("gone")
         return _valid(url)
@@ -790,7 +792,7 @@ def test_fleet_retries_the_pick_fetch_so_its_relisting_is_still_caught(_fleet_en
     shared = _ids("s", 200)
     attempts = {"pick": 0}
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         if url == "pick":
             attempts["pick"] += 1
             if attempts["pick"] == 1:
@@ -829,7 +831,7 @@ def test_fleet_never_lets_append_nzb_fetch_on_the_resolve_thread(_fleet_env):
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "dead"}, {"link": "ok"}]))
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         if url == "dead":
             raise OSError("gone")
         return _valid(url)
@@ -849,7 +851,7 @@ def test_fleet_pick_that_cannot_be_downloaded_fails_without_a_blind_fetch(
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         if url == "pick":
             raise OSError("indexer down")
         return _valid(url)
@@ -902,7 +904,7 @@ def test_stalled_fetch_wait_notices_a_cancel_without_waiting_it_out():
     cancel = threading.Event()
     waits = []
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         release.wait(10)
         return _valid(url)
 
@@ -987,7 +989,7 @@ def test_failed_pick_stops_downloading_backups(_fleet_env):
     ctx = _fleet_ctx(_fleet_dupe(rows))
     fetched = []
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         fetched.append(url)
         if url == "pick":
             raise OSError("indexer down")
@@ -1096,7 +1098,7 @@ def test_fleet_snapshots_successes_abortably_before_any_download(_fleet_env):
         order.append("snapshot")
         return (3,)
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         order.append("fetch " + url)
         return _valid(url)
 
@@ -1201,7 +1203,7 @@ def test_capped_fleet_consults_the_loader_when_rows_fail_to_fill_the_cap(
     )
     ctx = _fleet_ctx(dupe)
 
-    def _fetch(url):
+    def _fetch(url, **_kw):
         if url == "dead":
             raise OSError("gone")
         return _valid(url)
@@ -1364,3 +1366,24 @@ def test_hung_append_is_abandoned_on_cancel_and_deleted_when_it_lands():
                 break
             time.sleep(0.02)
     assert deleted == [55]
+
+
+def test_backup_fetches_are_size_capped_tighter_than_the_pick(_fleet_env):
+    # Codex r15 (P1): four parallel backup fetches must not each buffer the
+    # full 100 MiB ceiling; the pick keeps it.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_resolver_dupes import _FLEET_NZB_MAX_BYTES
+
+    caps = {}
+
+    def _fetch(url, max_bytes=None):
+        caps[url] = max_bytes
+        return _valid(url)
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert caps["pick"] is None  # the nzbget_api default ceiling
+    assert caps["b0"] == caps["b1"] == _FLEET_NZB_MAX_BYTES

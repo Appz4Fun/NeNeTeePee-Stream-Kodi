@@ -97,7 +97,7 @@ def _submit_candidates(
     spool = NzbSpool(dedup.spool_base)
     stream = prefetched_clusters(
         clusters,
-        _core.nzbget_api.fetch_nzb_bytes,
+        _fleet_fetcher(clusters),
         cancel_event,
         window=PREFETCH_WINDOW,
         # Never fetch past what the current round can still use.
@@ -137,6 +137,31 @@ def _submit_candidates(
         for candidate in usable:
             candidate.setdefault("_submitted", False)
     return tally["live"]
+
+
+# Per-response ceiling for BACKUP NZBs fetched in parallel: PREFETCH_WINDOW
+# of them can be in flight before any reaches the spool, so this bounds that
+# memory (4 x 32 MiB) on a CoreELEC box. Real NZBs sit far below it (a 100 GB
+# release is ~25 MB of XML); the pick keeps the full nzbget_api ceiling.
+_FLEET_NZB_MAX_BYTES = 32 * 1024 * 1024
+
+
+def _fleet_fetcher(clusters):
+    """The fleet's NZB fetch: the pick's listings at the full ceiling, the
+    backups' at ``_FLEET_NZB_MAX_BYTES``."""
+    pick_links = {
+        row.get("link")
+        for cluster in clusters[:1]
+        if cluster and cluster[0].get("_is_pick")
+        for row in cluster
+    }
+
+    def _fetch(url):
+        if url in pick_links:
+            return _core.nzbget_api.fetch_nzb_bytes(url)
+        return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+
+    return _fetch
 
 
 def _open_slots(tally, limits):

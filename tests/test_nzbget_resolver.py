@@ -29,7 +29,7 @@ def _no_real_nzb_prefetch():
     attached). Tests of the download itself patch it explicitly.
     """
 
-    def _fake_nzb(url):
+    def _fake_nzb(url, **_kw):
         return (
             '<nzb xmlns="http://www.newzbin.com/DTD/2003/nzb"><file subject="x">'
             '<segments><segment bytes="1" number="1">{}@t</segment></segments>'
@@ -3431,3 +3431,17 @@ def test_manifest_fleet_honors_nzbget_max_backups(cap, expected):
         assert dupe is None
     else:
         assert dupe["max_backups"] == expected
+
+
+def test_manifest_fleet_honors_the_fallback_switch():
+    # Codex r15: fallback_streams_enabled=false turns manifest backups off too.
+    sources = ["https://indexer/{}.nzb".format(i) for i in range(3)]
+    assert (
+        _manifest_dupe_submission(
+            sources[0],
+            "Movie",
+            {"_source_urls": sources},
+            _settings({"fallback_streams_enabled": "false"}),
+        )
+        is None
+    )
