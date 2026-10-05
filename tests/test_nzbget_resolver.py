@@ -3584,3 +3584,17 @@ def _wait_until(predicate, timeout=2.0):
     while not predicate() and _time.monotonic() < deadline:
         _time.sleep(0.01)
     return predicate()
+
+
+def test_manifest_dupe_key_survives_a_rotated_apikey():
+    # Codex r26 (P2): a regenerated manifest with new credentials keeps the
+    # DupeKey, so the resubmit ledger can still match NZBGet's held backups.
+    def _dupe(secret):
+        sources = [
+            "https://indexer/get/{}?apikey={}&t=get".format(i, secret) for i in range(3)
+        ]
+        return _manifest_dupe_submission(
+            sources[0], "Movie", {"_source_urls": sources}, _settings({})
+        )
+
+    assert _dupe("OLD")["key"] == _dupe("NEW")["key"]

@@ -319,10 +319,9 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             break
         if not is_pick:
             tally["attempts"] += 1
-        body = NzbSpool.load(handle)
         nzbid, vetoed = _append_abortably(
             candidate,
-            body,
+            NzbSpool.load(handle),
             (dupe_key, settings_getter, veto_probe),
             (cancel_event, dedup),
         )
@@ -334,8 +333,9 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             continue
         candidate["_nzbid"] = nzbid
         if is_pick:
-            # For the poll's FORCE rescue (submit_fleet parks it on disk).
-            candidate["_body"] = body
+            # For the poll's FORCE rescue: parked on disk NOW, so its bytes
+            # are never held while the (possibly huge) backups load and send.
+            _park_pick(candidate, handle)
         dedup.remember_listing(candidate)
         dedup.commit_posting(token)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
@@ -349,6 +349,22 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         candidate["_submitted"] = not vetoed
         if not vetoed and not is_pick:
             tally["live"].append(nzbid)
+
+
+def _park_pick(candidate, handle):
+    """Park the appended pick's NZB on disk (``_body_path``) for the rescue.
+
+    Only when no temp folder takes it does it stay in memory (``_body``), the
+    only good copy.
+    """
+    from resources.lib.nzbget_fleet_run import _park_pick_body
+
+    body = NzbSpool.load(handle)
+    path = _park_pick_body(body)
+    if path is None:
+        candidate["_body"] = body
+    else:
+        candidate["_body_path"] = path
 
 
 def _append_abortably(candidate, body, send, stops):
@@ -718,7 +734,7 @@ def _copy_vetoed_after_append(nzbid, settings_getter):
         return False
 
 
-def _pick_rescue_callable(ctx, nzb_url, title):
+def _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=None):
     """Build the resolve-thread closure that FORCE re-submits the vetoed pick (#372 r6).
 
     Returns a zero-arg callable the poll invokes ON THE RESOLVE THREAD (never the
@@ -756,7 +772,11 @@ def _pick_rescue_callable(ctx, nzb_url, title):
 
     def _rescue_now(getter):
         dupe = ctx.dupe or {}
-        if _core.nzbget_api.active_group_by_name(title, settings_getter=getter):
+        # The vetoed pick itself can linger in listgroups during NZBGet's
+        # queue-to-history handoff: it is not a foreign download.
+        if _core.nzbget_api.active_group_by_name(
+            title, exclude_nzbid=pick_nzbid, settings_getter=getter
+        ):
             _core.xbmc.log(
                 (
                     "NeNeTeePee-Stream-Kodi: NZBGet FORCE rescue skipped -- "

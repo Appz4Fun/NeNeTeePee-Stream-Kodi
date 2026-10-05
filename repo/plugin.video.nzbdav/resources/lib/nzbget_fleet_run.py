@@ -110,14 +110,15 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     # RPCs before its first waitForAbort) while Kodi is exiting.
     progress.canceled()
     ctx.fleet_aborted = progress.aborted
+    # The pick's downloaded body, parked ON DISK right after its append for
+    # the poll's rare FORCE rescue (re-sending it beats re-fetching a dead,
+    # mirrored, or single-use URL); the resolve deletes it when it ends, a
+    # cancel included. Only when no temp folder was writable is it kept in
+    # memory, the only good copy.
+    ctx.pick_nzb_path = pick.pop("_body_path", None)
     body = pick.pop("_body", None)
     if ctx.cancel_event.is_set():
         return None, None
-    # The pick's downloaded body, parked ON DISK for the poll's rare FORCE
-    # rescue (re-sending it beats re-fetching a dead, mirrored, or single-use
-    # URL) -- never held in memory for the hour-long poll, unless no temp
-    # folder is writable: then it stays in memory, the only good copy.
-    ctx.pick_nzb_path = _park_pick_body(body)
     if ctx.pick_nzb_path is None and body:
         ctx.pick_nzb_bytes = body
     nzbid = pick.get("_nzbid")

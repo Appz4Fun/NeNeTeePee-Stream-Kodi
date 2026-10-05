@@ -2119,3 +2119,49 @@ def test_fleet_rechecks_shutdown_after_the_final_send(_fleet_env):
     ):
         assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
     assert ctx.fleet_aborted is True and ctx.cancel_event.is_set()
+
+
+def test_pick_is_parked_before_any_backup_is_sent(_fleet_env):
+    # Codex r26 (P1): the pick's bytes are moved to disk right after its own
+    # append, never held while the backups load and send.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    events = []
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
+
+    def _park(body):
+        events.append("park")
+        return "/tmp/parked-pick.nzb"
+
+    def _append(url, name, **_kw):
+        events.append("append " + url)
+        return len(events), None
+
+    park = patch("resources.lib.nzbget_fleet_run._park_pick_body", side_effect=_park)
+    with park, patch(_FETCH, side_effect=_valid), patch(_APPEND, side_effect=_append):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert events == ["append pick", "park", "append b0", "append b1"]
+    assert ctx.pick_nzb_path == "/tmp/parked-pick.nzb"
+
+
+def test_force_rescue_ignores_the_vetoed_pick_lingering_in_the_queue():
+    # Codex r26 (P2): the pick itself is not a "foreign" same-name download.
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _pick_rescue_callable
+
+    ctx = SimpleNamespace(
+        settings_getter=lambda *_a: "",
+        dupe={"key": "k", "pick_score": 9},
+        submitted_nzbids=[],
+        dialog=None,
+        cancel_event=threading.Event(),
+        pick_nzb_path=None,
+    )
+    rescue = _pick_rescue_callable(ctx, "http://i/x.nzb", "T", pick_nzbid=41)
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.active_group_by_name",
+        return_value=False,
+    ) as lookup, patch(_APPEND, return_value=(42, None)):
+        assert rescue() == 42
+    assert lookup.call_args.kwargs["exclude_nzbid"] == 41

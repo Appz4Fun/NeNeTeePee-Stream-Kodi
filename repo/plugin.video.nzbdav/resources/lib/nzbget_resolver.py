@@ -831,7 +831,7 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
             # the pick. Built on both the fleet and plain paths (the dict is
             # always passed to the poll).
-            "rescue": _pick_rescue_callable(ctx, nzb_url, title),
+            "rescue": _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=nzbid),
         },
     )
     handled, leave_job = _handle_poll_failure(
@@ -1012,7 +1012,11 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     cap = _parse_max_backups(getter("nzbget_max_backups", "-1") or "-1")
     if cap == 0:
         return None
-    key = hashlib.sha256("\n".join(sorted(urls)).encode("utf-8")).hexdigest()
+    # Hash credential-stripped identities: a regenerated manifest with a
+    # rotated apikey or session token keeps the same DupeKey (and so the
+    # resubmit ledger's held backups).
+    identities = sorted({nzbget_submit_ledger.link_key(url) or url for url in urls})
+    key = hashlib.sha256("\n".join(identities).encode("utf-8")).hexdigest()
     base = _dupe_score_base()
     backups = [
         {"link": url, "title": title, "score": base - index}
