@@ -25,6 +25,7 @@ import os
 import shutil
 import tempfile
 import threading
+import time
 import zlib
 from array import array
 
@@ -529,7 +530,7 @@ def fetch_cluster_abortable(cluster, fetch, stop_events=(), on_wait=None):
 
 
 def call_abortable(  # pylint: disable=too-many-arguments
-    func, stop_events=(), on_wait=None, default=None, on_late=None
+    func, stop_events=(), on_wait=None, default=None, on_late=None, deadline=None
 ):
     """Run ``func()`` on a daemon thread; ``default`` if stopped or failed.
 
@@ -538,7 +539,8 @@ def call_abortable(  # pylint: disable=too-many-arguments
     shutdown abandons it at once. A thread that cannot start, or a raising
     ``func``, yields ``default``. ``on_late(value)`` runs on the worker thread
     when ``func`` finishes AFTER the wait was abandoned (e.g. to delete an
-    append that landed after a cancel).
+    append that landed after a cancel). ``deadline`` (seconds) abandons the
+    wait once it passes, like a stop event, returning ``default``.
     """
     done = threading.Event()
     lock = threading.Lock()
@@ -570,10 +572,12 @@ def call_abortable(  # pylint: disable=too-many-arguments
             xbmc.LOGWARNING,
         )
         return default
+    give_up_at = None if deadline is None else time.monotonic() + deadline
     while not done.wait(_WAIT_SLICE_SECONDS):
         if on_wait is not None:
             on_wait()
-        if _stopped(stop_events):
+        overdue = give_up_at is not None and time.monotonic() >= give_up_at
+        if overdue or _stopped(stop_events):
             with lock:
                 if not done.is_set():
                     box["abandoned"] = True

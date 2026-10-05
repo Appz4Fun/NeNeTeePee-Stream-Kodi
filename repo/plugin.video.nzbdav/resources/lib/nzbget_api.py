@@ -729,23 +729,57 @@ def _nzbid_in(nzbid, nzbids):
     return any(_same_nzbid(nzbid, other) for other in nzbids or ())
 
 
-def max_dupe_score_by_dupekey(dupe_key, settings_getter=None):
+def history_rows(settings_getter=None):
+    """NZBGet's history as a list (one RPC), or ``[]`` on any error.
+
+    Lets a caller that needs several facts from history (same-key successes,
+    the highest same-key score) read it once.
+    """
+    rows, error = _rpc_call("history", [False], settings_getter=settings_getter)
+    return rows if error is None and isinstance(rows, list) else []
+
+
+def config_options(names, settings_getter=None):
+    """Several running-config options from ONE ``config`` RPC.
+
+    Returns ``{lowercased name: lowercased value}`` for the requested names
+    that exist; ``{}`` when the RPC fails (callers treat it as best-effort).
+    """
+    rows, error = _rpc_call("config", [], settings_getter=settings_getter)
+    if error is not None or not isinstance(rows, list):
+        return {}
+    wanted = {str(name).lower() for name in names}
+    found = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("Name", "")).lower()
+        if name in wanted:
+            found[name] = str(row.get("Value", "")).strip().lower()
+    return found
+
+
+def max_dupe_score_by_dupekey(dupe_key, settings_getter=None, history=None):
     """Highest DupeScore NZBGet holds for ``dupe_key`` (queue + history), or None.
 
     A fresh fleet must outrank every same-key item NZBGet already has
     (NZBGet only downloads a SCORE-mode duplicate that beats them), and a
     wall-clock score base cannot promise that after the box's clock rolls
-    back. Best-effort: RPC errors are skipped; None when nothing matches.
+    back. DupeKeys match case-insensitively, like NZBGet's. ``history`` is
+    an already-read ``history_rows`` (else it is fetched). Best-effort: RPC
+    errors are skipped; None when nothing matches.
     """
     if not dupe_key:
         return None
+    if history is None:
+        history = history_rows(settings_getter)
+    queue, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
+    if error is not None or not isinstance(queue, list):
+        queue = []
     best = None
-    for method, params in (("history", [False]), ("listgroups", [0])):
-        rows, error = _rpc_call(method, params, settings_getter=settings_getter)
-        if error is not None or not isinstance(rows, list):
-            continue
+    for rows in (history, queue):
         for row in rows:
-            if not isinstance(row, dict) or row.get("DupeKey") != dupe_key:
+            if not isinstance(row, dict) or not _dupekey_match(row, dupe_key):
                 continue
             try:
                 score = int(row.get("DupeScore"))
@@ -755,18 +789,17 @@ def max_dupe_score_by_dupekey(dupe_key, settings_getter=None):
     return best
 
 
-def success_ids_by_dupekey(dupe_key, settings_getter=None):
+def success_ids_by_dupekey(dupe_key, settings_getter=None, history=None):
     """NZBIDs of every SUCCESS history row sharing ``dupe_key`` (#372 round 4).
 
     Snapshotted when a dupe-enabled poll starts so group-follow can exclude
     successes that PREDATE the resolve (see ``history_success_by_dupekey``).
+    ``history`` is an already-read ``history_rows`` (else it is fetched).
     Best-effort: an RPC error or empty history yields ``[]``.
     """
     if not dupe_key:
         return []
-    hist, error = _rpc_call("history", [False], settings_getter=settings_getter)
-    if error is not None or not isinstance(hist, list):
-        return []
+    hist = history_rows(settings_getter) if history is None else history
     ids = []
     for item in hist:
         entry = _success_history_entry(item, dupe_key)

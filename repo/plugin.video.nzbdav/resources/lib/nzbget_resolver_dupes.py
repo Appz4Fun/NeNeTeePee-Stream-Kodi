@@ -316,9 +316,10 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             break
         if not is_pick:
             tally["attempts"] += 1
+        body = NzbSpool.load(handle)
         nzbid, vetoed = _append_abortably(
             candidate,
-            NzbSpool.load(handle),
+            body,
             (dupe_key, settings_getter, veto_probe),
             (cancel_event, dedup),
         )
@@ -330,8 +331,8 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             continue
         candidate["_nzbid"] = nzbid
         if is_pick:
-            # Kept for the poll's FORCE rescue (submit_fleet hands it over).
-            candidate["_body"] = NzbSpool.load(handle)
+            # For the poll's FORCE rescue (submit_fleet parks it on disk).
+            candidate["_body"] = body
         dedup.remember_listing(candidate)
         dedup.commit_posting(fingerprint)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
@@ -477,7 +478,7 @@ _HEALTHCHECK_WARNED = [False]
 _HEALTHCHECK_LOCK = threading.Lock()
 
 
-def _warn_if_healthcheck_pauses(settings_getter):
+def _warn_if_healthcheck_pauses(settings_getter, options=None):
     """Warn if NZBGet's ``HealthCheck=Pause`` disables automatic dup failover.
 
     Per nzbget.com/documentation/rss/#duplicates automatic duplicate failover
@@ -485,10 +486,15 @@ def _warn_if_healthcheck_pauses(settings_getter):
     download instead of promoting a backup, so the picked release's backups sit
     idle until the user unpauses one. Best-effort -- an unreadable config is
     skipped. Always logs; notifies the user at most once per Kodi session.
+    ``options`` is an already-read ``config_options`` dict (else one RPC).
     """
     try:
-        value = _core.nzbget_api.config_option(
-            "HealthCheck", settings_getter=settings_getter
+        value = (
+            options.get("healthcheck")
+            if options is not None
+            else _core.nzbget_api.config_option(
+                "HealthCheck", settings_getter=settings_getter
+            )
         )
     except Exception:  # pylint: disable=broad-except
         return
@@ -509,13 +515,16 @@ def _warn_if_healthcheck_pauses(settings_getter):
     _core._notify(_core._addon_name(), _core._string(30230), 6000)
 
 
-def _dupe_check_disabled(settings_getter):
+def _dupe_check_disabled(settings_getter, options=None):
     """True only when NZBGet's ``DupeCheck`` option is explicitly ``no``.
 
     With DupeCheck off NZBGet does not park same-key items as backups -- it would
     download every one as a normal queue item (parallel full downloads). Best-
     effort: an unreadable config returns False (assume the default, on).
+    ``options`` is an already-read ``config_options`` dict (else one RPC).
     """
+    if options is not None:
+        return options.get("dupecheck") == "no"
     try:
         return (
             _core.nzbget_api.config_option("DupeCheck", settings_getter=settings_getter)
@@ -750,7 +759,7 @@ def _pick_rescue_callable(ctx, nzb_url, title):
             return None
         # Re-send the body the fleet already downloaded when there is one: the
         # pick URL may be dead (a mirror supplied it) or single-use.
-        body = getattr(ctx, "pick_nzb_bytes", None)
+        body = _read_parked_pick(getattr(ctx, "pick_nzb_path", None))
         extra = {"nzb_bytes": body} if body else {}
         try:
             nzbid, error = _core.nzbget_api.append_nzb(
@@ -796,6 +805,17 @@ def _pick_rescue_callable(ctx, nzb_url, title):
         return None
 
     return _rescue
+
+
+def _read_parked_pick(path):
+    """The pick body ``submit_fleet`` parked on disk, or None (best-effort)."""
+    if not path:
+        return None
+    try:
+        with open(path, "rb") as handle:
+            return handle.read()
+    except OSError:
+        return None
 
 
 # ``_pick_rescue_callable``'s result when a cancel/shutdown abandoned the
@@ -893,7 +913,7 @@ def _rescue_plain_pick(state, fleet):
     return False
 
 
-def _preexisting_success_ids(dupe_key, settings_getter):
+def _preexisting_success_ids(dupe_key, settings_getter, history=None):
     """Same-key SUCCESS rows already in history when the poll starts (#372 r4).
 
     Group-follow must IGNORE them: they predate this resolve (their files may
@@ -908,7 +928,7 @@ def _preexisting_success_ids(dupe_key, settings_getter):
     try:
         return tuple(
             _core.nzbget_api.success_ids_by_dupekey(
-                dupe_key, settings_getter=settings_getter
+                dupe_key, settings_getter=settings_getter, history=history
             )
         )
     except Exception:  # pylint: disable=broad-except

@@ -9,7 +9,9 @@ here. Honors the same ``setResolvedUrl``-on-failure contract as the nzbdav
 path: exactly one resolution per exit, failures resolve False.
 """
 
+import contextlib
 import hashlib
+import os
 import threading
 import time
 from urllib.parse import unquote
@@ -622,8 +624,9 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # True when the foreground fleet stopped for a Kodi shutdown (vs a
         # user cancel): its appended jobs are left to finish.
         self.fleet_aborted = False
-        # The pick's downloaded NZB, re-sent by the FORCE rescue.
-        self.pick_nzb_bytes = None
+        # The pick's downloaded NZB parked on disk, re-sent by the FORCE
+        # rescue; deleted when the resolve ends.
+        self.pick_nzb_path = None
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -684,7 +687,19 @@ def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
     if not nzb_url:
         ctx.on_failure(_string(30223))
         return False
-    return _submit_poll_resolve(ctx, nzb_url, title, meta[0], meta[1])
+    try:
+        return _submit_poll_resolve(ctx, nzb_url, title, meta[0], meta[1])
+    finally:
+        _discard_parked_pick(ctx)
+
+
+def _discard_parked_pick(ctx):
+    """Delete the pick NZB ``submit_fleet`` parked for the FORCE rescue."""
+    path = getattr(ctx, "pick_nzb_path", None)
+    if path:
+        with contextlib.suppress(OSError):
+            os.remove(path)
+        ctx.pick_nzb_path = None
 
 
 def _close_dialog(dialog):

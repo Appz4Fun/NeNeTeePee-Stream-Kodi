@@ -1,5 +1,7 @@
 """NZBGet duplicate fleet: same-release selection, same-posting dedup, prefetch."""
 
+import pathlib
+import tempfile
 import threading
 from unittest.mock import patch
 
@@ -1052,7 +1054,7 @@ def test_config_probe_is_abortable_and_reads_only_a_snapshot(_fleet_env):
     release = threading.Event()
     getters = []
 
-    def _hung(getter):
+    def _hung(getter, **_kw):
         getters.append(getter)
         release.wait(10)
         return False
@@ -1121,7 +1123,7 @@ def test_fleet_snapshots_successes_abortably_before_any_download(_fleet_env):
     order = []
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
 
-    def _snapshot(*_a):
+    def _snapshot(*_a, **_kw):
         order.append("snapshot")
         return (3,)
 
@@ -1441,7 +1443,12 @@ def test_each_nzb_streams_to_disk_in_one_download(_fleet_env, tmp_path):
     # Backups stream to disk; the pick is fetched into memory (Codex r18).
     assert sorted(downloads) == [("b1", None), ("big", None)]
     assert [c.args[0] for c in append.call_args_list] == ["pick", "big", "b1"]
-    assert not list(tmp_path.rglob("*.nzb"))
+    # The fleet's spool is gone; only the pick parked for the FORCE rescue
+    # remains, until the resolve ends.
+    assert not list(tmp_path.rglob("nzbdav-fleet-*/*.nzb"))
+    assert [p.name for p in tmp_path.glob("*.nzb")] == [
+        pathlib.Path(ctx.pick_nzb_path).name
+    ]
 
 
 def test_loader_batches_share_the_fleet_replacement_budget(_fleet_env):
@@ -1726,8 +1733,11 @@ def test_force_rescue_resends_the_fleets_pick_body():
         submitted_nzbids=[],
         dialog=None,
         cancel_event=threading.Event(),
-        pick_nzb_bytes=b"<nzb/>",
+        pick_nzb_path=None,
     )
+    parked = pathlib.Path(tempfile.mkdtemp()) / "pick.nzb"
+    parked.write_bytes(b"<nzb/>")
+    ctx.pick_nzb_path = str(parked)
     rescue = _pick_rescue_callable(ctx, "http://dead/pick.nzb", "T")
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.active_group_by_name",
@@ -1744,4 +1754,76 @@ def test_fleet_hands_the_pick_body_to_the_resolve(_fleet_env):
     ctx = _fleet_ctx(_fleet_dupe([]))
     with patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
         submit_fleet(ctx, "pick", "T", "k")
-    assert ctx.pick_nzb_bytes == _valid("pick")
+    # Parked on disk (Codex r21), not held in memory for the poll.
+    assert pathlib.Path(ctx.pick_nzb_path).read_bytes() == _valid("pick")
+    assert not hasattr(ctx, "pick_nzb_bytes")
+
+
+def test_resolve_deletes_the_parked_pick_when_it_ends(tmp_path):
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _discard_parked_pick
+
+    parked = tmp_path / "nzbdav-pick-x.nzb"
+    parked.write_bytes(b"x")
+    ctx = SimpleNamespace(pick_nzb_path=str(parked))
+    _discard_parked_pick(ctx)
+    assert not parked.exists() and ctx.pick_nzb_path is None
+
+
+def test_preflight_coalesces_rpcs_and_has_a_budget(_fleet_env):
+    # Codex r21: one history + one listgroups + one config read, under a
+    # shared budget -- an unresponsive NZBGet can't stall playback for minutes.
+    from resources.lib import nzbget_api
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    calls = []
+
+    def _rpc(method, params, settings_getter=None):
+        calls.append(method)
+        return [], None
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch.object(nzbget_api, "_rpc_call", side_effect=_rpc), patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled",
+        wraps=lambda getter, options=None: False,
+    ), patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert sorted(calls) == ["config", "history", "listgroups"]
+
+
+def test_preflight_budget_abandons_a_hung_probe(_fleet_env):
+    import time
+
+    from resources.lib import nzbget_fleet_run
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    release = threading.Event()
+
+    def _hung(*_a, **_k):
+        release.wait(10)
+        return []
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    start = time.monotonic()
+    with patch.object(nzbget_fleet_run, "_PREFLIGHT_BUDGET_SECONDS", 0.5), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows", side_effect=_hung
+    ), patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
+        assert submit_fleet(ctx, "pick", "T", "k") == (1, None)
+    release.set()
+    assert time.monotonic() - start < 3
+
+
+def test_max_dupe_score_matches_dupekeys_case_insensitively():
+    from resources.lib import nzbget_api
+
+    rows = {
+        "history": [{"DupeKey": "IMDB=1|Movie", "DupeScore": 40}],
+        "listgroups": [],
+    }
+    with patch.object(
+        nzbget_api,
+        "_rpc_call",
+        side_effect=lambda m, p, settings_getter=None: (rows[m], None),
+    ):
+        assert nzbget_api.max_dupe_score_by_dupekey("imdb=1|movie") == 40

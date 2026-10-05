@@ -20,6 +20,10 @@ The caller then polls the pick's download ("Downloading... 0%") as before.
 Names that tests patch on ``nzbget_resolver`` are reached through ``_core``.
 """
 
+import contextlib
+import os
+import tempfile
+
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
 from resources.lib.fallback_streams import _MAX_FALLBACKS
 from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable
@@ -92,13 +96,40 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     if capped and not dupe_check_off and pick.get("_nzbid"):
         _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
     ctx.fleet_aborted = progress.aborted
-    # The pick's downloaded body, for the poll's FORCE rescue: re-sending it
-    # beats re-fetching a dead, mirrored, or single-use grab URL.
-    ctx.pick_nzb_bytes = pick.pop("_body", None)
+    # The pick's downloaded body, parked ON DISK for the poll's rare FORCE
+    # rescue (re-sending it beats re-fetching a dead, mirrored, or single-use
+    # URL) -- never held in memory for the hour-long poll.
+    ctx.pick_nzb_path = _park_pick_body(pick.pop("_body", None))
     if ctx.cancel_event.is_set():
         return None, None
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _park_pick_body(body):
+    """Write the pick's NZB to a private temp file; its path, or None.
+
+    The resolve deletes it when it ends (``_discard_parked_pick``).
+    """
+    if not body:
+        return None
+    try:
+        handle, path = tempfile.mkstemp(
+            prefix="nzbdav-pick-", suffix=".nzb", dir=_core._fleet_spool_base()
+        )
+    except (OSError, TypeError, ValueError):
+        try:
+            handle, path = tempfile.mkstemp(prefix="nzbdav-pick-", suffix=".nzb")
+        except OSError:
+            return None
+    try:
+        with os.fdopen(handle, "wb") as out:
+            out.write(body)
+    except OSError:
+        with contextlib.suppress(OSError):
+            os.remove(path)
+        return None
+    return path
 
 
 def _lift_scores(dupe, max_score):
@@ -180,28 +211,39 @@ def _fill_from_loader(dupe, progress, run, state):
             return  # a fixed loader has nothing more to give
 
 
+# The whole pre-fleet probe's budget; past it the fleet proceeds on defaults.
+_PREFLIGHT_BUDGET_SECONDS = 20
+
+
 def _probe_nzbget_config(getter, progress, dupe_key):
     """Pre-fleet NZBGet probes, abortably: ``(dupecheck_off, preexisting, max)``.
 
-    The same-key preexisting-success snapshot (history), the highest same-key
-    DupeScore (``_lift_scores``), the ``DupeCheck=no`` check, and the
-    HealthCheck=Pause warning are RPCs that can each hang for
-    the RPC timeout, so they run off-thread behind the cancel/shutdown-aware
-    wait, reading only ``getter`` (the caller's settings snapshot). A canceled
+    The same-key preexisting-success snapshot and the highest same-key
+    DupeScore (``_lift_scores``) share one ``history`` read (+ ``listgroups``);
+    the ``DupeCheck=no`` check and the HealthCheck=Pause warning share one
+    ``config`` read. They run off-thread behind the cancel/shutdown-aware wait
+    with a shared ``_PREFLIGHT_BUDGET_SECONDS`` budget (an unresponsive NZBGet
+    can't stall playback for minutes), reading only ``getter`` (the caller's
+    settings snapshot). A canceled
     or failed probe returns ``(False, None, None)`` (DupeCheck assumed on; the
     poll then snapshots successes itself; scores are left as computed).
     """
 
     def _probe():
-        # Same-key successes BEFORE this fleet submits anything: one another
-        # resolve lands while this fleet downloads/sends is not stale.
-        preexisting = _core._preexisting_success_ids(dupe_key, getter)
+        # ONE history read serves both the same-key success snapshot (taken
+        # BEFORE this fleet submits anything) and the highest same-key score;
+        # ONE config read serves both DupeCheck and HealthCheck.
+        history = _core.nzbget_api.history_rows(getter)
+        preexisting = _core._preexisting_success_ids(dupe_key, getter, history=history)
         max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
-            dupe_key, settings_getter=getter
+            dupe_key, settings_getter=getter, history=history
         )
-        if _core._dupe_check_disabled(getter):
+        options = _core.nzbget_api.config_options(
+            ("DupeCheck", "HealthCheck"), settings_getter=getter
+        )
+        if _core._dupe_check_disabled(getter, options=options):
             return True, preexisting, max_score
-        _core._warn_if_healthcheck_pauses(getter)
+        _core._warn_if_healthcheck_pauses(getter, options=options)
         return False, preexisting, max_score
 
     return call_abortable(
@@ -209,6 +251,7 @@ def _probe_nzbget_config(getter, progress, dupe_key):
         (progress.cancel_event,),
         progress.canceled,
         default=(False, None, None),
+        deadline=_PREFLIGHT_BUDGET_SECONDS,
     )
 
 
