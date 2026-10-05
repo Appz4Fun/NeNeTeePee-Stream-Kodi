@@ -874,3 +874,57 @@ def test_unspooled_mirror_body_is_resent_from_the_working_mirror_url(_fleet_env)
     sent = append.call_args_list[1]
     assert sent.args[0] == "mirror"
     assert "nzb_bytes" not in sent.kwargs
+
+
+def test_cancel_during_send_stops_the_remaining_appends(_fleet_env):
+    # Codex r7: the dialog is re-checked before every append.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    class _SendCancel(_Dialog):
+        def iscanceled(self):
+            sends = [m for _p, m in self.lines if m.startswith("Sending")]
+            return len(sends) >= 3
+
+    rows = [{"link": "b{}".format(i)} for i in range(6)]
+    ctx = _fleet_ctx(_fleet_dupe(rows), dialog=_SendCancel())
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(i, None) for i in range(1, 8)]
+    ) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    assert append.call_count == 2  # the 3rd tick saw the cancel
+    assert ctx.submitted_nzbids == [1, 2]  # for the caller to delete
+
+
+def test_stalled_fetch_wait_notices_a_cancel_without_waiting_it_out():
+    # Codex r7: a hung indexer must not pin the resolve thread.
+    import time
+
+    release = threading.Event()
+    cancel = threading.Event()
+    waits = []
+
+    def _fetch(url):
+        release.wait(10)
+        return _valid(url)
+
+    def _on_wait():
+        waits.append(1)
+        cancel.set()
+
+    start = time.monotonic()
+    got = list(
+        prefetched_clusters([[{"link": "slow"}]], _fetch, cancel, on_wait=_on_wait)
+    )
+    release.set()
+    assert time.monotonic() - start < 2
+    assert waits and not got
+
+
+def test_fleet_progress_treats_kodi_shutdown_as_cancel():
+    from resources.lib.nzbget_fleet_run import _FleetProgress
+
+    cancel = threading.Event()
+    monitor = type("M", (), {"abortRequested": lambda self: True})()
+    with patch("resources.lib.nzbget_resolver.xbmc.Monitor", return_value=monitor):
+        assert _FleetProgress(None, cancel).canceled() is True
+    assert cancel.is_set()

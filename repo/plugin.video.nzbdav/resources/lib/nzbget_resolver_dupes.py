@@ -55,8 +55,9 @@ def _submit_candidates(
        row records its ``_nzbid`` and a failed one its ``_append_error``.
 
     ``dedup.progress`` (optional) is told ``("download", done, total)`` after
-    each listing cluster is handled and ``("send", count, None)`` before a
-    send phase, for the resolve's progress dialog.
+    each listing cluster is handled, ``("send", sent, count)`` before each
+    append, and ``("wait", None, None)`` while a slow fetch is pending, for the
+    resolve's progress dialog (and its cancel/shutdown checks).
 
     Unlimited (``live_limit`` None): one round collects EVERY candidate, then
     sends them all. Capped: a round collects only the slots still open, and a
@@ -96,6 +97,8 @@ def _submit_candidates(
         window=PREFETCH_WINDOW,
         # Never fetch past what the current round can still use.
         demand=lambda: tally["wanted"],
+        # A stalled indexer must not hide a dialog cancel or Kodi shutdown.
+        on_wait=lambda: _report(dedup, "wait", None, None),
     )
     try:
         while True:
@@ -107,7 +110,6 @@ def _submit_candidates(
             kept = _collect_unique(stream, (dedup, spool, tally), cancel_event, need)
             if not kept or (cancel_event is not None and cancel_event.is_set()):
                 break
-            _report(dedup, "send", len(kept), None)
             _send_kept(
                 kept,
                 dupe_key,
@@ -213,7 +215,10 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
     """
     cancel_event, submitted_sink, veto_probe, dedup = run
     (live_limit, max_attempts), tally = budget
-    for candidate, handle in kept:
+    for index, (candidate, handle) in enumerate(kept):
+        # One tick per append: moves the bar and re-checks the dialog cancel,
+        # so a cancel stops the remaining appends.
+        _report(dedup, "send", index, len(kept))
         if _fill_done(
             tally["live"], live_limit, tally["attempts"], max_attempts, cancel_event
         ):

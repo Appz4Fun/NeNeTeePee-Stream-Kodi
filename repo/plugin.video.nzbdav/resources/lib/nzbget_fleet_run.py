@@ -114,16 +114,19 @@ class _FleetProgress:
         if phase == "download":
             percent = int(done * 100 / total) if total else 0
             self._update(percent, _core._fmt(30616, done, total))
-        else:
-            self._update(100, _core._fmt(30617, done))
+        elif phase == "send":
+            percent = int(done * 100 / total) if total else 100
+            self._update(percent, _core._fmt(30617, total))
         self.canceled()
 
     def canceled(self):
-        """True (and the cancel event set) once the user canceled the dialog."""
+        """True (and the cancel event set) on a dialog cancel or Kodi shutdown."""
         try:
-            # ``is True``: Kodi returns a real bool; anything else (a stub) is
+            # ``is True``: Kodi returns real bools; anything else (a stub) is
             # not a cancel.
             if self._dialog is not None and self._dialog.iscanceled() is True:
+                self._cancel_event.set()
+            if _core.xbmc.Monitor().abortRequested() is True:
                 self._cancel_event.set()
         except Exception as exc:  # pylint: disable=broad-except
             _log_dialog_error(exc)

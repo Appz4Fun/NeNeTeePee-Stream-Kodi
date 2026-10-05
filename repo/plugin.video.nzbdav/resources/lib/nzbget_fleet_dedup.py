@@ -376,13 +376,33 @@ class _Fetch:
         finally:
             self._done.set()
 
-    def result(self):
-        self._done.wait()
+    def result(self, stop_events=(), on_wait=None):
+        """The fetch's result; abandons the wait once a stop event fires.
+
+        Waits in short slices, calling ``on_wait`` between them (the caller's
+        chance to notice a dialog cancel or Kodi shutdown), so a stalled
+        indexer never pins the resolve thread for its whole HTTP timeout. An
+        abandoned fetch finishes on its daemon thread and is ignored.
+        """
+        while not self._done.wait(_WAIT_SLICE_SECONDS):
+            if on_wait is not None:
+                on_wait()
+            if _stopped(stop_events):
+                return self._value[0], None, None
         return self._value
 
 
-def prefetched_clusters(
-    clusters, fetch, cancel_event=None, window=PREFETCH_WINDOW, demand=None
+# How often a wait on an in-flight fetch re-checks for a cancel or shutdown.
+_WAIT_SLICE_SECONDS = 0.2
+
+
+def prefetched_clusters(  # pylint: disable=too-many-arguments
+    clusters,
+    fetch,
+    cancel_event=None,
+    window=PREFETCH_WINDOW,
+    demand=None,
+    on_wait=None,
 ):
     """Yield ``(head, body, fingerprint)`` per cluster in order, ``window`` ahead.
 
@@ -391,7 +411,9 @@ def prefetched_clusters(
     held in memory at once. ``demand`` (a zero-arg callable, or None for
     unbounded) reports how many more items the caller can still use: fetches
     in flight never exceed it, so a capped round never grabs an NZB it will
-    not consume. Stops early once ``cancel_event`` fires. Closing the generator
+    not consume. ``on_wait`` (optional) is called while waiting on a slow fetch,
+    so the caller can raise ``cancel_event`` on a dialog cancel or Kodi
+    shutdown. Stops early once ``cancel_event`` fires. Closing the generator
     (a cancel, or the caller's cap being met) stops every in-flight fetch from
     moving on to its cluster's next listing and starts no new ones.
     """
@@ -415,7 +437,7 @@ def prefetched_clusters(
     try:
         _refill()
         while pending:
-            item = pending.popleft().result()
+            item = pending.popleft().result(stop_events, on_wait)
             if _stopped(stop_events):
                 return
             yield item
