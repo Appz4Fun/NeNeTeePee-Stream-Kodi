@@ -67,18 +67,35 @@ def _variant_signature(title):
     return flags, languages
 
 
-def same_variant(pick, row):
-    """Whether ``row`` has the pick's 3D, dub/sub, hardsub, cut, and languages.
+def _movie_years_match(pick, row):
+    """For a movie pick, both parsed years must be equal -- absent included.
 
-    The NZBGet-only half of ``same_release``: the fallback loader's
-    same-content extras skip it upstream (the stream proxy byte-verifies a
+    ``_same_content`` lets a missing year match any year because the stream
+    proxy byte-verifies a switch; an NZBGet failover has no such check, so a
+    yearless ``Dune.1080p`` must never back up ``Dune.1984``. Episodes (any
+    season/episode evidence on the pick) keep the content gate's rules.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    _title, pick_year, seasons, episodes, _part = _fs._release_identity(pick)
+    if seasons or episodes:
+        return True
+    return pick_year == _fs._release_identity(row)[1]
+
+
+def same_variant(pick, row):
+    """The NZBGet-only gates: variant tags, languages, and the movie year.
+
+    ``row`` must carry the pick's 3D, dub/sub, hardsub, and cut flags and its
+    languages, and a movie row the pick's exact year. The fallback loader's
+    same-content extras skip these upstream (the stream proxy byte-verifies a
     switch there), but an NZBGet failover plays whatever it promotes.
     Fail-closed on a parse error.
     """
     try:
         return _variant_signature(pick.get("title")) == _variant_signature(
             row.get("title")
-        )
+        ) and _movie_years_match(pick, row)
     except Exception:  # pylint: disable=broad-except
         return False
 

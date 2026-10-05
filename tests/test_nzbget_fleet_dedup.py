@@ -1047,3 +1047,66 @@ def test_config_probe_is_abortable_and_reads_only_a_snapshot(_fleet_env):
     assert time.monotonic() - start < 2
     append.assert_not_called()
     assert getters and getters[0]("nzbget_url") == "http://n"
+
+
+@pytest.mark.parametrize(
+    "pick_title,row_title,expected",
+    [
+        ("Dune.1984.1080p.BluRay.x264-GRP", "Dune.1080p.BluRay.x264-GRP", False),
+        ("Dune.1984.1080p.BluRay.x264-GRP", "Dune.2021.1080p.BluRay.x264-GRP", False),
+        ("Dune.1984.1080p.BluRay.x264-GRP", "Dune 1984 1080p BluRay x264-GRP", True),
+        ("Show.S01E02.1080p.WEB.h264-GRP", "Show.2019.S01E02.1080p.WEB.h264-GRP", True),
+    ],
+)
+def test_nzbget_gates_require_the_movie_year(pick_title, row_title, expected):
+    # Codex r11 (P1): a yearless candidate could be a different film.
+    from resources.lib.nzbget_fleet_dedup import same_variant
+
+    pick = {"title": pick_title, "link": "p"}
+    row = {"title": row_title, "link": "x"}
+    assert same_variant(pick, row) is expected
+    if not expected:
+        assert not same_release(pick, row)
+
+
+def test_stale_successes_use_the_snapshot_taken_before_the_fleet():
+    # Codex r11: a foreign success that lands while the fleet downloads is
+    # not stale; only the pre-fleet snapshot (minus owned ids) is.
+    from resources.lib.nzbget_resolver import _stale_successes
+
+    with patch("resources.lib.nzbget_resolver._preexisting_success_ids") as late:
+        got = _stale_successes(
+            "k",
+            None,
+            {"owned_nzbids": lambda: [6], "preexisting_successes": (5, 6)},
+        )
+    assert got == (5,)
+    late.assert_not_called()
+
+
+def test_resolve_snapshots_successes_before_submitting_the_fleet():
+    from resources.lib.nzbget_resolver import _submit_poll_resolve
+
+    order = []
+    ctx = _fleet_ctx({"key": "k"})
+    ctx.on_failure = lambda _m: None
+    ctx.timeout = 1
+    ctx.interval = 0
+
+    def _snapshot(*_a):
+        order.append("snapshot")
+        return (3,)
+
+    def _fleet(*_a):
+        order.append("fleet")
+        return 9, None
+
+    with patch(
+        "resources.lib.nzbget_resolver._preexisting_success_ids", side_effect=_snapshot
+    ), patch("resources.lib.nzbget_fleet_run.submit_fleet", side_effect=_fleet), patch(
+        "resources.lib.nzbget_resolver.poll_nzbget_job",
+        return_value={"outcome": "timeout"},
+    ) as poll:
+        _submit_poll_resolve(ctx, "pick", "T", None, None)
+    assert order == ["snapshot", "fleet"]
+    assert poll.call_args.kwargs["fleet"]["preexisting_successes"] == (3,)
