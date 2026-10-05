@@ -77,6 +77,21 @@ def keep(link, source_path, now=None):
         return False
 
 
+def has(link, now=None):
+    """Whether a fresh cached NZB exists for ``link`` (a stat, no read)."""
+    now = time.time() if now is None else now
+    try:
+        path = _cache_path(link)
+        return bool(
+            path
+            and os.path.isfile(path)
+            and now - os.path.getmtime(path) < TTL_SECONDS
+            and 0 < os.path.getsize(path) <= _MAX_BYTES
+        )
+    except (OSError, ValueError):
+        return False
+
+
 def load(link, now=None):
     """The cached NZB bytes for ``link`` (kept less than a day ago), or None."""
     now = time.time() if now is None else now

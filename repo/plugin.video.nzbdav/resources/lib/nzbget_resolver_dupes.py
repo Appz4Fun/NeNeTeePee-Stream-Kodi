@@ -86,12 +86,18 @@ def _submit_candidates(
             seen.add(link)
             usable.append(candidate)
     clusters = dedup.clusters(usable)
+    # A pick kept on the box after a canceled play is not downloaded again:
+    # it doesn't count toward (or show) "Downloading NZBs N of M".
+    for cluster in clusters[:1]:
+        head = cluster[0] if cluster else {}
+        if head.get("_is_pick") and _core.nzb_cache.has(head.get("link")):
+            head["_cached"] = True
     tally = {
         "live": [],
         "attempts": 0,
         "wanted": None,
         "seen": 0,
-        "total": len(clusters),
+        "total": sum(1 for c in clusters if c and not c[0].get("_cached")),
         # The pick never counts against the backup cap: it needs one extra
         # collect slot until it is in hand, and its append is not a backup.
         "pick_pending": bool(usable and usable[0].get("_is_pick")),
@@ -260,8 +266,9 @@ def _collect_unique(stream, state, cancel_event, need):
     kept = []
     tally["wanted"] = need
     for candidate, payload, fingerprint in stream:
-        tally["seen"] += 1
-        _report(dedup, "download", tally["seen"], tally["total"])
+        if not candidate.get("_cached"):
+            tally["seen"] += 1
+            _report(dedup, "download", tally["seen"], tally["total"])
         if cancel_event is not None and cancel_event.is_set():
             _discard(spool, payload)
             break

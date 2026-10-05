@@ -2433,3 +2433,38 @@ def test_prefetch_is_serialized_once_the_spool_holds_bodies_in_memory(_fleet_env
     ), patch(_APPEND, side_effect=[(i, None) for i in range(1, 7)]):
         submit_fleet(ctx, "pick", "T", "k")
     assert active["peak"] == 1
+
+
+def test_a_cached_pick_never_shows_downloading_nzbs(_fleet_env, tmp_path):
+    # Owner request: NZBs already on the box are sent, not "downloaded".
+    from resources.lib import nzb_cache
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    source = tmp_path / "pick.nzb"
+    source.write_bytes(_valid("pick"))
+    assert nzb_cache.keep("pick", str(source))
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, return_value=(1, None)
+    ):
+        submit_fleet(ctx, "pick", "T", "k")
+    fetch.assert_not_called()
+    messages = [m for _p, m in ctx.dialog.lines]
+    assert not any(m.startswith("Downloading NZBs") for m in messages)
+    assert "Sending 1 NZBs to NZBGet..." in messages
+
+
+def test_cached_pick_is_left_out_of_the_download_count(_fleet_env, tmp_path):
+    from resources.lib import nzb_cache
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    source = tmp_path / "pick.nzb"
+    source.write_bytes(_valid("pick"))
+    assert nzb_cache.keep("pick", str(source))
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ):
+        submit_fleet(ctx, "pick", "T", "k")
+    downloads = [m for _p, m in ctx.dialog.lines if m.startswith("Downloading NZBs")]
+    assert downloads == ["Downloading NZBs 1 of 2", "Downloading NZBs 2 of 2"]
