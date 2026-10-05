@@ -625,8 +625,10 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # user cancel): its appended jobs are left to finish.
         self.fleet_aborted = False
         # The pick's downloaded NZB parked on disk, re-sent by the FORCE
-        # rescue; deleted when the resolve ends.
+        # rescue; deleted when the resolve ends. ``pick_nzb_bytes`` holds it
+        # only when no temp folder could take it.
         self.pick_nzb_path = None
+        self.pick_nzb_bytes = None
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -700,6 +702,8 @@ def _discard_parked_pick(ctx):
         with contextlib.suppress(OSError):
             os.remove(path)
         ctx.pick_nzb_path = None
+    if getattr(ctx, "pick_nzb_bytes", None) is not None:
+        ctx.pick_nzb_bytes = None
 
 
 def _close_dialog(dialog):

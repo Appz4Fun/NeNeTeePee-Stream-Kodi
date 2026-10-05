@@ -93,17 +93,23 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
     dedup.aborted = lambda: progress.aborted
     run = (dupe_key, getter, ctx, dedup)
-    live = len(_send_batch(run, candidates, limits, capped))
-    if capped and not dupe_check_off and pick.get("_nzbid"):
-        _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
+    try:
+        live = len(_send_batch(run, candidates, limits, capped))
+        if capped and not dupe_check_off and pick.get("_nzbid"):
+            _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
+    finally:
+        dedup.close()
     ctx.fleet_aborted = progress.aborted
     body = pick.pop("_body", None)
     if ctx.cancel_event.is_set():
         return None, None
     # The pick's downloaded body, parked ON DISK for the poll's rare FORCE
     # rescue (re-sending it beats re-fetching a dead, mirrored, or single-use
-    # URL) -- never held in memory for the hour-long poll.
+    # URL) -- never held in memory for the hour-long poll, unless no temp
+    # folder is writable: then it stays in memory, the only good copy.
     ctx.pick_nzb_path = _park_pick_body(body)
+    if ctx.pick_nzb_path is None and body:
+        ctx.pick_nzb_bytes = body
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
 
@@ -227,8 +233,9 @@ def _probe_nzbget_config(getter, progress, dupe_key):
     with a shared ``_PREFLIGHT_BUDGET_SECONDS`` budget (an unresponsive NZBGet
     can't stall playback for minutes), reading only ``getter`` (the caller's
     settings snapshot). A canceled
-    or failed probe returns ``(False, None, None)`` (DupeCheck assumed on; the
-    poll then snapshots successes itself; scores are left as computed).
+    or failed probe returns ``(True, None, None)``: DupeCheck unknown counts
+    as off (the pick is sent alone), the poll snapshots successes itself, and
+    scores are left as computed.
     """
 
     give_up_at = time.monotonic() + _PREFLIGHT_BUDGET_SECONDS
@@ -250,12 +257,12 @@ def _probe_nzbget_config(getter, progress, dupe_key):
             else _core._preexisting_success_ids(dupe_key, getter, history=history)
         )
         if _stopped():
-            return False, preexisting, None
+            return True, preexisting, None
         max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
             dupe_key, settings_getter=getter, history=history or []
         )
         if _stopped():
-            return False, preexisting, max_score
+            return True, preexisting, max_score
         options = _core.nzbget_api.config_options(
             ("DupeCheck", "HealthCheck"), settings_getter=getter
         )
@@ -265,11 +272,13 @@ def _probe_nzbget_config(getter, progress, dupe_key):
             _core._warn_if_healthcheck_pauses(getter, options=options)
         return False, preexisting, max_score
 
+    # A timed-out (or failed) probe fails CLOSED: DupeCheck unknown means the
+    # pick goes alone, never an unbounded fleet of parallel full downloads.
     return call_abortable(
         _probe,
         (progress.cancel_event,),
         progress.canceled,
-        default=(False, None, None),
+        default=(True, None, None),
         deadline=_PREFLIGHT_BUDGET_SECONDS,
     )
 

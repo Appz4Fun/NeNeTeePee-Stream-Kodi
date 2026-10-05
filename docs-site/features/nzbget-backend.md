@@ -232,10 +232,14 @@ Cancel at any step: if you cancel before the upload, nothing is sent to
 NZBGet; if you cancel during it, whatever was already sent is removed.
 
 !!! warning "Backups use indexer grabs"
-    With unlimited backups, every backup costs one NZB download from your
-    indexer. Those downloads count against your indexer's API and grab limits.
-    If your indexer has a tight daily grab limit, set **Maximum duplicate
-    backups** to a small number, or to `0` to turn backups off.
+    With unlimited backups, every backup costs at least one NZB download from
+    your indexer. Backups found by the same-content search (other release
+    groups or codecs, after the same-release results and NZBHydra2's hidden
+    uploads) cost two: that search downloads each candidate once to check it,
+    and the add-on downloads it again to send it. Those downloads count against
+    your indexer's API and grab limits. If your indexer has a tight daily grab
+    limit, set **Maximum duplicate backups** to a small number, or to `0` to
+    turn backups off.
 
 !!! note "NZBGet options that affect failover"
     For automatic failover, NZBGet's **HealthCheck** option must be `Delete`,

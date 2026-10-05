@@ -252,12 +252,20 @@ class FleetDedup:
     resolve's progress dialog.
     """
 
+    # Fingerprints held in memory at once; past this they spill to disk (a
+    # 600k-article remux NZB is ~2.4 MiB), so an unlimited fleet of huge
+    # NZBs keeps a bounded footprint on a CoreELEC box.
+    MEMORY_BUDGET = 16 * 1024 * 1024
+
     def __init__(self, pick=None, spool_base=None, progress=None):
         self._listings = [pick] if isinstance(pick, dict) else []
+        # Each entry is an in-memory ``array('I')`` or the path it spilled to.
         self._fingerprints = []
         # Kept this round but not (yet) in NZBGet: still deduped against, but
         # dropped at the round's end unless committed by a successful append.
         self._pending = []
+        self._in_memory = 0
+        self._spill_dir = None
         self.spool_base = spool_base
         self.progress = progress
         # Optional zero-arg callable: True once Kodi is shutting down (vs a
@@ -300,20 +308,28 @@ class FleetDedup:
 
     def known_posting(self, fingerprint):
         """Whether ``fingerprint`` is the same posting as one sent or kept."""
-        known_sets = self._fingerprints + self._pending
-        if not fingerprint or not known_sets:
+        entries = self._fingerprints + [entry for entry, _fp in self._pending]
+        if not fingerprint or not entries:
             return False
-        return any(_shares_posting(fingerprint, known) for known in known_sets)
+        return any(
+            _shares_posting(fingerprint, _load_fingerprint(entry)) for entry in entries
+        )
 
     def remember_posting(self, fingerprint):
         """Hold ``fingerprint`` for this round (see ``commit_posting``)."""
         if fingerprint:
-            self._pending.append(fingerprint)
+            self._pending.append((self._store(fingerprint), fingerprint))
 
     def commit_posting(self, fingerprint):
         """Mark ``fingerprint``'s posting covered for good (it reached NZBGet)."""
-        if fingerprint:
-            self._fingerprints.append(fingerprint)
+        if not fingerprint:
+            return
+        for index, (entry, held) in enumerate(self._pending):
+            if held is fingerprint:
+                del self._pending[index]
+                self._fingerprints.append(entry)
+                return
+        self._fingerprints.append(self._store(fingerprint))
 
     def end_round(self):
         """Forget postings kept this round that never reached NZBGet.
@@ -321,7 +337,68 @@ class FleetDedup:
         A row whose append failed (or whose body couldn't be stored) does not
         block a later phase's mirror of the same posting.
         """
+        for entry, _fp in self._pending:
+            self._forget(entry)
         self._pending = []
+
+    def close(self):
+        """Delete any spilled fingerprints (call when the fleet is done)."""
+        if self._spill_dir is not None:
+            shutil.rmtree(self._spill_dir, ignore_errors=True)
+            self._spill_dir = None
+
+    def _store(self, fingerprint):
+        """Keep ``fingerprint`` in memory within the budget, else on disk."""
+        size = len(fingerprint) * fingerprint.itemsize
+        if self._in_memory + size <= self.MEMORY_BUDGET:
+            self._in_memory += size
+            return fingerprint
+        path = self._spill_path()
+        if path is not None:
+            try:
+                with open(path, "wb") as handle:
+                    fingerprint.tofile(handle)
+                return path
+            except OSError:
+                _remove_quietly(path)
+        # No disk either: keep it (exact dedup beats an unbounded re-grab).
+        self._in_memory += size
+        return fingerprint
+
+    def _forget(self, entry):
+        if isinstance(entry, str):
+            _remove_quietly(entry)
+        else:
+            self._in_memory = max(0, self._in_memory - len(entry) * entry.itemsize)
+
+    def _spill_path(self):
+        if self._spill_dir is None:
+            for parent in (self.spool_base, None):
+                try:
+                    self._spill_dir = tempfile.mkdtemp(
+                        prefix="nzbdav-fingerprints-", dir=parent
+                    )
+                    break
+                except (OSError, TypeError, ValueError):
+                    continue
+        if self._spill_dir is None:
+            return None
+        handle, path = tempfile.mkstemp(dir=self._spill_dir, suffix=".crc")
+        os.close(handle)
+        return path
+
+
+def _load_fingerprint(entry):
+    """An in-memory fingerprint, or one read back from its spill file."""
+    if not isinstance(entry, str):
+        return entry
+    loaded = array("I")
+    try:
+        with open(entry, "rb") as handle:
+            loaded.frombytes(handle.read())
+    except OSError:
+        return array("I")
+    return loaded
 
 
 class NzbSpool:

@@ -1925,3 +1925,102 @@ def test_overlap_probe_works_in_bounded_chunks():
     with patch.object(nzbget_fleet_dedup, "_PROBE_CHUNK", 500):
         assert nzbget_fleet_dedup.same_posting(left, relisted)
         assert not nzbget_fleet_dedup.same_posting(left, other)
+
+
+def test_unknown_dupecheck_sends_only_the_pick(_fleet_env):
+    # Codex r23 (P1): config unreadable -> fail closed -> pick alone.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
+    with patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled",
+        side_effect=lambda getter, options=None: options.get("dupecheck", "no") == "no",
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.config_options", return_value={}
+    ), patch(
+        _FETCH, side_effect=_valid
+    ), patch(
+        _APPEND, return_value=(1, None)
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+
+
+def test_timed_out_preflight_sends_only_the_pick(_fleet_env):
+    from resources.lib import nzbget_fleet_run
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    release = threading.Event()
+
+    def _hung(*_a, **_k):
+        release.wait(10)
+        return []
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+    with patch.object(nzbget_fleet_run, "_PREFLIGHT_BUDGET_SECONDS", 0.4), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows", side_effect=_hung
+    ), patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, return_value=(1, None)
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    release.set()
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+
+
+def test_pick_body_stays_in_memory_when_no_temp_folder_takes_it(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch(
+        "resources.lib.nzbget_fleet_run._park_pick_body", return_value=None
+    ), patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert ctx.pick_nzb_path is None
+    assert ctx.pick_nzb_bytes == _valid("pick")
+
+
+def test_force_rescue_starts_no_append_after_a_cancel_during_lookup():
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _pick_rescue_callable
+
+    cancel = threading.Event()
+    ctx = SimpleNamespace(
+        settings_getter=lambda *_a: "",
+        dupe={"key": "k", "pick_score": 9},
+        submitted_nzbids=[],
+        dialog=None,
+        cancel_event=cancel,
+        pick_nzb_path=None,
+    )
+
+    def _lookup(*_a, **_k):
+        cancel.set()  # canceled while the lookup RPC was in flight
+        return False
+
+    rescue = _pick_rescue_callable(ctx, "http://i/x.nzb", "T")
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.active_group_by_name",
+        side_effect=_lookup,
+    ), patch(_APPEND) as append:
+        rescue()
+        time.sleep(0.3)
+    append.assert_not_called()
+
+
+def test_fingerprints_past_the_memory_budget_spill_to_disk(tmp_path):
+    # Codex r23 (P1): an unlimited fleet's retained fingerprints are bounded.
+    dedup = FleetDedup(spool_base=str(tmp_path))
+    first = posting_fingerprint(_nzb(_ids("a", 300)))
+    second = posting_fingerprint(_nzb(_ids("b", 300)))
+    with patch.object(FleetDedup, "MEMORY_BUDGET", 300 * 4):
+        dedup.commit_posting(first)  # fits the budget: in memory
+        dedup.commit_posting(second)  # over budget: spilled
+    spilled = list(tmp_path.rglob("*.crc"))
+    assert len(spilled) == 1
+    # Spilled fingerprints still dedupe exactly.
+    relisted = posting_fingerprint(_nzb(_ids("b", 299) + ["z@x"]))
+    assert dedup.known_posting(relisted)
+    assert not dedup.known_posting(posting_fingerprint(_nzb(_ids("c", 300))))
+    dedup.close()
+    assert not list(tmp_path.rglob("*.crc"))

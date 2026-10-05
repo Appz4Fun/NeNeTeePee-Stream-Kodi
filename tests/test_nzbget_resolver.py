@@ -2354,11 +2354,19 @@ def test_dupe_check_disabled_reads_config():
         "resources.lib.nzbget_resolver.nzbget_api.config_option", return_value="yes"
     ):
         assert _dupe_check_disabled(_settings({})) is False
+    # Fail CLOSED (Codex r23): unreadable or unknown DupeCheck counts as off,
+    # so a transient failure can't launch a fleet of parallel full downloads.
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.config_option",
         side_effect=RuntimeError("boom"),
     ):
-        assert _dupe_check_disabled(_settings({})) is False  # best-effort
+        assert _dupe_check_disabled(_settings({})) is True
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.config_option", return_value=None
+    ):
+        assert _dupe_check_disabled(_settings({})) is True
+    assert _dupe_check_disabled(_settings({}), options={}) is True
+    assert _dupe_check_disabled(_settings({}), options={"dupecheck": "yes"}) is False
 
 
 def test_warn_if_healthcheck_pauses_notifies_once_on_pause():

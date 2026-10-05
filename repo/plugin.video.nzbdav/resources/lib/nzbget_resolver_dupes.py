@@ -523,19 +523,21 @@ def _dupe_check_disabled(settings_getter, options=None):
     """True only when NZBGet's ``DupeCheck`` option is explicitly ``no``.
 
     With DupeCheck off NZBGet does not park same-key items as backups -- it would
-    download every one as a normal queue item (parallel full downloads). Best-
-    effort: an unreadable config returns False (assume the default, on).
-    ``options`` is an already-read ``config_options`` dict (else one RPC).
+    download every one as a normal queue item (parallel full downloads). FAIL
+    CLOSED: an unreadable config counts as off, so a transient RPC failure can
+    never launch an (unlimited) fleet of full parallel downloads -- the fleet
+    then sends the pick alone. ``options`` is an already-read
+    ``config_options`` dict (else one RPC).
     """
     if options is not None:
-        return options.get("dupecheck") == "no"
+        return options.get("dupecheck", "no") == "no"
     try:
-        return (
-            _core.nzbget_api.config_option("DupeCheck", settings_getter=settings_getter)
-            == "no"
+        value = _core.nzbget_api.config_option(
+            "DupeCheck", settings_getter=settings_getter
         )
     except Exception:  # pylint: disable=broad-except
-        return False
+        return True
+    return value is None or value == "no"
 
 
 _MAX_EXTRA_BACKUPS = 5
@@ -761,9 +763,15 @@ def _pick_rescue_callable(ctx, nzb_url, title):
                 _core.xbmc.LOGINFO,
             )
             return None
+        cancel_event = getattr(ctx, "cancel_event", None)
+        if cancel_event is not None and cancel_event.is_set():
+            # Canceled/shutting down while the lookup ran: start no append.
+            return None
         # Re-send the body the fleet already downloaded when there is one: the
         # pick URL may be dead (a mirror supplied it) or single-use.
-        body = _read_parked_pick(getattr(ctx, "pick_nzb_path", None))
+        body = _read_parked_pick(getattr(ctx, "pick_nzb_path", None)) or getattr(
+            ctx, "pick_nzb_bytes", None
+        )
         extra = {"nzb_bytes": body} if body else {}
         try:
             nzbid, error = _core.nzbget_api.append_nzb(
