@@ -517,6 +517,7 @@ def _handle_poll_failure(
     cancel_event=None,
     poll_result=None,
     submitted_nzbids=None,
+    adopted_nzbids=None,
 ):
     """Dispatch a non-success poll outcome to its failure callback.
 
@@ -527,6 +528,10 @@ def _handle_poll_failure(
     so the caller proceeds to the SMB resolve. ``poll_result`` (the poll's
     terminal dict) carries the currently tracked member and any
     paused-promoted member ids; ``submitted_nzbids`` are the fleet's appends.
+    ``adopted_nzbids`` are backups an EARLIER play sent (the resubmit ledger):
+    the poll may track them, but a cancel never deletes them -- another
+    resolve may still rely on them. The deletes run in the background, so a
+    stalled NZBGet never holds the cancel (or its dialog cleanup) open.
     """
     if outcome in ("timeout", "aborted"):
         on_failure(_string(30101))
@@ -534,9 +539,12 @@ def _handle_poll_failure(
     if outcome == "canceled":
         if cancel_event is not None:
             cancel_event.set()  # stop the backup worker first
-        canceled = _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids)
-        nzbget_api.cancel_jobs(canceled, settings_getter=settings_getter)
-        nzbget_submit_ledger.forget(canceled)
+        canceled = [
+            job
+            for job in _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids)
+            if not nzbget_api._nzbid_in(job, adopted_nzbids)
+        ]
+        _cancel_jobs_in_background(canceled, settings_getter)
         on_failure(None)
         return True, False
     if outcome == "failed":
@@ -619,7 +627,7 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         self.submitted_nzbids = []
         # Backups an EARLIER play parked in NZBGet under this DupeKey that the
         # fleet skipped re-sending (nzbget_submit_ledger): this resolve follows
-        # a failover onto them, but a cancel leaves them parked.
+        # a failover onto them, but a cancel never deletes them.
         self.adopted_nzbids = []
         # Same-key SUCCESS ids snapshotted before the fleet submitted anything
         # (None: the poll snapshots them itself).
@@ -834,6 +842,7 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         cancel_event=ctx.cancel_event,
         poll_result=result,
         submitted_nzbids=list(getattr(ctx, "submitted_nzbids", None) or []),
+        adopted_nzbids=list(getattr(ctx, "adopted_nzbids", None) or []),
     )
     if handled:
         return leave_job

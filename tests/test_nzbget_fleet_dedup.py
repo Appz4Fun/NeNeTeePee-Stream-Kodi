@@ -2024,3 +2024,38 @@ def test_fingerprints_past_the_memory_budget_spill_to_disk(tmp_path):
     assert not dedup.known_posting(posting_fingerprint(_nzb(_ids("c", 300))))
     dedup.close()
     assert not list(tmp_path.rglob("*.crc"))
+
+
+def test_spilled_fingerprints_are_not_kept_alive_by_the_round(tmp_path):
+    # Codex r24 (P1): past the budget a remembered fingerprint lives only on
+    # disk -- FleetDedup keeps a token, never the array itself.
+    import gc
+    import weakref
+
+    dedup = FleetDedup(spool_base=str(tmp_path))
+    with patch.object(FleetDedup, "MEMORY_BUDGET", 0):
+        fingerprint = posting_fingerprint(_nzb(_ids("a", 300)))
+        ref = weakref.ref(fingerprint)
+        token = dedup.remember_posting(fingerprint)
+        del fingerprint
+        gc.collect()
+        assert ref() is None
+        assert dedup.known_posting(posting_fingerprint(_nzb(_ids("a", 300))))
+        dedup.commit_posting(token)
+        dedup.end_round()
+    assert dedup.known_posting(posting_fingerprint(_nzb(_ids("a", 300))))
+    dedup.close()
+
+
+def test_a_full_spill_disk_keeps_the_fingerprint_in_memory(tmp_path):
+    # Codex r24 (P2): mkstemp failing (disk full, no inodes) degrades to memory.
+    dedup = FleetDedup(spool_base=str(tmp_path))
+    fingerprint = posting_fingerprint(_nzb(_ids("a", 300)))
+    with patch.object(FleetDedup, "MEMORY_BUDGET", 0), patch(
+        "resources.lib.nzbget_fleet_dedup.tempfile.mkstemp",
+        side_effect=OSError(28, "No space left on device"),
+    ):
+        token = dedup.remember_posting(fingerprint)
+    dedup.commit_posting(token)
+    assert dedup.known_posting(posting_fingerprint(_nzb(_ids("a", 299) + ["z@x"])))
+    dedup.close()

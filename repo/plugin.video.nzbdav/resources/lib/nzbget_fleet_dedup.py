@@ -261,9 +261,12 @@ class FleetDedup:
         self._listings = [pick] if isinstance(pick, dict) else []
         # Each entry is an in-memory ``array('I')`` or the path it spilled to.
         self._fingerprints = []
-        # Kept this round but not (yet) in NZBGet: still deduped against, but
-        # dropped at the round's end unless committed by a successful append.
+        # Kept this round but not (yet) in NZBGet, as ``(token, entry)``: still
+        # deduped against, but dropped at the round's end unless committed by
+        # a successful append. Callers hold the token, never the array, so a
+        # spilled fingerprint really leaves memory.
         self._pending = []
+        self._last_token = 0
         self._in_memory = 0
         self._spill_dir = None
         self.spool_base = spool_base
@@ -308,7 +311,7 @@ class FleetDedup:
 
     def known_posting(self, fingerprint):
         """Whether ``fingerprint`` is the same posting as one sent or kept."""
-        entries = self._fingerprints + [entry for entry, _fp in self._pending]
+        entries = self._fingerprints + [entry for _token, entry in self._pending]
         if not fingerprint or not entries:
             return False
         return any(
@@ -316,20 +319,35 @@ class FleetDedup:
         )
 
     def remember_posting(self, fingerprint):
-        """Hold ``fingerprint`` for this round (see ``commit_posting``)."""
-        if fingerprint:
-            self._pending.append((self._store(fingerprint), fingerprint))
+        """Hold ``fingerprint`` for this round; its token for ``commit_posting``.
 
-    def commit_posting(self, fingerprint):
-        """Mark ``fingerprint``'s posting covered for good (it reached NZBGet)."""
+        Only the stored entry is kept (in memory within the budget, else its
+        spill file); drop the array itself once this returns. None when there
+        is no fingerprint.
+        """
         if not fingerprint:
+            return None
+        self._last_token += 1
+        self._pending.append((self._last_token, self._store(fingerprint)))
+        return self._last_token
+
+    def commit_posting(self, token):
+        """Mark a posting covered for good (its NZB reached NZBGet).
+
+        ``token`` is what ``remember_posting`` returned; a fingerprint array
+        that was never remembered is stored directly.
+        """
+        if token is None:
             return
-        for index, (entry, held) in enumerate(self._pending):
-            if held is fingerprint:
-                del self._pending[index]
-                self._fingerprints.append(entry)
-                return
-        self._fingerprints.append(self._store(fingerprint))
+        if isinstance(token, int):
+            for index, (held, entry) in enumerate(self._pending):
+                if held == token:
+                    del self._pending[index]
+                    self._fingerprints.append(entry)
+                    return
+            return
+        if token:
+            self._fingerprints.append(self._store(token))
 
     def end_round(self):
         """Forget postings kept this round that never reached NZBGet.
@@ -337,7 +355,7 @@ class FleetDedup:
         A row whose append failed (or whose body couldn't be stored) does not
         block a later phase's mirror of the same posting.
         """
-        for entry, _fp in self._pending:
+        for _token, entry in self._pending:
             self._forget(entry)
         self._pending = []
 
@@ -383,7 +401,11 @@ class FleetDedup:
                     continue
         if self._spill_dir is None:
             return None
-        handle, path = tempfile.mkstemp(dir=self._spill_dir, suffix=".crc")
+        try:
+            handle, path = tempfile.mkstemp(dir=self._spill_dir, suffix=".crc")
+        except OSError:
+            # Disk full or out of inodes: _store keeps it in memory instead.
+            return None
         os.close(handle)
         return path
 

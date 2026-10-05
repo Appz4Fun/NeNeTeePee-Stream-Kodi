@@ -128,7 +128,7 @@ def _submit_candidates(
             )
             # The whole round was sent: free its spool files and memory so a
             # capped fleet's replacement rounds have room.
-            for _candidate, handle, _fingerprint in kept:
+            for _candidate, handle, _token in kept:
                 spool.release(handle)
             dedup.end_round()
             if need is None or tally.get("pick_failed"):
@@ -205,7 +205,8 @@ def _collect_unique(stream, state, cancel_event, need):
 
     ``state`` is ``(dedup, spool, tally, fetch)``; ``tally["wanted"]`` tells the
     stream how many more items this round can use. Returns
-    ``(candidate, handle)`` entries with an ``NzbSpool`` handle; a backup
+    ``(candidate, handle, token)`` entries: an ``NzbSpool`` handle and the
+    ``FleetDedup.remember_posting`` token (never the fingerprint); a backup
     without a stored NZB is dropped, and a pick without one is kept with a
     None handle so the send phase reports its failure. ``need`` None collects
     everything the stream has.
@@ -259,9 +260,11 @@ def _collect_unique(stream, state, cancel_event, need):
             )
             continue
         # Unique: held for this round so later downloads compare against it;
-        # committed once its append reaches NZBGet.
-        dedup.remember_posting(fingerprint)
-        kept.append((candidate, handle, fingerprint))
+        # committed once its append reaches NZBGet. The round keeps only the
+        # token: a fingerprint spilled to disk must not stay alive here.
+        token = dedup.remember_posting(fingerprint)
+        fingerprint = None
+        kept.append((candidate, handle, token))
         if need is not None:
             tally["wanted"] = need - len(kept)
             if len(kept) >= need:
@@ -302,7 +305,7 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
     """
     cancel_event, submitted_sink, veto_probe, dedup = run
     (live_limit, max_attempts), tally = budget
-    for index, (candidate, handle, fingerprint) in enumerate(kept):
+    for index, (candidate, handle, token) in enumerate(kept):
         # One tick per append: moves the bar and re-checks the dialog cancel,
         # so a cancel stops the remaining appends.
         _report(dedup, "send", index, len(kept))
@@ -334,7 +337,7 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             # For the poll's FORCE rescue (submit_fleet parks it on disk).
             candidate["_body"] = body
         dedup.remember_listing(candidate)
-        dedup.commit_posting(fingerprint)
+        dedup.commit_posting(token)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
         # delete this id immediately, and a COPY-vetoed row still needs deleting.
         if submitted_sink is not None:

@@ -1748,6 +1748,7 @@ def test_resolve_cancel_deletes_job_and_resolves_false():
             {"nzburl": "http://i/x.nzb", "title": "X"},
             settings_getter=_full_settings(),
         )
+    assert _wait_until(lambda: cancel.called)
     cancel.assert_called_once()
     assert cancel.call_args.args[0] == [42]  # id-scoped: just the pick
     assert plugin.setResolvedUrl.call_args[0][1] is False
@@ -1902,6 +1903,7 @@ def test_play_nzbget_submits_every_manifest_source(outcome):
     assert poll.call_args.kwargs["dupe_key"] == pick.kwargs["dupe_key"]
     assert poll.call_args.kwargs["fleet"]["owned_nzbids"]() == [42, 43]
     if outcome == "canceled":
+        assert _wait_until(lambda: cancel.called)
         assert set(cancel.call_args.args[0]) == {42, 43}
     else:
         cancel.assert_not_called()
@@ -2578,6 +2580,7 @@ def test_handle_poll_failure_cancel_also_cancels_promoted_backup():
             poll_result={"outcome": "canceled", "nzbid": 9},
         )
     assert (handled, leave) == (True, False)
+    assert _wait_until(lambda: deleted)
     assert deleted == [[9, 5]]  # tracked backup first, then the pick
 
 
@@ -2646,6 +2649,7 @@ def test_handle_poll_failure_cancel_deletes_own_jobs_and_stops_worker():
         )
     assert (handled, leave) == (True, False)
     assert ev.is_set()  # backup worker signaled to stop
+    assert _wait_until(lambda: deleted)
     assert deleted == [[5]]  # id-scoped: only this resolve's pick
 
 
@@ -2856,6 +2860,7 @@ def test_cancel_is_scoped_to_this_resolves_nzbids():
             submitted_nzbids=[7, 8],
         )
     assert (handled, leave) == (True, False)
+    assert _wait_until(lambda: deleted)
     assert deleted == [
         [9, 12, 7, 8, 5]
     ]  # tracked, paused, submitted, pick -- add-on jobs only
@@ -3525,3 +3530,57 @@ def test_force_rescue_is_abandoned_on_cancel_and_late_append_deleted():
                 break
             time.sleep(0.02)
     assert deleted == [77]
+
+
+def test_poll_cancel_never_deletes_backups_adopted_from_an_earlier_play():
+    # Codex r24 (P1): a backup the resubmit ledger adopted may be tracked, but
+    # this resolve's cancel must not delete it (another resolve may use it).
+    import threading
+
+    deleted = []
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
+        side_effect=lambda ids, settings_getter=None: deleted.append(list(ids)),
+    ):
+        _handle_poll_failure(
+            "canceled",
+            5,
+            _settings({}),
+            lambda m: None,
+            cancel_event=threading.Event(),
+            poll_result={"outcome": "canceled", "nzbid": "11", "paused_nzbids": (12,)},
+            submitted_nzbids=[7],
+            adopted_nzbids=[11, 12],
+        )
+    assert _wait_until(lambda: deleted)
+    assert deleted == [[7, 5]]
+
+
+def test_poll_cancel_cleanup_never_blocks_on_a_stalled_nzbget():
+    # Codex r24 (P2): the poll-cancel deletes run in the background.
+    import threading
+    import time
+
+    release = threading.Event()
+    failed = []
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
+        side_effect=lambda *_a, **_k: release.wait(5),
+    ):
+        start = time.monotonic()
+        _handle_poll_failure(
+            "canceled", 5, _settings({}), failed.append, cancel_event=threading.Event()
+        )
+        elapsed = time.monotonic() - start
+        release.set()
+    assert elapsed < 1 and failed == [None]
+
+
+def _wait_until(predicate, timeout=2.0):
+    """Poll ``predicate`` until true: cancel cleanup runs on a daemon thread."""
+    import time as _time
+
+    deadline = _time.monotonic() + timeout
+    while not predicate() and _time.monotonic() < deadline:
+        _time.sleep(0.01)
+    return predicate()
