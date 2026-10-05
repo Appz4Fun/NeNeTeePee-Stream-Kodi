@@ -154,41 +154,70 @@ def safe_fromstring(xml_text):
     return _ET.fromstring(xml_text)  # nosec B314 — entity declarations refused above
 
 
-# How much of a file ``safe_iterparse`` vets before streaming the rest: the
-# prolog (XML declaration + DOCTYPE) always comes first.
+# The longest prolog (XML declaration, comments, DOCTYPE) ``safe_iterparse``
+# accepts before the root element; real NZB prologs are a few hundred bytes.
 _PROLOG_SCAN_BYTES = 1024 * 1024
+_PROLOG_CHUNK_BYTES = 64 * 1024
 
 
-def _doctype_unvetted(text):
-    """True when a DOCTYPE carries an internal subset, or doesn't end in view.
+class _RootReached(Exception):
+    """Internal: the prolog scan reached the root element."""
 
-    Only an internal subset (``[ ... ]``) can declare entities. NZBs reference
-    an external DTD and never have one, so refusing any internal subset -- or
-    a DOCTYPE whose end lies beyond the scanned prefix -- costs nothing.
+
+def _vet_prolog(path):
+    """Parse the file's prolog with expat until the ROOT element starts.
+
+    Refuses an entity declaration, a DOCTYPE with an internal subset, and a
+    prolog longer than ``_PROLOG_SCAN_BYTES`` -- however it is padded
+    (whitespace, comments, processing instructions), since expat itself finds
+    where the prolog ends. Entities are only ever declared in the prolog, so a
+    vetted prolog makes the stdlib stream parse safe.
     """
-    match = _DOCTYPE_RE.search(text)
-    if not match:
-        return False
-    end = text.find(">", match.end())
-    return end < 0 or "[" in text[match.end() : end]
+    # nosemgrep
+    from xml.parsers import expat  # nosec B407 - only vets the prolog, expands nothing
+
+    def _start(*_args):
+        raise _RootReached()
+
+    def _doctype(_name, _sysid, _pubid, has_internal_subset):
+        if has_internal_subset:
+            raise _UnsafeXmlError("XML internal DTD subsets are not allowed")
+
+    def _entity(*_args):
+        raise _UnsafeXmlError("XML entity declarations are not allowed")
+
+    parser = expat.ParserCreate()
+    parser.StartElementHandler = _start
+    parser.StartDoctypeDeclHandler = _doctype
+    parser.EntityDeclHandler = _entity
+    scanned = 0
+    with open(path, "rb") as handle:
+        while scanned <= _PROLOG_SCAN_BYTES:
+            chunk = handle.read(_PROLOG_CHUNK_BYTES)
+            try:
+                parser.Parse(chunk, not chunk)
+            except _RootReached:
+                return
+            except expat.ExpatError as exc:
+                raise _UnsafeXmlError("malformed XML prolog: {}".format(exc)) from exc
+            if not chunk:
+                raise _UnsafeXmlError("XML document has no root element")
+            scanned += len(chunk)
+    raise _UnsafeXmlError("XML prolog is too long")
 
 
 def safe_iterparse(path, events=("end",)):
     """Stream-parse an XML file, refusing entity declarations.
 
     The file-backed twin of ``safe_fromstring`` for large documents: memory
-    stays bounded by the caller clearing elements as it goes. Uses
-    ``defusedxml`` when present; on the stdlib fallback the prolog is vetted
-    first (no entity declaration, no internal DTD subset), which is where any
-    entity must be declared.
+    stays bounded by the caller detaching elements as it goes. Uses
+    ``defusedxml`` when present; on the stdlib fallback the whole prolog is
+    vetted first by expat (``_vet_prolog``), which is where any entity must be
+    declared.
     """
     if _USING_DEFUSEDXML:
         # nosemgrep
         return _ET.iterparse(path, events=events, forbid_dtd=False)
-    with open(path, "rb") as handle:
-        head = handle.read(_PROLOG_SCAN_BYTES)
-    _reject_entity_declarations(head)
-    if any(_doctype_unvetted(text) for text in _entity_scan_texts(head)):
-        raise _UnsafeXmlError("XML internal DTD subsets are not allowed")
+    _vet_prolog(path)
     # nosemgrep
     return _stdlib_et.iterparse(path, events=events)  # nosec B314 — prolog vetted above

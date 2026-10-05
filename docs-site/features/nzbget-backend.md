@@ -157,9 +157,12 @@ of the release from other indexers or uploaders. Every submission gets:
 NZBGet downloads the highest-scored item, which is your pick, so the progress
 bar and completion behave exactly as before. It parks the rest in its history
 as duplicate backups (status `dupe`) without downloading them. The score
-decides which item plays, not the submission order. That keeps your pick
-active and lets the backups go in at any time. NeNeTeePee-Stream-Kodi submits them in a
-background thread, so they never delay playback.
+decides which item plays, not the submission order, so your pick stays the
+active download. NeNeTeePee-Stream-Kodi finds, downloads, and sends the
+backups before NZBGet starts on your pick (see
+[Speed and indexer limits](#speed-and-indexer-limits)), so playback starts
+after that step: the more duplicate NZBs a release has, the longer it takes.
+Set **Maximum duplicate backups** lower to shorten it.
 
 Your pick can finish unrepairable: par2 repair fails, unpack fails, or health
 drops below NZBGet's critical threshold. NZBGet then automatically pulls the

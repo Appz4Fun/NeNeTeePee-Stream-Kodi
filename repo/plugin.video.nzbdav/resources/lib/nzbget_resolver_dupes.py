@@ -155,11 +155,13 @@ _FLEET_NZB_MAX_BYTES = 32 * 1024 * 1024
 def _fleet_fetcher(clusters, spool):
     """The fleet's NZB fetch.
 
-    Normally each NZB streams straight into a spool file and is fingerprinted
-    from disk (``posting_fingerprint_file``): one GET, no body in memory, the
-    full ``nzbget_api`` size ceiling. Returns ``(path, fingerprint)``, or None
-    for a response that isn't an NZB (its file is removed). Without a spool
-    folder it falls back to in-memory bytes, capped for backups.
+    Each BACKUP streams straight into a spool file and is fingerprinted from
+    disk (``posting_fingerprint_file``): one GET, no body in memory, the full
+    ``nzbget_api`` size ceiling. Returns ``(path, fingerprint)``, or None for a
+    response that isn't an NZB (its file is removed). Without a spool folder
+    backups fall back to in-memory bytes, capped. The pick (a single fetch)
+    is always fetched into memory at the full ceiling, so a full temp disk
+    can't fail it.
     """
     pick_links = {
         row.get("link")
@@ -169,10 +171,13 @@ def _fleet_fetcher(clusters, spool):
     }
 
     def _fetch(url):
+        if url in pick_links:
+            # The pick is ONE fetch (memory bounded by the full ceiling) and
+            # must not fail just because the temp disk is full: fetch it into
+            # memory; ``NzbSpool.save(required=True)`` then keeps it either way.
+            return _core.nzbget_api.fetch_nzb_bytes(url)
         path = spool.reserve()
         if path is None:
-            if url in pick_links:
-                return _core.nzbget_api.fetch_nzb_bytes(url)
             return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
         _core.nzbget_api.download_nzb(url, path)
         fingerprint = posting_fingerprint_file(path)

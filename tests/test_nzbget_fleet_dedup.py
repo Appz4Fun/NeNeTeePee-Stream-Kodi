@@ -1430,11 +1430,14 @@ def test_each_nzb_streams_to_disk_in_one_download(_fleet_env, tmp_path):
     ctx = _fleet_ctx(_fleet_dupe([{"link": "big"}, {"link": "b1"}]))
     with patch(
         "resources.lib.nzbget_resolver._fleet_spool_base", return_value=str(tmp_path)
-    ), patch.object(nzbget_api, "download_nzb", side_effect=_download), patch(
+    ), patch(_FETCH, side_effect=_valid), patch.object(
+        nzbget_api, "download_nzb", side_effect=_download
+    ), patch(
         _APPEND, side_effect=[(1, None), (2, None), (3, None)]
     ) as append:
         submit_fleet(ctx, "pick", "T", "k")
-    assert sorted(downloads) == [("b1", None), ("big", None), ("pick", None)]
+    # Backups stream to disk; the pick is fetched into memory (Codex r18).
+    assert sorted(downloads) == [("b1", None), ("big", None)]
     assert [c.args[0] for c in append.call_args_list] == ["pick", "big", "b1"]
     assert not list(tmp_path.rglob("*.nzb"))
 
@@ -1537,3 +1540,104 @@ def test_loader_stop_event_prevents_new_manifest_fetches():
             selected, iter([{"link": "c1"}, {"link": "c2"}]), state, False
         )
     start.assert_not_called()
+
+
+def test_padded_prolog_cannot_hide_an_entity_declaration(tmp_path):
+    # Codex r18 (P1): >1 MiB of whitespace/comments before an internal DOCTYPE.
+    from resources.lib import xml_safety
+    from resources.lib.nzbget_fleet_dedup import posting_fingerprint_file
+
+    padding = b"<!--" + b"x" * (1100 * 1024) + b"-->\n"
+    evil = (
+        b'<?xml version="1.0"?>'
+        + padding
+        + b'<!DOCTYPE nzb [<!ENTITY a "aaaa">]>'
+        + b"<nzb><file><segments><segment>&a;</segment></segments></file></nzb>"
+    )
+    path = tmp_path / "evil.nzb"
+    path.write_bytes(evil)
+    with patch.object(xml_safety, "_USING_DEFUSEDXML", False):
+        assert posting_fingerprint_file(str(path)) is None
+        # A normal NZB with an external DTD reference still parses.
+        good = tmp_path / "good.nzb"
+        good.write_bytes(
+            b'<?xml version="1.0"?><!DOCTYPE nzb PUBLIC "-//newzBin//DTD NZB 1.1//EN"'
+            b' "http://www.newzbin.com/DTD/nzb/nzb-1.1.dtd">'
+            + _nzb(_ids("g", 3)).split(b"?>", 1)[1]
+        )
+        assert posting_fingerprint_file(str(good)) == posting_fingerprint(
+            _nzb(_ids("g", 3))
+        )
+
+
+def test_streaming_fingerprint_detaches_parsed_segments(tmp_path):
+    # Codex r18 (P1): segments must not accumulate under their parent.
+    from resources.lib import nzbget_fleet_dedup
+
+    path = tmp_path / "x.nzb"
+    path.write_bytes(_nzb(_ids("a", 2000)))
+    seen = []
+    real = nzbget_fleet_dedup._local_name
+
+    def _spy(tag):
+        return real(tag)
+
+    from resources.lib import xml_safety
+
+    real_iterparse = xml_safety.safe_iterparse
+
+    def _watch(p, events=("end",)):
+        for event, elem in real_iterparse(p, events=events):
+            yield event, elem
+            if event == "end" and real(elem.tag) == "segments":
+                seen.append(len(list(elem)))
+
+    with patch.object(xml_safety, "safe_iterparse", side_effect=_watch), patch.object(
+        nzbget_fleet_dedup, "_local_name", side_effect=_spy
+    ):
+        fingerprint = nzbget_fleet_dedup.posting_fingerprint_file(str(path))
+    assert fingerprint is not None and len(fingerprint) == 2000
+    assert seen == [0]  # every segment was detached as soon as it ended
+
+
+def test_pick_is_fetched_into_memory_so_a_full_disk_cannot_fail_it(_fleet_env):
+    # Codex r18: the spool's disk being full must not fail the pick.
+    from resources.lib import nzbget_api
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    def _disk_full(url, dest_path, max_bytes=None):
+        raise OSError("No space left on device")
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch(_FETCH, side_effect=_valid), patch.object(
+        nzbget_api, "download_nzb", side_effect=_disk_full
+    ), patch(_APPEND, return_value=(5, None)) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (5, None)
+    assert append.call_args.kwargs["nzb_bytes"] == _valid("pick")
+
+
+def test_loader_widens_past_filtered_out_rows(_fleet_env):
+    # Codex r18: the loader's first rows are a German variant (filtered out);
+    # the fleet keeps widening until a suitable candidate appears.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    limit = {"n": None}
+    pool = [
+        {"link": "de", "title": "The.Matrix.1999.German.DL.1080p.BluRay.x264-GRP"},
+        {"link": "ok", "title": "The.Matrix.1999.1080p.BluRay.x265-OTHER"},
+    ]
+    asked = []
+
+    def _loader():
+        asked.append(limit["n"])
+        return pool[: limit["n"]]
+
+    dupe = _fleet_dupe([], max_backups=1, loader=_loader, loader_limit=limit)
+    dupe["pick"]["title"] = "The.Matrix.1999.1080p.BluRay.x264-GRP"
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append, patch(_VETO, return_value=False):
+        submit_fleet(ctx, "pick", "The.Matrix.1999.1080p.BluRay.x264-GRP", "k")
+    assert asked == [1, 2]
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "ok"]

@@ -135,7 +135,13 @@ def _fill_from_loader(dupe, progress, run, state):
                 return
             limit["n"] = min(_MAX_FALLBACKS, asked)
         more = _loader_extras(dupe, progress, prior)
-        if not more or progress.canceled():
+        if progress.canceled():
+            return
+        if not more:
+            # Everything the loader exposed was filtered out (language, year,
+            # variant, seen link): widen and ask again, up to its ceiling.
+            if isinstance(limit, dict) and (limit.get("n") or 0) < _MAX_FALLBACKS:
+                continue
             return
         remaining = cap - live
         live += len(

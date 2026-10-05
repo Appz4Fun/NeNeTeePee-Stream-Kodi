@@ -180,22 +180,31 @@ def posting_fingerprint(nzb_bytes):
 def posting_fingerprint_file(path):
     """``posting_fingerprint`` for an NZB on disk, parsed as a stream.
 
-    Each ``<segment>`` is hashed and cleared as soon as it ends, so memory is
-    the fingerprint (4 bytes per article), never the document. None for
-    unparseable or unsafe XML or an NZB without segment Message-IDs.
+    Each ``<segment>`` is hashed and detached from its parent as soon as it
+    ends, so memory is the fingerprint (4 bytes per article), never the
+    document. None for unparseable or unsafe XML or an NZB without segment
+    Message-IDs.
     """
     from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
 
     hashes = set()
+    stack = []
     try:
-        for _event, elem in safe_iterparse(path):
-            if _local_name(elem.tag) == "segment":
+        for event, elem in safe_iterparse(path, events=("start", "end")):
+            if event == "start":
+                stack.append(elem)
+                continue
+            stack.pop()
+            name = _local_name(elem.tag)
+            if name == "segment":
                 msgid = (elem.text or "").strip().strip("<>").lower()
                 if msgid:
                     hashes.add(zlib.crc32(msgid.encode("utf-8")))
-                elem.clear()
-            elif _local_name(elem.tag) == "file":
-                elem.clear()
+            if name in ("segment", "file") and stack:
+                # Detach, not just clear: an emptied child still sits in its
+                # parent until the parent ends, so a file with hundreds of
+                # thousands of segments would keep them all.
+                stack[-1].remove(elem)
     except (OSError, ParseError, UnsafeXmlError, ValueError):
         return None
     return array("I", sorted(hashes)) if hashes else None
