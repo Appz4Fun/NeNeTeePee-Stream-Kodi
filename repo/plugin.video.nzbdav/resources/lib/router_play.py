@@ -737,6 +737,24 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
     }
 
 
+def _nzbget_loader_setting(key, default=""):
+    """``_get_script_setting`` for the NZBGet fleet's fallback loader.
+
+    ``fallback_streams_max`` is the nzbdav proxy's standby cap; NZBGet's
+    backups are bounded by ``nzbget_max_backups`` in the fleet instead, so the
+    loader always scans at its own ceiling (``fallback_streams._MAX_FALLBACKS``,
+    a bound on its manifest-probing cost) and a 0 proxy cap can't switch
+    NZBGet discovery off.
+    """
+    import resources.lib.router as _router
+
+    if key == "fallback_streams_max":
+        from resources.lib.fallback_streams import _MAX_FALLBACKS
+
+        return str(_MAX_FALLBACKS)
+    return _router._get_script_setting(key, default)
+
+
 def _hydra_uploads_loader(selected):
     """Deferred NZBHydra duplicate-upload lookup for the pick, or ``None`` (#372).
 
@@ -788,7 +806,7 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     # xbmcaddon.Addon().getSetting off the main thread (a CoreELEC crash class
     # the snapshot design exists to avoid).
     loader = _router._fallback_candidate_loader_for_selection(
-        selected, filtered, settings_getter=_router._get_script_setting
+        selected, filtered, settings_getter=_nzbget_loader_setting
     )
     hydra_uploads = _hydra_uploads_loader(selected)
     if dupe is None and (loader is not None or hydra_uploads is not None):

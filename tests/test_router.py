@@ -4958,7 +4958,14 @@ def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
     ):
         router_play._attach_nzbget_dupe(params, {"link": "p"}, [{"link": "p"}], {})
 
-    assert seen.get("getter") is _get_script_setting
+    # The pure-XML script getter (thread-safe), with fallback_streams_max
+    # pinned to the loader's own ceiling: NZBGet's cap is nzbget_max_backups.
+    getter = seen.get("getter")
+    assert getter is router_play._nzbget_loader_setting
+    with patch("resources.lib.router._get_script_setting", return_value="0") as xml:
+        assert getter("fallback_streams_max", "5") == "5"
+        assert getter("hydra_url", "") == "0"
+    xml.assert_called_once_with("hydra_url", "")
     assert params["_nzbget_dupe"]["loader"] == "FRESH_LOADER"
 
 

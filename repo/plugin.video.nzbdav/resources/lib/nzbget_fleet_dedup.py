@@ -287,6 +287,11 @@ class NzbSpool:
         self._in_memory += len(body)
         return body
 
+    def release(self, handle):
+        """Give an in-memory body's bytes back to the budget once it was sent."""
+        if isinstance(handle, (bytes, bytearray)):
+            self._in_memory = max(0, self._in_memory - len(handle))
+
     @staticmethod
     def load(handle):
         """The stored body, or None when it can no longer be read."""

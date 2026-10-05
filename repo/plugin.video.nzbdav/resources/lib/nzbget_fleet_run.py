@@ -44,7 +44,10 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         _is_pick=True,
     )
     candidates = [pick]
-    if _core._dupe_check_disabled(getter):
+    dupe_check_off = _probe_nzbget_config(getter, progress)
+    if progress.canceled():
+        return None, None
+    if dupe_check_off:
         # Same-key items would download in parallel instead of parking as
         # backups: send the pick alone.
         _core.xbmc.log(
@@ -53,7 +56,6 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
             _core.xbmc.LOGINFO,
         )
     else:
-        _core._warn_if_healthcheck_pauses(getter)
         candidates += _fleet_backups(dupe, progress)
     if progress.canceled():
         return None, None
@@ -78,6 +80,39 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         return None, None
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _probe_nzbget_config(getter, progress):
+    """``DupeCheck=no`` check plus the HealthCheck=Pause warning, abortably.
+
+    Both are NZBGet ``config`` RPCs that can each hang for the RPC timeout, so
+    they run off-thread behind the cancel/shutdown-aware wait. The thread
+    reads only a snapshot of the connection settings taken HERE on the resolve
+    thread (no off-thread Kodi ``getSetting``). Returns True when DupeCheck is
+    off; a canceled or failed probe returns False (assume the default, on).
+    """
+    url, user, password, category = _core.nzbget_api._get_settings(getter)
+    snapshot = {
+        "nzbget_url": url,
+        "nzbget_username": user,
+        "nzbget_password": password,
+        "nzbget_category": category,
+    }
+
+    def _snapshot_getter(key, default=""):
+        return snapshot.get(key, default)
+
+    def _probe():
+        if _core._dupe_check_disabled(_snapshot_getter):
+            return True
+        _core._warn_if_healthcheck_pauses(_snapshot_getter)
+        return False
+
+    return bool(
+        call_abortable(
+            _probe, (progress.cancel_event,), progress.canceled, default=False
+        )
+    )
 
 
 def _fleet_backups(dupe, progress):

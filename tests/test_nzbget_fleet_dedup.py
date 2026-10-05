@@ -977,3 +977,73 @@ def test_owned_backup_success_is_never_treated_as_stale():
     ):
         assert _stale_successes("k", None, {"owned_nzbids": lambda: [1, 6]}) == (5,)
         assert _stale_successes("k", None, None) == (5, 6)
+
+
+def test_failed_pick_stops_downloading_backups(_fleet_env):
+    # Codex r10: no pick, no fleet -> don't spend grabs on backups.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    rows = [{"link": "b{}".format(i)} for i in range(20)]
+    ctx = _fleet_ctx(_fleet_dupe(rows))
+    fetched = []
+
+    def _fetch(url):
+        fetched.append(url)
+        if url == "pick":
+            raise OSError("indexer down")
+        return _valid(url)
+
+    with patch(_FETCH, side_effect=_fetch), patch(_APPEND) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, "NZB download failed")
+    append.assert_not_called()
+    # Only the prefetch window already in flight (plus the pick's retry).
+    assert len(fetched) <= 1 + 4 + 1
+
+
+def test_spool_memory_budget_is_released_after_send():
+    # Codex r10: a capped round's replacements must fit once earlier in-memory
+    # bodies were sent.
+    with patch(
+        "resources.lib.nzbget_fleet_dedup.tempfile.mkdtemp", side_effect=OSError
+    ), patch.object(NzbSpool, "MEMORY_BUDGET", 10):
+        spool = NzbSpool()
+        first = spool.save(b"12345678")
+        assert spool.save(b"12345678") is None  # over budget
+        spool.release(first)
+        assert spool.save(b"12345678") == b"12345678"
+
+
+def test_config_probe_is_abortable_and_reads_only_a_snapshot(_fleet_env):
+    # Codex r10: a hung NZBGet config RPC must not pin the resolve thread, and
+    # the probe thread never reads Kodi settings.
+    import time
+
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    release = threading.Event()
+    getters = []
+
+    def _hung(getter):
+        getters.append(getter)
+        release.wait(10)
+        return False
+
+    class _CancelNow(_Dialog):
+        def iscanceled(self):
+            return True
+
+    ctx = _fleet_ctx(_fleet_dupe([]), dialog=_CancelNow())
+    start = time.monotonic()
+    with patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", side_effect=_hung
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api._get_settings",
+        return_value=("http://n", "u", "p", "tv"),
+    ), patch(
+        _APPEND
+    ) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    release.set()
+    assert time.monotonic() - start < 2
+    append.assert_not_called()
+    assert getters and getters[0]("nzbget_url") == "http://n"

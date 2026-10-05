@@ -118,7 +118,7 @@ def _submit_candidates(
                 kept,
                 dupe_key,
                 settings_getter,
-                (cancel_event, submitted_sink, veto_probe, dedup),
+                (cancel_event, submitted_sink, veto_probe, dedup, spool),
                 (limits, tally),
             )
             if need is None or tally.get("pick_failed"):
@@ -173,6 +173,11 @@ def _collect_unique(stream, state, cancel_event, need):
             )
         if candidate.get("_is_pick"):
             tally["pick_pending"] = False
+            if not body:
+                # No pick, no fleet: stop downloading backups that could
+                # never be sent (each would cost an indexer grab).
+                kept.append((candidate, None))
+                break
         if fingerprint and dedup.known_posting(fingerprint):
             _core.xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
@@ -217,12 +222,12 @@ def _report(dedup, phase, done, total):
 def _send_kept(kept, dupe_key, settings_getter, run, budget):
     """Phase 2: append every kept NZB to NZBGet, best first.
 
-    ``run`` is ``(cancel_event, submitted_sink, veto_probe, dedup)``;
+    ``run`` is ``(cancel_event, submitted_sink, veto_probe, dedup, spool)``;
     ``budget`` is ``(limits, tally)``, and ``tally`` (``live`` ids,
     ``attempts``) is updated in place. A sent NZB marks its posting covered in
     ``dedup``, so later phases skip other listings of it.
     """
-    cancel_event, submitted_sink, veto_probe, dedup = run
+    cancel_event, submitted_sink, veto_probe, dedup, spool = run
     (live_limit, max_attempts), tally = budget
     for index, (candidate, handle) in enumerate(kept):
         # One tick per append: moves the bar and re-checks the dialog cancel,
@@ -239,6 +244,9 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         if not is_pick:
             tally["attempts"] += 1
         body = NzbSpool.load(handle)
+        # Sent (or failed) either way: an in-memory body frees its budget for a
+        # later capped round's replacements.
+        spool.release(handle)
         if not body:
             # Every fleet append carries its body: append_nzb must never fetch
             # on the resolve thread. A pick without one fails the resolve.
