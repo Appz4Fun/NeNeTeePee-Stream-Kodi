@@ -2938,7 +2938,7 @@ def test_spawn_dupe_backups_bounds_extras_by_remaining_standby_slots():
     }
     seen = {}
 
-    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, leading=None):
+    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, **_kw):
         seen["limit"] = limit
         return []
 
@@ -3062,7 +3062,7 @@ def test_spawn_dupe_backups_threads_score_base_into_extras():
     }
     seen = {}
 
-    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, leading=None):
+    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, **_kw):
         seen["limit"] = limit
         seen["score_base"] = score_base
         return []

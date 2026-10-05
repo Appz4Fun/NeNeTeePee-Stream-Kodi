@@ -90,6 +90,9 @@ def _resolve_fallback_prefetch_settings(settings_getter):
     return _router.fallback_candidate_prefetch_settings(settings_getter=settings_getter)
 
 
+_HYDRA_UPLOADS_CACHE_KEY = "_hydra_duplicate_uploads"
+
+
 def _fetch_fallback_extra_uploads(selected, settings_getter):
     """Fetch same-title alternate uploads from Hydra's duplicate API (fail-soft).
 
@@ -105,12 +108,20 @@ def _fetch_fallback_extra_uploads(selected, settings_getter):
         selected, settings_getter=settings_getter
     ):
         return []
+    # One Hydra internal search per selection: the NZBGet fleet's duplicate
+    # lookup and its fallback loader both ask for the same title.
+    cached = selected.get(_HYDRA_UPLOADS_CACHE_KEY)
+    if isinstance(cached, list):
+        return list(cached)
     from resources.lib.hydra import fetch_release_duplicate_uploads
 
     try:
-        return fetch_release_duplicate_uploads(
+        uploads = fetch_release_duplicate_uploads(
             selected, settings_getter=settings_getter
         )
+        if isinstance(uploads, list):
+            selected[_HYDRA_UPLOADS_CACHE_KEY] = list(uploads)
+        return uploads
     except Exception as error:  # pylint: disable=broad-except
         from resources.lib.http_util import redact_text
 

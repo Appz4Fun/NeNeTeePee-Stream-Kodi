@@ -21,8 +21,8 @@ Release identity never uses size: postings of one release can differ by GBs.
 """
 
 import collections
+import threading
 import zlib
-from concurrent.futures import ThreadPoolExecutor
 
 import xbmc
 
@@ -65,6 +65,22 @@ def _variant_signature(title):
     return flags, languages
 
 
+def same_variant(pick, row):
+    """Whether ``row`` has the pick's 3D, dub/sub, hardsub, cut, and languages.
+
+    The NZBGet-only half of ``same_release``: the fallback loader's
+    same-content extras skip it upstream (the stream proxy byte-verifies a
+    switch there), but an NZBGet failover plays whatever it promotes.
+    Fail-closed on a parse error.
+    """
+    try:
+        return _variant_signature(pick.get("title")) == _variant_signature(
+            row.get("title")
+        )
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
 def same_release(pick, row):
     """Whether ``row`` is the same release as ``pick`` (fail-closed).
 
@@ -82,8 +98,7 @@ def same_release(pick, row):
         return (
             bool(_fs._same_content(pick, row))
             and bool(_fs._metadata_profiles_match(pick, row, require_same_group=True))
-            and _variant_signature(pick.get("title"))
-            == _variant_signature(row.get("title"))
+            and same_variant(pick, row)
         )
     except Exception:  # pylint: disable=broad-except
         return False
@@ -207,19 +222,27 @@ class FleetDedup:
             self._fingerprints.append(fingerprint)
 
 
-def _fetch_cluster(cluster, fetch, cancel_event):
-    """Fetch the first listing of ``cluster`` that downloads.
+def _stopped(events):
+    return any(event is not None and event.is_set() for event in events)
 
-    Returns ``(member, body)``; ``body`` is None when every listing failed (the
-    head is returned so the caller can still try a plain append).
+
+def _fetch_cluster(cluster, fetch, stop_events):
+    """Fetch the first listing of ``cluster`` that returns a valid NZB.
+
+    Returns ``(member, body, fingerprint)``. A body counts only when it parses
+    as an NZB with article Message-IDs, so an HTTP-200 login or rate-limit page
+    falls through to the next listing. ``body`` and ``fingerprint`` are None
+    when every listing failed (the head is returned so the caller can still try
+    a plain append). Stops between listings once any of ``stop_events`` fires.
     """
     for member in cluster:
-        if cancel_event is not None and cancel_event.is_set():
+        if _stopped(stop_events):
             break
         body = _try_fetch(fetch, member["link"])
-        if body:
-            return member, body
-    return cluster[0], None
+        fingerprint = posting_fingerprint(body) if body else None
+        if fingerprint:
+            return member, body, fingerprint
+    return cluster[0], None, None
 
 
 def _try_fetch(fetch, url):
@@ -235,71 +258,72 @@ def _try_fetch(fetch, url):
         return None
 
 
-class _Done:  # pylint: disable=too-few-public-methods
-    """A finished fetch, shaped like the ``Future`` it stands in for."""
+class _Fetch:
+    """One cluster's fetch, run on its own daemon thread or inline.
 
-    def __init__(self, value):
-        self._value = value
+    A daemon thread per fetch (never a ``ThreadPoolExecutor``, whose workers
+    are non-daemon and joined at interpreter exit) keeps an in-flight indexer
+    request from delaying Kodi shutdown. When a thread cannot start (thread
+    exhaustion on a small box) the fetch runs inline instead: no work item is
+    ever queued anywhere, so it can never run twice.
+    """
+
+    def __init__(self, cluster, fetch, stop_events):
+        self._args = (cluster, fetch, stop_events)
+        self._done = threading.Event()
+        self._value = (cluster[0], None, None)
+
+    def start(self):
+        try:
+            threading.Thread(
+                target=self._run, name="nzbdav-nzbget-prefetch", daemon=True
+            ).start()
+        except Exception:  # pylint: disable=broad-except
+            self._run()
+        return self
+
+    def _run(self):
+        try:
+            self._value = _fetch_cluster(*self._args)
+        finally:
+            self._done.set()
 
     def result(self):
+        self._done.wait()
         return self._value
 
 
-def _start_fetch(pool, cluster, fetch, cancel_event):
-    """Start fetching ``cluster`` on the pool, or fetch it inline.
-
-    ``pool`` is a one-item list holding the executor (or None). Inline is the
-    fallback when the pool cannot start a thread (thread exhaustion on a small
-    box), so prefetching degrades to sequential fetches instead of failing the
-    fleet. The pool is dropped after the first failure: CPython's ``submit``
-    queues the work item before starting a thread, so retrying it could run a
-    cluster twice (a duplicate indexer grab).
-    """
-    if pool[0] is not None:
-        try:
-            return pool[0].submit(_fetch_cluster, cluster, fetch, cancel_event)
-        except Exception:  # pylint: disable=broad-except
-            pool[0].shutdown(wait=False)
-            pool[0] = None
-    return _Done(_fetch_cluster(cluster, fetch, cancel_event))
-
-
 def prefetched_clusters(clusters, fetch, cancel_event=None, window=PREFETCH_WINDOW):
-    """Yield ``(member, body)`` per cluster in order, fetching ``window`` ahead.
+    """Yield ``(member, body, fingerprint)`` per cluster in order, ``window`` ahead.
 
-    Fetches run on a small thread pool so indexer round-trips overlap, while
-    results are consumed strictly in rank order (DupeScores stay rank-ordered)
-    and at most ``window`` bodies are held in memory at once. Stops early once
-    ``cancel_event`` fires.
+    Fetches overlap on daemon threads while results are consumed strictly in
+    rank order (DupeScores stay rank-ordered) and at most ``window`` bodies are
+    held in memory at once. Stops early once ``cancel_event`` fires. Closing
+    the generator (a cancel, or the caller's cap being met) stops every
+    in-flight fetch from moving on to its cluster's next listing and starts no
+    new ones.
     """
     window = max(1, window)
+    stop = threading.Event()
+    stop_events = (cancel_event, stop)
     pending = collections.deque()
     remaining = iter(clusters)
-    try:
-        pool = [
-            ThreadPoolExecutor(
-                max_workers=window, thread_name_prefix="nzbdav-nzbget-prefetch"
-            )
-        ]
-    except Exception:  # pylint: disable=broad-except
-        pool = [None]
 
     def _submit_next():
         cluster = next(remaining, None)
         if cluster is None:
             return False
-        pending.append(_start_fetch(pool, cluster, fetch, cancel_event))
+        pending.append(_Fetch(cluster, fetch, stop_events).start())
         return True
 
     try:
         while len(pending) < window and _submit_next():
             pass
         while pending:
-            member, body = pending.popleft().result()
-            if cancel_event is not None and cancel_event.is_set():
+            item = pending.popleft().result()
+            if _stopped(stop_events):
                 return
             _submit_next()
-            yield member, body
+            yield item
     finally:
-        if pool[0] is not None:
-            pool[0].shutdown(wait=False)
+        stop.set()

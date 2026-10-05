@@ -167,44 +167,96 @@ def test_clusters_remember_listings_across_phases():
 # --- prefetched_clusters ----------------------------------------------------
 
 
+def _valid(url):
+    return _nzb([url + "@x"])
+
+
 def test_prefetch_yields_in_rank_order_and_tries_next_listing():
     clusters = [[{"link": "a"}], [{"link": "b1"}, {"link": "b2"}], [{"link": "c"}]]
 
     def _fetch(url):
         if url == "b1":
             raise OSError("403")
-        return url.encode()
+        return _valid(url)
 
     got = list(prefetched_clusters(clusters, _fetch))
-    assert [(m["link"], body) for m, body in got] == [
-        ("a", b"a"),
-        ("b2", b"b2"),
-        ("c", b"c"),
+    assert [(m["link"], body) for m, body, _fp in got] == [
+        ("a", _valid("a")),
+        ("b2", _valid("b2")),
+        ("c", _valid("c")),
     ]
+    assert all(fp == posting_fingerprint(body) for _m, body, fp in got)
+
+
+def test_prefetch_skips_a_non_nzb_body_to_the_next_listing():
+    # An HTTP-200 login / rate-limit page is not a grab: try the next listing.
+    pages = {"x": b"<html>rate limited</html>", "y": _valid("y")}
+    got = list(prefetched_clusters([[{"link": "x"}, {"link": "y"}]], pages.get))
+    assert [(m["link"], body) for m, body, _fp in got] == [("y", _valid("y"))]
 
 
 def test_prefetch_reports_head_when_every_listing_fails():
     got = list(prefetched_clusters([[{"link": "x"}, {"link": "y"}]], _raise))
-    assert [(m["link"], body) for m, body in got] == [("x", None)]
+    assert got == [({"link": "x"}, None, None)]
 
 
 def test_prefetch_stops_on_cancel():
     cancel = threading.Event()
     clusters = [[{"link": str(i)}] for i in range(10)]
     seen = []
-    for member, _body in prefetched_clusters(clusters, str.encode, cancel):
+    for member, _body, _fp in prefetched_clusters(clusters, _valid, cancel):
         seen.append(member["link"])
         cancel.set()
     assert seen == ["0"]
 
 
+def test_prefetch_close_stops_in_flight_fetches_moving_on():
+    # Closing the stream (cap met / cancel) must stop an in-flight cluster
+    # from grabbing its next listing.
+    release = threading.Event()
+    fetched = []
+
+    def _fetch(url):
+        fetched.append(url)
+        if url == "slow1":
+            release.wait(5)
+            raise OSError("timeout")
+        return _valid(url)
+
+    clusters = [[{"link": "a"}], [{"link": "slow1"}, {"link": "slow2"}]]
+    stream = prefetched_clusters(clusters, _fetch, window=2)
+    next(stream)
+    stream.close()
+    release.set()
+    for _ in range(50):
+        if "slow1" in fetched:
+            break
+        threading.Event().wait(0.01)
+    threading.Event().wait(0.05)
+    assert "slow2" not in fetched
+
+
+def test_prefetch_uses_daemon_threads():
+    started = []
+    real_thread = threading.Thread
+
+    def _spy(target=None, name=None, daemon=None):
+        thread = real_thread(target=target, name=name, daemon=daemon)
+        started.append(thread)
+        return thread
+
+    with patch("resources.lib.nzbget_fleet_dedup.threading.Thread", side_effect=_spy):
+        list(prefetched_clusters([[{"link": "a"}], [{"link": "b"}]], _valid))
+    assert started and all(t.daemon for t in started)
+
+
 def test_prefetch_degrades_to_inline_when_threads_cannot_start():
     with patch(
-        "resources.lib.nzbget_fleet_dedup.ThreadPoolExecutor.submit",
+        "resources.lib.nzbget_fleet_dedup.threading.Thread",
         side_effect=RuntimeError("can't start new thread"),
     ):
-        got = list(prefetched_clusters([[{"link": "a"}], [{"link": "b"}]], str.encode))
-    assert [body for _m, body in got] == [b"a", b"b"]
+        got = list(prefetched_clusters([[{"link": "a"}], [{"link": "b"}]], _valid))
+    assert [body for _m, body, _fp in got] == [_valid("a"), _valid("b")]
 
 
 def _raise(_url):
@@ -388,7 +440,7 @@ def test_capped_submit_stops_fetching_once_the_cap_is_met():
 
     rows = [{"link": "u{}".format(i), "title": "t", "score": 1} for i in range(10)]
     with patch(
-        "resources.lib.nzbget_fleet_dedup.ThreadPoolExecutor.submit",
+        "resources.lib.nzbget_fleet_dedup.threading.Thread",
         side_effect=RuntimeError("inline for determinism"),
     ), patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])) as fetch, patch(
         _APPEND, return_value=(1, None)
@@ -400,3 +452,49 @@ def test_capped_submit_stops_fetching_once_the_cap_is_met():
     # The initial window of 4 plus the one refill started when the first
     # result was consumed -- never another fetch after the cap was met.
     assert fetch.call_count == 5
+
+
+def test_loader_extras_drop_language_and_3d_variants_of_the_pick():
+    from resources.lib.nzbget_resolver import _extra_backups_from_loader
+
+    pick = {"title": "The.Matrix.1999.1080p.BluRay.x264-GRP", "link": "p"}
+    cands = [
+        {"link": "de", "title": "The.Matrix.1999.German.DL.1080p.BluRay.x264-GRP"},
+        {"link": "3d", "title": "The.Matrix.1999.3D.HSBS.1080p.BluRay.x264-GRP"},
+        {"link": "ok", "title": "The.Matrix.1999.1080p.BluRay.x265-OTHER"},
+    ]
+    got = _extra_backups_from_loader(lambda: cands, [], limit=None, pick=pick)
+    assert [e["link"] for e in got] == ["ok"]
+
+
+def test_fleet_pubdates_recorded_under_each_backups_own_title():
+    from resources.lib.nzbget_resolver import _record_fleet_pubdates
+
+    dupe = {
+        "backups": [
+            {"title": "Show S01E02 1080p WEB H264-GRP", "pubdate": _PUB},
+            {"pubdate": _PUB_90S},
+        ]
+    }
+    with patch("resources.lib.nzbget_resolver.record_download") as record:
+        _record_fleet_pubdates(dupe, "Show.S01E02.1080p.WEB.h264-GRP")
+    assert [c.args for c in record.call_args_list] == [
+        ("Show S01E02 1080p WEB H264-GRP", _PUB),
+        ("Show.S01E02.1080p.WEB.h264-GRP", _PUB_90S),
+    ]
+
+
+def test_hydra_duplicate_lookup_runs_once_per_selection():
+    from resources.lib.router_fallback import _fetch_fallback_extra_uploads
+
+    selected = {"link": "p", "title": "T"}
+    uploads = [{"link": "u", "title": "T"}]
+    with patch(
+        "resources.lib.router._hydra_duplicate_lookup_enabled", return_value=True
+    ), patch(
+        "resources.lib.hydra.fetch_release_duplicate_uploads", return_value=uploads
+    ) as fetch:
+        first = _fetch_fallback_extra_uploads(selected, None)
+        second = _fetch_fallback_extra_uploads(selected, None)
+    assert first == second == uploads
+    fetch.assert_called_once()

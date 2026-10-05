@@ -19,8 +19,8 @@ import threading
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
 from resources.lib.nzbget_fleet_dedup import (
     FleetDedup,
-    posting_fingerprint,
     prefetched_clusters,
+    same_variant,
 )
 
 
@@ -108,10 +108,9 @@ def _submit_candidates(
         dedup.clusters(usable), _core.nzbget_api.fetch_nzb_bytes, cancel_event
     )
     try:
-        for candidate, body in stream:
+        for candidate, body, fingerprint in stream:
             if _fill_done(live, live_limit, attempts, max_attempts, cancel_event):
                 break
-            fingerprint = posting_fingerprint(body) if body else None
             if fingerprint and dedup.known_posting(fingerprint):
                 _core.xbmc.log(
                     "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
@@ -316,8 +315,14 @@ _MAX_VETO_REPLACEMENTS = 5
 _FLEET_ROW_KEYS = ("title", "size", "pubdate", "_posted_epoch")
 
 
-def _extra_backups_from_loader(
-    loader, seen_links, limit=_MAX_EXTRA_BACKUPS, score_base=0, reserve=0, leading=None
+def _extra_backups_from_loader(  # pylint: disable=too-many-arguments
+    loader,
+    seen_links,
+    limit=_MAX_EXTRA_BACKUPS,
+    score_base=0,
+    reserve=0,
+    leading=None,
+    pick=None,
 ):
     """Hydra duplicate uploads plus same-content candidates from the fallback loader.
 
@@ -334,9 +339,12 @@ def _extra_backups_from_loader(
     (to ``limit + reserve`` when ``limit > 0``), not the live-submit cap: the
     caller's veto-aware fill loop draws extra replacements from this headroom
     when a candidate is ``DELETED/COPY``-vetoed (#372 r6). The loader runs only
-    when the leading uploads leave room. Best-effort: a missing/erroring loader,
-    its turned-off sentinel (a non-list), or ``limit <= 0`` yields no loader
-    candidates.
+    when the leading uploads leave room. With a ``pick``, a candidate whose 3D,
+    dub/sub, hardsub, cut, or language tags differ from the pick's is dropped:
+    the loader's same-content gate leaves them open for the byte-verifying
+    stream proxy, but an NZBGet failover would play them. Best-effort: a
+    missing/erroring loader, its turned-off sentinel (a non-list), or
+    ``limit <= 0`` yields no loader candidates.
     """
     if limit is not None and limit <= 0:
         return []
@@ -352,6 +360,8 @@ def _extra_backups_from_loader(
                 return
             link = _core._usable_backup_link(candidate, seen)
             if not link:
+                continue
+            if pick and not same_variant(pick, candidate):
                 continue
             seen.add(link)
             row = {key: candidate[key] for key in _FLEET_ROW_KEYS if key in candidate}
@@ -544,6 +554,7 @@ def _loader_extras_for_fleet(dupe, backups, live_count=None):
         score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
         reserve=_MAX_VETO_REPLACEMENTS,
         leading=_core._hydra_uploads_for_fleet(dupe),
+        pick=dupe.get("pick"),
     )
 
 
