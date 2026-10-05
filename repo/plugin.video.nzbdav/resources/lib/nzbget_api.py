@@ -773,11 +773,18 @@ def dupekey_member_states(dupe_key, history, queue):
                 state = "dead"
             else:
                 continue
-            try:
-                states[int(str(row.get("NZBID")).strip())] = state
-            except (TypeError, ValueError):
-                continue
+            nzbid = _int_nzbid(row.get("NZBID"))
+            if nzbid is not None:
+                states[nzbid] = state
     return states
+
+
+def _int_nzbid(value):
+    """``value`` as an int NZBID (listgroups may send a string), or None."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
 
 
 def config_options(names, settings_getter=None):

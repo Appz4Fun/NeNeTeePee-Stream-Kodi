@@ -61,7 +61,7 @@ def test_entries_expire_after_a_day():
     nzbget_submit_ledger.record([_row("https://idx/a", 1)], "k", now=1000)
     ttl = nzbget_submit_ledger.TTL_SECONDS
     assert nzbget_submit_ledger.held("k", {1: "parked"}, now=1000 + ttl - 1)
-    assert nzbget_submit_ledger.held("k", {1: "parked"}, now=1000 + ttl) == []
+    assert not nzbget_submit_ledger.held("k", {1: "parked"}, now=1000 + ttl)
 
 
 def test_record_skips_rows_nzbget_did_not_accept_and_replaces_a_relink():
@@ -79,7 +79,7 @@ def test_a_corrupt_ledger_reads_as_empty_and_is_rewritten():
     path = nzbget_submit_ledger._path()
     with open(path, "w", encoding="utf-8") as out:
         out.write("{not json")
-    assert nzbget_submit_ledger.held("k", {1: "parked"}) == []
+    assert not nzbget_submit_ledger.held("k", {1: "parked"})
     nzbget_submit_ledger.record([_row("https://idx/a", 1)], "k")
     with open(path, encoding="utf-8") as handle:
         assert [e["nzbid"] for e in json.load(handle)] == [1]
@@ -269,4 +269,4 @@ def test_background_cancel_forgets_the_deleted_jobs():
     nzbget_submit_ledger.record([_row("https://idx/a", 7)], "k")
     with patch.object(nzbget_resolver.nzbget_api, "cancel_jobs"):
         nzbget_resolver._cancel_jobs_in_background([7], lambda *_a: "")
-    assert nzbget_submit_ledger.held("k", {7: "parked"}) == []
+    assert not nzbget_submit_ledger.held("k", {7: "parked"})

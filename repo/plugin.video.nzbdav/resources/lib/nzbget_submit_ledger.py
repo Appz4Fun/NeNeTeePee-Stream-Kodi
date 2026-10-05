@@ -19,6 +19,7 @@ throughout: any read or write error degrades to "nothing recorded", which is
 the old resubmit-everything behavior.
 """
 
+import contextlib
 import json
 import os
 import tempfile
@@ -88,20 +89,24 @@ def _save(entries):
             json.dump(entries, out)
         os.replace(tmp, path)
     except OSError:
-        try:
+        # Best-effort: an unwritten ledger only means the next play resends.
+        with contextlib.suppress(OSError):
             os.remove(tmp)
-        except OSError:
-            pass
+
+
+def _age(entry, now):
+    """Seconds since ``entry`` was recorded, or None when unreadable."""
+    try:
+        return now - float(entry.get("at", 0))
+    except (TypeError, ValueError):
+        return None
 
 
 def _fresh(entries, now):
     fresh = []
     for entry in entries:
-        try:
-            age = now - float(entry.get("at", 0))
-        except (TypeError, ValueError):
-            continue
-        if 0 <= age < TTL_SECONDS:
+        age = _age(entry, now)
+        if age is not None and 0 <= age < TTL_SECONDS:
             fresh.append(entry)
     return fresh
 
