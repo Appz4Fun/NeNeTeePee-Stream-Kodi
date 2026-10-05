@@ -18,6 +18,7 @@ import threading
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
 from resources.lib.nzbget_fleet_dedup import (
+    PREFETCH_WINDOW,
     FleetDedup,
     prefetched_clusters,
     same_variant,
@@ -32,6 +33,7 @@ def _submit_dupe_backups(
     submitted_sink=None,
     dedup=None,
     veto_probe=True,
+    live_limit=None,
 ):
     """Submit the release's duplicate backups to NZBGet (#372, Smart Duplicates).
 
@@ -57,7 +59,9 @@ def _submit_dupe_backups(
     ``ctx.submitted_nzbids``) receives each NZBID AS ITS APPEND SUCCEEDS -- a
     cancel mid-batch snapshots that list immediately, so an already-appended
     backup must be visible before the next append starts, not after the whole
-    batch returns.
+    batch returns. ``live_limit`` caps the LIVE backups (``None`` = all): the
+    cap counts what was really submitted, so rows that collapse as duplicates
+    never use up a slot.
     """
     return _core._submit_candidates(
         backups,
@@ -67,6 +71,7 @@ def _submit_dupe_backups(
         submitted_sink=submitted_sink,
         dedup=dedup,
         veto_probe=veto_probe,
+        limits=(live_limit, None),
     )
 
 
@@ -104,8 +109,17 @@ def _submit_candidates(
             usable.append(candidate)
     live = []
     attempts = 0
+    # Never prefetch more than the cap could still use.
+    window = (
+        PREFETCH_WINDOW
+        if live_limit is None
+        else max(1, min(PREFETCH_WINDOW, live_limit))
+    )
     stream = prefetched_clusters(
-        dedup.clusters(usable), _core.nzbget_api.fetch_nzb_bytes, cancel_event
+        dedup.clusters(usable),
+        _core.nzbget_api.fetch_nzb_bytes,
+        cancel_event,
+        window=window,
     )
     try:
         for candidate, body, fingerprint in stream:
@@ -146,6 +160,10 @@ def _submit_candidates(
                 break
     finally:
         stream.close()
+        # Every inspected row is now decided: the completion ledger records
+        # only rows that really reached NZBGet.
+        for candidate in usable:
+            candidate.setdefault("_submitted", False)
     return live
 
 
@@ -438,6 +456,8 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
     unlimited = _fleet_is_unlimited(dupe)
     dedup = FleetDedup(pick=dupe.get("pick"))
     dedup.remember_posting(dupe.get("pick_fingerprint"))
+    max_backups = dupe.get("max_backups")
+    capped = isinstance(max_backups, int) and max_backups > 0
     live = _core._submit_dupe_backups(
         backups,
         dupe_key,
@@ -446,13 +466,13 @@ def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
         submitted_sink=submitted_ids,
         dedup=dedup,
         veto_probe=not unlimited,
+        live_limit=max_backups if capped else None,
     )
     if cancel_event.is_set():
         return
     # Extras budget = the cap's slots the LIVE same-release backups left free;
     # a COPY-vetoed (or entirely failed) append frees its slot for a loader
     # replacement (#372 r6). Unlimited fleets have no budget.
-    max_backups = dupe.get("max_backups")
     if unlimited:
         remaining = None
     elif max_backups is None:
@@ -532,9 +552,8 @@ def _loader_extras_for_fleet(dupe, backups, live_count=None):
     r6) is the count of backups that ACTUALLY landed live -- a
     ``DELETED/COPY``-vetoed backup frees its slot for a loader replacement, so
     the remaining-slot math uses the live tally when given (else
-    ``len(backups)`` for back-compat). The candidate list is widened by
-    ``_MAX_VETO_REPLACEMENTS`` (reserve) so the fill loop has headroom to draw
-    replacements for vetoed extras.
+    ``len(backups)`` for back-compat). Returns every candidate (no slot
+    truncation); with no remaining slot it returns none.
     """
     extras_limit = dupe.get("max_backups")
     spent = len(backups) if live_count is None else live_count
@@ -551,12 +570,14 @@ def _loader_extras_for_fleet(dupe, backups, live_count=None):
     # so round-4's cross-fleet ordering guarantees are untouched.
     if remaining is not None and remaining <= 0:
         return []
+    # The candidate list is NOT truncated to the remaining slots: listings and
+    # postings that collapse as duplicates must not use up a slot, so the
+    # live cap is enforced by the fill loop (_submit_extras_until_filled).
     return _core._extra_backups_from_loader(
         dupe.get("loader"),
         [b.get("link") for b in backups],
-        limit=remaining,
+        limit=None,
         score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
-        reserve=_MAX_VETO_REPLACEMENTS,
         leading=_core._hydra_uploads_for_fleet(dupe),
         pick=dupe.get("pick"),
     )

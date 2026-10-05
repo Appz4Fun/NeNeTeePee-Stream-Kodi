@@ -4865,7 +4865,10 @@ def test_nzbget_dupe_submission_caps_backups_by_setting():
         _dupe_setting_getter({"nzbget_enabled": "true", "nzbget_max_backups": "3"}),
     ):
         dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity)
-    assert len(dupe["backups"]) == 3
+    # Every same-release row is carried; the worker caps LIVE backups at 3
+    # after same-posting dedup, so collapsed rows never use up a slot.
+    assert dupe["max_backups"] == 3
+    assert len(dupe["backups"]) == 10
 
 
 def test_release_dupe_key_episode_without_numeric_se_stays_distinct():

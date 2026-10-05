@@ -3077,7 +3077,9 @@ def test_spawn_dupe_backups_threads_score_base_into_extras():
         _spawn_dupe_backups(_dupe_ctx(dupe))
     # Extras start just below the lowest same-name backup: base - count - 1.
     assert seen["score_base"] == 100000 - 1 - 1
-    assert seen["limit"] == 2  # 3 cap - 1 live same-name
+    # The candidate list is not truncated (duplicates must not use up slots);
+    # the 3 cap - 1 live = 2 remaining slots are enforced by the fill loop.
+    assert seen["limit"] is None
 
 
 def test_spawn_dupe_backups_runs_loader_only_fleet():

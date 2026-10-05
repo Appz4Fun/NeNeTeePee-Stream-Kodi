@@ -569,12 +569,14 @@ def _backup_row(result):
     }
 
 
-def _same_release_backups(selected, filtered, max_backups):
+def _same_release_backups(selected, filtered):
     """The other picker results that are the pick's release, deduped/capped.
 
     Exact same-name rows (case/whitespace-normalized) come first, then rows
     that ``nzbget_fleet_dedup.same_release`` accepts under a different name, each
-    group in picker order. ``max_backups < 0`` is unlimited.
+    group in picker order. Every such row is returned: ``nzbget_max_backups``
+    caps the LIVE backups in the worker, after same-posting dedup, so a row
+    that collapses as a duplicate never uses up a slot.
     """
     from resources.lib.nzbget_fleet_dedup import same_release
 
@@ -593,8 +595,7 @@ def _same_release_backups(selected, filtered, max_backups):
         else:
             continue
         seen.add(result["link"])
-    rows = [_backup_row(result) for result in exact + similar]
-    return rows if max_backups < 0 else rows[:max_backups]
+    return [_backup_row(result) for result in exact + similar]
 
 
 def _parse_max_backups(raw):
@@ -661,7 +662,7 @@ def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=N
     key = _release_dupe_key(identity or {}, selected.get("title"))
     if not key:
         return None
-    backups = _same_release_backups(selected, filtered, max_backups)
+    backups = _same_release_backups(selected, filtered)
     if not backups:
         return None
     base = _dupe_score_base()

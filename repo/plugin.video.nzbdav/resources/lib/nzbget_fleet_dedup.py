@@ -23,6 +23,7 @@ Release identity never uses size: postings of one release can differ by GBs.
 import collections
 import threading
 import zlib
+from array import array
 
 import xbmc
 
@@ -31,11 +32,9 @@ from resources.lib.http_util import pubdate_to_epoch, redact_text
 SAME_LISTING_WINDOW_SECONDS = 120
 PREFETCH_WINDOW = 4
 
-# Fingerprints keep every article hash below this count, else a deterministic
-# 1-in-_SAMPLE_MOD sample (the same Message-ID always hashes the same way, so
-# two samples of one posting overlap exactly as the full sets would).
-_FULL_FINGERPRINT_BELOW = 512
-_SAMPLE_MOD = 16
+# A fingerprint keeps EVERY article's CRC32 (no sampling, so the 1% rule is
+# exact) as a sorted ``array('I')``: 4 bytes per article, so even a large
+# remux fleet stays a few tens of MiB on a CoreELEC box.
 _SAME_POSTING_SHARE = 0.01
 
 
@@ -137,7 +136,7 @@ def same_listing(left, right):
 
 
 def posting_fingerprint(nzb_bytes):
-    """Return ``(article_count, frozenset_of_crc32)`` for an NZB, or None.
+    """Return a sorted ``array('I')`` of every article's CRC32, or None.
 
     None for unparseable XML or an NZB without any segment Message-IDs.
     """
@@ -155,30 +154,23 @@ def posting_fingerprint(nzb_bytes):
                     hashes.add(zlib.crc32(msgid.encode("utf-8")))
     if not hashes:
         return None
-    count = len(hashes)
-    if count >= _FULL_FINGERPRINT_BELOW:
-        hashes = {value for value in hashes if value % _SAMPLE_MOD == 0}
-    return count, frozenset(hashes)
+    return array("I", sorted(hashes))
 
 
-def _sampled(hashes):
-    return frozenset(value for value in hashes if value % _SAMPLE_MOD == 0)
+def _shares_posting(probe, probe_len, other):
+    """Whether set ``probe`` shares more than 1% of the smaller article set."""
+    smaller = min(probe_len, len(other))
+    if smaller == 0:
+        return False
+    # set.intersection walks the array in C: cheap even for large postings.
+    return len(probe.intersection(other)) > smaller * _SAME_POSTING_SHARE
 
 
 def same_posting(left, right):
     """Whether two fingerprints share more than 1% of the smaller article set."""
     if not left or not right:
         return False
-    left_count, left_hashes = left
-    right_count, right_hashes = right
-    if left_count >= _FULL_FINGERPRINT_BELOW or right_count >= _FULL_FINGERPRINT_BELOW:
-        # At least one side is a sample: compare like with like.
-        left_hashes = _sampled(left_hashes)
-        right_hashes = _sampled(right_hashes)
-    smaller = min(len(left_hashes), len(right_hashes))
-    if smaller == 0:
-        return False
-    return len(left_hashes & right_hashes) > smaller * _SAME_POSTING_SHARE
+    return _shares_posting(set(left), len(left), right)
 
 
 class FleetDedup:
@@ -215,7 +207,13 @@ class FleetDedup:
 
     def known_posting(self, fingerprint):
         """Whether ``fingerprint`` is the same posting as one already submitted."""
-        return any(same_posting(fingerprint, known) for known in self._fingerprints)
+        if not fingerprint or not self._fingerprints:
+            return False
+        probe = set(fingerprint)
+        return any(
+            _shares_posting(probe, len(fingerprint), known)
+            for known in self._fingerprints
+        )
 
     def remember_posting(self, fingerprint):
         if fingerprint:
@@ -323,7 +321,10 @@ def prefetched_clusters(clusters, fetch, cancel_event=None, window=PREFETCH_WIND
             item = pending.popleft().result()
             if _stopped(stop_events):
                 return
-            _submit_next()
             yield item
+            # Refill only once the caller asks for more: a caller that stops
+            # here (cap met) never pays for another grab, and at most
+            # ``window`` bodies (the yielded one included) are ever held.
+            _submit_next()
     finally:
         stop.set()

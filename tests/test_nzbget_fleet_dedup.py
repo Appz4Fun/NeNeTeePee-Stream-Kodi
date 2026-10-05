@@ -119,14 +119,32 @@ def test_disjoint_repost_is_a_different_posting():
     assert not same_posting(left, right)
 
 
-def test_large_postings_compare_on_samples():
+def test_large_postings_compare_every_article():
     ids = _ids("a", 5000)
     left = posting_fingerprint(_nzb(ids))
-    assert left[0] == 5000 and len(left[1]) < 1000  # sampled
+    assert len(left) == 5000  # every article kept, 4 bytes each
     relisted = posting_fingerprint(_nzb(ids[:-3] + _ids("r", 3)))
     other = posting_fingerprint(_nzb(_ids("b", 5000)))
     assert same_posting(left, relisted)
     assert not same_posting(left, other)
+
+
+def test_overlap_just_over_one_percent_is_never_missed():
+    # 6 shared of 512 = 1.17%: a 1-in-16 sample could drop all six (Codex r3).
+    shared = _ids("s", 6)
+    left = posting_fingerprint(_nzb(shared + _ids("a", 506)))
+    right = posting_fingerprint(_nzb(shared + _ids("b", 506)))
+    assert same_posting(left, right)
+    under = posting_fingerprint(_nzb(shared[:5] + _ids("c", 507)))  # 0.98%
+    assert not same_posting(left, under)
+
+
+def test_fleet_known_posting_matches_same_posting():
+    dedup = FleetDedup()
+    first = posting_fingerprint(_nzb(_ids("a", 300)))
+    dedup.remember_posting(first)
+    assert dedup.known_posting(posting_fingerprint(_nzb(_ids("a", 299) + ["z@x"])))
+    assert not dedup.known_posting(posting_fingerprint(_nzb(_ids("b", 300))))
 
 
 def test_small_vs_large_fingerprints_compare_like_with_like():
@@ -287,10 +305,9 @@ def test_same_release_backups_exact_first_then_other_names():
         {"link": "d", "title": "Show.S01E02.1080p.WEB.h264-NTB"},
         {"link": "a", "title": "Show S01E02 1080p WEB H264-GRP"},  # dup link
     ]
-    got = _same_release_backups(pick, rows, -1)
+    got = _same_release_backups(pick, rows)
     assert [r["link"] for r in got] == ["b", "a"]
     assert got[1]["size"] == "9"
-    assert [r["link"] for r in _same_release_backups(pick, rows, 1)] == ["b"]
 
 
 # --- worker submit pipeline -------------------------------------------------
@@ -449,9 +466,9 @@ def test_capped_submit_stops_fetching_once_the_cap_is_met():
     ):
         live = _submit_candidates(rows, "k", lambda *_a: "", limits=(1, None))
     assert live == [1]
-    # The initial window of 4 plus the one refill started when the first
-    # result was consumed -- never another fetch after the cap was met.
-    assert fetch.call_count == 5
+    # A cap of one prefetches one NZB at a time and never refills after the
+    # cap is met: exactly one indexer grab.
+    assert fetch.call_count == 1
 
 
 def test_loader_extras_drop_language_and_3d_variants_of_the_pick():
@@ -569,3 +586,43 @@ def test_nzb_fetch_is_size_capped():
     with patch.object(nzbget_api, "_http_get", return_value="<nzb/>") as get:
         nzbget_api.fetch_nzb_bytes("http://i/x.nzb")
     assert get.call_args.kwargs["max_bytes"] == nzbget_api._MAX_NZB_BYTES
+
+
+def test_capped_fleet_counts_live_backups_not_collapsed_rows():
+    # Codex r3: with a cap of 1, rows that mirror the pick's posting must not
+    # use up the slot -- the first genuinely distinct posting still lands.
+    from resources.lib.nzbget_resolver import _submit_backup_fleet
+
+    pick = {"link": "p", "size": "100", "pubdate": _PUB}
+    mirrors = [
+        {"link": "m{}".format(i), "title": "t", "size": "100", "pubdate": _PUB_90S}
+        for i in range(6)
+    ]
+    dupe = {
+        "key": "k",
+        "pick": pick,
+        "backups": [],
+        "max_backups": 1,
+        "hydra_uploads": lambda: mirrors + [{"link": "distinct", "title": "t"}],
+    }
+    with patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])), patch(
+        _APPEND, return_value=(9, None)
+    ) as append, patch(_VETO, return_value=False):
+        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
+    assert [c.args[0] for c in append.call_args_list] == ["distinct"]
+    assert [e["_submitted"] for e in dupe["extras"]] == [False] * 6 + [True]
+
+
+def test_ledger_skips_backups_the_worker_did_not_submit():
+    from resources.lib.nzbget_resolver import _record_fleet_pubdates
+
+    dupe = {
+        "backups": [
+            {"title": "Sent", "pubdate": _PUB, "_submitted": True},
+            {"title": "Collapsed", "pubdate": _PUB, "_submitted": False},
+            {"title": "Not Reached Yet", "pubdate": _PUB_90S},
+        ]
+    }
+    with patch("resources.lib.nzbget_resolver.record_download") as record:
+        _record_fleet_pubdates(dupe, "Pick")
+    assert [c.args[0] for c in record.call_args_list] == ["Sent", "Not Reached Yet"]

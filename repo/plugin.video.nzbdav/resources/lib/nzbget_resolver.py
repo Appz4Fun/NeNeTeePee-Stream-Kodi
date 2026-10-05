@@ -918,10 +918,16 @@ def _record_fleet_pubdates(dupe, title):
     harmless.
     """
     dupe = dupe or {}
+    # A backup the worker decided not to submit (a collapsed duplicate, or
+    # past the cap) is flagged ``_submitted=False``; an unflagged backup is one
+    # the worker has not reached yet and is recorded as before.
+    backups = [
+        backup for backup in dupe.get("backups") or [] if backup.get("_submitted", True)
+    ]
     submitted_extras = [
         extra for extra in dupe.get("extras") or [] if extra.get("_submitted")
     ]
-    for backup in list(dupe.get("backups") or []) + submitted_extras:
+    for backup in backups + submitted_extras:
         pubdate = backup.get("pubdate")
         if pubdate:
             record_download(backup.get("title") or title, pubdate)
