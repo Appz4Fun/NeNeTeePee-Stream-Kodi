@@ -889,7 +889,8 @@ def _final_delete(command, ids, settings_getter):
     """
     if not ids:
         return True
-    _result, error = _rpc_call(
+    result, error = _rpc_call(
         "editqueue", [command, "", ids], settings_getter=settings_getter
     )
-    return error is None
+    # editqueue answers ``true`` on success; ``false`` (or nothing) is a failure.
+    return error is None and result is True

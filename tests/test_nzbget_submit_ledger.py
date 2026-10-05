@@ -370,3 +370,95 @@ def test_adoption_is_bounded_by_the_cap(_nzbget_history):
         submit_fleet(ctx, "pick", "T", "k")
     assert [c.args[0] for c in append.call_args_list] == ["pick"]
     assert ctx.adopted_nzbids == [11]
+
+
+def test_a_false_editqueue_result_is_a_failed_delete():
+    # Codex r30 (P2): NZBGet answers ``false`` for a failed edit.
+    with patch.object(nzbget_api, "_rpc_call", return_value=(False, None)):
+        assert nzbget_api.cancel_jobs([7]) is False
+
+
+@pytest.mark.usefixtures("_fleet_env")
+def test_no_force_while_the_queue_holds_a_same_key_download():
+    # Codex r30 (P2): history unreadable but the queue shows this key active --
+    # FORCE would start a parallel download, so the pick keeps SCORE.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _ctx(_fleet_dupe(_rows(1)))
+    active = [{"NZBID": 5, "DupeKey": "k", "Status": "DOWNLOADING"}]
+    with patch(_HISTORY, return_value=None), patch(_QUEUE, return_value=active), patch(
+        _FETCH, side_effect=_valid
+    ), patch(_APPEND, return_value=(20, None)) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+    assert append.call_args.kwargs["dupe_mode"] == "SCORE"
+
+
+def test_adopted_slots_also_shrink_the_attempt_budget():
+    # Codex r30 (P2): adopted base slots never become replacement allowance.
+    from resources.lib import nzbget_fleet_run
+    from resources.lib.nzbget_fleet_dedup import FleetDedup
+
+    held = [
+        {
+            "link": nzbget_submit_ledger.link_key("https://idx/b0"),
+            "nzbid": 11,
+            "state": "parked",
+        }
+    ]
+    dedup = FleetDedup()
+    run = ("k", lambda *_a: "", _ctx({}), dedup, held)
+    seen = {}
+
+    def _submit(fresh, *_a, **kw):
+        seen["limits"] = kw["limits"]
+        return []
+
+    candidates = [{"link": "pick", "_is_pick": True}, {"link": "https://idx/b0"}]
+    with patch("resources.lib.nzbget_resolver._submit_candidates", side_effect=_submit):
+        live = nzbget_fleet_run._send_batch(run, candidates, (5, 10), True)
+    assert seen["limits"] == (4, 9)
+    assert live == [11] and dedup.attempts_used == 1
+
+
+def _late_append(cancel_ok):
+    """An append that lands after a cancel abandoned its wait."""
+    from resources.lib.nzbget_fleet_dedup import FleetDedup
+    from resources.lib.nzbget_resolver_dupes import _append_abortably
+
+    cancel = threading.Event()
+    release = threading.Event()
+    deleted = threading.Event()
+
+    def _slow(*_a, **_k):
+        release.wait(5)
+        return 77
+
+    def _cancel(*_a, **_k):
+        deleted.set()
+        return cancel_ok
+
+    candidate = {"link": "https://idx/late?apikey=s", "title": "late"}
+    timer = threading.Timer(0.1, cancel.set)
+    with patch(
+        "resources.lib.nzbget_resolver._append_one_backup", side_effect=_slow
+    ), patch.object(nzbget_api, "cancel_jobs", side_effect=_cancel):
+        timer.start()
+        assert _append_abortably(
+            candidate, b"<nzb/>", ("k", lambda *_a: "", False), (cancel, FleetDedup())
+        ) == (None, False)
+        release.set()
+        assert deleted.wait(2)
+        _settle(lambda: False, timeout=0.1)
+
+
+def test_a_late_append_whose_delete_fails_stays_in_the_ledger():
+    # Codex r30 (P2): the job is still in NZBGet -- a replay must reuse it.
+    _late_append(cancel_ok=False)
+    held = nzbget_submit_ledger.held("k", {77: "parked"})
+    assert [e["link"] for e in held] == ["https://idx/late"]
+
+
+def test_a_late_append_that_was_deleted_is_forgotten():
+    _late_append(cancel_ok=True)
+    assert not nzbget_submit_ledger.held("k", {77: "parked"})

@@ -74,15 +74,19 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         _is_pick=True,
     )
     if ctx.preexisting_successes is None:
-        # NZBGet's history couldn't be read: the pick's score can't be lifted
-        # above an older same-key item, so under SCORE NZBGet might park it
-        # as a duplicate. Fail closed: send it alone with FORCE (always
-        # downloads), no backups.
+        # NZBGet's history couldn't be read: no backups, and the pick's score
+        # can't be lifted above an older same-key item.
         dupe_check_off = True
-        pick["_dupe_mode"] = "FORCE"
+        if members is not None and not members:
+            # The queue WAS read and holds nothing under this key: FORCE (no
+            # duplicate checks) can't start a parallel download, and it keeps
+            # SCORE from parking the pick behind an unseen older success.
+            pick["_dupe_mode"] = "FORCE"
         _core.xbmc.log(
             "NeNeTeePee-Stream-Kodi: NZBGet history unreadable -- sending the "
-            "pick alone with DupeMode=FORCE (no #372 backups).",
+            "pick alone (DupeMode={}, no #372 backups).".format(
+                pick.get("_dupe_mode") or "SCORE"
+            ),
             _core.xbmc.LOGINFO,
         )
     candidates = [pick]
@@ -273,10 +277,10 @@ def _probe_nzbget_config(getter, progress, dupe_key):
     run off-thread behind the cancel/shutdown-aware wait with a shared
     ``_PREFLIGHT_BUDGET_SECONDS`` budget (an unresponsive NZBGet can't stall
     playback for minutes), reading only ``getter`` (the caller's settings
-    snapshot). A canceled or failed probe returns ``(True, None, None, {})``:
-    DupeCheck unknown counts as off (the pick is sent alone), the poll
-    snapshots successes itself, scores are left as computed, and nothing is
-    known to be held (nothing is skipped).
+    snapshot). A canceled or failed probe returns ``(True, None, None, None)``:
+    DupeCheck unknown counts as off (the pick is sent alone, under SCORE),
+    the poll snapshots successes itself, scores are left as computed, and
+    membership is unknown (nothing is skipped).
     """
 
     give_up_at = time.monotonic() + _PREFLIGHT_BUDGET_SECONDS
@@ -300,16 +304,18 @@ def _probe_nzbget_config(getter, progress, dupe_key):
             else _core._preexisting_success_ids(dupe_key, getter, history=history)
         )
         if _stopped():
-            return True, preexisting, None, {}
+            return True, preexisting, None, None
         queue = _core.nzbget_api.queue_rows(getter)
         max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
             dupe_key, settings_getter=getter, history=history or [], queue=queue or []
         )
-        # Unknown history or queue: claim nothing is held (resend everything).
+        # Unknown queue: membership unknown (None). Unknown history: only the
+        # queue's same-key members are known (still enough to skip them, and
+        # to refuse a FORCE that would download in parallel with one).
         members = (
-            {}
-            if history is None or queue is None
-            else _core.nzbget_api.dupekey_member_states(dupe_key, history, queue)
+            None
+            if queue is None
+            else _core.nzbget_api.dupekey_member_states(dupe_key, history or [], queue)
         )
         if _stopped():
             return True, preexisting, max_score, members
@@ -328,7 +334,7 @@ def _probe_nzbget_config(getter, progress, dupe_key):
         _probe,
         (progress.cancel_event,),
         progress.canceled,
-        default=(True, None, None, {}),
+        default=(True, None, None, None),
         deadline=_PREFLIGHT_BUDGET_SECONDS,
     )
 
@@ -347,6 +353,12 @@ def _send_batch(run, candidates, limits, capped):
     fresh, adopted = _skip_held(candidates, held, ctx, slots=live_limit)
     if live_limit is not None:
         live_limit = max(0, live_limit - len(adopted))
+    if max_attempts is not None:
+        # An adopted slot is not extra replacement allowance either.
+        max_attempts = max(0, max_attempts - len(adopted))
+    if adopted:
+        # ...for this pass and for the loader batches that continue it.
+        dedup.attempts_used = getattr(dedup, "attempts_used", 0) + len(adopted)
     try:
         live = _core._submit_candidates(
             fresh,

@@ -417,9 +417,17 @@ def _append_abortably(candidate, body, send, stops):
         return nzbid, vetoed
 
     def _late(result):
+        if not (result and result[0]):
+            return
+        # Recorded FIRST: until NZBGet confirms the delete (and after a Kodi
+        # shutdown, which leaves it to finish), the job is in NZBGet, and a
+        # replay must recognize it instead of sending it again.
+        _core.nzbget_submit_ledger.record([dict(candidate, _nzbid=result[0])], dupe_key)
         aborted = getattr(dedup, "aborted", None)
-        if result and result[0] and not (aborted is not None and aborted()):
-            _core.nzbget_api.cancel_jobs([result[0]], settings_getter=settings_getter)
+        if aborted is not None and aborted():
+            return
+        if _core.nzbget_api.cancel_jobs([result[0]], settings_getter=settings_getter):
+            _core.nzbget_submit_ledger.forget([result[0]])
 
     return call_abortable(
         _append,
