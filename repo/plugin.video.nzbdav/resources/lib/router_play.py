@@ -737,26 +737,33 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
     }
 
 
-def _nzbget_loader_setting(key, default=""):
+def _nzbget_loader_getter(limit):
     """``_get_script_setting`` for the NZBGet fleet's fallback loader.
 
     ``fallback_streams_max`` is the nzbdav proxy's standby cap, so the NZBGet
-    loader ignores it: it scans up to ``nzbget_max_backups`` (when that is a
-    positive cap) within the loader's own ceiling
+    loader ignores it. ``limit`` is a ``{"n": ...}`` holder the fleet sets
+    to the number of candidates it can still use (raising it after a rejected
+    append); unset, the loader scans up to ``nzbget_max_backups`` when that is
+    a positive cap. Always within the loader's own ceiling
     (``fallback_streams._MAX_FALLBACKS``, a bound on its manifest-probing
-    cost). A 0 proxy cap can't switch NZBGet discovery off, and a small NZBGet
-    cap never pays grabs for candidates it could not submit.
+    cost); a 0 proxy cap can't switch NZBGet discovery off.
     """
     import resources.lib.router as _router
 
-    if key == "fallback_streams_max":
+    def _getter(key, default=""):
+        if key != "fallback_streams_max":
+            return _router._get_script_setting(key, default)
         from resources.lib.fallback_streams import _MAX_FALLBACKS
 
-        cap = _parse_max_backups(
-            _router._get_script_setting("nzbget_max_backups", "-1")
-        )
-        return str(min(_MAX_FALLBACKS, cap) if cap > 0 else _MAX_FALLBACKS)
-    return _router._get_script_setting(key, default)
+        wanted = limit.get("n")
+        if wanted is None:
+            cap = _parse_max_backups(
+                _router._get_script_setting("nzbget_max_backups", "-1")
+            )
+            wanted = cap if cap > 0 else _MAX_FALLBACKS
+        return str(max(1, min(_MAX_FALLBACKS, int(wanted))))
+
+    return _getter
 
 
 def _hydra_uploads_loader(selected):
@@ -809,8 +816,9 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     # handle-based /play path that one carries a None getter and would call
     # xbmcaddon.Addon().getSetting off the main thread (a CoreELEC crash class
     # the snapshot design exists to avoid).
+    loader_limit = {"n": None}
     loader = _router._fallback_candidate_loader_for_selection(
-        selected, filtered, settings_getter=_nzbget_loader_setting
+        selected, filtered, settings_getter=_nzbget_loader_getter(loader_limit)
     )
     hydra_uploads = _hydra_uploads_loader(selected)
     if dupe is None and (loader is not None or hydra_uploads is not None):
@@ -821,6 +829,7 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
         dupe = _loader_only_dupe_submission(selected, identity, getter)
     if dupe:
         dupe["loader"] = loader
+        dupe["loader_limit"] = loader_limit
         dupe["hydra_uploads"] = hydra_uploads
         # The pick's listing evidence: the worker never re-submits another
         # listing of the pick's own posting.

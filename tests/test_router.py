@@ -4959,16 +4959,19 @@ def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
         router_play._attach_nzbget_dupe(params, {"link": "p"}, [{"link": "p"}], {})
 
     # The pure-XML script getter (thread-safe), with fallback_streams_max
-    # pinned to the loader's own ceiling: NZBGet's cap is nzbget_max_backups.
+    # replaced by the NZBGet fleet's own demand: never the proxy cap.
     getter = seen.get("getter")
-    assert getter is router_play._nzbget_loader_setting
+    limit = params["_nzbget_dupe"]["loader_limit"]
     with patch("resources.lib.router._get_script_setting", return_value="-1") as xml:
-        assert getter("fallback_streams_max", "0") == "5"  # never the proxy cap
+        assert getter("fallback_streams_max", "0") == "5"
         assert getter("hydra_url", "") == "-1"
     xml.assert_any_call("hydra_url", "")
-    # A small NZBGet cap bounds the loader's (grab-costing) scan too.
+    # A small NZBGet cap bounds the loader's (grab-costing) scan too ...
     with patch("resources.lib.router._get_script_setting", return_value="2"):
         assert getter("fallback_streams_max", "0") == "2"
+    # ... and the fleet raises the demand on the fly after a rejection.
+    limit["n"] = 3
+    assert getter("fallback_streams_max", "0") == "3"
     assert params["_nzbget_dupe"]["loader"] == "FRESH_LOADER"
 
 

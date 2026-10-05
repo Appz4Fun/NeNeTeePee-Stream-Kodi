@@ -21,6 +21,7 @@ from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     PREFETCH_WINDOW,
     FleetDedup,
     NzbSpool,
+    call_abortable,
     fetch_cluster_abortable,
     prefetched_clusters,
     same_variant,
@@ -123,8 +124,9 @@ def _submit_candidates(
             )
             # The whole round was sent: free its spool files and memory so a
             # capped fleet's replacement rounds have room.
-            for _candidate, handle in kept:
+            for _candidate, handle, _fingerprint in kept:
                 spool.release(handle)
+            dedup.end_round()
             if need is None or tally.get("pick_failed"):
                 break  # unlimited: everything was collected and sent
     finally:
@@ -180,7 +182,7 @@ def _collect_unique(stream, state, cancel_event, need):
             if not body:
                 # No pick, no fleet: stop downloading backups that could
                 # never be sent (each would cost an indexer grab).
-                kept.append((candidate, None))
+                kept.append((candidate, None, None))
                 break
         if fingerprint and dedup.known_posting(fingerprint):
             _core.xbmc.log(
@@ -208,7 +210,7 @@ def _collect_unique(stream, state, cancel_event, need):
                 _core.xbmc.LOGINFO,
             )
             continue
-        kept.append((candidate, handle))
+        kept.append((candidate, handle, fingerprint))
         if need is not None:
             tally["wanted"] = need - len(kept)
             if len(kept) >= need:
@@ -228,12 +230,15 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
 
     ``run`` is ``(cancel_event, submitted_sink, veto_probe, dedup)``;
     ``budget`` is ``(limits, tally)``, and ``tally`` (``live`` ids,
-    ``attempts``) is updated in place. A sent NZB marks its posting covered in
-    ``dedup``, so later phases skip other listings of it.
+    ``attempts``) is updated in place. A sent NZB marks its listing and
+    posting covered in ``dedup``, so later phases skip other copies of it.
+    Each append (and its COPY-veto probe) runs behind the abortable wait, so a
+    hung NZBGet RPC never blocks a cancel or Kodi shutdown;
+    ``settings_getter`` must therefore be thread-safe (a settings snapshot).
     """
     cancel_event, submitted_sink, veto_probe, dedup = run
     (live_limit, max_attempts), tally = budget
-    for index, (candidate, handle) in enumerate(kept):
+    for index, (candidate, handle, fingerprint) in enumerate(kept):
         # One tick per append: moves the bar and re-checks the dialog cancel,
         # so a cancel stops the remaining appends.
         _report(dedup, "send", index, len(kept))
@@ -247,43 +252,73 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             break
         if not is_pick:
             tally["attempts"] += 1
-        body = NzbSpool.load(handle)
-        if not body:
-            # Every fleet append carries its body: append_nzb must never fetch
-            # on the resolve thread. A pick without one fails the resolve.
-            candidate["_append_error"] = "NZB download failed"
-            nzbid = None
-        else:
-            nzbid = _core._append_one_backup(
-                candidate["link"],
-                candidate,
-                dupe_key,
-                settings_getter,
-                nzb_bytes=body,
-            )
-
+        nzbid, vetoed = _append_abortably(
+            candidate,
+            NzbSpool.load(handle),
+            (dupe_key, settings_getter, veto_probe),
+            (cancel_event, dedup),
+        )
         if not nzbid:
-            if candidate.get("_is_pick"):
+            if is_pick:
                 # No pick, no fleet: the resolve fails with NZBGet's error.
                 tally["pick_failed"] = True
                 return
             continue
         candidate["_nzbid"] = nzbid
         dedup.remember_listing(candidate)
+        dedup.commit_posting(fingerprint)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
         # delete this id immediately, and a COPY-vetoed row still needs deleting.
         if submitted_sink is not None:
             submitted_sink.append(nzbid)
-        # A DELETED/COPY veto means the slot was never really filled ->
-        # exclude it from the LIVE tally so the next round backfills it (#372 r6).
-        vetoed = veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)
         # The completion ledger records only rows NZBGet really kept, under
-        # their own titles; a vetoed row never downloads.
+        # their own titles; a vetoed row never downloads, and it frees its
+        # slot for the next round (#372 r6). Only backups count against the
+        # cap; the pick's own COPY veto is handled by the poll's FORCE rescue.
         candidate["_submitted"] = not vetoed
-        # Only backups count against the cap; the pick's own COPY veto is
-        # handled by the poll's FORCE rescue.
         if not vetoed and not is_pick:
             tally["live"].append(nzbid)
+
+
+def _append_abortably(candidate, body, send, stops):
+    """One append (+ COPY-veto probe) behind the abortable wait.
+
+    ``send`` is ``(dupe_key, settings_getter, veto_probe)``; ``stops`` is
+    ``(cancel_event, dedup)``. Returns ``(nzbid, vetoed)``; ``(None, False)``
+    on failure or when the wait was abandoned. An append that lands AFTER a
+    user cancel abandoned the wait is deleted from NZBGet on the worker thread
+    (it never reached ``submitted_nzbids``); on a Kodi shutdown it is left to
+    finish, like the poll's ``aborted`` path.
+    """
+    dupe_key, settings_getter, veto_probe = send
+    cancel_event, dedup = stops
+    if not body:
+        # Every fleet append carries its body: append_nzb must never fetch on
+        # the resolve thread. A pick without one fails the resolve.
+        candidate["_append_error"] = "NZB download failed"
+        return None, False
+
+    def _append():
+        nzbid = _core._append_one_backup(
+            candidate["link"], candidate, dupe_key, settings_getter, nzb_bytes=body
+        )
+        vetoed = bool(nzbid) and bool(
+            veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)
+        )
+        return nzbid, vetoed
+
+    def _late(result):
+        aborted = getattr(dedup, "aborted", None)
+        if result and result[0] and not (aborted is not None and aborted()):
+            _core.nzbget_api.cancel_jobs([result[0]], settings_getter=settings_getter)
+
+    return call_abortable(
+        _append,
+        (cancel_event,),
+        lambda: _report(dedup, "wait", None, None),
+        default=(None, False),
+        on_late=_late,
+    )
 
 
 def _fill_done(live, live_limit, attempts, max_attempts, cancel_event):

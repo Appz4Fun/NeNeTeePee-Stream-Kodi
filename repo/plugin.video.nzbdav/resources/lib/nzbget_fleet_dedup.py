@@ -205,8 +205,14 @@ class FleetDedup:
     def __init__(self, pick=None, spool_base=None, progress=None):
         self._listings = [pick] if isinstance(pick, dict) else []
         self._fingerprints = []
+        # Kept this round but not (yet) in NZBGet: still deduped against, but
+        # dropped at the round's end unless committed by a successful append.
+        self._pending = []
         self.spool_base = spool_base
         self.progress = progress
+        # Optional zero-arg callable: True once Kodi is shutting down (vs a
+        # user cancel) -- late appends are then left to finish, not deleted.
+        self.aborted = None
 
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.
@@ -243,18 +249,32 @@ class FleetDedup:
             self._listings.append(row)
 
     def known_posting(self, fingerprint):
-        """Whether ``fingerprint`` is the same posting as one already submitted."""
-        if not fingerprint or not self._fingerprints:
+        """Whether ``fingerprint`` is the same posting as one sent or kept."""
+        known_sets = self._fingerprints + self._pending
+        if not fingerprint or not known_sets:
             return False
         probe = set(fingerprint)
         return any(
-            _shares_posting(probe, len(fingerprint), known)
-            for known in self._fingerprints
+            _shares_posting(probe, len(fingerprint), known) for known in known_sets
         )
 
     def remember_posting(self, fingerprint):
+        """Hold ``fingerprint`` for this round (see ``commit_posting``)."""
+        if fingerprint:
+            self._pending.append(fingerprint)
+
+    def commit_posting(self, fingerprint):
+        """Mark ``fingerprint``'s posting covered for good (it reached NZBGet)."""
         if fingerprint:
             self._fingerprints.append(fingerprint)
+
+    def end_round(self):
+        """Forget postings kept this round that never reached NZBGet.
+
+        A row whose append failed (or whose body couldn't be stored) does not
+        block a later phase's mirror of the same posting.
+        """
+        self._pending = []
 
 
 class NzbSpool:
@@ -445,29 +465,38 @@ def fetch_cluster_abortable(cluster, fetch, stop_events=(), on_wait=None):
     return _Fetch(cluster, fetch, stop_events).start().result(stop_events, on_wait)
 
 
-def call_abortable(func, stop_events=(), on_wait=None, default=None):
+def call_abortable(  # pylint: disable=too-many-arguments
+    func, stop_events=(), on_wait=None, default=None, on_late=None
+):
     """Run ``func()`` on a daemon thread; ``default`` if stopped or failed.
 
-    For a slow lookup on the resolve thread (NZBHydra's duplicate search):
-    the wait re-checks ``on_wait``/``stop_events`` every slice, so a dialog
-    cancel or Kodi shutdown abandons it at once. A thread that cannot start,
-    or a raising ``func``, yields ``default``.
+    For a slow NZBGet/indexer call on the resolve thread: the wait re-checks
+    ``on_wait``/``stop_events`` every slice, so a dialog cancel or Kodi
+    shutdown abandons it at once. A thread that cannot start, or a raising
+    ``func``, yields ``default``. ``on_late(value)`` runs on the worker thread
+    when ``func`` finishes AFTER the wait was abandoned (e.g. to delete an
+    append that landed after a cancel).
     """
     done = threading.Event()
-    box = {"value": default}
+    lock = threading.Lock()
+    box = {"value": default, "abandoned": False}
 
     def _run():
         try:
             box["value"] = func()
         except Exception as exc:  # pylint: disable=broad-except
             xbmc.log(
-                "NeNeTeePee-Stream-Kodi: NZBGet fleet lookup failed: {}".format(
+                "NeNeTeePee-Stream-Kodi: NZBGet fleet call failed: {}".format(
                     redact_text(str(exc))
                 ),
                 xbmc.LOGDEBUG,
             )
         finally:
-            done.set()
+            with lock:
+                done.set()
+                late = box["abandoned"]
+        if late and on_late is not None:
+            on_late(box["value"])
 
     try:
         threading.Thread(target=_run, name="nzbdav-nzbget-lookup", daemon=True).start()
@@ -482,7 +511,11 @@ def call_abortable(func, stop_events=(), on_wait=None, default=None):
         if on_wait is not None:
             on_wait()
         if _stopped(stop_events):
-            return default
+            with lock:
+                if not done.is_set():
+                    box["abandoned"] = True
+                    return default
+            break
     return box["value"]
 
 

@@ -619,6 +619,9 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # Same-key SUCCESS ids snapshotted before the fleet submitted anything
         # (None: the poll snapshots them itself).
         self.preexisting_successes = None
+        # True when the foreground fleet stopped for a Kodi shutdown (vs a
+        # user cancel): its appended jobs are left to finish.
+        self.fleet_aborted = False
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -753,8 +756,13 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         # submits anything, into ctx.preexisting_successes.
         nzbid, error = submit_fleet(ctx, nzb_url, title, dupe_key)
         if ctx.cancel_event.is_set():
-            # Canceled while finding/downloading/sending: delete whatever this
-            # resolve already appended, then exit silently.
+            if getattr(ctx, "fleet_aborted", False):
+                # Kodi is shutting down: like the poll's ``aborted`` outcome,
+                # leave anything already appended to finish for a later retry.
+                ctx.on_failure(_string(30101))
+                return True
+            # User cancel while finding/downloading/sending: delete whatever
+            # this resolve already appended, then exit silently.
             if ctx.submitted_nzbids:
                 nzbget_api.cancel_jobs(
                     list(ctx.submitted_nzbids), settings_getter=getter
@@ -900,14 +908,16 @@ def _record_fleet_pubdates(dupe, title, completed_nzbid=None):
             record_download(row.get("title") or title, row["pubdate"])
 
 
-def _manifest_dupe_submission(nzb_url, title, params):
+def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     """Join explicit manifest sources to the tracked Smart-Duplicates flow.
 
     The manifest already defines the selected group, so include every distinct
-    alternative. The existing worker still enforces DupeCheck and cancellation.
-    Hash the exact group to avoid exposing URL credentials in NZBGet's DupeKey.
+    alternative, bounded by ``nzbget_max_backups`` like any NZBGet fleet (0
+    turns manifest backups off too). The fleet still enforces DupeCheck and
+    cancellation. Hash the exact group to avoid exposing URL credentials in
+    NZBGet's DupeKey.
     """
-    from resources.lib.router_play import _dupe_score_base
+    from resources.lib.router_play import _dupe_score_base, _parse_max_backups
 
     sources = params.get("_source_urls")
     if not isinstance(sources, list):
@@ -916,6 +926,11 @@ def _manifest_dupe_submission(nzb_url, title, params):
         dict.fromkeys([nzb_url] + [u for u in sources if isinstance(u, str) and u])
     )
     if len(urls) < 2:
+        return None
+    cap = _parse_max_backups(
+        _bind_getter(settings_getter)("nzbget_max_backups", "-1") or "-1"
+    )
+    if cap == 0:
         return None
     key = hashlib.sha256("\n".join(sorted(urls)).encode("utf-8")).hexdigest()
     base = _dupe_score_base()
@@ -928,7 +943,7 @@ def _manifest_dupe_submission(nzb_url, title, params):
         "pick_score": base,
         "score_base": base,
         "backups": backups,
-        "max_backups": len(backups),
+        "max_backups": cap,
     }
 
 
@@ -1075,7 +1090,7 @@ def resolve_and_play_nzbget(
             params.get("_download_size"),
         ),
         completed_job=params.get("_nzbget_completed_job"),
-        dupe=_manifest_dupe_submission(nzb_url, title, params),
+        dupe=_manifest_dupe_submission(nzb_url, title, params, settings_getter),
         season_pack_record=params.get("_season_pack"),
         episode_context=params.get("_episode_context"),
     )
@@ -1124,7 +1139,7 @@ def play_nzbget(
             resolve_params.get("_download_size"),
         ),
         completed_job=resolve_params.get("_nzbget_completed_job"),
-        dupe=_manifest_dupe_submission(nzb_url, title, resolve_params),
+        dupe=_manifest_dupe_submission(nzb_url, title, resolve_params, settings_getter),
         season_pack_record=resolve_params.get("_season_pack"),
         episode_context=resolve_params.get("_episode_context"),
     )

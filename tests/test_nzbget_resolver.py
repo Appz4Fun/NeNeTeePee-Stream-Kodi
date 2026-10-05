@@ -1892,7 +1892,8 @@ def test_manifest_fleet_deduplicates_without_truncating_explicit_group():
         sources[3], "Movie", {"_source_urls": sources + sources}
     )
     assert [b["link"] for b in dupe["backups"]] == sources[:3] + sources[4:]
-    assert len(dupe["backups"]) == dupe["max_backups"] == 7
+    assert len(dupe["backups"]) == 7
+    assert dupe["max_backups"] == -1  # nzbget_max_backups default: all of them
     assert all(b["score"] < dupe["pick_score"] for b in dupe["backups"])
     assert "secret" not in dupe["key"]
     reordered = _manifest_dupe_submission(
@@ -3414,3 +3415,19 @@ def test_handle_poll_failure_copy_status_uses_honest_message():
                 poll_result={"outcome": "failed", "status": status},
             )
     assert seen == ["30231", "30231", "30220"]
+
+
+@pytest.mark.parametrize("cap,expected", [("0", None), ("2", 2), ("-1", -1)])
+def test_manifest_fleet_honors_nzbget_max_backups(cap, expected):
+    # Codex r14: the manifest (_source_urls) fleet obeys the NZBGet cap too.
+    sources = ["https://indexer/{}.nzb".format(i) for i in range(4)]
+    dupe = _manifest_dupe_submission(
+        sources[0],
+        "Movie",
+        {"_source_urls": sources},
+        _settings({"nzbget_max_backups": cap}),
+    )
+    if expected is None:
+        assert dupe is None
+    else:
+        assert dupe["max_backups"] == expected

@@ -1258,3 +1258,109 @@ def test_failed_spool_write_leaves_no_partial_file(tmp_path):
         assert spool.save(b"abc") == b"abc"  # memory fallback
     assert not list(tmp_path.rglob("*.nzb"))
     spool.close()
+
+
+def test_unsent_posting_does_not_block_a_later_mirror(_fleet_env):
+    # Codex r14: a kept row whose append FAILED must not mark its posting
+    # covered; a later phase's (loader) relisting of it is still sent.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    shared = _ids("s", 100)
+    bodies = {"pick": _ids("p", 50), "b0": shared, "relist": shared[:-1] + ["r@x"]}
+    dupe = _fleet_dupe(
+        [{"link": "b0"}],
+        max_backups=1,
+        loader=lambda: [{"link": "relist", "title": "R"}],
+    )
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_posting_bodies(bodies)), patch(
+        _APPEND, side_effect=[(1, None), (None, "rejected"), (3, None)]
+    ) as append, patch(_VETO, return_value=False):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "b0", "relist"]
+
+
+def test_loader_is_asked_for_more_after_a_rejected_candidate(_fleet_env):
+    # Codex r14: cap 1, the loader's first candidate is COPY-vetoed -> the
+    # fleet raises its demand and the loader's next candidate fills the slot.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    limit = {"n": None}
+    pool = [{"link": "x1", "title": "X1"}, {"link": "x2", "title": "X2"}]
+    asked = []
+
+    def _loader():
+        asked.append(limit["n"])
+        return pool[: limit["n"]]
+
+    dupe = _fleet_dupe([], max_backups=1, loader=_loader, loader_limit=limit)
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ) as append, patch(
+        _VETO, side_effect=[False, True, False]
+    ):  # pick, x1, x2
+        submit_fleet(ctx, "pick", "T", "k")
+    assert asked == [1, 2]
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "x1", "x2"]
+
+
+def test_shutdown_during_the_fleet_leaves_appended_jobs_running():
+    # Codex r14: Kodi shutdown is not a user cancel -- nothing is deleted.
+    from resources.lib.nzbget_resolver import _submit_poll_resolve
+
+    failures = []
+    ctx = _fleet_ctx({"key": "k"})
+    ctx.on_failure = failures.append
+
+    def _fleet(ctx_, *_a):
+        ctx_.submitted_nzbids.append(77)
+        ctx_.fleet_aborted = True
+        ctx_.cancel_event.set()
+        return None, None
+
+    with patch(
+        "resources.lib.nzbget_fleet_run.submit_fleet", side_effect=_fleet
+    ), patch("resources.lib.nzbget_resolver.nzbget_api.cancel_jobs") as cancel, patch(
+        "resources.lib.nzbget_resolver._string", return_value="aborted"
+    ):
+        assert _submit_poll_resolve(ctx, "pick", "T", None, None) is True
+    cancel.assert_not_called()
+    assert failures == ["aborted"]
+
+
+def test_hung_append_is_abandoned_on_cancel_and_deleted_when_it_lands():
+    # Codex r14: one stalled append RPC must not pin the resolve thread; if it
+    # lands after the user canceled, it is deleted from NZBGet.
+    import time
+
+    from resources.lib.nzbget_resolver_dupes import _append_abortably
+
+    release = threading.Event()
+    cancel = threading.Event()
+    deleted = []
+
+    def _slow_append(*_a, **_k):
+        release.wait(5)
+        return 55, None
+
+    dedup = FleetDedup(progress=lambda *_a: cancel.set())
+    with patch(_APPEND, side_effect=_slow_append), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
+        side_effect=lambda ids, settings_getter=None: deleted.extend(ids),
+    ):
+        start = time.monotonic()
+        got = _append_abortably(
+            {"link": "u", "title": "t", "score": 1},
+            b"<nzb/>",
+            ("k", lambda *_a: "", False),
+            (cancel, dedup),
+        )
+        assert time.monotonic() - start < 2
+        assert got == (None, False)
+        release.set()
+        for _ in range(100):
+            if deleted:
+                break
+            time.sleep(0.02)
+    assert deleted == [55]

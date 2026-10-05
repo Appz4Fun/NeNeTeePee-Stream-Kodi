@@ -21,6 +21,7 @@ Names that tests patch on ``nzbget_resolver`` are reached through ``_core``.
 """
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
+from resources.lib.fallback_streams import _MAX_FALLBACKS
 from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable
 
 
@@ -32,7 +33,8 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     SUCCESS ids snapshotted before anything was submitted (None if unknown).
     A user cancel sets ``ctx.cancel_event`` and returns ``(None, None)``;
     anything already appended is in ``ctx.submitted_nzbids`` for the caller
-    to delete.
+    to delete -- unless ``ctx.fleet_aborted`` says Kodi is shutting down, when
+    they are left to finish.
     """
     dupe = ctx.dupe if isinstance(ctx.dupe, dict) else {}
     getter = ctx.settings_getter
@@ -46,10 +48,14 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         _is_pick=True,
     )
     candidates = [pick]
+    # Every NZBGet call below runs off-thread (abortable): read the connection
+    # settings ONCE here on the resolve thread -- no off-thread getSetting.
+    getter = _snapshot_getter(getter)
     dupe_check_off, ctx.preexisting_successes = _probe_nzbget_config(
         getter, progress, dupe_key
     )
     if progress.canceled():
+        ctx.fleet_aborted = progress.aborted
         return None, None
     if dupe_check_off:
         # Same-key items would download in parallel instead of parking as
@@ -67,30 +73,70 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         # known to be unfilled -- see below.
         candidates += _fleet_backups(dupe, progress, include_loader=not capped)
     if progress.canceled():
+        ctx.fleet_aborted = progress.aborted
         return None, None
     # The cap bounds the BACKUPS (the pick is never counted); a capped fleet
     # probes each append for a DELETED/COPY veto so the next round can
     # backfill that backup's slot.
     limits = (cap, cap + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
     dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
+    dedup.aborted = lambda: progress.aborted
     run = (dupe_key, getter, ctx, dedup)
-    live = _send_batch(run, candidates, limits, capped)
-    if capped and not dupe_check_off and pick.get("_nzbid") and len(live) < cap:
-        # Picker/Hydra rows collapsed, died, or were vetoed before filling the
-        # cap: only now consult the loader, for exactly the open slots.
-        more = _loader_extras(dupe, progress, candidates[1:])
-        remaining = cap - len(live)
-        if more and not progress.canceled():
-            _send_batch(
-                run,
-                more,
-                (remaining, remaining + _core._MAX_VETO_REPLACEMENTS),
-                capped,
-            )
+    live = len(_send_batch(run, candidates, limits, capped))
+    if capped and not dupe_check_off and pick.get("_nzbid"):
+        _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
+    ctx.fleet_aborted = progress.aborted
     if ctx.cancel_event.is_set():
         return None, None
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _snapshot_getter(getter):
+    """A thread-safe getter over the NZBGet connection settings, read now."""
+    url, user, password, category = _core.nzbget_api._get_settings(getter)
+    snapshot = {
+        "nzbget_url": url,
+        "nzbget_username": user,
+        "nzbget_password": password,
+        "nzbget_category": category,
+    }
+    return lambda key, default="": snapshot.get(key, default)
+
+
+def _fill_from_loader(dupe, progress, run, state):
+    """Capped fleet: fill the slots the picker/Hydra rows left open, on demand.
+
+    ``state`` is ``(cap, live, prior)``. The fallback loader downloads NZB
+    manifests, so it is asked for only as many candidates as there are open
+    slots; when an append then fails or is COPY-vetoed and slots stay open, it
+    is asked again for that many MORE (up to its own ceiling), so a rejected
+    candidate is replaced without paying grabs up front.
+    """
+    cap, live, prior = state
+    prior = list(prior)
+    limit = dupe.get("loader_limit")
+    while live < cap and not progress.canceled():
+        if isinstance(limit, dict):
+            asked = int(limit.get("n") or 0) + (cap - live)
+            if limit.get("n") is not None and limit["n"] >= _MAX_FALLBACKS:
+                return
+            limit["n"] = min(_MAX_FALLBACKS, asked)
+        more = _loader_extras(dupe, progress, prior)
+        if not more or progress.canceled():
+            return
+        remaining = cap - live
+        live += len(
+            _send_batch(
+                run,
+                more,
+                (remaining, remaining + _core._MAX_VETO_REPLACEMENTS),
+                True,
+            )
+        )
+        prior += more
+        if not isinstance(limit, dict):
+            return  # a fixed loader has nothing more to give
 
 
 def _probe_nzbget_config(getter, progress, dupe_key):
@@ -99,29 +145,18 @@ def _probe_nzbget_config(getter, progress, dupe_key):
     The same-key preexisting-success snapshot (history), the ``DupeCheck=no``
     check, and the HealthCheck=Pause warning are RPCs that can each hang for
     the RPC timeout, so they run off-thread behind the cancel/shutdown-aware
-    wait. The thread reads only a snapshot of the connection settings taken
-    HERE on the resolve thread (no off-thread Kodi ``getSetting``). A canceled
+    wait, reading only ``getter`` (the caller's settings snapshot). A canceled
     or failed probe returns ``(False, None)`` (DupeCheck assumed on; the poll
     then snapshots successes itself).
     """
-    url, user, password, category = _core.nzbget_api._get_settings(getter)
-    snapshot = {
-        "nzbget_url": url,
-        "nzbget_username": user,
-        "nzbget_password": password,
-        "nzbget_category": category,
-    }
-
-    def _snapshot_getter(key, default=""):
-        return snapshot.get(key, default)
 
     def _probe():
         # Same-key successes BEFORE this fleet submits anything: one another
         # resolve lands while this fleet downloads/sends is not stale.
-        preexisting = _core._preexisting_success_ids(dupe_key, _snapshot_getter)
-        if _core._dupe_check_disabled(_snapshot_getter):
+        preexisting = _core._preexisting_success_ids(dupe_key, getter)
+        if _core._dupe_check_disabled(getter):
             return True, preexisting
-        _core._warn_if_healthcheck_pauses(_snapshot_getter)
+        _core._warn_if_healthcheck_pauses(getter)
         return False, preexisting
 
     return call_abortable(
@@ -206,6 +241,8 @@ class _FleetProgress:
     def __init__(self, dialog, cancel_event):
         self._dialog = dialog
         self._cancel_event = cancel_event
+        # Kodi shutdown (vs a user cancel): submitted jobs are left to finish.
+        self.aborted = False
 
     @property
     def cancel_event(self):
@@ -231,6 +268,7 @@ class _FleetProgress:
             if self._dialog is not None and self._dialog.iscanceled() is True:
                 self._cancel_event.set()
             if _core.xbmc.Monitor().abortRequested() is True:
+                self.aborted = True
                 self._cancel_event.set()
         except Exception as exc:  # pylint: disable=broad-except
             _log_dialog_error(exc)
