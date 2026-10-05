@@ -352,8 +352,9 @@ class _Fetch:
     A daemon thread per fetch (never a ``ThreadPoolExecutor``, whose workers
     are non-daemon and joined at interpreter exit) keeps an in-flight indexer
     request from delaying Kodi shutdown. When a thread cannot start (thread
-    exhaustion on a small box) the fetch runs inline instead: no work item is
-    ever queued anywhere, so it can never run twice.
+    exhaustion on a small box) the fetch is skipped rather than run inline --
+    an inline request could not be canceled -- and the cluster reports no body,
+    so its head is sent as a plain URL append (NZBGet fetches it).
     """
 
     def __init__(self, cluster, fetch, stop_events):
@@ -366,8 +367,13 @@ class _Fetch:
             threading.Thread(
                 target=self._run, name="nzbdav-nzbget-prefetch", daemon=True
             ).start()
-        except Exception:  # pylint: disable=broad-except
-            self._run()
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet fleet fetch thread failed to "
+                "start, leaving the NZB to NZBGet: {}".format(exc),
+                xbmc.LOGWARNING,
+            )
+            self._done.set()
         return self
 
     def _run(self):
@@ -394,6 +400,52 @@ class _Fetch:
 
 # How often a wait on an in-flight fetch re-checks for a cancel or shutdown.
 _WAIT_SLICE_SECONDS = 0.2
+
+
+def fetch_cluster_abortable(cluster, fetch, stop_events=(), on_wait=None):
+    """Fetch one cluster off-thread and wait abortably; ``(head, body, fp)``."""
+    return _Fetch(cluster, fetch, stop_events).start().result(stop_events, on_wait)
+
+
+def call_abortable(func, stop_events=(), on_wait=None, default=None):
+    """Run ``func()`` on a daemon thread; ``default`` if stopped or failed.
+
+    For a slow lookup on the resolve thread (NZBHydra's duplicate search):
+    the wait re-checks ``on_wait``/``stop_events`` every slice, so a dialog
+    cancel or Kodi shutdown abandons it at once. A thread that cannot start,
+    or a raising ``func``, yields ``default``.
+    """
+    done = threading.Event()
+    box = {"value": default}
+
+    def _run():
+        try:
+            box["value"] = func()
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet fleet lookup failed: {}".format(
+                    redact_text(str(exc))
+                ),
+                xbmc.LOGDEBUG,
+            )
+        finally:
+            done.set()
+
+    try:
+        threading.Thread(target=_run, name="nzbdav-nzbget-lookup", daemon=True).start()
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet fleet lookup thread failed to start: "
+            "{}".format(exc),
+            xbmc.LOGWARNING,
+        )
+        return default
+    while not done.wait(_WAIT_SLICE_SECONDS):
+        if on_wait is not None:
+            on_wait()
+        if _stopped(stop_events):
+            return default
+    return box["value"]
 
 
 def prefetched_clusters(  # pylint: disable=too-many-arguments

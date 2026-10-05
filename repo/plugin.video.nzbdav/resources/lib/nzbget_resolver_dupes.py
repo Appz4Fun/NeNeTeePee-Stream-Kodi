@@ -21,7 +21,7 @@ from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     PREFETCH_WINDOW,
     FleetDedup,
     NzbSpool,
-    posting_fingerprint,
+    fetch_cluster_abortable,
     prefetched_clusters,
     same_variant,
 )
@@ -88,6 +88,9 @@ def _submit_candidates(
         "wanted": None,
         "seen": 0,
         "total": len(clusters),
+        # The pick never counts against the backup cap: it needs one extra
+        # collect slot until it is in hand, and its append is not a backup.
+        "pick_pending": bool(usable and usable[0].get("_is_pick")),
     }
     spool = NzbSpool(dedup.spool_base)
     stream = prefetched_clusters(
@@ -137,7 +140,7 @@ def _open_slots(tally, limits):
     need = max(0, live_limit - len(tally["live"]))
     if max_attempts is not None:
         need = min(need, max(0, max_attempts - tally["attempts"]))
-    return need
+    return need + 1 if tally.get("pick_pending") else need
 
 
 def _collect_unique(stream, state, cancel_event, need):
@@ -159,9 +162,16 @@ def _collect_unique(stream, state, cancel_event, need):
         if cancel_event is not None and cancel_event.is_set():
             break
         if body is None and candidate.get("_is_pick"):
-            # The pick seeds every later dedup decision: one more try at its
-            # own URL before falling back to NZBGet fetching it blind.
-            body, fingerprint = _retry_pick_fetch(candidate)
+            # The pick seeds every later dedup decision: one more (abortable)
+            # try at its own URL before falling back to NZBGet fetching it blind.
+            _head, body, fingerprint = fetch_cluster_abortable(
+                [candidate],
+                _core.nzbget_api.fetch_nzb_bytes,
+                (cancel_event,),
+                lambda: _report(dedup, "wait", None, None),
+            )
+        if candidate.get("_is_pick"):
+            tally["pick_pending"] = False
         if fingerprint and dedup.known_posting(fingerprint):
             _core.xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
@@ -180,22 +190,6 @@ def _collect_unique(stream, state, cancel_event, need):
             if len(kept) >= need:
                 break
     return kept
-
-
-def _retry_pick_fetch(pick):
-    """A second fetch of the pick's own URL; ``(body, fingerprint)`` or Nones."""
-    try:
-        body = _core.nzbget_api.fetch_nzb_bytes(pick["link"])
-    except Exception as exc:  # pylint: disable=broad-except
-        _core.xbmc.log(
-            "NeNeTeePee-Stream-Kodi: NZBGet pick NZB retry failed: {}".format(
-                _core._redact_text(str(exc))
-            ),
-            _core.xbmc.LOGDEBUG,
-        )
-        return None, None
-    fingerprint = posting_fingerprint(body) if body else None
-    return (body, fingerprint) if fingerprint else (None, None)
 
 
 def _report(dedup, phase, done, total):
@@ -219,11 +213,16 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         # One tick per append: moves the bar and re-checks the dialog cancel,
         # so a cancel stops the remaining appends.
         _report(dedup, "send", index, len(kept))
-        if _fill_done(
-            tally["live"], live_limit, tally["attempts"], max_attempts, cancel_event
+        is_pick = bool(candidate.get("_is_pick"))
+        if (cancel_event is not None and cancel_event.is_set()) or (
+            not is_pick
+            and _fill_done(
+                tally["live"], live_limit, tally["attempts"], max_attempts, cancel_event
+            )
         ):
             break
-        tally["attempts"] += 1
+        if not is_pick:
+            tally["attempts"] += 1
         body = NzbSpool.load(handle)
         extra = {"nzb_bytes": body} if body else {}
         # Without a body, NZBGet fetches the listing that actually answered.
@@ -253,7 +252,9 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         # The completion ledger records only rows NZBGet really kept, under
         # their own titles; a vetoed row never downloads.
         candidate["_submitted"] = not vetoed
-        if not vetoed:
+        # Only backups count against the cap; the pick's own COPY veto is
+        # handled by the poll's FORCE rescue.
+        if not vetoed and not is_pick:
             tally["live"].append(nzbid)
 
 

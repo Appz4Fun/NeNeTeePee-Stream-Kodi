@@ -2767,9 +2767,9 @@ def test_completed_download_records_fleet_pubdates():
                 {
                     "link": "b1",
                     "pubdate": "Tue, 02 Jun 2026 11:00:00 +0000",
-                    "_submitted": True,
+                    "_nzbid": 51,
                 },
-                {"link": "b2", "_submitted": True},  # no pubdate -> skipped
+                {"link": "b2", "_nzbid": 52},  # parked: never recorded
             ],
         },
     )
@@ -2782,11 +2782,16 @@ def test_completed_download_records_fleet_pubdates():
         return_value="smb://s/d/x.mkv",
     ):
         _play_completed_download(
-            ctx, "/dl/x", "The Title", "Mon, 01 Jun 2026 10:00:00 +0000", "700"
+            ctx,
+            "/dl/x",
+            "The Title",
+            "Mon, 01 Jun 2026 10:00:00 +0000",
+            "700",
+            job_id=51,  # failover completed backup b1
         )
     assert ("The Title", "Mon, 01 Jun 2026 10:00:00 +0000") in recorded  # the pick
-    assert ("The Title", "Tue, 02 Jun 2026 11:00:00 +0000") in recorded  # backup
-    assert len(recorded) == 2  # pubdate-less backup skipped
+    assert ("The Title", "Tue, 02 Jun 2026 11:00:00 +0000") in recorded  # b1
+    assert len(recorded) == 2  # parked b2 is never recorded
 
 
 def test_cancel_is_scoped_to_this_resolves_nzbids():

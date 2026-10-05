@@ -151,7 +151,7 @@ def poll_nzbget_job(
         "rescued": False,
     }
     if dupe_key:
-        state["stale_successes"] = _preexisting_success_ids(dupe_key, settings_getter)
+        state["stale_successes"] = _stale_successes(dupe_key, settings_getter, fleet)
     while time.monotonic() < deadline:
         if dialog.iscanceled():
             # Carry the CURRENTLY tracked NZBID (the promoted backup once
@@ -169,6 +169,22 @@ def poll_nzbget_job(
         if monitor.waitForAbort(interval):
             return {"outcome": "aborted"}
     return {"outcome": "timeout"}
+
+
+def _stale_successes(dupe_key, settings_getter, fleet):
+    """Same-key SUCCESS ids that predate this resolve (group-follow ignores them).
+
+    This fleet's own members are never stale: with the foreground fleet, a
+    backup appended early can complete before the poll even starts, and it
+    must stay playable.
+    """
+    owned_nzbids = (fleet or {}).get("owned_nzbids")
+    owned = set(owned_nzbids() or []) if owned_nzbids is not None else set()
+    return tuple(
+        nzbid
+        for nzbid in _preexisting_success_ids(dupe_key, settings_getter)
+        if nzbid not in owned
+    )
 
 
 def _update_active_dialog(dialog, group):
@@ -820,13 +836,13 @@ def _play_completed_download(
 
     Recording happens BEFORE the SMB mapping, which can still fail without
     un-completing the download (fail-soft): the picker's "DL" tag must reflect
-    the box's history even when the share is unreachable right now. The whole
-    fleet's post-dates are recorded, not just the pick's: failover can complete
-    under ANY same-name backup (a different upload with its own pubdate), and
-    the picker's repost-guard only tags rows whose pubdate the ledger knows.
+    the box's history even when the share is unreachable right now. When
+    failover completed a BACKUP (a different upload with its own pubdate), that
+    backup's post-date is recorded too, so the picker's repost-guard -- which
+    only tags rows whose pubdate the ledger knows -- recognizes it.
     """
     record_download(title, download_pubdate, download_size)
-    _record_fleet_pubdates(getattr(ctx, "dupe", None), title)
+    _record_fleet_pubdates(getattr(ctx, "dupe", None), title, job_id)
     video_url = _resolve_completed_smb(
         dest_dir,
         ctx,
@@ -848,33 +864,25 @@ def _play_completed_download(
     ctx.on_success(video_url)
 
 
-def _record_fleet_pubdates(dupe, title):
-    """Ledger-record every SENT fleet member's post-date under its own title (#372).
+def _record_fleet_pubdates(dupe, title, completed_nzbid=None):
+    """Ledger-record the fleet member that COMPLETED, under its own title (#372).
 
-    Any fleet member can become the SUCCESS row the next picker render reuses
-    (the poll follows a promoted backup), and each is a different upload with
-    its own pubdate. A backup may carry a different name than the pick (same
-    release, other spelling), and the picker looks the ledger up by each row's
-    own title, so each backup is recorded under ITS title (``title``, the
-    pick's, only when it has none). Recording the sent fleet keeps the
-    repost-guard's purpose intact -- an unrelated same-name repost from
-    another day is still rejected (its pubdate is never recorded). Extras the
-    worker actually submitted (``dupe["extras"]`` rows it flagged
-    ``_submitted``) are recorded the same way, under their own titles, so a
-    promoted differently named extra keeps its repost guard too; an extra
-    without a pubdate (an NZBHydra duplicate upload) has nothing to record.
-    record_download is best-effort and dedups epochs, so double-recording is
-    harmless.
+    Parked Smart-Duplicate backups never download -- only the member NZBGet
+    finished (``completed_nzbid``, the poll's terminal NZBID) has files on
+    disk, so only its post-date may vouch for a picker row. A backup can carry
+    a different name than the pick (same release, other spelling), and the
+    picker looks the ledger up by each row's own title, so it is recorded under
+    ITS title (``title``, the pick's, only when it has none). A completed
+    member without a pubdate (an NZBHydra duplicate upload) has nothing to
+    record. record_download is best-effort and dedups epochs.
     """
+    if completed_nzbid is None:
+        return
     dupe = dupe or {}
-    # Only rows the worker affirmatively sent (``_submitted`` True) count: the
-    # pick can complete while the worker is still collecting, and a row it has
-    # not reached yet may still be collapsed, capped out, or never sent.
     rows = list(dupe.get("backups") or []) + list(dupe.get("extras") or [])
-    for backup in (row for row in rows if row.get("_submitted")):
-        pubdate = backup.get("pubdate")
-        if pubdate:
-            record_download(backup.get("title") or title, pubdate)
+    for row in rows:
+        if row.get("_nzbid") == completed_nzbid and row.get("pubdate"):
+            record_download(row.get("title") or title, row["pubdate"])
 
 
 def _manifest_dupe_submission(nzb_url, title, params):

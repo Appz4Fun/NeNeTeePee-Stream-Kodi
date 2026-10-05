@@ -21,7 +21,7 @@ Names that tests patch on ``nzbget_resolver`` are reached through ``_core``.
 """
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
-from resources.lib.nzbget_fleet_dedup import FleetDedup
+from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable
 
 
 def submit_fleet(ctx, nzb_url, title, dupe_key):
@@ -54,16 +54,15 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         )
     else:
         _core._warn_if_healthcheck_pauses(getter)
-        candidates += _fleet_backups(dupe)
+        candidates += _fleet_backups(dupe, progress)
     if progress.canceled():
         return None, None
     cap = dupe.get("max_backups")
     capped = isinstance(cap, int) and cap > 0
-    # The pick counts as one live slot; a capped fleet probes each append for a
-    # DELETED/COPY veto so the next round can backfill it.
-    limits = (
-        (cap + 1, cap + 1 + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
-    )
+    # The cap bounds the BACKUPS (the pick is never counted); a capped fleet
+    # probes each append for a DELETED/COPY veto so the next round can
+    # backfill that backup's slot.
+    limits = (cap, cap + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
     dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
     _core._submit_candidates(
         candidates,
@@ -81,20 +80,29 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
 
 
-def _fleet_backups(dupe):
+def _fleet_backups(dupe, progress):
     """The pick's backups in rank order: picker rows, then Hydra + loader extras.
 
     The extras are scored just below the picker rows and shared as
-    ``dupe["extras"]`` for the completion ledger.
+    ``dupe["extras"]`` for the completion ledger. The NZBHydra search and the
+    fallback loader can each take tens of seconds, so they run off-thread
+    behind an abortable wait: a dialog cancel or Kodi shutdown abandons them
+    (and the fleet proceeds without extras).
     """
     backups = list(dupe.get("backups") or [])
-    extras = _core._extra_backups_from_loader(
-        dupe.get("loader"),
-        [backup.get("link") for backup in backups],
-        limit=None,
-        score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
-        leading=_core._hydra_uploads_for_fleet(dupe),
-        pick=dupe.get("pick"),
+
+    def _extras():
+        return _core._extra_backups_from_loader(
+            dupe.get("loader"),
+            [backup.get("link") for backup in backups],
+            limit=None,
+            score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
+            leading=_core._hydra_uploads_for_fleet(dupe),
+            pick=dupe.get("pick"),
+        )
+
+    extras = call_abortable(
+        _extras, (progress.cancel_event,), progress.canceled, default=[]
     )
     dupe["extras"] = extras
     return backups + extras
@@ -106,6 +114,10 @@ class _FleetProgress:
     def __init__(self, dialog, cancel_event):
         self._dialog = dialog
         self._cancel_event = cancel_event
+
+    @property
+    def cancel_event(self):
+        return self._cancel_event
 
     def finding(self):
         self._update(0, _core._string(30615))

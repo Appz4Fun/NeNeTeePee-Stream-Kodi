@@ -276,13 +276,22 @@ def test_prefetch_uses_daemon_threads():
     assert started and all(t.daemon for t in started)
 
 
-def test_prefetch_degrades_to_inline_when_threads_cannot_start():
+def test_prefetch_never_fetches_inline_when_threads_cannot_start():
+    # Codex r7: an inline request could not be canceled, so a cluster whose
+    # thread can't start reports no body (NZBGet fetches the URL itself).
+    fetched = []
     with patch(
         "resources.lib.nzbget_fleet_dedup.threading.Thread",
         side_effect=RuntimeError("can't start new thread"),
     ):
-        got = list(prefetched_clusters([[{"link": "a"}], [{"link": "b"}]], _valid))
-    assert [body for _m, body, _fp in got] == [_valid("a"), _valid("b")]
+        got = list(
+            prefetched_clusters(
+                [[{"link": "a"}], [{"link": "b"}]],
+                lambda url: fetched.append(url) or _valid(url),
+            )
+        )
+    assert got == [({"link": "a"}, None, None), ({"link": "b"}, None, None)]
+    assert not fetched
 
 
 def _raise(_url):
@@ -355,14 +364,9 @@ def test_capped_submit_stops_fetching_once_the_cap_is_met():
     from resources.lib.nzbget_resolver import _submit_candidates
 
     rows = [{"link": "u{}".format(i), "title": "t", "score": 1} for i in range(10)]
-    with patch(
-        "resources.lib.nzbget_fleet_dedup.threading.Thread",
-        side_effect=RuntimeError("inline for determinism"),
-    ), patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])) as fetch, patch(
+    with patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])) as fetch, patch(
         _APPEND, return_value=(1, None)
-    ), patch(
-        _VETO, return_value=False
-    ):
+    ), patch(_VETO, return_value=False):
         live = _submit_candidates(rows, "k", lambda *_a: "", limits=(1, None))
     assert live == [1]
     # A cap of one prefetches one NZB at a time and never refills after the
@@ -383,24 +387,26 @@ def test_loader_extras_drop_language_and_3d_variants_of_the_pick():
     assert [e["link"] for e in got] == ["ok"]
 
 
-def test_fleet_pubdates_recorded_under_each_backups_own_title():
+def test_completed_backup_is_ledger_recorded_under_its_own_title():
+    # Codex r7: only the member NZBGet actually COMPLETED vouches for a row;
+    # parked backups never downloaded.
     from resources.lib.nzbget_resolver import _record_fleet_pubdates
 
     dupe = {
         "backups": [
-            {
-                "title": "Show S01E02 1080p WEB H264-GRP",
-                "pubdate": _PUB,
-                "_submitted": True,
-            },
-            {"pubdate": _PUB_90S, "_submitted": True},
-        ]
+            {"title": "Show S01E02 1080p WEB H264-GRP", "pubdate": _PUB, "_nzbid": 7},
+            {"title": "Parked", "pubdate": _PUB_90S, "_nzbid": 8},
+        ],
+        "extras": [{"title": "Alt Name", "pubdate": _PUB_90S, "_nzbid": 9}],
     }
     with patch("resources.lib.nzbget_resolver.record_download") as record:
-        _record_fleet_pubdates(dupe, "Show.S01E02.1080p.WEB.h264-GRP")
+        _record_fleet_pubdates(dupe, "Pick", 7)
+        _record_fleet_pubdates(dupe, "Pick", 9)
+        _record_fleet_pubdates(dupe, "Pick", 42)  # the pick itself completed
+        _record_fleet_pubdates(dupe, "Pick", None)
     assert [c.args for c in record.call_args_list] == [
         ("Show S01E02 1080p WEB H264-GRP", _PUB),
-        ("Show.S01E02.1080p.WEB.h264-GRP", _PUB_90S),
+        ("Alt Name", _PUB_90S),
     ]
 
 
@@ -420,45 +426,12 @@ def test_hydra_duplicate_lookup_runs_once_per_selection():
     fetch.assert_called_once()
 
 
-def test_submitted_extras_are_ledger_recorded_under_their_own_titles():
-    from resources.lib.nzbget_resolver import _record_fleet_pubdates
-
-    dupe = {
-        "backups": [],
-        "extras": [
-            {"title": "Alt Name", "pubdate": _PUB, "_submitted": True},
-            {"title": "Never Sent", "pubdate": _PUB_90S},
-            {"title": "Hydra Upload", "pubdate": "", "_submitted": True},
-        ],
-    }
-    with patch("resources.lib.nzbget_resolver.record_download") as record:
-        _record_fleet_pubdates(dupe, "Pick")
-    assert [c.args for c in record.call_args_list] == [("Alt Name", _PUB)]
-
-
 def test_nzb_fetch_is_size_capped():
     from resources.lib import nzbget_api
 
     with patch.object(nzbget_api, "_http_get", return_value="<nzb/>") as get:
         nzbget_api.fetch_nzb_bytes("http://i/x.nzb")
     assert get.call_args.kwargs["max_bytes"] == nzbget_api._MAX_NZB_BYTES
-
-
-def test_ledger_skips_backups_the_worker_did_not_submit():
-    from resources.lib.nzbget_resolver import _record_fleet_pubdates
-
-    dupe = {
-        "backups": [
-            {"title": "Sent", "pubdate": _PUB, "_submitted": True},
-            {"title": "Collapsed", "pubdate": _PUB, "_submitted": False},
-            {"title": "Not Reached Yet", "pubdate": _PUB_90S},
-        ]
-    }
-    with patch("resources.lib.nzbget_resolver.record_download") as record:
-        _record_fleet_pubdates(dupe, "Pick")
-    # Codex r5: a row the worker has not reached yet may still be collapsed or
-    # capped out, so only affirmatively sent rows are recorded.
-    assert [c.args[0] for c in record.call_args_list] == ["Sent"]
 
 
 def test_every_nzb_is_downloaded_and_spooled_before_the_first_send(tmp_path):
@@ -928,3 +901,53 @@ def test_fleet_progress_treats_kodi_shutdown_as_cancel():
     with patch("resources.lib.nzbget_resolver.xbmc.Monitor", return_value=monitor):
         assert _FleetProgress(None, cancel).canceled() is True
     assert cancel.is_set()
+
+
+def test_capped_fleet_vetoed_pick_does_not_let_backups_exceed_the_cap(_fleet_env):
+    # Codex r7: the cap bounds BACKUPS; a COPY-vetoed pick is not a backup slot.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    rows = [{"link": "b{}".format(i)} for i in range(4)]
+    ctx = _fleet_ctx(_fleet_dupe(rows, max_backups=1))
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ) as append, patch(_VETO, side_effect=[True, False]):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "b0"]
+
+
+def test_slow_hydra_lookup_is_abandoned_on_cancel(_fleet_env):
+    # Codex r7: "Looking for duplicate NZBs..." must stay cancelable.
+    import time
+
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    release = threading.Event()
+
+    def _slow_hydra():
+        release.wait(10)
+        return []
+
+    class _CancelNow(_Dialog):
+        def iscanceled(self):
+            return True
+
+    ctx = _fleet_ctx(_fleet_dupe([], hydra_uploads=_slow_hydra), dialog=_CancelNow())
+    start = time.monotonic()
+    with patch(_FETCH, side_effect=_valid), patch(_APPEND) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    release.set()
+    assert time.monotonic() - start < 2
+    append.assert_not_called()
+
+
+def test_owned_backup_success_is_never_treated_as_stale():
+    # Codex r7: a backup appended by the foreground fleet can complete before
+    # polling starts; only successes from OTHER resolves are stale.
+    from resources.lib.nzbget_resolver import _stale_successes
+
+    with patch(
+        "resources.lib.nzbget_resolver._preexisting_success_ids", return_value=(5, 6)
+    ):
+        assert _stale_successes("k", None, {"owned_nzbids": lambda: [1, 6]}) == (5,)
+        assert _stale_successes("k", None, None) == (5, 6)
