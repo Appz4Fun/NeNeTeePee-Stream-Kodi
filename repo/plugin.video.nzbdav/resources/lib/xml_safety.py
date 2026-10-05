@@ -190,24 +190,37 @@ def _vet_prolog(path):
     parser.StartElementHandler = _start
     parser.StartDoctypeDeclHandler = _doctype
     parser.EntityDeclHandler = _entity
-    scanned = 0
+    if hasattr(path, "read"):
+        start = path.tell()
+        try:
+            _scan_prolog(parser, path, expat)
+        finally:
+            path.seek(start)
+        return
     with open(path, "rb") as handle:
-        while scanned <= _PROLOG_SCAN_BYTES:
-            chunk = handle.read(_PROLOG_CHUNK_BYTES)
-            try:
-                parser.Parse(chunk, not chunk)
-            except _RootReached:
-                return
-            except expat.ExpatError as exc:
-                raise _UnsafeXmlError("malformed XML prolog: {}".format(exc)) from exc
-            if not chunk:
-                raise _UnsafeXmlError("XML document has no root element")
-            scanned += len(chunk)
+        _scan_prolog(parser, handle, expat)
+
+
+def _scan_prolog(parser, handle, expat):
+    """Feed ``handle`` to ``parser`` until the root element (or a limit)."""
+    scanned = 0
+    while scanned <= _PROLOG_SCAN_BYTES:
+        chunk = handle.read(_PROLOG_CHUNK_BYTES)
+        try:
+            parser.Parse(chunk, not chunk)
+        except _RootReached:
+            return
+        except expat.ExpatError as exc:
+            raise _UnsafeXmlError("malformed XML prolog: {}".format(exc)) from exc
+        if not chunk:
+            raise _UnsafeXmlError("XML document has no root element")
+        scanned += len(chunk)
     raise _UnsafeXmlError("XML prolog is too long")
 
 
 def safe_iterparse(path, events=("end",)):
-    """Stream-parse an XML file, refusing entity declarations.
+    """Stream-parse an XML file (a path or a seekable binary stream), refusing
+    entity declarations.
 
     The file-backed twin of ``safe_fromstring`` for large documents: memory
     stays bounded by the caller detaching elements as it goes. Uses

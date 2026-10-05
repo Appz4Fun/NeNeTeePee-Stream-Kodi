@@ -23,6 +23,7 @@ Names that tests patch on ``nzbget_resolver`` are reached through ``_core``.
 import contextlib
 import os
 import tempfile
+import time
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
 from resources.lib.fallback_streams import _MAX_FALLBACKS
@@ -96,12 +97,13 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     if capped and not dupe_check_off and pick.get("_nzbid"):
         _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
     ctx.fleet_aborted = progress.aborted
+    body = pick.pop("_body", None)
+    if ctx.cancel_event.is_set():
+        return None, None
     # The pick's downloaded body, parked ON DISK for the poll's rare FORCE
     # rescue (re-sending it beats re-fetching a dead, mirrored, or single-use
     # URL) -- never held in memory for the hour-long poll.
-    ctx.pick_nzb_path = _park_pick_body(pick.pop("_body", None))
-    if ctx.cancel_event.is_set():
-        return None, None
+    ctx.pick_nzb_path = _park_pick_body(body)
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
 
@@ -229,21 +231,38 @@ def _probe_nzbget_config(getter, progress, dupe_key):
     poll then snapshots successes itself; scores are left as computed).
     """
 
+    give_up_at = time.monotonic() + _PREFLIGHT_BUDGET_SECONDS
+
+    def _stopped():
+        # The worker itself stops between RPCs once the wait was abandoned
+        # (cancel, shutdown, or the shared budget) -- no work after cleanup.
+        return progress.cancel_event.is_set() or time.monotonic() >= give_up_at
+
     def _probe():
         # ONE history read serves both the same-key success snapshot (taken
         # BEFORE this fleet submits anything) and the highest same-key score;
-        # ONE config read serves both DupeCheck and HealthCheck.
+        # ONE config read serves both DupeCheck and HealthCheck. A failed
+        # history read leaves the snapshot UNKNOWN (None) so the poll retries.
         history = _core.nzbget_api.history_rows(getter)
-        preexisting = _core._preexisting_success_ids(dupe_key, getter, history=history)
-        max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
-            dupe_key, settings_getter=getter, history=history
+        preexisting = (
+            None
+            if history is None
+            else _core._preexisting_success_ids(dupe_key, getter, history=history)
         )
+        if _stopped():
+            return False, preexisting, None
+        max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
+            dupe_key, settings_getter=getter, history=history or []
+        )
+        if _stopped():
+            return False, preexisting, max_score
         options = _core.nzbget_api.config_options(
             ("DupeCheck", "HealthCheck"), settings_getter=getter
         )
         if _core._dupe_check_disabled(getter, options=options):
             return True, preexisting, max_score
-        _core._warn_if_healthcheck_pauses(getter, options=options)
+        if not _stopped():
+            _core._warn_if_healthcheck_pauses(getter, options=options)
         return False, preexisting, max_score
 
     return call_abortable(

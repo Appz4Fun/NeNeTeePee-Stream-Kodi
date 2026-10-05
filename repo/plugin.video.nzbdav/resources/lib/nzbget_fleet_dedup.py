@@ -21,6 +21,7 @@ Release identity never uses size: postings of one release can differ by GBs.
 """
 
 import collections
+import io
 import os
 import shutil
 import tempfile
@@ -158,30 +159,23 @@ def same_listing(left, right):
 
 
 def posting_fingerprint(nzb_bytes):
-    """Return an ``array('I')`` of every article's CRC32 (document order), or None.
+    """``posting_fingerprint_file`` for an NZB already in memory.
 
-    Appended straight into the compact array -- 4 bytes per article, no
-    intermediate set or sort: the overlap test builds its own probe set.
-
-    None for unparseable XML or an NZB without any segment Message-IDs.
+    Parsed with the same streaming, element-detaching parser (over an
+    in-memory stream), so a segment-heavy NZB never becomes a full tree.
+    None for unparseable or unsafe XML or an NZB without segment Message-IDs.
     """
-    from resources.lib.nzb_manifest import _children_by_name, _parse_nzb_root
-
-    root = _parse_nzb_root(nzb_bytes)
-    if root is None:
+    if not nzb_bytes:
         return None
-    hashes = array("I")
-    for file_elem in _children_by_name(root, "file"):
-        for segments in _children_by_name(file_elem, "segments"):
-            for segment in _children_by_name(segments, "segment"):
-                msgid = (segment.text or "").strip().strip("<>").lower()
-                if msgid:
-                    hashes.append(zlib.crc32(msgid.encode("utf-8")))
-    return hashes if hashes else None
+    return posting_fingerprint_file(io.BytesIO(bytes(nzb_bytes)))
 
 
 def posting_fingerprint_file(path):
-    """``posting_fingerprint`` for an NZB on disk, parsed as a stream.
+    """The posting fingerprint of an NZB file (a path or a binary stream).
+
+    An ``array('I')`` of every article's CRC32 (document order), appended
+    straight into the compact array -- 4 bytes per article, no intermediate
+    set or sort.
 
     Each ``<segment>`` is hashed and detached from its parent as soon as it
     ends, so memory is the fingerprint (4 bytes per article), never the
@@ -217,20 +211,36 @@ def _local_name(tag):
     return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
 
 
-def _shares_posting(probe, probe_len, other):
-    """Whether set ``probe`` shares more than 1% of the smaller article set."""
-    smaller = min(probe_len, len(other))
+# Overlap is counted a chunk of the probe at a time, so a comparison never
+# boxes more than this many CRC32s into a Python set at once.
+_PROBE_CHUNK = 65536
+
+
+def _shares_posting(fingerprint, other):
+    """Whether two fingerprints share more than 1% of the smaller article set.
+
+    Never materializes either fingerprint as one big set: each 64k-article
+    slice of ``fingerprint`` becomes a small set that is intersected with
+    ``other`` (iterated in C), stopping as soon as the threshold is crossed.
+    """
+    smaller = min(len(fingerprint), len(other))
     if smaller == 0:
         return False
-    # set.intersection walks the array in C: cheap even for large postings.
-    return len(probe.intersection(other)) > smaller * _SAME_POSTING_SHARE
+    needed = smaller * _SAME_POSTING_SHARE
+    shared = 0
+    for start in range(0, len(fingerprint), _PROBE_CHUNK):
+        chunk = set(fingerprint[start : start + _PROBE_CHUNK])
+        shared += len(chunk.intersection(other))
+        if shared > needed:
+            return True
+    return False
 
 
 def same_posting(left, right):
     """Whether two fingerprints share more than 1% of the smaller article set."""
     if not left or not right:
         return False
-    return _shares_posting(set(left), len(left), right)
+    return _shares_posting(left, right)
 
 
 class FleetDedup:
@@ -293,10 +303,7 @@ class FleetDedup:
         known_sets = self._fingerprints + self._pending
         if not fingerprint or not known_sets:
             return False
-        probe = set(fingerprint)
-        return any(
-            _shares_posting(probe, len(fingerprint), known) for known in known_sets
-        )
+        return any(_shares_posting(fingerprint, known) for known in known_sets)
 
     def remember_posting(self, fingerprint):
         """Hold ``fingerprint`` for this round (see ``commit_posting``)."""

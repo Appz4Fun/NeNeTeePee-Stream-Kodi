@@ -370,6 +370,10 @@ def _append_abortably(candidate, body, send, stops):
         nzbid = _core._append_one_backup(
             candidate["link"], candidate, dupe_key, settings_getter, nzb_bytes=body
         )
+        if nzbid and cancel_event is not None and cancel_event.is_set():
+            # Canceled while the append was in flight: hand the id straight to
+            # the late cleanup -- no veto probe (another RPC) first.
+            return nzbid, False
         vetoed = bool(nzbid) and bool(
             veto_probe and _core._copy_vetoed_after_append(nzbid, settings_getter)
         )

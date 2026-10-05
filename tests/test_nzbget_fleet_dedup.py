@@ -3,6 +3,7 @@
 import pathlib
 import tempfile
 import threading
+import time
 from unittest.mock import patch
 
 import pytest
@@ -927,8 +928,6 @@ def test_cancel_during_send_stops_the_remaining_appends(_fleet_env):
 
 def test_stalled_fetch_wait_notices_a_cancel_without_waiting_it_out():
     # Codex r7: a hung indexer must not pin the resolve thread.
-    import time
-
     release = threading.Event()
     cancel = threading.Event()
     waits = []
@@ -975,8 +974,6 @@ def test_capped_fleet_vetoed_pick_does_not_let_backups_exceed_the_cap(_fleet_env
 
 def test_slow_hydra_lookup_is_abandoned_on_cancel(_fleet_env):
     # Codex r7: "Looking for duplicate NZBs..." must stay cancelable.
-    import time
-
     from resources.lib.nzbget_fleet_run import submit_fleet
 
     release = threading.Event()
@@ -1047,8 +1044,6 @@ def test_spool_memory_budget_is_released_after_send():
 def test_config_probe_is_abortable_and_reads_only_a_snapshot(_fleet_env):
     # Codex r10: a hung NZBGet config RPC must not pin the resolve thread, and
     # the probe thread never reads Kodi settings.
-    import time
-
     from resources.lib.nzbget_fleet_run import submit_fleet
 
     release = threading.Event()
@@ -1134,6 +1129,8 @@ def test_fleet_snapshots_successes_abortably_before_any_download(_fleet_env):
     with patch(
         "resources.lib.nzbget_resolver._preexisting_success_ids", side_effect=_snapshot
     ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows", return_value=[]
+    ), patch(
         "resources.lib.nzbget_resolver.nzbget_api._get_settings",
         return_value=("http://n", "u", "p", ""),
     ), patch(
@@ -1169,8 +1166,6 @@ def test_resolve_passes_the_fleet_snapshot_to_the_poll():
 
 
 def test_hung_history_snapshot_is_cancelable(_fleet_env):
-    import time
-
     from resources.lib.nzbget_fleet_run import submit_fleet
 
     release = threading.Event()
@@ -1363,8 +1358,6 @@ def test_shutdown_during_the_fleet_leaves_appended_jobs_running():
 def test_hung_append_is_abandoned_on_cancel_and_deleted_when_it_lands():
     # Codex r14: one stalled append RPC must not pin the resolve thread; if it
     # lands after the user canceled, it is deleted from NZBGet.
-    import time
-
     from resources.lib.nzbget_resolver_dupes import _append_abortably
 
     release = threading.Event()
@@ -1654,8 +1647,6 @@ def test_loader_widens_past_filtered_out_rows(_fleet_env):
 
 def test_cancel_cleanup_runs_off_the_resolve_thread_on_a_snapshot():
     # Codex r20: a stalled NZBGet must not hold a cancel open.
-    import time
-
     from resources.lib.nzbget_resolver import _cancel_jobs_in_background
 
     release = threading.Event()
@@ -1793,8 +1784,6 @@ def test_preflight_coalesces_rpcs_and_has_a_budget(_fleet_env):
 
 
 def test_preflight_budget_abandons_a_hung_probe(_fleet_env):
-    import time
-
     from resources.lib import nzbget_fleet_run
     from resources.lib.nzbget_fleet_run import submit_fleet
 
@@ -1827,3 +1816,112 @@ def test_max_dupe_score_matches_dupekeys_case_insensitively():
         side_effect=lambda m, p, settings_getter=None: (rows[m], None),
     ):
         assert nzbget_api.max_dupe_score_by_dupekey("imdb=1|movie") == 40
+
+
+def test_failed_history_read_leaves_the_snapshot_unknown(_fleet_env):
+    # Codex r22: a failed history RPC is "unknown" (None), not "no successes",
+    # so the poll takes its own snapshot instead of trusting an empty one.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows", return_value=None
+    ), patch(
+        "resources.lib.nzbget_resolver._preexisting_success_ids"
+    ) as snapshot, patch(
+        _FETCH, side_effect=_valid
+    ), patch(
+        _APPEND, return_value=(1, None)
+    ):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert ctx.preexisting_successes is None
+    snapshot.assert_not_called()
+
+
+def test_append_landing_after_cancel_skips_the_veto_probe():
+    from resources.lib.nzbget_resolver_dupes import _append_abortably
+
+    cancel = threading.Event()
+
+    def _append(*_a, **_k):
+        cancel.set()  # the user canceled while this append was in flight
+        return 9, None
+
+    with patch(_APPEND, side_effect=_append), patch(_VETO) as veto, patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs"
+    ):
+        _append_abortably(
+            {"link": "u", "title": "t", "score": 1},
+            b"<nzb/>",
+            ("k", lambda *_a: "", True),
+            (cancel, FleetDedup()),
+        )
+        time.sleep(0.3)
+    veto.assert_not_called()
+
+
+def test_canceled_fleet_does_not_park_the_pick(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    class _CancelOnSend(_Dialog):
+        def iscanceled(self):
+            return any(m.startswith("Sending") for _p, m in self.lines)
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]), dialog=_CancelOnSend())
+    with patch("resources.lib.nzbget_fleet_run._park_pick_body") as park, patch(
+        _FETCH, side_effect=_valid
+    ), patch(_APPEND, return_value=(1, None)):
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    park.assert_not_called()
+
+
+def test_preflight_worker_stops_between_rpcs_after_cancel(_fleet_env):
+    # Codex r22: once the wait is abandoned, the probe starts no further RPC.
+    from resources.lib.nzbget_fleet_run import _FleetProgress, _probe_nzbget_config
+
+    cancel = threading.Event()
+    calls = []
+
+    def _history(*_a, **_k):
+        calls.append("history")
+        cancel.set()
+        return []
+
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows", side_effect=_history
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.max_dupe_score_by_dupekey",
+        side_effect=lambda *a, **k: calls.append("listgroups"),
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.config_options",
+        side_effect=lambda *a, **k: calls.append("config") or {},
+    ):
+        _probe_nzbget_config(lambda *_a: "", _FleetProgress(None, cancel), "k")
+        time.sleep(0.3)
+    assert calls == ["history"]
+
+
+def test_in_memory_fingerprint_streams_instead_of_building_a_tree():
+    # Codex r22 (P1): the pick's bytes use the streaming, detaching parser.
+    from resources.lib import nzbget_fleet_dedup
+
+    body = _nzb(_ids("a", 50))
+    with patch(
+        "resources.lib.nzb_manifest._parse_nzb_root",
+        side_effect=AssertionError("must not build a full tree"),
+    ):
+        assert len(nzbget_fleet_dedup.posting_fingerprint(body)) == 50
+
+
+def test_overlap_probe_works_in_bounded_chunks():
+    # Codex r22 (P1): comparisons box at most _PROBE_CHUNK CRCs at a time,
+    # and the result is the same as the exact whole-set count.
+    from resources.lib import nzbget_fleet_dedup
+
+    ids = _ids("a", 3000)
+    left = posting_fingerprint(_nzb(ids))
+    relisted = posting_fingerprint(_nzb(ids[:2990] + _ids("r", 10)))
+    other = posting_fingerprint(_nzb(_ids("b", 3000)))
+    with patch.object(nzbget_fleet_dedup, "_PROBE_CHUNK", 500):
+        assert nzbget_fleet_dedup.same_posting(left, relisted)
+        assert not nzbget_fleet_dedup.same_posting(left, other)

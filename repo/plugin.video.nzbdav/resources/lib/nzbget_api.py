@@ -730,13 +730,14 @@ def _nzbid_in(nzbid, nzbids):
 
 
 def history_rows(settings_getter=None):
-    """NZBGet's history as a list (one RPC), or ``[]`` on any error.
+    """NZBGet's history as a list (one RPC), or None when it couldn't be read.
 
     Lets a caller that needs several facts from history (same-key successes,
-    the highest same-key score) read it once.
+    the highest same-key score) read it once; None keeps "unknown" distinct
+    from an empty history.
     """
     rows, error = _rpc_call("history", [False], settings_getter=settings_getter)
-    return rows if error is None and isinstance(rows, list) else []
+    return rows if error is None and isinstance(rows, list) else None
 
 
 def config_options(names, settings_getter=None):
@@ -772,7 +773,7 @@ def max_dupe_score_by_dupekey(dupe_key, settings_getter=None, history=None):
     if not dupe_key:
         return None
     if history is None:
-        history = history_rows(settings_getter)
+        history = history_rows(settings_getter) or []
     queue, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
     if error is not None or not isinstance(queue, list):
         queue = []
@@ -800,6 +801,8 @@ def success_ids_by_dupekey(dupe_key, settings_getter=None, history=None):
     if not dupe_key:
         return []
     hist = history_rows(settings_getter) if history is None else history
+    if hist is None:
+        return []
     ids = []
     for item in hist:
         entry = _success_history_entry(item, dupe_key)
