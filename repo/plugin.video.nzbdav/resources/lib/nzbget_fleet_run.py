@@ -59,27 +59,34 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
             "backups (they would download in parallel).",
             _core.xbmc.LOGINFO,
         )
-    else:
-        candidates += _fleet_backups(dupe, progress)
-    if progress.canceled():
-        return None, None
     cap = dupe.get("max_backups")
     capped = isinstance(cap, int) and cap > 0
+    if not dupe_check_off:
+        # Unlimited: everything up front (download all, then send all).
+        # Capped: the loader (it downloads manifests) waits until the cap is
+        # known to be unfilled -- see below.
+        candidates += _fleet_backups(dupe, progress, include_loader=not capped)
+    if progress.canceled():
+        return None, None
     # The cap bounds the BACKUPS (the pick is never counted); a capped fleet
     # probes each append for a DELETED/COPY veto so the next round can
     # backfill that backup's slot.
     limits = (cap, cap + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
     dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
-    _core._submit_candidates(
-        candidates,
-        dupe_key,
-        getter,
-        cancel_event=ctx.cancel_event,
-        submitted_sink=ctx.submitted_nzbids,
-        dedup=dedup,
-        veto_probe=capped,
-        limits=limits,
-    )
+    run = (dupe_key, getter, ctx, dedup)
+    live = _send_batch(run, candidates, limits, capped)
+    if capped and not dupe_check_off and pick.get("_nzbid") and len(live) < cap:
+        # Picker/Hydra rows collapsed, died, or were vetoed before filling the
+        # cap: only now consult the loader, for exactly the open slots.
+        more = _loader_extras(dupe, progress, candidates[1:])
+        remaining = cap - len(live)
+        if more and not progress.canceled():
+            _send_batch(
+                run,
+                more,
+                (remaining, remaining + _core._MAX_VETO_REPLACEMENTS),
+                capped,
+            )
     if ctx.cancel_event.is_set():
         return None, None
     nzbid = pick.get("_nzbid")
@@ -122,35 +129,40 @@ def _probe_nzbget_config(getter, progress, dupe_key):
     )
 
 
-def _fleet_backups(dupe, progress):
-    """The pick's backups in rank order: picker rows, then Hydra + loader extras.
+def _send_batch(run, candidates, limits, capped):
+    """One download-dedupe-send pass of ``_submit_candidates``; LIVE backup ids."""
+    dupe_key, getter, ctx, dedup = run
+    return _core._submit_candidates(
+        candidates,
+        dupe_key,
+        getter,
+        cancel_event=ctx.cancel_event,
+        submitted_sink=ctx.submitted_nzbids,
+        dedup=dedup,
+        veto_probe=capped,
+        limits=limits,
+    )
+
+
+def _fleet_backups(dupe, progress, include_loader=True):
+    """The pick's backups in rank order: picker rows, then Hydra (+ loader) extras.
 
     The extras are scored just below the picker rows and shared as
     ``dupe["extras"]`` for the completion ledger. The NZBHydra search and the
     fallback loader can each take tens of seconds, so they run off-thread
     behind an abortable wait: a dialog cancel or Kodi shutdown abandons them
-    (and the fleet proceeds without extras).
+    (and the fleet proceeds without extras). ``include_loader=False`` leaves
+    the loader for ``_loader_extras`` (a capped fleet's last resort).
     """
     backups = list(dupe.get("backups") or [])
 
-    cap = dupe.get("max_backups")
-    capped = isinstance(cap, int) and cap > 0
-
     def _extras():
-        hydra = _core._hydra_uploads_for_fleet(dupe)
-        # The loader downloads NZB manifests to compare candidates: skip it
-        # when a positive cap is already covered by the picker rows and
-        # NZBHydra's uploads (they rank first, so its rows would never be
-        # needed unless those collapse; the fill loop has the rest).
-        loader = dupe.get("loader")
-        if capped and len(backups) + len(hydra) >= cap:
-            loader = None
         return _core._extra_backups_from_loader(
-            loader,
+            dupe.get("loader") if include_loader else None,
             [backup.get("link") for backup in backups],
             limit=None,
             score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
-            leading=hydra,
+            leading=_core._hydra_uploads_for_fleet(dupe),
             pick=dupe.get("pick"),
         )
 
@@ -159,6 +171,33 @@ def _fleet_backups(dupe, progress):
     )
     dupe["extras"] = extras
     return backups + extras
+
+
+def _loader_extras(dupe, progress, prior):
+    """The fallback loader's extras, ranked below ``prior`` (abortable).
+
+    Scored just below the lowest-scored row already in the fleet and added to
+    ``dupe["extras"]`` for the completion ledger.
+    """
+    if dupe.get("loader") is None:
+        return []
+    scores = [int(row.get("score") or 0) for row in prior if isinstance(row, dict)]
+    floor = min(scores) if scores else int(dupe.get("score_base") or 0)
+
+    def _extras():
+        return _core._extra_backups_from_loader(
+            dupe.get("loader"),
+            [row.get("link") for row in prior if isinstance(row, dict)],
+            limit=None,
+            score_base=floor - 1,
+            pick=dupe.get("pick"),
+        )
+
+    more = call_abortable(
+        _extras, (progress.cancel_event,), progress.canceled, default=[]
+    )
+    dupe["extras"] = list(dupe.get("extras") or []) + list(more)
+    return more
 
 
 class _FleetProgress:

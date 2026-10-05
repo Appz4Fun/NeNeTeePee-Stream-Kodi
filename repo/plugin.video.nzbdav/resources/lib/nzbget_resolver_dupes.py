@@ -118,9 +118,13 @@ def _submit_candidates(
                 kept,
                 dupe_key,
                 settings_getter,
-                (cancel_event, submitted_sink, veto_probe, dedup, spool),
+                (cancel_event, submitted_sink, veto_probe, dedup),
                 (limits, tally),
             )
+            # The whole round was sent: free its spool files and memory so a
+            # capped fleet's replacement rounds have room.
+            for _candidate, handle in kept:
+                spool.release(handle)
             if need is None or tally.get("pick_failed"):
                 break  # unlimited: everything was collected and sent
     finally:
@@ -222,12 +226,12 @@ def _report(dedup, phase, done, total):
 def _send_kept(kept, dupe_key, settings_getter, run, budget):
     """Phase 2: append every kept NZB to NZBGet, best first.
 
-    ``run`` is ``(cancel_event, submitted_sink, veto_probe, dedup, spool)``;
+    ``run`` is ``(cancel_event, submitted_sink, veto_probe, dedup)``;
     ``budget`` is ``(limits, tally)``, and ``tally`` (``live`` ids,
     ``attempts``) is updated in place. A sent NZB marks its posting covered in
     ``dedup``, so later phases skip other listings of it.
     """
-    cancel_event, submitted_sink, veto_probe, dedup, spool = run
+    cancel_event, submitted_sink, veto_probe, dedup = run
     (live_limit, max_attempts), tally = budget
     for index, (candidate, handle) in enumerate(kept):
         # One tick per append: moves the bar and re-checks the dialog cancel,
@@ -244,9 +248,6 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         if not is_pick:
             tally["attempts"] += 1
         body = NzbSpool.load(handle)
-        # Sent (or failed) either way: an in-memory body frees its budget for a
-        # later capped round's replacements.
-        spool.release(handle)
         if not body:
             # Every fleet append carries its body: append_nzb must never fetch
             # on the resolve thread. A pick without one fails the resolve.

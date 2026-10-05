@@ -298,16 +298,24 @@ class NzbSpool:
                     handle.write(body)
                 return path
             except OSError:
-                pass
+                # A partial write (disk full) must not hold space.
+                _remove_quietly(path)
         if not required and self._in_memory + len(body) > self.MEMORY_BUDGET:
             return None
         self._in_memory += len(body)
         return body
 
     def release(self, handle):
-        """Give an in-memory body's bytes back to the budget once it was sent."""
+        """Free a handle once its whole send round is done.
+
+        An in-memory body gives its bytes back to the budget; a spooled file is
+        deleted, so a capped fleet's later replacement rounds have room on a
+        small temp partition.
+        """
         if isinstance(handle, (bytes, bytearray)):
             self._in_memory = max(0, self._in_memory - len(handle))
+        elif handle:
+            _remove_quietly(handle)
 
     @staticmethod
     def load(handle):
@@ -324,6 +332,17 @@ class NzbSpool:
         if self._dir is not None:
             shutil.rmtree(self._dir, ignore_errors=True)
             self._dir = None
+
+
+def _remove_quietly(path):
+    """Delete a spool file; a missing or locked one is not an error."""
+    try:
+        os.remove(path)
+    except OSError as exc:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet fleet spool cleanup: {}".format(exc),
+            xbmc.LOGDEBUG,
+        )
 
 
 def _stopped(events):

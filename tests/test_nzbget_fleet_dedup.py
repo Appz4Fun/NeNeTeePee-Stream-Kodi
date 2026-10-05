@@ -1185,3 +1185,76 @@ def test_capped_fleet_skips_the_loader_when_rows_cover_the_cap(_fleet_env):
     ), patch(_VETO, return_value=False):
         submit_fleet(ctx, "pick", "T", "k")
     assert not loader_calls
+
+
+def test_capped_fleet_consults_the_loader_when_rows_fail_to_fill_the_cap(
+    _fleet_env,
+):
+    # Codex r13: a dead picker backup "covered" the cap by count only; the
+    # loader must still supply the replacement.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    dupe = _fleet_dupe(
+        [{"link": "dead"}],
+        max_backups=1,
+        loader=lambda: [{"link": "x", "title": "X"}],
+    )
+    ctx = _fleet_ctx(dupe)
+
+    def _fetch(url):
+        if url == "dead":
+            raise OSError("gone")
+        return _valid(url)
+
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append, patch(_VETO, return_value=False):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "x"]
+    scores = [c.kwargs["dupe_score"] for c in append.call_args_list]
+    assert scores[0] > scores[1]
+    assert [e["link"] for e in dupe["extras"] if e.get("_submitted")] == ["x"]
+
+
+def test_spool_files_are_freed_after_each_round(tmp_path):
+    # Codex r13: a capped fleet's replacement rounds need the disk the
+    # already-sent round no longer does.
+    from resources.lib.nzbget_resolver_dupes import _submit_candidates
+
+    rows = [{"link": "u{}".format(i), "title": "t", "score": 1} for i in range(4)]
+    counts = []
+
+    def _append(url, name, **kw):
+        counts.append(len(list(tmp_path.rglob("*.nzb"))))
+        return len(counts), None
+
+    with patch(_FETCH, side_effect=_valid), patch(_APPEND, side_effect=_append), patch(
+        _VETO, side_effect=[True, True, False]
+    ):
+        _submit_candidates(
+            rows,
+            "k",
+            lambda *_a: "",
+            dedup=FleetDedup(spool_base=str(tmp_path)),
+            limits=(1, None),
+        )
+    # One NZB spooled per round, and the previous round's file is gone.
+    assert counts == [1, 1, 1]
+    assert not list(tmp_path.rglob("*.nzb"))
+
+
+def test_failed_spool_write_leaves_no_partial_file(tmp_path):
+    spool = NzbSpool(base_dir=str(tmp_path))
+    real_open = open
+
+    def _full_disk(path, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if "w" in mode:
+            real_open(path, *args, **kwargs).close()
+            raise OSError("No space left on device")
+        return real_open(path, *args, **kwargs)
+
+    with patch("builtins.open", side_effect=_full_disk):
+        assert spool.save(b"abc") == b"abc"  # memory fallback
+    assert not list(tmp_path.rglob("*.nzb"))
+    spool.close()
