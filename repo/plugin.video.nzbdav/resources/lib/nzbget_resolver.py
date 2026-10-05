@@ -871,15 +871,17 @@ def _cancel_jobs_in_background(nzbids, settings_getter):
         "nzbget_password": password,
         "nzbget_category": category,
     }
-    # The jobs are about to be deleted: a replay must send them again.
-    nzbget_submit_ledger.forget(nzbids)
 
     def _cleanup():
         try:
-            nzbget_api.cancel_jobs(
+            deleted = nzbget_api.cancel_jobs(
                 nzbids,
                 settings_getter=lambda key, default="": snapshot.get(key, default),
             )
+            if deleted:
+                # Gone from NZBGet: a replay must send them again. A failed
+                # delete keeps the ledger, so a replay still reuses the jobs.
+                nzbget_submit_ledger.forget(nzbids)
         except Exception as exc:  # pylint: disable=broad-except
             xbmc.log(
                 "NeNeTeePee-Stream-Kodi: NZBGet cancel cleanup failed: {}".format(

@@ -572,6 +572,8 @@ def cancel_jobs(nzbids, settings_getter=None):
     the same tolerance ``_same_nzbid`` applies) and deduped across types:
     ``editqueue`` expects an integer array, and one bad member would fail the
     whole batch. Empty input is a no-op; best-effort like ``cancel_job``.
+    Returns True when both deletes went through (or there was nothing to
+    delete), False when either RPC failed.
     """
     ids = []
     for nzbid in nzbids or []:
@@ -582,9 +584,10 @@ def cancel_jobs(nzbids, settings_getter=None):
         if value not in ids:
             ids.append(value)
     if not ids:
-        return
-    _final_delete("HistoryFinalDelete", ids, settings_getter)
-    _final_delete("GroupFinalDelete", ids, settings_getter)
+        return True
+    history_ok = _final_delete("HistoryFinalDelete", ids, settings_getter)
+    queue_ok = _final_delete("GroupFinalDelete", ids, settings_getter)
+    return history_ok and queue_ok
 
 
 def _dupekey_match(item, dupe_key):
@@ -885,5 +888,8 @@ def _final_delete(command, ids, settings_getter):
     editqueue would be a pointless round-trip on every cancel.
     """
     if not ids:
-        return
-    _rpc_call("editqueue", [command, "", ids], settings_getter=settings_getter)
+        return True
+    _result, error = _rpc_call(
+        "editqueue", [command, "", ids], settings_getter=settings_getter
+    )
+    return error is None

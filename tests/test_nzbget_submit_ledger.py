@@ -281,13 +281,52 @@ def test_adopted_backups_count_as_this_resolves_for_failover():
     assert seen["owned"] == [5, 6, 11]
 
 
+def _settle(predicate, timeout=2.0):
+    """Poll ``predicate``: the cancel cleanup runs on a daemon thread."""
+    import time
+
+    deadline = time.monotonic() + timeout
+    while not predicate() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return predicate()
+
+
 def test_background_cancel_forgets_the_deleted_jobs():
     from resources.lib import nzbget_resolver
 
     nzbget_submit_ledger.record([_row("https://idx/a", 7)], "k")
-    with patch.object(nzbget_resolver.nzbget_api, "cancel_jobs"):
+    with patch.object(nzbget_resolver.nzbget_api, "cancel_jobs", return_value=True):
         nzbget_resolver._cancel_jobs_in_background([7], lambda *_a: "")
-    assert not nzbget_submit_ledger.held("k", {7: "parked"})
+        assert _settle(lambda: not nzbget_submit_ledger.held("k", {7: "parked"}))
+
+
+def test_a_failed_cancel_keeps_the_ledger_entries():
+    # Codex r29 (P2): the jobs may still be in NZBGet -- a replay must still
+    # recognize (and reuse) them.
+    from resources.lib import nzbget_resolver
+
+    nzbget_submit_ledger.record([_row("https://idx/a", 7)], "k")
+    done = threading.Event()
+
+    def _cancel(*_a, **_k):
+        done.set()
+        return False
+
+    with patch.object(nzbget_resolver.nzbget_api, "cancel_jobs", side_effect=_cancel):
+        nzbget_resolver._cancel_jobs_in_background([7], lambda *_a: "")
+        assert done.wait(2)
+    _settle(lambda: False, timeout=0.1)
+    assert nzbget_submit_ledger.held("k", {7: "parked"})
+
+
+def test_cancel_jobs_reports_a_failed_delete():
+    with patch.object(
+        nzbget_api, "_rpc_call", side_effect=[(True, None), (None, "timeout")]
+    ):
+        assert nzbget_api.cancel_jobs([7]) is False
+    with patch.object(nzbget_api, "_rpc_call", return_value=(True, None)):
+        assert nzbget_api.cancel_jobs(["7"]) is True
+    assert nzbget_api.cancel_jobs([]) is True
 
 
 @pytest.mark.usefixtures("_fleet_env")

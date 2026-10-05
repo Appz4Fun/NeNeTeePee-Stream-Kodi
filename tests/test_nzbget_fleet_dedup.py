@@ -2227,3 +2227,22 @@ def test_a_failed_park_write_leaves_no_file(tmp_path):
     ):
         assert nzbget_fleet_run._write_parked(b"<nzb/>", str(tmp_path)) is None
     assert not list(tmp_path.iterdir())
+
+
+def test_a_suspended_prefetch_stream_does_not_pin_the_yielded_body():
+    # Codex r29 (P1): a round that stops consuming (its demand met) leaves the
+    # stream suspended; it must not keep the handed-over NZB body alive.
+    import gc
+    import weakref
+
+    def _fetch(url):
+        # A set stands in for the body: unlike bytes it supports weakrefs.
+        return {url}, posting_fingerprint(_nzb([url + "@x"]))
+
+    stream = prefetched_clusters([[{"link": "a"}], [{"link": "b"}]], _fetch)
+    _head, body, _fp = next(stream)
+    ref = weakref.ref(body)
+    del body, _head, _fp
+    gc.collect()
+    assert ref() is None
+    stream.close()

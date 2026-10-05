@@ -743,10 +743,14 @@ def prefetched_clusters(  # pylint: disable=too-many-arguments
     try:
         _refill()
         while pending:
-            item = pending.popleft().result(stop_events, on_wait)
+            # Hand the item over without keeping a local reference: a caller
+            # that stops consuming (its round's demand met) leaves this frame
+            # suspended, and a still-bound ``item`` would pin the yielded NZB
+            # body (up to 100 MiB for the pick) through the whole send.
+            ready = [pending.popleft().result(stop_events, on_wait)]
             if _stopped(stop_events):
                 return
-            yield item
+            yield ready.pop()
             # Refill only once the caller asks for more, and only up to what
             # it can still use: a caller that stops here never pays for
             # another grab.
