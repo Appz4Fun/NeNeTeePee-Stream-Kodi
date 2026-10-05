@@ -2,7 +2,7 @@
 # Copyright (C) 2026 nzbdav contributors
 # pylint: disable=cyclic-import
 
-"""NZBGet Smart-Duplicates backup fleet: submit, widen, cancel-cleanup (#372).
+"""NZBGet Smart-Duplicates fleet engine: dedupe, spool, send, widen, rescue (#372).
 
 Cohesive helper group split out of ``nzbget_resolver`` to keep every module
 under Codacy's 500-NLOC file gate (same split idiom as
@@ -26,56 +26,6 @@ from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
 )
 
 
-def _submit_dupe_backups(
-    backups,
-    dupe_key,
-    settings_getter,
-    cancel_event=None,
-    submitted_sink=None,
-    dedup=None,
-    veto_probe=True,
-    live_limit=None,
-):
-    """Submit the release's duplicate backups to NZBGet (#372, Smart Duplicates).
-
-    ``backups`` is the picker-computed list of dicts with keys ``link``, ``title``, and
-    ``score`` for the same-release rows. Each is appended with the shared
-    ``dupe_key``, its own DupeScore (all below the pick's), and DupeMode=SCORE, so
-    NZBGet keeps the pick (highest score) downloading and parks each backup in history
-    as a duplicate -- failing over to the best remaining one if the pick is
-    unrepairable. Because NZBGet decides by score, submission order does not
-    matter: a backup submitted even after the pick has already succeeded is put
-    into history as a backup (not deleted). Best-effort: a bad/duplicate URL or a
-    failed fetch/append for one backup never aborts the rest or the pick. Stops
-    early if ``cancel_event`` fires (the user canceled the resolve).
-
-    ``dedup`` (a ``FleetDedup``) collapses listings and NZBs that are the same
-    Usenet posting as the pick or an earlier backup; a fresh one is used when
-    omitted. Returns the list of LIVE submitted NZBIDs -- a ``DELETED/COPY``-vetoed
-    backup (NZBGet's content-fingerprint duplicate check refusing to re-add
-    content already in history, #372 r6) is excluded so the fleet can backfill
-    that slot, though it still lands in ``submitted_sink`` for cancel cleanup.
-    ``veto_probe=False`` skips that per-append history probe (the unlimited
-    fleet has no slot to backfill). ``submitted_sink`` (the resolve-shared
-    ``ctx.submitted_nzbids``) receives each NZBID AS ITS APPEND SUCCEEDS -- a
-    cancel mid-batch snapshots that list immediately, so an already-appended
-    backup must be visible before the next append starts, not after the whole
-    batch returns. ``live_limit`` caps the LIVE backups (``None`` = all): the
-    cap counts what was really submitted, so rows that collapse as duplicates
-    never use up a slot.
-    """
-    return _core._submit_candidates(
-        backups,
-        dupe_key,
-        settings_getter,
-        cancel_event=cancel_event,
-        submitted_sink=submitted_sink,
-        dedup=dedup,
-        veto_probe=veto_probe,
-        limits=(live_limit, None),
-    )
-
-
 def _submit_candidates(
     candidates,
     dupe_key,
@@ -88,7 +38,9 @@ def _submit_candidates(
 ):
     """Download and dedupe candidates first, then send the unique ones.
 
-    Each round has two phases, in rank order:
+    ``candidates`` is the whole fleet in rank order: the pick first (flagged
+    ``_is_pick``, top DupeScore), then its backups. Each round has two phases,
+    in rank order:
 
     1. **Collect.** Same-listing candidates collapse into one fetch (the
        others are fallbacks for a failed grab); NZB bodies are fetched
@@ -97,7 +49,13 @@ def _submit_candidates(
        ``NzbSpool`` folder on disk as soon as it is known to be unique; a
        same-posting body is dropped. A candidate whose every listing failed
        is kept for one plain append (NZBGet's own fetch).
-    2. **Send.** Every kept NZB is appended to NZBGet, best first.
+    2. **Send.** Every kept NZB is appended to NZBGet, best first. A failed
+       PICK append stops the batch (the resolve reports it); each appended
+       row records its ``_nzbid`` and a failed one its ``_append_error``.
+
+    ``dedup.progress`` (optional) is told ``("download", done, total)`` after
+    each listing cluster is handled and ``("send", count, None)`` before a
+    send phase, for the resolve's progress dialog.
 
     Unlimited (``live_limit`` None): one round collects EVERY candidate, then
     sends them all. Capped: a round collects only the slots still open, and a
@@ -121,10 +79,17 @@ def _submit_candidates(
         if link:
             seen.add(link)
             usable.append(candidate)
-    tally = {"live": [], "attempts": 0, "wanted": None}
+    clusters = dedup.clusters(usable)
+    tally = {
+        "live": [],
+        "attempts": 0,
+        "wanted": None,
+        "seen": 0,
+        "total": len(clusters),
+    }
     spool = NzbSpool(dedup.spool_base)
     stream = prefetched_clusters(
-        dedup.clusters(usable),
+        clusters,
         _core.nzbget_api.fetch_nzb_bytes,
         cancel_event,
         window=PREFETCH_WINDOW,
@@ -139,8 +104,9 @@ def _submit_candidates(
             ):
                 break
             kept = _collect_unique(stream, (dedup, spool, tally), cancel_event, need)
-            if not kept:
+            if not kept or (cancel_event is not None and cancel_event.is_set()):
                 break
+            _report(dedup, "send", len(kept), None)
             _send_kept(
                 kept,
                 dupe_key,
@@ -148,8 +114,8 @@ def _submit_candidates(
                 (cancel_event, submitted_sink, veto_probe, dedup),
                 (limits, tally),
             )
-            if need is None:
-                break  # unlimited: every candidate was collected and sent
+            if need is None or tally.get("pick_failed"):
+                break  # unlimited: everything was collected and sent
     finally:
         stream.close()
         spool.close()
@@ -185,6 +151,8 @@ def _collect_unique(stream, state, cancel_event, need):
     kept = []
     tally["wanted"] = need
     for candidate, body, fingerprint in stream:
+        tally["seen"] += 1
+        _report(dedup, "download", tally["seen"], tally["total"])
         if cancel_event is not None and cancel_event.is_set():
             break
         if fingerprint and dedup.known_posting(fingerprint):
@@ -205,6 +173,13 @@ def _collect_unique(stream, state, cancel_event, need):
             if len(kept) >= need:
                 break
     return kept
+
+
+def _report(dedup, phase, done, total):
+    """Forward a progress tick to ``dedup.progress`` when one is attached."""
+    progress = getattr(dedup, "progress", None)
+    if progress is not None:
+        progress(phase, done, total)
 
 
 def _send_kept(kept, dupe_key, settings_getter, run, budget):
@@ -229,7 +204,12 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             candidate["link"], candidate, dupe_key, settings_getter, **extra
         )
         if not nzbid:
+            if candidate.get("_is_pick"):
+                # No pick, no fleet: the resolve fails with NZBGet's error.
+                tally["pick_failed"] = True
+                return
             continue
+        candidate["_nzbid"] = nzbid
         # Lets the completion ledger record this row under its own title.
         candidate["_submitted"] = True
         dedup.remember_listing(candidate)
@@ -298,9 +278,10 @@ def _append_one_backup(nzb_url, backup, dupe_key, settings_getter, nzb_bytes=Non
             **extra,
         )
     except Exception as exc:  # pylint: disable=broad-except
+        backup["_append_error"] = _core._redact_text(str(exc))
         _core.xbmc.log(
             "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup submit raised: {}".format(
-                _core._redact_text(str(exc))
+                backup["_append_error"]
             ),
             _core.xbmc.LOGWARNING,
         )
@@ -314,6 +295,7 @@ def _append_one_backup(nzb_url, backup, dupe_key, settings_getter, nzb_bytes=Non
             _core.xbmc.LOGINFO,
         )
         return nzbid
+    backup["_append_error"] = error
     _core.xbmc.log(
         ("NeNeTeePee-Stream-Kodi: NZBGet duplicate backup submit failed: {}").format(
             error
@@ -360,26 +342,6 @@ def _warn_if_healthcheck_pauses(settings_getter):
             return
         _HEALTHCHECK_WARNED[0] = True
     _core._notify(_core._addon_name(), _core._string(30230), 6000)
-
-
-def _snapshot_conn_getter(settings_getter):
-    """A thread-safe getter over a main-thread snapshot of NZBGet connection
-    settings (#372).
-
-    Read the connection settings once on the calling (main/resolve) thread so the
-    background backup worker performs NO off-thread Kodi ``getSetting`` (unsafe on
-    CoreELEC/Kodi builds), and preserves a blank ``nzbget_username``/password
-    verbatim (``dict.get`` returns the stored ``""`` rather than the auth default
-    the addon getter substitutes).
-    """
-    url, user, password, category = _core.nzbget_api._get_settings(settings_getter)
-    snapshot = {
-        "nzbget_url": url,
-        "nzbget_username": user,
-        "nzbget_password": password,
-        "nzbget_category": category,
-    }
-    return lambda key, default="": snapshot.get(key, default)
 
 
 def _dupe_check_disabled(settings_getter):
@@ -485,178 +447,12 @@ def _load_extra_candidates(loader):
     return candidates if isinstance(candidates, list) else []
 
 
-def _dupe_worker_should_skip(getter, cancel_event):
-    """True when the backup worker must submit nothing (#372).
-
-    Skips silently on a pre-submit cancel (the user already gave up on the
-    resolve), and skips with a log when the server has DupeCheck=no -- same-key
-    items would then download in parallel instead of parking as backups.
-    """
-    if cancel_event.is_set():
-        return True
-    if _core._dupe_check_disabled(getter):
-        _core.xbmc.log(
-            "NeNeTeePee-Stream-Kodi: NZBGet DupeCheck=no -- skipping #372 duplicate "
-            "backups (they would download in parallel).",
-            _core.xbmc.LOGINFO,
-        )
-        return True
-    return False
-
-
-def _fleet_is_unlimited(dupe):
-    """True when the fleet submits every candidate (``nzbget_max_backups`` = -1)."""
-    max_backups = dupe.get("max_backups")
-    return isinstance(max_backups, int) and max_backups < 0
-
-
-def _submit_backup_fleet(getter, cancel_event, dupe_key, dupe, submitted_ids):
-    """Submit the same-release backups, then the widened extras (#372).
-
-    Widens with NZBHydra duplicate uploads and same-content loader candidates
-    (#372 r2) as lowest-priority backups keyed under the same (pick's) DupeKey.
-    A capped fleet bounds them by the cap's REMAINING slots so backups + extras
-    never exceed ``nzbget_max_backups``; an unlimited fleet (-1) submits every
-    candidate and skips the per-append COPY-veto probe (there is no slot to
-    backfill). Both phases share one ``FleetDedup`` so a listing or posting
-    already covered by the pick or an earlier backup is never re-submitted.
-    Rides every score on the fleet's ``score_base`` so they outrank prior
-    same-key successes (#372 r4). A loader-only fleet (``backups`` empty,
-    NZBHydra collapsed every mirror into one row) submits just the extras.
-    Reads ONLY the snapshot ``getter`` -- this runs on the worker thread, which
-    must never call into Kodi. Every appended NZBID is recorded into
-    ``submitted_ids`` AS IT LANDS so the post-cancel cleanup can delete exactly
-    this resolve's submissions.
-    """
-    backups = list(dupe.get("backups") or [])
-    unlimited = _fleet_is_unlimited(dupe)
-    dedup = FleetDedup(pick=dupe.get("pick"), spool_base=dupe.get("spool_base"))
-    dedup.remember_posting(dupe.get("pick_fingerprint"))
-    max_backups = dupe.get("max_backups")
-    capped = isinstance(max_backups, int) and max_backups > 0
-    live = _core._submit_dupe_backups(
-        backups,
-        dupe_key,
-        getter,
-        cancel_event=cancel_event,
-        submitted_sink=submitted_ids,
-        dedup=dedup,
-        veto_probe=not unlimited,
-        live_limit=max_backups if capped else None,
-    )
-    if cancel_event.is_set():
-        return
-    # Extras budget = the cap's slots the LIVE same-release backups left free;
-    # a COPY-vetoed (or entirely failed) append frees its slot for a loader
-    # replacement (#372 r6). Unlimited fleets have no budget.
-    if unlimited:
-        remaining = None
-    elif max_backups is None:
-        remaining = _MAX_EXTRA_BACKUPS
-    else:
-        remaining = max(0, max_backups - len(live))
-    candidates = _core._loader_extras_for_fleet(dupe, backups, live_count=len(live))
-    # Shared with the resolve thread's completion ledger (_record_fleet_pubdates).
-    dupe["extras"] = candidates
-    if candidates:
-        _core._submit_extras_until_filled(
-            candidates,
-            remaining,
-            dupe_key,
-            getter,
-            cancel_event,
-            submitted_ids,
-            dedup=dedup,
-            veto_probe=not unlimited,
-        )
-
-
-def _submit_extras_until_filled(
-    candidates,
-    remaining,
-    dupe_key,
-    getter,
-    cancel_event,
-    submitted_ids,
-    dedup=None,
-    veto_probe=True,
-):
-    """Append extras until ``remaining`` LIVE backups land (#372 r6).
-
-    The veto-aware fill: it keeps drawing from the widened ``candidates`` list
-    past any that NZBGet vetoes as ``DELETED/COPY`` (a slot that was never
-    really filled), so a same-content mirror already in NZBGet's history can't
-    silently shrink the fallback depth. Bounded three ways -- ``remaining``
-    LIVE extras appended, a user cancel, or ``remaining +
-    _MAX_VETO_REPLACEMENTS`` total append attempts -- so a pathological
-    all-vetoed pool can't grind the worker (and the ``is_submitting``-extended
-    failover grace) for minutes. ``remaining=None`` (an unlimited fleet)
-    appends every candidate. Each appended NZBID lands in ``submitted_ids`` AS
-    IT LANDS (vetoed ones too, for cancel cleanup). Returns the LIVE extra
-    NZBIDs.
-    """
-    if remaining is not None and remaining <= 0:
-        return []
-    max_attempts = None if remaining is None else remaining + _MAX_VETO_REPLACEMENTS
-    return _core._submit_candidates(
-        candidates,
-        dupe_key,
-        getter,
-        cancel_event=cancel_event,
-        submitted_sink=submitted_ids,
-        dedup=dedup,
-        veto_probe=veto_probe,
-        limits=(remaining, max_attempts),
-    )
-
-
 def _hydra_uploads_for_fleet(dupe):
     """NZBHydra duplicate uploads for the pick, absorbing every failure (#372)."""
     loader = dupe.get("hydra_uploads")
     if loader is None:
         return []
     return _core._load_extra_candidates(loader)
-
-
-def _loader_extras_for_fleet(dupe, backups, live_count=None):
-    """The fleet's widened extras, bounded and score-based (#372 r2/r4/r6).
-
-    NZBHydra duplicate uploads come first, then the fallback loader's
-    same-content candidates. A capped fleet bounds them by the cap's REMAINING
-    slots (``max_backups`` minus the backups already spent; ``None`` = the hard
-    extras cap); an unlimited fleet (-1) takes them all. ``live_count`` (#372
-    r6) is the count of backups that ACTUALLY landed live -- a
-    ``DELETED/COPY``-vetoed backup frees its slot for a loader replacement, so
-    the remaining-slot math uses the live tally when given (else
-    ``len(backups)`` for back-compat). Returns every candidate (no slot
-    truncation); with no remaining slot it returns none.
-    """
-    extras_limit = dupe.get("max_backups")
-    spent = len(backups) if live_count is None else live_count
-    if _fleet_is_unlimited(dupe):
-        remaining = None
-    elif extras_limit is None:
-        remaining = _MAX_EXTRA_BACKUPS
-    else:
-        remaining = max(0, extras_limit - spent)
-    # Extras start just below the lowest same-release backup (base - count - 1);
-    # the whole fleet rides BELOW the base so any later fleet's pick (== its
-    # own, larger base) strictly outranks every member of this one. The anchor
-    # stays on the INTENDED backup count (len(backups)), NOT the live tally,
-    # so round-4's cross-fleet ordering guarantees are untouched.
-    if remaining is not None and remaining <= 0:
-        return []
-    # The candidate list is NOT truncated to the remaining slots: listings and
-    # postings that collapse as duplicates must not use up a slot, so the
-    # live cap is enforced by the fill loop (_submit_extras_until_filled).
-    return _core._extra_backups_from_loader(
-        dupe.get("loader"),
-        [b.get("link") for b in backups],
-        limit=None,
-        score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
-        leading=_core._hydra_uploads_for_fleet(dupe),
-        pick=dupe.get("pick"),
-    )
 
 
 def _fleet_spool_base():
@@ -672,128 +468,6 @@ def _fleet_spool_base():
     except Exception:  # pylint: disable=broad-except
         return None
     return path if isinstance(path, str) and path else None
-
-
-def _cleanup_canceled_submissions(getter, submitted_ids):
-    """Delete exactly THIS worker's submissions after a mid-submit cancel (#372).
-
-    Covers the append that was already in flight when the user canceled and so
-    landed after _handle_poll_failure's one-shot DupeKey sweep. Scoped to the
-    NZBIDs this resolve submitted -- NEVER a whole-DupeKey sweep, which could
-    wipe a fresh retry of the same release (it shares the stable DupeKey) that
-    started while this stale worker drained. Best-effort like every other
-    backup step: a failed delete is swallowed, never raised off-thread.
-    """
-    try:
-        _core.nzbget_api.cancel_jobs(submitted_ids, settings_getter=getter)
-    except Exception:  # pylint: disable=broad-except
-        pass
-
-
-def _nothing_to_submit(dupe_key, dupe):
-    """True when the worker has no possible submission (#372 r4).
-
-    No key means no Smart-Duplicates fleet at all; with a key, an empty
-    same-release list is still submittable when a loader or the NZBHydra
-    duplicate-upload lookup exists to widen from (the NZBHydra
-    collapsed-mirrors case -- a loader-only fleet).
-    """
-    if not dupe_key:
-        return True
-    return (
-        not dupe.get("backups")
-        and dupe.get("loader") is None
-        and dupe.get("hydra_uploads") is None
-    )
-
-
-def _spawn_dupe_backups(ctx):
-    """Fire-and-forget the release's duplicate backups in a daemon thread (#372).
-
-    Runs off the resolve thread (each backup is an indexer HTTP round-trip) so it
-    never delays the pick's poll/progress ("it won't affect playback"); the
-    daemon flag keeps it from blocking Kodi shutdown. Because every item carries
-    an explicit DupeScore (the pick highest), NZBGet keeps the pick the active
-    download regardless of when the backups land -- so submission order is not a
-    concern and a backup arriving after the pick already succeeded is still put
-    into history as a backup, not deleted. Skips entirely when the server has
-    DupeCheck turned off (backups would download in parallel), and warns once if
-    HealthCheck=Pause would block automatic failover. Reads settings from a
-    main-thread snapshot so the worker never touches Kodi off-thread. All errors
-    are swallowed -- backups are pure insurance and must never break playback.
-    """
-    dupe = ctx.dupe or {}
-    dupe_key = dupe.get("key") or ""
-    if _core._nothing_to_submit(dupe_key, dupe):
-        return None
-    try:
-        getter = _core._snapshot_conn_getter(ctx.settings_getter)
-    except Exception as exc:  # pylint: disable=broad-except
-        # The snapshot reads Kodi/injected settings and runs AFTER the primary is
-        # already accepted. Backups are pure insurance -- a settings-read failure
-        # here must skip them, never propagate out and fail the primary's playback.
-        _core.xbmc.log(
-            (
-                "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup snapshot failed: {}"
-            ).format(_core._redact_text(str(exc))),
-            _core.xbmc.LOGWARNING,
-        )
-        return None
-    # Kodi's temp folder, resolved HERE on the resolve thread: the worker
-    # never calls into Kodi.
-    dupe["spool_base"] = _core._fleet_spool_base()
-    cancel_event = ctx.cancel_event
-    # Share the appended-ids list with the resolve thread: the cancel path
-    # deletes exactly these (id-scoped, never a whole-DupeKey sweep).
-    submitted_ids = getattr(ctx, "submitted_nzbids", None)
-    if submitted_ids is None:
-        submitted_ids = []
-
-    def _worker():
-        reached_submit = False
-        try:
-            if _core._dupe_worker_should_skip(getter, cancel_event):
-                return
-            _core._warn_if_healthcheck_pauses(getter)
-            reached_submit = True
-            _core._submit_backup_fleet(
-                getter, cancel_event, dupe_key, dupe, submitted_ids
-            )
-        except Exception as exc:  # pylint: disable=broad-except
-            _core.xbmc.log(
-                (
-                    "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup worker "
-                    "error: {}"
-                ).format(_core._redact_text(str(exc))),
-                _core.xbmc.LOGWARNING,
-            )
-        finally:
-            # If a cancel arrived while a backup's append was already in flight,
-            # that backup can land in NZBGet AFTER _handle_poll_failure's
-            # one-shot id-scoped cancel -- and NZBGet would then promote the
-            # orphan as the group's new active download. Clean up once the
-            # worker has drained, scoped to this resolve's own submissions
-            # (#372 r2 cancel-race, r3 retry-race).
-            if reached_submit and cancel_event.is_set() and submitted_ids:
-                _core._cleanup_canceled_submissions(getter, submitted_ids)
-
-    try:
-        thread = threading.Thread(
-            target=_worker, name="nzbdav-nzbget-dupe-backups", daemon=True
-        )
-        thread.start()
-    except Exception as exc:  # pylint: disable=broad-except
-        # for example, RuntimeError "can't start new thread" under thread exhaustion.
-        # The backups are pure insurance -- never let them break the already-
-        # queued pick's playback.
-        _core.xbmc.log(
-            "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup spawn failed: {}".format(
-                _core._redact_text(str(exc))
-            ),
-            _core.xbmc.LOGWARNING,
-        )
-        return None
-    return thread
 
 
 # ---------------------------------------------------------------------------

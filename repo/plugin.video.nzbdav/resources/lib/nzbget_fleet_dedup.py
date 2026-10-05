@@ -181,12 +181,15 @@ class FleetDedup:
 
     ``spool_base`` is the directory the fleet's NzbSpool folders go under
     (resolved on the resolve thread; None = the system temp directory).
+    ``progress`` is an optional ``(phase, done, total)`` callback for the
+    resolve's progress dialog.
     """
 
-    def __init__(self, pick=None, spool_base=None):
+    def __init__(self, pick=None, spool_base=None, progress=None):
         self._listings = [pick] if isinstance(pick, dict) else []
         self._fingerprints = []
         self.spool_base = spool_base
+        self.progress = progress
 
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.

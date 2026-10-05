@@ -11,9 +11,6 @@ from resources.lib.nzbget_resolver import (
     _manifest_dupe_submission,
     _read_poll_interval,
     _read_settings,
-    _snapshot_conn_getter,
-    _spawn_dupe_backups,
-    _submit_dupe_backups,
     _tick_group_follow,
     _warn_if_healthcheck_pauses,
     play_nzbget,
@@ -2307,67 +2304,6 @@ def test_resolve_reuse_applies_resume_offset():
 _APPEND = "resources.lib.nzbget_resolver.nzbget_api.append_nzb"
 
 
-def test_submit_dupe_backups_appends_with_shared_key_and_scores():
-    # Each backup carries the SHARED DupeKey, its own (per-picker) DupeScore, and
-    # DupeMode=SCORE; NZBGet groups them by key and keeps the highest active.
-    backups = [
-        {"link": "http://i/a.nzb", "title": "The Movie GROUP2", "score": 999},
-        {"link": "http://i/b.nzb", "title": "The Movie GROUP3", "score": 998},
-    ]
-    with patch(_APPEND, return_value=(5, None)) as append, patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
-    ):
-        submitted = _submit_dupe_backups(backups, "imdb=1234567", _settings({}))
-    assert [c.args[0] for c in append.call_args_list] == [
-        "http://i/a.nzb",
-        "http://i/b.nzb",
-    ]
-    assert all(c.kwargs["dupe_key"] == "imdb=1234567" for c in append.call_args_list)
-    assert [c.kwargs["dupe_score"] for c in append.call_args_list] == [999, 998]
-    assert all(c.kwargs["dupe_mode"] == "SCORE" for c in append.call_args_list)
-    # Distinct job names (DupeKey groups them, so names need not match).
-    assert len({c.args[1] for c in append.call_args_list}) == 2
-    assert len(submitted) == 2
-
-
-def test_submit_dupe_backups_skips_bad_and_duplicate_urls():
-    backups = [
-        {"link": "http://i/a.nzb", "title": "A", "score": 9},
-        "not-a-dict",
-        {"title": "no link", "score": 8},
-        {"link": "http://i/a.nzb", "title": "dup", "score": 7},
-        {"link": "http://i/b.nzb", "title": "B", "score": 6},
-    ]
-    with patch(_APPEND, return_value=(5, None)) as append, patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
-    ):
-        _submit_dupe_backups(backups, "k", _settings({}))
-    assert [c.args[0] for c in append.call_args_list] == [
-        "http://i/a.nzb",
-        "http://i/b.nzb",
-    ]
-
-
-def test_submit_dupe_backups_is_fail_soft_per_backup():
-    backups = [
-        {"link": "http://i/a.nzb", "title": "A", "score": 3},
-        {"link": "http://i/b.nzb", "title": "B", "score": 2},
-        {"link": "http://i/c.nzb", "title": "C", "score": 1},
-    ]
-
-    def flaky(nzb_url, *a, **k):
-        if nzb_url == "http://i/b.nzb":
-            raise RuntimeError("boom")
-        return (7, None)
-
-    with patch(_APPEND, side_effect=flaky) as append, patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
-    ):
-        submitted = _submit_dupe_backups(backups, "k", _settings({}))
-    assert append.call_count == 3
-    assert len(submitted) == 2  # a and c despite b raising
-
-
 class _InlineThread:  # pylint: disable=too-few-public-methods
     """Thread stand-in that runs its target synchronously on start()."""
 
@@ -2377,57 +2313,6 @@ class _InlineThread:  # pylint: disable=too-few-public-methods
 
     def start(self):
         self._target()
-
-
-def _dupe_ctx(dupe, getter=None):
-    import threading
-    from types import SimpleNamespace
-
-    return SimpleNamespace(
-        settings_getter=getter or _settings({}),
-        dupe=dupe,
-        cancel_event=threading.Event(),
-    )
-
-
-def test_spawn_dupe_backups_submits_and_warns_healthcheck():
-    dupe = {"key": "imdb=1", "pick_score": 1000, "backups": [{"link": "u", "score": 9}]}
-    ctx = _dupe_ctx(dupe)
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups", return_value=[5]
-    ) as core, patch(
-        "resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"
-    ) as warn, patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ):
-        _spawn_dupe_backups(ctx)
-    core.assert_called_once()
-    assert core.call_args.args[0] == dupe["backups"]
-    assert core.call_args.args[1] == "imdb=1"  # shared key
-    warn.assert_called_once()
-
-
-def test_spawn_dupe_backups_skips_when_dupecheck_disabled():
-    # DupeCheck=no -> backups would download in parallel -> skip submission.
-    dupe = {"key": "imdb=1", "pick_score": 2, "backups": [{"link": "u", "score": 1}]}
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups"
-    ) as core, patch(
-        "resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"
-    ), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=True
-    ):
-        _spawn_dupe_backups(_dupe_ctx(dupe))
-    core.assert_not_called()
-
-
-def test_snapshot_conn_getter_preserves_blank_username():
-    # A blank nzbget_username must survive into the worker getter (NZBGet's empty
-    # ControlUsername disables username checking) -- not be defaulted to ``nzbget``.
-    getter = _settings({"nzbget_url": "http://box:6789", "nzbget_username": ""})
-    snap = _snapshot_conn_getter(getter)
-    assert snap("nzbget_username", "nzbget") == ""
-    assert snap("nzbget_url", "http://localhost:6789") == "http://box:6789"
 
 
 def test_dupe_check_disabled_reads_config():
@@ -2444,32 +2329,6 @@ def test_dupe_check_disabled_reads_config():
         side_effect=RuntimeError("boom"),
     ):
         assert _dupe_check_disabled(_settings({})) is False  # best-effort
-
-
-def test_spawn_dupe_backups_noop_without_backups_or_key():
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups"
-    ) as core:
-        assert _spawn_dupe_backups(_dupe_ctx({"key": "k", "backups": []})) is None
-        assert (
-            _spawn_dupe_backups(_dupe_ctx({"key": "", "backups": [{"link": "u"}]}))
-            is None
-        )
-        assert _spawn_dupe_backups(_dupe_ctx(None)) is None
-    core.assert_not_called()
-
-
-def test_spawn_dupe_backups_swallows_thread_start_error():
-    class _BoomThread:  # pylint: disable=too-few-public-methods
-        def __init__(self, *a, **k):
-            pass
-
-        def start(self):
-            raise RuntimeError("can't start new thread")
-
-    ctx = _dupe_ctx({"key": "k", "backups": [{"link": "u", "score": 1}]})
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _BoomThread):
-        assert _spawn_dupe_backups(ctx) is None  # must not raise
 
 
 def test_warn_if_healthcheck_pauses_notifies_once_on_pause():
@@ -2489,99 +2348,6 @@ def test_warn_if_healthcheck_pauses_silent_when_not_pause():
     ), patch("resources.lib.nzbget_resolver._notify") as notify:
         _warn_if_healthcheck_pauses(_settings({}))
     notify.assert_not_called()
-
-
-def test_resolve_submits_pick_with_dupe_key_and_spawns_backups():
-    # With a picker-computed dupe submission, the PICK is appended with the shared
-    # DupeKey at the top DupeScore, and the backups are spawned.
-    plugin = sys.modules["xbmcplugin"]
-    plugin.setResolvedUrl = MagicMock()
-    dupe = {
-        "key": "imdb=1234567",
-        "pick_score": 1000,
-        "backups": [{"link": "http://i/b.nzb", "title": "B", "score": 999}],
-    }
-    with patch(_APPEND, return_value=(42, None)) as append, patch(
-        "resources.lib.nzbget_resolver._spawn_dupe_backups"
-    ) as spawn, patch(
-        "resources.lib.nzbget_resolver.poll_nzbget_job",
-        return_value={"outcome": "success", "dest_dir": "/dl/movies/The.Movie"},
-    ), patch(
-        "resources.lib.nzbget_resolver.resolve_smb_video",
-        return_value="smb://host/completed/The.Movie/movie.mkv",
-    ):
-        resolve_and_play_nzbget(
-            7,
-            {"nzburl": "http://i/x.nzb", "title": "The.Movie", "_nzbget_dupe": dupe},
-            settings_getter=_full_settings(),
-        )
-    append.assert_called_once()
-    assert append.call_args.args[0] == "http://i/x.nzb"
-    assert append.call_args.kwargs["dupe_key"] == "imdb=1234567"
-    assert append.call_args.kwargs["dupe_score"] == 1000  # top score
-    assert append.call_args.kwargs["dupe_mode"] == "SCORE"
-    spawn.assert_called_once()
-
-
-def test_resolve_without_dupe_submits_plain_pick():
-    plugin = sys.modules["xbmcplugin"]
-    plugin.setResolvedUrl = MagicMock()
-    with patch(_APPEND, return_value=(42, None)) as append, patch(
-        "resources.lib.nzbget_resolver._spawn_dupe_backups"
-    ) as spawn, patch(
-        "resources.lib.nzbget_resolver.poll_nzbget_job",
-        return_value={"outcome": "success", "dest_dir": "/dl/movies/The.Movie"},
-    ), patch(
-        "resources.lib.nzbget_resolver.resolve_smb_video",
-        return_value="smb://host/completed/The.Movie/movie.mkv",
-    ):
-        resolve_and_play_nzbget(
-            7,
-            {"nzburl": "http://i/x.nzb", "title": "The.Movie"},
-            settings_getter=_full_settings(),
-        )
-    assert append.call_count == 1
-    assert append.call_args.kwargs.get("dupe_key", "") == ""
-    assert append.call_args.kwargs.get("dupe_score", 0) == 0
-    spawn.assert_not_called()
-    assert plugin.setResolvedUrl.call_args[0][1] is True
-
-
-def test_resolve_with_none_getter_and_dupe_does_not_crash():
-    # Real Kodi handle-based path passes settings_getter=None; _build_submit_ctx
-    # binds it so the background dupe thread carries a callable getter.
-    plugin = sys.modules["xbmcplugin"]
-    plugin.setResolvedUrl = MagicMock()
-    dupe = {"key": "imdb=1", "pick_score": 1000, "backups": [{"link": "u", "score": 9}]}
-    with patch(
-        "resources.lib.nzbget_resolver._read_settings",
-        return_value=("http://box", "smb://host/c", 600),
-    ), patch(
-        "resources.lib.nzbget_resolver.nzbget_api._get_settings",
-        return_value=("http://box", "u", "p", ""),
-    ), patch(
-        "resources.lib.nzbget_resolver.nzbget_api.completed_base_dir",
-        return_value="/dl",
-    ), patch(
-        "resources.lib.nzbget_resolver._read_poll_interval", return_value=1
-    ), patch(
-        _APPEND, return_value=(42, None)
-    ), patch(
-        "resources.lib.nzbget_resolver._spawn_dupe_backups"
-    ) as spawn, patch(
-        "resources.lib.nzbget_resolver.poll_nzbget_job",
-        return_value={"outcome": "success", "dest_dir": "/dl/movies/X"},
-    ), patch(
-        "resources.lib.nzbget_resolver.resolve_smb_video",
-        return_value="smb://host/c/X/x.mkv",
-    ):
-        resolve_and_play_nzbget(
-            7,
-            {"nzburl": "http://i/x.nzb", "title": "The.Movie", "_nzbget_dupe": dupe},
-        )  # settings_getter omitted -> None
-    plugin.setResolvedUrl.assert_called_once()
-    assert plugin.setResolvedUrl.call_args[0][1] is True
-    spawn.assert_called_once()  # dupe backups spawned; primary auth left raw
 
 
 # ---------------------------------------------------------------------------
@@ -2845,22 +2611,6 @@ def test_handle_poll_failure_cancel_deletes_own_jobs_and_stops_worker():
     assert deleted == [[5]]  # id-scoped: only this resolve's pick
 
 
-def test_submit_dupe_backups_stops_on_cancel_event():
-    import threading
-
-    ev = threading.Event()
-    ev.set()
-    with patch(_APPEND) as append:
-        submitted = _submit_dupe_backups(
-            [{"link": "http://i/a.nzb", "title": "A", "score": 1}],
-            "k",
-            _settings({}),
-            cancel_event=ev,
-        )
-    append.assert_not_called()
-    assert not submitted
-
-
 def test_extra_backups_from_loader_dedups_caps_and_scores_descending():
     from resources.lib.nzbget_resolver import _extra_backups_from_loader
 
@@ -2911,49 +2661,6 @@ def test_extra_backups_from_loader_no_ceiling_above_five():
     assert [e["link"] for e in got] == ["x{}".format(i) for i in range(8)]
 
 
-def test_spawn_dupe_backups_fail_soft_when_snapshot_raises():
-    # Reading the connection snapshot can raise (a bad injected getter / Kodi
-    # settings read). Backups are pure insurance submitted AFTER the primary is
-    # already accepted -- a snapshot failure must skip them, never propagate out
-    # and fail the primary's playback (round-2 review finding: fail-soft snapshot).
-    dupe = {"key": "k", "pick_score": 2, "backups": [{"link": "u", "score": 1}]}
-    with patch(
-        "resources.lib.nzbget_resolver._snapshot_conn_getter",
-        side_effect=RuntimeError("settings read failed"),
-    ), patch("resources.lib.nzbget_resolver.threading.Thread") as thread:
-        result = _spawn_dupe_backups(_dupe_ctx(dupe))
-    assert result is None  # skipped, did not raise
-    thread.assert_not_called()  # no worker spawned
-
-
-def test_spawn_dupe_backups_bounds_extras_by_remaining_standby_slots():
-    # With max_backups=2 already spent on two same-name backups, the loader extras
-    # get 0 remaining slots -- the widening must not exceed the standby cap.
-    dupe = {
-        "key": "k",
-        "pick_score": 3,
-        "backups": [{"link": "a", "score": 2}, {"link": "b", "score": 1}],
-        "max_backups": 2,
-        "loader": lambda: [{"link": "x"}],
-    }
-    seen = {}
-
-    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, **_kw):
-        seen["limit"] = limit
-        return []
-
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups", return_value=[10, 11]
-    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ), patch(
-        "resources.lib.nzbget_resolver._extra_backups_from_loader", side_effect=_extra
-    ):
-        _spawn_dupe_backups(_dupe_ctx(dupe))
-    # 2 cap - 2 live backups = 0 slots left: no extras (and no Hydra lookup).
-    assert "limit" not in seen
-
-
 def test_poll_excludes_just_failed_member_from_promotion_scan():
     # NZBGet's queue->history transition is not atomic: the just-failed pick can
     # still linger in listgroups under the same DupeKey for a tick. The promotion
@@ -2987,59 +2694,6 @@ def test_poll_excludes_just_failed_member_from_promotion_scan():
     assert 1 in seen_exclude  # the just-failed pick id is excluded from promotion
 
 
-def test_spawn_dupe_backups_cleans_own_submissions_on_cancel_after_submit():
-    # A cancel arriving mid-submit can let a backup's in-flight append land in
-    # NZBGet AFTER _handle_poll_failure's one-shot cancel_dupekey_group sweep;
-    # that orphan would be promoted as the group's new active download. The
-    # worker must clean up once it observes the cancel -- deleting exactly the
-    # NZBIDs IT submitted, never the whole DupeKey: a fresh retry of the same
-    # release shares the stable key and must survive a stale worker's cleanup
-    # (round-3 review finding: retry race).
-    import threading
-
-    ev = threading.Event()
-    dupe = {"key": "imdb=1", "pick_score": 9, "backups": [{"link": "u", "score": 1}]}
-    ctx = _dupe_ctx(dupe)
-    ctx.cancel_event = ev
-    cleaned = []
-
-    def _submit(backups, key, getter, cancel_event=None, submitted_sink=None, **_kw):
-        ev.set()  # cancel observed only after this submit's append is already away
-        if submitted_sink is not None:
-            submitted_sink.append(7)  # published as the append landed
-        return [7]
-
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups", side_effect=_submit
-    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ), patch(
-        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
-        side_effect=lambda ids, settings_getter=None: cleaned.append(list(ids)),
-    ):
-        _spawn_dupe_backups(ctx)
-    assert cleaned == [[7]]  # exactly this worker's submissions deleted
-
-
-def test_spawn_dupe_backups_does_not_clean_up_on_normal_completion():
-    # The cleanup must fire ONLY on cancel -- a normal, non-canceled run must
-    # never delete the backups the worker just submitted (nor the pick's group).
-    dupe = {"key": "imdb=1", "pick_score": 9, "backups": [{"link": "u", "score": 1}]}
-    cleaned = []
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups", return_value=[1]
-    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ), patch(
-        "resources.lib.nzbget_resolver._extra_backups_from_loader", return_value=[]
-    ), patch(
-        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
-        side_effect=lambda ids, settings_getter=None: cleaned.append(list(ids)),
-    ):
-        _spawn_dupe_backups(_dupe_ctx(dupe))
-    assert not cleaned  # no cancel -> everything submitted is left intact
-
-
 def test_extra_backups_scores_sit_on_the_score_base():
     # Loader extras must carry the fleet's wall-clock score base so they too
     # outrank prior same-key successes, while staying strictly below every
@@ -3049,68 +2703,6 @@ def test_extra_backups_scores_sit_on_the_score_base():
     cands = [{"link": "x"}, {"link": "y"}]
     got = _extra_backups_from_loader(lambda: cands, [], limit=5, score_base=500)
     assert [e["score"] for e in got] == [500, 499]
-
-
-def test_spawn_dupe_backups_threads_score_base_into_extras():
-    dupe = {
-        "key": "k",
-        "pick_score": 100002,
-        "score_base": 100000,
-        "backups": [{"link": "a", "score": 100001}],
-        "max_backups": 3,
-        "loader": lambda: [{"link": "x"}],
-    }
-    seen = {}
-
-    def _extra(loader, seen_links, limit=5, score_base=0, reserve=0, **_kw):
-        seen["limit"] = limit
-        seen["score_base"] = score_base
-        return []
-
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._submit_dupe_backups", return_value=[7]
-    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ), patch(
-        "resources.lib.nzbget_resolver._extra_backups_from_loader", side_effect=_extra
-    ):
-        _spawn_dupe_backups(_dupe_ctx(dupe))
-    # Extras start just below the lowest same-name backup: base - count - 1.
-    assert seen["score_base"] == 100000 - 1 - 1
-    # The candidate list is not truncated (duplicates must not use up slots);
-    # the 3 cap - 1 live = 2 remaining slots are enforced by the fill loop.
-    assert seen["limit"] is None
-
-
-def test_spawn_dupe_backups_runs_loader_only_fleet():
-    # A loader-only submission (no same-name backups) must still spawn the
-    # worker and submit the loader extras under the fleet's DupeKey
-    # (review thread: loader-only duplicate backups). Round 6: the extras now
-    # flow through the veto-aware fill loop, so they are appended directly.
-    dupe = {
-        "key": "k",
-        "pick_score": 100001,
-        "score_base": 100000,
-        "backups": [],
-        "max_backups": 3,
-        "loader": lambda: [{"link": "x", "title": "X"}],
-    }
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        _APPEND, return_value=(11, None)
-    ) as append, patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
-    ), patch(
-        "resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"
-    ), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ):
-        thread = _spawn_dupe_backups(_dupe_ctx(dupe))
-    assert thread is not None  # worker ran (not the no-backups noop)
-    # The loader extra is appended under the fleet DupeKey, scored just below
-    # the (empty) same-name band: base - 0 - 1.
-    assert append.call_args.args[0] == "x"
-    assert append.call_args.kwargs["dupe_key"] == "k"
-    assert append.call_args.kwargs["dupe_score"] == 100000 - 1
 
 
 def test_poll_group_follow_ignores_stale_preexisting_success():
@@ -3148,27 +2740,6 @@ def test_poll_group_follow_ignores_stale_preexisting_success():
         result = poll_nzbget_job(1, dialog, _Monitor(), 60, interval=0, dupe_key="k")
     assert result["outcome"] == "failed"  # stale success never played
     assert all(3 in ex for ex in seen_excludes)
-
-
-def test_backups_submit_under_their_own_release_title():
-    # Backups must NOT get decorated fallback job names: a promoted backup that
-    # completes becomes the SUCCESS history row the next picker render looks up
-    # by EXACT title (completed_history -> _tag_available_nzbget). A decorated
-    # name would hide it -- and with the wall-clock score base the replay would
-    # then re-download despite the files existing (review thread:
-    # completed-history reuse).
-    ev = None
-    with patch(_APPEND, return_value=(5, None)) as append, patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
-    ):
-        row = {"link": "http://i/a.nzb", "title": "The.Movie.2024.1080p-GRP"}
-        _submit_dupe_backups(
-            [dict(row, score=1)],
-            "imdb=1|the-movie-2024-1080p-grp",
-            _settings({}),
-            cancel_event=ev,
-        )
-    assert append.call_args.args[1] == "The.Movie.2024.1080p-GRP"
 
 
 def test_completed_download_records_fleet_pubdates():
@@ -3374,35 +2945,6 @@ def test_group_follow_tracks_owned_promoted_backup():
     }
 
 
-def test_backup_nzbids_publish_into_shared_list_as_appends_land():
-    # A cancel mid-batch snapshots ctx.submitted_nzbids BEFORE
-    # _submit_dupe_backups returns; each NZBID must be published into the
-    # shared list AS ITS APPEND SUCCEEDS so the immediate id-scoped cancel
-    # already sees it (round-6 review finding).
-    shared = []
-    seen_during = []
-
-    def fake_append(url, name, settings_getter=None, **kw):
-        seen_during.append(list(shared))  # snapshot BEFORE this append lands
-        return (100 + len(seen_during), None)
-
-    with patch(_APPEND, side_effect=fake_append), patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
-    ):
-        _submit_dupe_backups(
-            [
-                {"link": "http://i/a.nzb", "title": "A", "score": 2},
-                {"link": "http://i/b.nzb", "title": "B", "score": 1},
-            ],
-            "k",
-            _settings({}),
-            submitted_sink=shared,
-        )
-    # By the time the SECOND append starts, the first id is already published.
-    assert seen_during[1] == [101]
-    assert shared == [101, 102]
-
-
 # ---------------------------------------------------------------------------
 # #372 round 6: recover from NZBGet's content-fingerprint DELETED/COPY veto
 #   - reactive one-shot FORCE rescue of a pick that never entered the queue
@@ -3446,29 +2988,6 @@ def test_copy_vetoed_after_append_is_affirmative_only():
             assert _copy_vetoed_after_append(7, _settings({})) is True
 
 
-def test_submit_dupe_backups_sinks_but_does_not_count_vetoed_ids():
-    # A COPY-vetoed backup id must be EXCLUDED from the LIVE return (that slot
-    # was never really filled) yet still land in the shared sink so a cancel
-    # deletes its DELETED/COPY history row too.
-    backups = [
-        {"link": "http://i/a.nzb", "title": "A", "score": 2},
-        {"link": "http://i/b.nzb", "title": "B", "score": 1},
-    ]
-    ids = {"http://i/a.nzb": 10, "http://i/b.nzb": 11}
-    sink = []
-
-    def fake_append(url, name, settings_getter=None, **kw):
-        return (ids[url], None)
-
-    with patch(_APPEND, side_effect=fake_append), patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append",
-        side_effect=lambda nzbid, getter: nzbid == 10,  # 'a' vetoed
-    ):
-        live = _submit_dupe_backups(backups, "k", _settings({}), submitted_sink=sink)
-    assert live == [11]  # vetoed 10 not counted as a live backup
-    assert sink == [10, 11]  # both sink -> cancel deletes the vetoed row too
-
-
 def test_extra_backups_from_loader_reserve_widens_list_only():
     from resources.lib.nzbget_resolver import _extra_backups_from_loader
 
@@ -3487,86 +3006,6 @@ def test_extra_backups_from_loader_reserve_widens_list_only():
     assert [e["score"] for e in scored] == [500, 499, 498, 497]
     # cap<=0 short-circuits regardless of reserve.
     assert not _extra_backups_from_loader(lambda: cands, [], limit=0, reserve=5)
-
-
-def test_backup_fleet_backfills_vetoed_same_name_slot_from_loader():
-    # cap 2, one same-name backup COPY-vetoed -> the freed slot is backfilled
-    # with a loader candidate the pre-round-6 budget (2 cap - 2 same-name = 0)
-    # would never have submitted.
-    import threading
-
-    from resources.lib.nzbget_resolver import _submit_backup_fleet
-
-    dupe = {
-        "key": "k",
-        "score_base": 1000,
-        "max_backups": 2,
-        "backups": [
-            {"link": "a", "title": "A", "score": 5},
-            {"link": "b", "title": "B", "score": 4},
-        ],
-        "loader": lambda: [{"link": "x", "title": "X"}],
-    }
-    ids = {"a": 1, "b": 2, "x": 3}
-    sink = []
-
-    def fake_append(url, name, settings_getter=None, **kw):
-        return (ids[url], None)
-
-    with patch(_APPEND, side_effect=fake_append) as append, patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append",
-        side_effect=lambda nzbid, getter: nzbid == 1,  # same-name 'a' vetoed
-    ):
-        _submit_backup_fleet(_settings({}), threading.Event(), "k", dupe, sink)
-    appended = [c.args[0] for c in append.call_args_list]
-    assert appended == ["a", "b", "x"]  # x backfilled the vetoed 'a' slot
-    assert sink == [1, 2, 3]  # every appended id sinks, vetoed one included
-
-
-def test_backup_fleet_replaces_vetoed_extras_until_pool_or_attempt_bound():
-    import threading
-
-    from resources.lib.nzbget_resolver import (
-        _MAX_VETO_REPLACEMENTS,
-        _submit_extras_until_filled,
-    )
-
-    candidates = [
-        {"link": "u%d" % i, "title": "T%d" % i, "score": 100 - i} for i in range(20)
-    ]
-
-    # Everything vetoed -> attempts stop at remaining + _MAX_VETO_REPLACEMENTS.
-    calls = {"n": 0}
-
-    def append_all(url, name, settings_getter=None, **kw):
-        calls["n"] += 1
-        return (calls["n"], None)
-
-    with patch(_APPEND, side_effect=append_all), patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=True
-    ):
-        live = _submit_extras_until_filled(
-            candidates, 2, "k", _settings({}), threading.Event(), []
-        )
-    assert not live  # never reached the live target
-    assert calls["n"] == 2 + _MAX_VETO_REPLACEMENTS  # bounded attempt budget
-
-    # Keeps drawing past vetoed candidates to reach the live target.
-    calls2 = {"n": 0}
-
-    def append_seq(url, name, settings_getter=None, **kw):
-        calls2["n"] += 1
-        return (calls2["n"], None)
-
-    with patch(_APPEND, side_effect=append_seq), patch(
-        "resources.lib.nzbget_resolver._copy_vetoed_after_append",
-        side_effect=lambda nzbid, getter: nzbid in (1, 2),  # first two vetoed
-    ):
-        live2 = _submit_extras_until_filled(
-            candidates, 2, "k", _settings({}), threading.Event(), []
-        )
-    assert live2 == [3, 4]  # skipped two vetoed, filled two live
-    assert calls2["n"] == 4  # within the 2 + 5 attempt bound
 
 
 def _rescue_stub(new_id, counter):

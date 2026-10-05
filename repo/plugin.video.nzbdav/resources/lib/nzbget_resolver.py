@@ -25,7 +25,6 @@ from resources.lib.http_util import redact_text as _redact_text
 from resources.lib.i18n import addon_name as _addon_name
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
-from resources.lib.nzbget_fleet_dedup import posting_fingerprint, same_listing
 from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _HEALTHCHECK_LOCK,
     _HEALTHCHECK_WARNED,
@@ -33,31 +32,21 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _MAX_VETO_REPLACEMENTS,
     _append_one_backup,
     _canceled_resolve_nzbids,
-    _cleanup_canceled_submissions,
     _copy_vetoed_after_append,
     _dupe_check_disabled,
-    _dupe_worker_should_skip,
     _extra_backups_from_loader,
     _fill_done,
-    _fleet_is_unlimited,
     _fleet_spool_base,
     _hydra_uploads_for_fleet,
     _is_copy_failure,
     _is_copy_veto_status,
     _load_extra_candidates,
-    _loader_extras_for_fleet,
-    _nothing_to_submit,
     _pick_rescue_callable,
     _preexisting_success_ids,
     _read_poll_interval,
     _rescue_or_exhausted,
     _rescue_plain_pick,
-    _snapshot_conn_getter,
-    _spawn_dupe_backups,
-    _submit_backup_fleet,
     _submit_candidates,
-    _submit_dupe_backups,
-    _submit_extras_until_filled,
     _usable_backup_link,
     _warn_if_healthcheck_pauses,
 )
@@ -134,10 +123,11 @@ def poll_nzbget_job(
     failover: if the tracked member fails, a promoted backup (a new active NZBID
     under the same DupeKey) is tracked instead, or an already-completed group
     member is played, before the resolve is reported failed. ``fleet`` carries
-    two callables: ``is_submitting`` (the backup worker's ``Thread.is_alive``)
-    keeps the poll from declaring the group exhausted while backups are still
-    being appended, and ``owned_nzbids`` (the pick + the worker's appends so
-    far) scopes failover tracking to THIS resolve -- an overlapping play of the
+    ``owned_nzbids`` (the pick + every backup this resolve appended), which
+    scopes failover tracking to THIS resolve, and an optional
+    ``is_submitting`` callable that keeps the poll from declaring the group
+    exhausted while backups are still being appended (the foreground fleet
+    sends every backup before polling, so it passes none) -- an overlapping play of the
     same release shares the stable DupeKey, and its active download must never
     be adopted (or later canceled). NZBGet preserves NZBIDs across
     history<->queue moves, so a promoted backup always surfaces under an id
@@ -512,8 +502,7 @@ def _handle_poll_failure(
     finish for a later retry. The success outcome returns ``(False, False)``
     so the caller proceeds to the SMB resolve. ``poll_result`` (the poll's
     terminal dict) carries the currently tracked member and any
-    paused-promoted member ids; ``submitted_nzbids`` are the backup worker's
-    appends so far.
+    paused-promoted member ids; ``submitted_nzbids`` are the fleet's appends.
     """
     if outcome in ("timeout", "aborted"):
         on_failure(_string(30101))
@@ -723,36 +712,42 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
     size/pubdate/indexer corroboration, so a same-named repost could play the
     wrong job; NZBGet's own dupe handling covers a still-in-flight re-submit.
 
-    When the picker computed a Smart-Duplicates submission (#372), the pick is
-    submitted with the shared DupeKey at the top DupeScore so NZBGet keeps it the
-    active download (the one this poll tracks); otherwise it is a plain single
-    submit unchanged from pre-#372. Once queued, the release's duplicate backups
-    are submitted off-thread so NZBGet can fail over to one if the pick is
-    unrepairable.
+    When the picker computed a Smart-Duplicates submission (#372), the pick and
+    every backup are downloaded, deduplicated, and sent together first
+    (``nzbget_fleet_run.submit_fleet``, behind the progress dialog), the pick
+    at the top DupeScore so NZBGet keeps it the active download (the one this
+    poll tracks); otherwise it is a plain single submit unchanged from
+    pre-#372.
     """
     getter = ctx.settings_getter
     dupe_key = (ctx.dupe or {}).get("key") or ""
-    nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
+    if dupe_key:
+        from resources.lib.nzbget_fleet_run import submit_fleet
+
+        nzbid, error = submit_fleet(ctx, nzb_url, title, dupe_key)
+        if ctx.cancel_event.is_set():
+            # Canceled while finding/downloading/sending: delete whatever this
+            # resolve already appended, then exit silently.
+            if ctx.submitted_nzbids:
+                nzbget_api.cancel_jobs(
+                    list(ctx.submitted_nzbids), settings_getter=getter
+                )
+            ctx.on_failure(None)
+            return False
+    else:
+        nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
     if not nzbid:
         # Surface the specific (already-redacted) NZBGet message—auth vs dupe
         # vs "append returned 0"—per the spec error table, else the generic.
         ctx.on_failure(error or _string(30222))
         return False
 
-    # Pick is queued at the top DupeScore: submit the release's duplicate backups
-    # so NZBGet can fail over to one if the pick is unrepairable (#372). Off-thread
-    # so it never delays the poll below; scores (not order) keep the pick active.
-    backups_thread = _spawn_dupe_backups(ctx) if dupe_key else None
-
-    def _backups_still_submitting():
-        # Don't exhaust the failover grace while the backup worker is still
-        # appending candidates (a fast-fail pick can beat a slow indexer).
-        return backups_thread is not None and backups_thread.is_alive()
-
     def _owned_fleet_nzbids():
-        # The pick plus every backup appended so far -- failover tracking and
-        # cancel stay scoped to exactly this resolve's downloads.
-        return [nzbid] + list(getattr(ctx, "submitted_nzbids", None) or [])
+        # The pick plus every backup appended -- failover tracking and cancel
+        # stay scoped to exactly this resolve's downloads. The fleet records
+        # the pick in submitted_nzbids too, so dedupe (order kept).
+        owned = [nzbid] + list(getattr(ctx, "submitted_nzbids", None) or [])
+        return list(dict.fromkeys(owned))
 
     result = poll_nzbget_job(
         nzbid,
@@ -763,7 +758,6 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         interval=ctx.interval,
         dupe_key=dupe_key,
         fleet={
-            "is_submitting": _backups_still_submitting,
             "owned_nzbids": _owned_fleet_nzbids,
             # #372 r6: a confirmed COPY veto (pick died DELETED/COPY, group
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
@@ -796,27 +790,13 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
 
 
 def _submit_pick(ctx, nzb_url, title, dupe_key):
-    """Append the pick, with the #372 Smart-Duplicates fields when computed.
+    """Append the pick as a plain single submit (no Smart-Duplicates fleet).
 
-    The pick carries the shared DupeKey at the top DupeScore so NZBGet keeps it
-    the active download; without a ``dupe_key`` this is a plain single submit
-    unchanged from pre-#372. Returns ``append_nzb``'s ``(nzbid, error)``.
-
-    A fleet pick is fetched here (once) so its article fingerprint can seed the
-    backup worker's same-posting dedup -- a relisting of the pick's own posting
-    must never become a backup. When the pick's indexer fails, another
-    indexer's listing of the SAME posting (equal size, post date within the
-    same-listing window) supplies the identical NZB. If every listing fails,
-    ``append_nzb`` fetches the pick's URL itself, exactly as before.
+    The fleet path (``dupe_key`` set) goes through
+    ``nzbget_fleet_run.submit_fleet`` instead; ``dupe_key`` is accepted for the
+    FORCE-rescue call shape. Returns ``append_nzb``'s ``(nzbid, error)``.
     """
     dupe = ctx.dupe or {}
-    extra = {}
-    if dupe_key:
-        body, fingerprint = _fetch_pick_body(nzb_url, dupe)
-        if body:
-            extra["nzb_bytes"] = body
-            if isinstance(ctx.dupe, dict):
-                ctx.dupe["pick_fingerprint"] = fingerprint
     return nzbget_api.append_nzb(
         nzb_url,
         title,
@@ -824,61 +804,7 @@ def _submit_pick(ctx, nzb_url, title, dupe_key):
         dupe_key=dupe_key,
         dupe_score=int(dupe.get("pick_score") or 0) if dupe_key else 0,
         dupe_mode="SCORE",
-        **extra,
     )
-
-
-def _fetch_pick_body(nzb_url, dupe):
-    """The pick's ``(body, fingerprint)`` from its URL or a mirror listing.
-
-    Mirrors are listings of the pick's own posting (``same_listing``): first
-    the picker backups, then NZBHydra's deferred duplicate uploads. The worker
-    never submits those as backups, so they serve here as fallbacks for the
-    pick's grab. A body counts only when it parses as an NZB. ``(None, None)``
-    when every listing fails (fail-soft).
-    """
-    pick = dupe.get("pick") or {}
-    tried = set()
-    for rows in (
-        lambda: [nzb_url],
-        lambda: _mirror_links(pick, dupe.get("backups")),
-        # Deferred: NZBHydra's hidden duplicate uploads (one internal search,
-        # cached on the selection so the backup worker reuses it) -- only
-        # consulted once the pick and every picker mirror failed.
-        lambda: _mirror_links(pick, _hydra_uploads_for_fleet(dupe)),
-    ):
-        for url in rows():
-            if not url or url in tried:
-                continue
-            tried.add(url)
-            body = _fetch_pick_candidate(url)
-            fingerprint = posting_fingerprint(body) if body else None
-            if fingerprint:
-                return body, fingerprint
-    return None, None
-
-
-def _mirror_links(pick, rows):
-    """Links of ``rows`` that list the pick's own posting (``same_listing``)."""
-    return [
-        row.get("link")
-        for row in rows or []
-        if isinstance(row, dict) and same_listing(pick, row)
-    ]
-
-
-def _fetch_pick_candidate(url):
-    """One pick listing's NZB body, or None (logged) on a failed fetch."""
-    try:
-        return nzbget_api.fetch_nzb_bytes(url)
-    except Exception as exc:  # pylint: disable=broad-except
-        xbmc.log(
-            "NeNeTeePee-Stream-Kodi: NZBGet pick NZB fetch failed: {}".format(
-                _redact_text(str(exc))
-            ),
-            xbmc.LOGDEBUG,
-        )
-        return None
 
 
 def _play_completed_download(

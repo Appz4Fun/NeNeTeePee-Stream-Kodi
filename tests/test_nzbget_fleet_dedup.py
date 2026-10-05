@@ -325,67 +325,6 @@ def _posting_bodies(mapping):
     return lambda url: _nzb(mapping[url]) if url in mapping else _raise(url)
 
 
-def test_submit_candidates_skips_same_posting_and_appends_bodies():
-    from resources.lib.nzbget_resolver import _submit_dupe_backups
-
-    shared = _ids("s", 200)
-    bodies = {
-        "a": shared,
-        "b": shared[:-1] + ["reup@post.example"],  # a's posting, relisted
-        "c": _ids("c", 200),  # a byte-identical repost would share 0 IDs too
-    }
-    backups = [{"link": u, "title": u, "score": 10 - i} for i, u in enumerate("abc")]
-    sink = []
-    with patch(_FETCH, side_effect=_posting_bodies(bodies)), patch(
-        _APPEND, side_effect=[(1, None), (2, None)]
-    ) as append, patch(_VETO, return_value=False) as veto:
-        live = _submit_dupe_backups(
-            backups, "k", lambda *_a: "", submitted_sink=sink, dedup=FleetDedup()
-        )
-    assert [c.args[0] for c in append.call_args_list] == ["a", "c"]
-    assert append.call_args_list[0].kwargs["nzb_bytes"] == _nzb(bodies["a"])
-    assert live == sink == [1, 2]
-    assert veto.call_count == 2
-
-
-def test_unlimited_fleet_submits_everything_without_veto_probe():
-    from resources.lib.nzbget_resolver import _spawn_dupe_backups
-
-    from tests.test_nzbget_resolver import _dupe_ctx, _InlineThread
-
-    backups = [
-        {"link": "b{}".format(i), "title": "t", "score": 1000 - i} for i in range(40)
-    ]
-    dupe = {
-        "key": "k",
-        "pick_score": 1001,
-        "score_base": 1001,
-        "backups": backups,
-        "max_backups": -1,
-        "hydra_uploads": lambda: [{"link": "h{}".format(i)} for i in range(30)],
-    }
-    bodies = {"b{}".format(i): _ids("b{}-".format(i), 50) for i in range(40)}
-    bodies.update({"h{}".format(i): _ids("h{}-".format(i), 50) for i in range(30)})
-    counter = iter(range(1, 1000))
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
-        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
-        _FETCH, side_effect=_posting_bodies(bodies)
-    ), patch(
-        _APPEND, side_effect=lambda *a, **k: (next(counter), None)
-    ) as append, patch(
-        _VETO
-    ) as veto:
-        _spawn_dupe_backups(_dupe_ctx(dupe))
-    urls = [c.args[0] for c in append.call_args_list]
-    assert urls == ["b{}".format(i) for i in range(40)] + [
-        "h{}".format(i) for i in range(30)
-    ]
-    scores = [c.kwargs["dupe_score"] for c in append.call_args_list]
-    assert scores == sorted(scores, reverse=True) and max(scores) < 1001
-    veto.assert_not_called()
-
-
 def test_hydra_duplicate_upload_carries_posted_epoch():
     from resources.lib.hydra import _duplicate_upload_from_raw
 
@@ -410,54 +349,6 @@ def test_same_release_rejects_language_and_3d_variants(title):
     # so a 3D / dubbed / foreign-language / hardsub variant is a different release.
     pick = {"title": "The.Matrix.1999.1080p.BluRay.x264-GRP", "link": "p"}
     assert not same_release(pick, {"title": title, "link": "x"})
-
-
-def test_backup_of_the_picks_own_posting_is_skipped():
-    from resources.lib.nzbget_resolver import _submit_backup_fleet
-
-    shared = _ids("s", 200)
-    bodies = {"relist": shared[:-1] + ["reup@post.example"], "other": _ids("o", 200)}
-    dupe = {
-        "key": "k",
-        "backups": [
-            {"link": "relist", "title": "t", "score": 9},
-            {"link": "other", "title": "t", "score": 8},
-        ],
-        "max_backups": -1,
-        "pick_fingerprint": posting_fingerprint(_nzb(shared)),
-    }
-    with patch(_FETCH, side_effect=_posting_bodies(bodies)), patch(
-        _APPEND, return_value=(5, None)
-    ) as append:
-        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
-    assert [c.args[0] for c in append.call_args_list] == ["other"]
-
-
-def test_submit_pick_fingerprints_and_appends_the_fetched_body():
-    from types import SimpleNamespace
-
-    from resources.lib.nzbget_resolver import _submit_pick
-
-    body = _nzb(_ids("p", 20))
-    ctx = SimpleNamespace(settings_getter=None, dupe={"pick_score": 7})
-    with patch(_FETCH, return_value=body), patch(
-        _APPEND, return_value=(1, None)
-    ) as append:
-        _submit_pick(ctx, "http://i/pick.nzb", "T", "k")
-    assert append.call_args.kwargs["nzb_bytes"] == body
-    assert ctx.dupe["pick_fingerprint"] == posting_fingerprint(body)
-
-
-def test_submit_pick_without_fleet_does_not_prefetch():
-    from types import SimpleNamespace
-
-    from resources.lib.nzbget_resolver import _submit_pick
-
-    ctx = SimpleNamespace(settings_getter=None, dupe=None)
-    with patch(_FETCH) as fetch, patch(_APPEND, return_value=(1, None)) as append:
-        _submit_pick(ctx, "http://i/pick.nzb", "T", "")
-    fetch.assert_not_called()
-    assert "nzb_bytes" not in append.call_args.kwargs
 
 
 def test_capped_submit_stops_fetching_once_the_cap_is_met():
@@ -529,37 +420,6 @@ def test_hydra_duplicate_lookup_runs_once_per_selection():
     fetch.assert_called_once()
 
 
-def test_pick_grab_falls_back_to_a_mirror_listing_of_its_posting():
-    from types import SimpleNamespace
-
-    from resources.lib.nzbget_resolver import _submit_pick
-
-    pick = {"link": "http://dead/pick.nzb", "size": "100", "pubdate": _PUB}
-    mirror = {"link": "http://alive/m.nzb", "size": "100", "pubdate": _PUB_90S}
-    other = {"link": "http://alive/o.nzb", "size": "200", "pubdate": _PUB}
-    body = _nzb(_ids("p", 20))
-    ctx = SimpleNamespace(
-        settings_getter=None,
-        dupe={"pick_score": 7, "pick": pick, "backups": [other, mirror]},
-    )
-    fetched = []
-
-    def _fetch(url):
-        fetched.append(url)
-        if url == pick["link"]:
-            raise OSError("indexer down")
-        return body
-
-    with patch(_FETCH, side_effect=_fetch), patch(
-        _APPEND, return_value=(1, None)
-    ) as append:
-        _submit_pick(ctx, pick["link"], "T", "k")
-    assert fetched == [pick["link"], mirror["link"]]  # never the other posting
-    assert append.call_args.args[0] == pick["link"]
-    assert append.call_args.kwargs["nzb_bytes"] == body
-    assert ctx.dupe["pick_fingerprint"] == posting_fingerprint(body)
-
-
 def test_submitted_extras_are_ledger_recorded_under_their_own_titles():
     from resources.lib.nzbget_resolver import _record_fleet_pubdates
 
@@ -576,53 +436,12 @@ def test_submitted_extras_are_ledger_recorded_under_their_own_titles():
     assert [c.args for c in record.call_args_list] == [("Alt Name", _PUB)]
 
 
-def test_worker_flags_submitted_extras_for_the_ledger():
-    from resources.lib.nzbget_resolver import _submit_backup_fleet
-
-    dupe = {
-        "key": "k",
-        "backups": [],
-        "max_backups": -1,
-        "loader": lambda: [{"link": "x", "title": "X", "pubdate": _PUB}],
-    }
-    with patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])), patch(
-        _APPEND, return_value=(3, None)
-    ):
-        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
-    assert [e["link"] for e in dupe["extras"] if e.get("_submitted")] == ["x"]
-
-
 def test_nzb_fetch_is_size_capped():
     from resources.lib import nzbget_api
 
     with patch.object(nzbget_api, "_http_get", return_value="<nzb/>") as get:
         nzbget_api.fetch_nzb_bytes("http://i/x.nzb")
     assert get.call_args.kwargs["max_bytes"] == nzbget_api._MAX_NZB_BYTES
-
-
-def test_capped_fleet_counts_live_backups_not_collapsed_rows():
-    # Codex r3: with a cap of 1, rows that mirror the pick's posting must not
-    # use up the slot -- the first genuinely distinct posting still lands.
-    from resources.lib.nzbget_resolver import _submit_backup_fleet
-
-    pick = {"link": "p", "size": "100", "pubdate": _PUB}
-    mirrors = [
-        {"link": "m{}".format(i), "title": "t", "size": "100", "pubdate": _PUB_90S}
-        for i in range(6)
-    ]
-    dupe = {
-        "key": "k",
-        "pick": pick,
-        "backups": [],
-        "max_backups": 1,
-        "hydra_uploads": lambda: mirrors + [{"link": "distinct", "title": "t"}],
-    }
-    with patch(_FETCH, side_effect=lambda url: _nzb([url + "@x"])), patch(
-        _APPEND, return_value=(9, None)
-    ) as append, patch(_VETO, return_value=False):
-        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
-    assert [c.args[0] for c in append.call_args_list] == ["distinct"]
-    assert [e["_submitted"] for e in dupe["extras"]] == [False] * 6 + [True]
 
 
 def test_ledger_skips_backups_the_worker_did_not_submit():
@@ -700,57 +519,6 @@ def test_capped_fleet_backfills_a_vetoed_send_from_the_next_candidate():
     assert fetch.call_count == 2
 
 
-def test_capped_extras_fetch_replacements_only_after_a_failure():
-    # Codex r4: one open slot + the veto reserve must not pre-download the
-    # whole reserve; a successful first append costs exactly one grab.
-    from resources.lib.nzbget_resolver_dupes import _submit_extras_until_filled
-
-    rows = [{"link": "e{}".format(i), "title": "t", "score": 1} for i in range(8)]
-    with patch(_FETCH, side_effect=_valid) as fetch, patch(
-        _APPEND, return_value=(4, None)
-    ), patch(_VETO, return_value=False):
-        live = _submit_extras_until_filled(rows, 1, "k", lambda *_a: "", None, [])
-    assert live == [4]
-    assert fetch.call_count == 1
-
-
-def test_pick_grab_falls_back_to_a_hydra_mirror_of_its_posting():
-    from types import SimpleNamespace
-
-    from resources.lib.nzbget_resolver import _submit_pick
-
-    pick = {"link": "http://dead/pick.nzb", "size": "100", "pubdate": _PUB}
-    hydra = [
-        {"link": "http://h/other.nzb", "size": 200, "_posted_epoch": 1791028800},
-        {"link": "http://h/mirror.nzb", "size": 100, "_posted_epoch": 1791028860},
-    ]
-    body = _nzb(_ids("p", 20))
-    ctx = SimpleNamespace(
-        settings_getter=None,
-        dupe={
-            "pick_score": 7,
-            "pick": pick,
-            "backups": [],
-            "hydra_uploads": lambda: hydra,
-        },
-    )
-
-    def _fetch(url):
-        if url == pick["link"]:
-            raise OSError("indexer down")
-        return body
-
-    with patch(_FETCH, side_effect=_fetch) as fetch, patch(
-        _APPEND, return_value=(1, None)
-    ) as append:
-        _submit_pick(ctx, pick["link"], "T", "k")
-    assert [c.args[0] for c in fetch.call_args_list] == [
-        pick["link"],
-        "http://h/mirror.nzb",
-    ]
-    assert append.call_args.kwargs["nzb_bytes"] == body
-
-
 def test_capped_round_never_fetches_past_what_it_can_use():
     # Codex r5: cap 4 and every append succeeds -> exactly 4 grabs.
     from resources.lib.nzbget_resolver_dupes import _submit_candidates
@@ -789,19 +557,242 @@ def test_unspoolable_body_is_sent_as_a_url_append():
     assert "nzb_bytes" not in append.call_args.kwargs
 
 
-def test_later_phase_mirror_rescues_a_failed_picker_backup():
-    # Codex r5: a picker backup's only URL is dead; the Hydra phase's mirror of
-    # the same posting must still be fetched and sent.
-    from resources.lib.nzbget_resolver import _submit_backup_fleet
+# --- foreground fleet (submit_fleet) ----------------------------------------
 
-    dead = {"link": "dead", "title": "t", "score": 9, "size": "200", "pubdate": _PUB}
-    mirror = {"link": "mirror", "title": "t", "size": 200, "_posted_epoch": 1791028860}
+
+class _Dialog:
+    def __init__(self, cancel_after=None):
+        self.lines = []
+        self._cancel_after = cancel_after
+
+    def update(self, percent, message=""):
+        self.lines.append((percent, message))
+
+    def iscanceled(self):
+        downloads = [m for _p, m in self.lines if m.startswith("Downloading NZBs")]
+        return self._cancel_after is not None and len(downloads) >= self._cancel_after
+
+
+def _fleet_ctx(dupe, dialog=None):
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        settings_getter=lambda *_a: "",
+        dupe=dupe,
+        dialog=dialog if dialog is not None else _Dialog(),
+        cancel_event=threading.Event(),
+        submitted_nzbids=[],
+    )
+
+
+def _fleet_dupe(backups, **extra):
     dupe = {
         "key": "k",
-        "backups": [dead],
+        "pick_score": 1000,
+        "score_base": 1000,
+        "pick": {"link": "pick", "title": "T", "size": "100", "pubdate": _PUB},
+        "backups": [
+            dict(b, score=b.get("score", 999 - i)) for i, b in enumerate(backups)
+        ],
         "max_backups": -1,
-        "hydra_uploads": lambda: [mirror],
     }
+    dupe.update(extra)
+    return dupe
+
+
+def _strings(msg_id):
+    return {
+        30615: "Looking for duplicate NZBs...",
+        30616: "Downloading NZBs {} of {}",
+        30617: "Sending {} NZBs to NZBGet...",
+    }[msg_id]
+
+
+@pytest.fixture
+def _fleet_env():
+    """No Kodi config reads, the real dialog strings, a counting NZBGet."""
+    with patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
+    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
+        "resources.lib.nzbget_resolver._fleet_spool_base", return_value=None
+    ), patch(
+        "resources.lib.nzbget_resolver._string", side_effect=_strings
+    ), patch(
+        "resources.lib.nzbget_resolver._fmt",
+        side_effect=lambda msg_id, *a: _strings(msg_id).format(*a),
+    ):
+        yield
+
+
+def test_fleet_downloads_everything_then_sends_pick_first(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    events = []
+    rows = [{"link": "b{}".format(i), "title": "t{}".format(i)} for i in range(3)]
+    ctx = _fleet_ctx(_fleet_dupe(rows))
+
+    def _fetch(url):
+        events.append("fetch " + url)
+        return _valid(url)
+
+    def _append(url, name, **kw):
+        events.append("append " + url)
+        return len(events), None
+
+    with patch(_FETCH, side_effect=_fetch), patch(_APPEND, side_effect=_append) as ap:
+        nzbid, error = submit_fleet(ctx, "pick", "T", "k")
+    assert [e.split()[0] for e in events] == ["fetch"] * 4 + ["append"] * 4
+    assert [e for e in events if e.startswith("append")][0] == "append pick"
+    scores = [c.kwargs["dupe_score"] for c in ap.call_args_list]
+    assert scores[0] == 1000 and scores == sorted(scores, reverse=True)
+    assert nzbid == 5 and error is None
+    messages = [m for _p, m in ctx.dialog.lines]
+    assert messages[0] == "Looking for duplicate NZBs..."
+    assert messages[1:5] == ["Downloading NZBs {} of 4".format(i) for i in range(1, 5)]
+    assert messages[5] == "Sending 4 NZBs to NZBGet..."
+    assert ctx.submitted_nzbids == [5, 6, 7, 8]
+
+
+def test_fleet_skips_a_backup_of_the_picks_own_posting(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    shared = _ids("s", 200)
+    bodies = {
+        "pick": shared,
+        "relist": shared[:-1] + ["reup@post.example"],
+        "other": _ids("o", 200),
+    }
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "relist"}, {"link": "other"}]))
+    with patch(_FETCH, side_effect=_posting_bodies(bodies)), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "other"]
+
+
+def test_fleet_pick_falls_back_to_a_mirror_of_its_posting(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    mirror = {"link": "mirror", "size": "100", "pubdate": _PUB_90S}
+    hydra = [{"link": "hydra-mirror", "size": 100, "_posted_epoch": 1791028860}]
+    ctx = _fleet_ctx(_fleet_dupe([mirror], hydra_uploads=lambda: hydra))
+    fetched = []
+
+    def _fetch(url):
+        fetched.append(url)
+        if url in ("pick", "mirror"):
+            raise OSError("indexer down")
+        return _valid(url)
+
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, return_value=(9, None)
+    ) as append:
+        nzbid, _err = submit_fleet(ctx, "pick", "T", "k")
+    assert fetched == ["pick", "mirror", "hydra-mirror"]
+    # The pick keeps its slot (link, title, top score); the mirror only supplied
+    # the bytes, and no mirror is ever sent as a separate backup.
+    assert append.call_count == 1
+    assert append.call_args.args[:2] == ("pick", "T")
+    assert append.call_args.kwargs["nzb_bytes"] == _valid("hydra-mirror")
+    assert nzbid == 9
+
+
+def test_fleet_failed_pick_append_sends_no_backups(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, return_value=(None, "Unauthorized")
+    ) as append:
+        nzbid, error = submit_fleet(ctx, "pick", "T", "k")
+    assert append.call_count == 1
+    assert (nzbid, error) == (None, "Unauthorized")
+
+
+def test_fleet_cancel_while_downloading_sends_nothing(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    rows = [{"link": "b{}".format(i)} for i in range(6)]
+    ctx = _fleet_ctx(_fleet_dupe(rows), dialog=_Dialog(cancel_after=2))
+    with patch(_FETCH, side_effect=_valid), patch(_APPEND) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    append.assert_not_called()
+    assert ctx.cancel_event.is_set()
+
+
+def test_resolve_cancel_during_fleet_deletes_appends_and_exits_silently():
+    from resources.lib.nzbget_resolver import _submit_poll_resolve
+
+    failures = []
+    ctx = _fleet_ctx({"key": "k"})
+    ctx.on_failure = failures.append
+
+    def _fleet(ctx_, *_a):
+        ctx_.submitted_nzbids.append(77)
+        ctx_.cancel_event.set()
+        return None, None
+
+    with patch(
+        "resources.lib.nzbget_fleet_run.submit_fleet", side_effect=_fleet
+    ), patch("resources.lib.nzbget_resolver.nzbget_api.cancel_jobs") as cancel, patch(
+        "resources.lib.nzbget_resolver.poll_nzbget_job"
+    ) as poll:
+        assert _submit_poll_resolve(ctx, "pick", "T", None, None) is False
+    cancel.assert_called_once()
+    assert cancel.call_args.args[0] == [77]
+    assert failures == [None]
+    poll.assert_not_called()
+
+
+def test_fleet_with_dupecheck_off_sends_only_the_pick(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+    with patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=True
+    ), patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, return_value=(3, None)
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in fetch.call_args_list] == ["pick"]
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+
+
+def test_fleet_cap_backfills_a_vetoed_backup(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    rows = [{"link": "b{}".format(i)} for i in range(4)]
+    ctx = _fleet_ctx(_fleet_dupe(rows, max_backups=1))
+    with patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ) as append, patch(_VETO, side_effect=[False, True, False]):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick", "b0", "b1"]
+    assert fetch.call_count == 3  # pick + the cap + one replacement, no more
+
+
+def test_fleet_unlimited_skips_the_veto_probe_and_flags_extras(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    dupe = _fleet_dupe(
+        [{"link": "b0"}],
+        loader=lambda: [{"link": "x", "title": "X", "pubdate": _PUB}],
+    )
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ), patch(_VETO) as veto:
+        submit_fleet(ctx, "pick", "T", "k")
+    veto.assert_not_called()
+    assert [e["link"] for e in dupe["extras"] if e.get("_submitted")] == ["x"]
+
+
+def test_fleet_dead_backup_is_rescued_by_a_hydra_mirror(_fleet_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    dead = {"link": "dead", "title": "t", "size": "200", "pubdate": _PUB}
+    mirror = {"link": "mirror", "size": 200, "_posted_epoch": 1791028860}
+    ctx = _fleet_ctx(_fleet_dupe([dead], hydra_uploads=lambda: [mirror]))
 
     def _fetch(url):
         if url == "dead":
@@ -809,7 +800,9 @@ def test_later_phase_mirror_rescues_a_failed_picker_backup():
         return _valid(url)
 
     with patch(_FETCH, side_effect=_fetch), patch(
-        _APPEND, side_effect=[(None, "fetch failed"), (5, None)]
+        _APPEND, side_effect=[(1, None), (2, None)]
     ) as append:
-        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
-    assert [c.args[0] for c in append.call_args_list] == ["dead", "mirror"]
+        submit_fleet(ctx, "pick", "T", "k")
+    sent = append.call_args_list[1]
+    assert sent.args[0] == "dead"  # the head keeps its slot
+    assert sent.kwargs["nzb_bytes"] == _valid("mirror")
