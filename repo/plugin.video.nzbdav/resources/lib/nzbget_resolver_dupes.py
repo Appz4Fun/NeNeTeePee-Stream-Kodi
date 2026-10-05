@@ -157,10 +157,11 @@ def _submit_candidates(
     return tally["live"]
 
 
-# Per-response ceiling for NZBs fetched in parallel INTO MEMORY -- only when
-# the spool has no writable folder (the normal path streams each NZB straight
-# to disk, so no body is ever held whole). Bounds that degraded path's memory
-# on a CoreELEC box; the pick keeps the full nzbget_api ceiling.
+# Per-BACKUP NZB ceiling, spooled or in memory. Spooling bounds the download,
+# but each append still loads the body whole and builds its base64 and JSON
+# request copies (roughly 5x the body at peak), so a backup is capped well
+# below the nzbget_api ceiling to keep that peak safe on a CoreELEC box; 32
+# MiB still covers a 100+ GB release. The pick keeps the full ceiling.
 _FLEET_NZB_MAX_BYTES = 32 * 1024 * 1024
 
 
@@ -168,9 +169,10 @@ def _fleet_fetcher(clusters, spool):
     """The fleet's NZB fetch.
 
     Each BACKUP streams straight into a spool file and is fingerprinted from
-    disk (``posting_fingerprint_file``): one GET, no body in memory, the full
-    ``nzbget_api`` size ceiling. Returns ``(path, fingerprint)``, or None for a
-    response that isn't an NZB (its file is removed). Without a spool folder
+    disk (``posting_fingerprint_file``): one GET, no body in memory, capped at
+    ``_FLEET_NZB_MAX_BYTES`` (its append loads it whole). Returns
+    ``(path, fingerprint)``, or None for a response that isn't an NZB (its
+    file is removed). Without a spool folder
     backups fall back to in-memory bytes, capped. The pick (a single fetch)
     is always fetched into memory at the full ceiling, so a full temp disk
     can't fail it.
@@ -191,7 +193,7 @@ def _fleet_fetcher(clusters, spool):
         path = spool.reserve()
         if path is None:
             return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
-        _core.nzbget_api.download_nzb(url, path)
+        _core.nzbget_api.download_nzb(url, path, max_bytes=_FLEET_NZB_MAX_BYTES)
         fingerprint = posting_fingerprint_file(path)
         if not fingerprint:
             spool.release(path)
@@ -471,6 +473,9 @@ def _append_one_backup(nzb_url, backup, dupe_key, settings_getter, nzb_bytes=Non
     """
     score = int(backup.get("score") or 0)
     job_name = backup.get("title") or dupe_key
+    # SCORE parks lower-scored same-key items as backups; the fleet asks for
+    # FORCE only for a lone pick whose score could not be checked.
+    dupe_mode = backup.get("_dupe_mode") or "SCORE"
     extra = {} if nzb_bytes is None else {"nzb_bytes": nzb_bytes}
     try:
         nzbid, error = _core.nzbget_api.append_nzb(
@@ -479,7 +484,7 @@ def _append_one_backup(nzb_url, backup, dupe_key, settings_getter, nzb_bytes=Non
             settings_getter=settings_getter,
             dupe_key=dupe_key,
             dupe_score=score,
-            dupe_mode="SCORE",
+            dupe_mode=dupe_mode,
             **extra,
         )
     except Exception as exc:  # pylint: disable=broad-except

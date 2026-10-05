@@ -1874,9 +1874,17 @@ def test_play_nzbget_missing_config_does_not_start_player():
 
 @pytest.mark.parametrize("outcome", ["failed", "canceled"])
 def test_play_nzbget_submits_every_manifest_source(outcome):
-    with patch("resources.lib.nzbget_resolver.threading.Thread", _InlineThread), patch(
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows", return_value=[]
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.queue_rows", return_value=[]
+    ), patch(
+        "resources.lib.nzbget_resolver.threading.Thread", _InlineThread
+    ), patch(
         "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
-    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"), patch(
+    ), patch(
+        "resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"
+    ), patch(
         "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
     ), patch(
         "resources.lib.nzbget_resolver.nzbget_api.append_nzb",

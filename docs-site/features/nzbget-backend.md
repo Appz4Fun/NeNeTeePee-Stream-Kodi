@@ -175,10 +175,12 @@ failed playback. NZBGet may refuse your pick because the same content is
 already in its history. If nothing else in the set can play, NeNeTeePee-Stream-Kodi
 re-submits the pick once with `FORCE`.
 
-If you cancel the play, NeNeTeePee-Stream-Kodi removes everything that play submitted or was
-following: the pick, any promoted backup, and the parked backups. NZBGet
-doesn't keep a backup running, and another play of the same release isn't
-affected.
+If you cancel the play, NeNeTeePee-Stream-Kodi removes everything that play
+submitted: the pick, any promoted backup it sent, and the parked backups it
+sent. Another play of the same release isn't affected. Backups an earlier play
+already left in NZBGet (see the 24-hour note below) are different: this play
+reuses them instead of sending them again, and a cancel leaves them in place,
+even one NZBGet has started downloading as a failover.
 
 ### What counts as the same release
 

@@ -7,6 +7,8 @@ import time
 from unittest.mock import patch
 
 import pytest
+from resources.lib.nzbget_api import history_rows as _REAL_HISTORY_ROWS
+from resources.lib.nzbget_api import queue_rows as _REAL_QUEUE_ROWS
 from resources.lib.nzbget_fleet_dedup import (
     FleetDedup,
     NzbSpool,
@@ -624,6 +626,13 @@ def _fleet_env():
     ), patch(
         "resources.lib.nzbget_resolver._fmt",
         side_effect=lambda msg_id, *a: _strings(msg_id).format(*a),
+    ), patch(
+        # A readable, empty NZBGet history and queue (an unreadable history
+        # sends the pick alone with FORCE -- tested on its own).
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows",
+        return_value=[],
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.queue_rows", return_value=[]
     ):
         yield
 
@@ -1434,7 +1443,8 @@ def test_each_nzb_streams_to_disk_in_one_download(_fleet_env, tmp_path):
     ) as append:
         submit_fleet(ctx, "pick", "T", "k")
     # Backups stream to disk; the pick is fetched into memory (Codex r18).
-    assert sorted(downloads) == [("b1", None), ("big", None)]
+    cap = 32 * 1024 * 1024  # backups are capped: each append loads one whole
+    assert sorted(downloads) == [("b1", cap), ("big", cap)]
     assert [c.args[0] for c in append.call_args_list] == ["pick", "big", "b1"]
     # The fleet's spool is gone; only the pick parked for the FORCE rescue
     # remains, until the resolve ends.
@@ -1775,10 +1785,16 @@ def test_preflight_coalesces_rpcs_and_has_a_budget(_fleet_env):
         return [], None
 
     ctx = _fleet_ctx(_fleet_dupe([]))
-    with patch.object(nzbget_api, "_rpc_call", side_effect=_rpc), patch(
+    with patch.object(nzbget_api, "_rpc_call", side_effect=_rpc), patch.object(
+        nzbget_api, "history_rows", _REAL_HISTORY_ROWS
+    ), patch.object(nzbget_api, "queue_rows", _REAL_QUEUE_ROWS), patch(
         "resources.lib.nzbget_resolver._dupe_check_disabled",
         wraps=lambda getter, options=None: False,
-    ), patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
+    ), patch(
+        _FETCH, side_effect=_valid
+    ), patch(
+        _APPEND, return_value=(1, None)
+    ):
         submit_fleet(ctx, "pick", "T", "k")
     assert sorted(calls) == ["config", "history", "listgroups"]
 

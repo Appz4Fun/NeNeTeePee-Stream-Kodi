@@ -73,6 +73,18 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         score=int(dupe.get("pick_score") or 0),
         _is_pick=True,
     )
+    if ctx.preexisting_successes is None:
+        # NZBGet's history couldn't be read: the pick's score can't be lifted
+        # above an older same-key item, so under SCORE NZBGet might park it
+        # as a duplicate. Fail closed: send it alone with FORCE (always
+        # downloads), no backups.
+        dupe_check_off = True
+        pick["_dupe_mode"] = "FORCE"
+        _core.xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet history unreadable -- sending the "
+            "pick alone with DupeMode=FORCE (no #372 backups).",
+            _core.xbmc.LOGINFO,
+        )
     candidates = [pick]
     if dupe_check_off:
         # Same-key items would download in parallel instead of parking as
@@ -280,6 +292,8 @@ def _probe_nzbget_config(getter, progress, dupe_key):
         # ONE config read serves both DupeCheck and HealthCheck. A failed
         # history read leaves the snapshot UNKNOWN (None) so the poll retries.
         history = _core.nzbget_api.history_rows(getter)
+        if history is None and not _stopped():
+            history = _core.nzbget_api.history_rows(getter)  # one retry
         preexisting = (
             None
             if history is None
@@ -329,8 +343,8 @@ def _send_batch(run, candidates, limits, capped):
     returned with the newly sent ids and shrinks this pass's live limit.
     """
     dupe_key, getter, ctx, dedup, held = run
-    fresh, adopted = _skip_held(candidates, held, ctx)
     live_limit, max_attempts = limits
+    fresh, adopted = _skip_held(candidates, held, ctx, slots=live_limit)
     if live_limit is not None:
         live_limit = max(0, live_limit - len(adopted))
     try:
@@ -352,7 +366,7 @@ def _send_batch(run, candidates, limits, capped):
         )
 
 
-def _skip_held(candidates, held, ctx):
+def _skip_held(candidates, held, ctx, slots=None):
     """``candidates`` minus the backups an earlier play left in NZBGet.
 
     A backup is held when the resubmit ledger has its link (credentials
@@ -362,8 +376,10 @@ def _skip_held(candidates, held, ctx):
     backup: its NZBID joins ``ctx.adopted_nzbids`` so this resolve's poll
     follows a failover onto it, and the row takes that ``_nzbid`` for the
     completion ledger. A ``"dead"`` copy (failed, or refused as a copy) would
-    only fail again. The pick is always sent. Returns ``(kept, adopted)``:
-    the candidates to send, and the NZBIDs newly adopted by this call.
+    only fail again. The pick is always sent. At most ``slots`` copies are
+    adopted (None = all): past the cap a held copy is still skipped (not sent
+    again) but not followed. Returns ``(kept, adopted)``: the candidates to
+    send, and the NZBIDs newly adopted by this call.
     """
     if not held:
         return list(candidates), []
@@ -381,7 +397,8 @@ def _skip_held(candidates, held, ctx):
         if entry is None:
             kept.append(candidate)
             continue
-        if entry.get("state") == "parked":
+        room = slots is None or len(newly) < slots
+        if entry.get("state") == "parked" and room:
             candidate["_nzbid"] = entry.get("nzbid")
             adopted = getattr(ctx, "adopted_nzbids", None)
             if isinstance(adopted, list) and entry.get("nzbid") not in adopted:

@@ -222,11 +222,22 @@ def test_another_indexers_listing_of_a_held_posting_is_skipped(_nzbget_history):
 
 
 @pytest.mark.usefixtures("_fleet_env")
-def test_unreadable_history_skips_nothing():
-    with patch(_HISTORY, return_value=None), patch(_QUEUE, return_value=[]):
-        _play(_rows(1), [10, 11])
-        _ctx2, _fetched, sent = _play(_rows(1), [20, 21])
-    assert len(sent) == 2
+def test_unreadable_history_sends_the_pick_alone_with_force():
+    # Codex r28 (P2): with NZBGet's history unknown the pick's score can't be
+    # lifted above an older same-key item, so SCORE could park it: it goes
+    # alone, FORCE, after one retry of the read.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _ctx(_fleet_dupe(_rows(2)))
+    with patch(_HISTORY, return_value=None) as history, patch(
+        _QUEUE, return_value=[]
+    ), patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, return_value=(20, None)
+    ) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (20, None)
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+    assert append.call_args.kwargs["dupe_mode"] == "FORCE"
+    assert history.call_count == 2
 
 
 @pytest.mark.usefixtures("_fleet_env")
@@ -293,6 +304,27 @@ def test_adopted_backups_take_a_slot_of_the_cap(_nzbget_history):
     ctx = _ctx(_fleet_dupe(rows, max_backups=1))
     with patch(_FETCH, side_effect=_valid), patch(
         _APPEND, side_effect=[(20, None), (21, None)]
+    ) as append, patch(
+        "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
+    ):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+    assert ctx.adopted_nzbids == [11]
+
+
+@pytest.mark.usefixtures("_fleet_env")
+def test_adoption_is_bounded_by_the_cap(_nzbget_history):
+    # Codex r28 (P2): a replay with a lower cap adopts only as many held copies
+    # as it has slots; the rest are still skipped (never re-sent).
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    _play(_rows(3), [10, 11, 12, 13])
+    _nzbget_history["history"] = [
+        {"NZBID": n, "DupeKey": "k", "Status": "DELETED/DUPE"} for n in (11, 12, 13)
+    ]
+    ctx = _ctx(_fleet_dupe(_rows(3), max_backups=1))
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, return_value=(20, None)
     ) as append, patch(
         "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
     ):
