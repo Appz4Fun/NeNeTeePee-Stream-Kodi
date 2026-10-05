@@ -191,10 +191,12 @@ class FleetDedup:
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.
 
-        A candidate that lists an already-known posting (the pick, or a member
-        of an earlier cluster from this fleet) is dropped. Each returned cluster
-        is a list whose head is its best-ranked listing; the rest are fallbacks
-        for a failed grab. Every member is remembered as known.
+        A candidate that lists an already-COVERED posting (the pick, or a
+        backup this fleet already sent -- see ``remember_listing``) is dropped.
+        Each returned cluster is a list whose head is its best-ranked listing;
+        the rest are fallbacks for a failed grab. Nothing is remembered here: a
+        posting whose every listing failed stays uncovered, so a later phase
+        (NZBHydra uploads, loader extras) can still supply a working mirror.
         """
         clusters = []
         for candidate in candidates:
@@ -209,9 +211,16 @@ class FleetDedup:
                 clusters.append([candidate])
             else:
                 home.append(candidate)
-        for cluster in clusters:
-            self._listings.extend(cluster)
         return clusters
+
+    def remember_listing(self, row):
+        """Mark ``row``'s posting covered (call once its NZB reached NZBGet).
+
+        Every listing in a cluster is within the same-listing window of its
+        head, so remembering the head covers the whole cluster.
+        """
+        if isinstance(row, dict):
+            self._listings.append(row)
 
     def known_posting(self, fingerprint):
         """Whether ``fingerprint`` is the same posting as one already submitted."""
@@ -233,13 +242,19 @@ class NzbSpool:
 
     One private ``nzbdav-fleet-*`` folder per batch, under ``base_dir`` (Kodi's
     temp folder) or the system temp directory. A body that cannot be written
-    (no folder, disk full) is kept in memory instead, so a spool failure never
-    drops a backup. ``close`` deletes the folder and everything in it.
+    (no folder, disk full) is kept in memory only while the in-memory total
+    stays under ``MEMORY_BUDGET``; past it ``save`` returns None and the
+    caller sends that backup as a plain URL append (NZBGet fetches it), so a
+    spool failure never drops a backup and never exhausts a CoreELEC box's
+    RAM. ``close`` deletes the folder and everything in it.
     """
+
+    MEMORY_BUDGET = 64 * 1024 * 1024
 
     def __init__(self, base_dir=None):
         self._dir = None
         self._count = 0
+        self._in_memory = 0
         for parent in (base_dir, None):
             try:
                 self._dir = tempfile.mkdtemp(prefix="nzbdav-fleet-", dir=parent)
@@ -248,17 +263,24 @@ class NzbSpool:
                 continue
 
     def save(self, body):
-        """Store ``body``; returns a handle for ``load`` (a path, or the bytes)."""
-        if self._dir is None:
-            return body
-        self._count += 1
-        path = os.path.join(self._dir, "{:05d}.nzb".format(self._count))
-        try:
-            with open(path, "wb") as handle:
-                handle.write(body)
-        except OSError:
-            return body
-        return path
+        """Store ``body``; returns a ``load`` handle (a path, the bytes, or None).
+
+        None means the body could be neither written nor held within the
+        memory budget: the caller falls back to a plain URL append.
+        """
+        if self._dir is not None:
+            self._count += 1
+            path = os.path.join(self._dir, "{:05d}.nzb".format(self._count))
+            try:
+                with open(path, "wb") as handle:
+                    handle.write(body)
+                return path
+            except OSError:
+                pass
+        if self._in_memory + len(body) > self.MEMORY_BUDGET:
+            return None
+        self._in_memory += len(body)
+        return body
 
     @staticmethod
     def load(handle):
@@ -352,15 +374,19 @@ class _Fetch:
         return self._value
 
 
-def prefetched_clusters(clusters, fetch, cancel_event=None, window=PREFETCH_WINDOW):
-    """Yield ``(member, body, fingerprint)`` per cluster in order, ``window`` ahead.
+def prefetched_clusters(
+    clusters, fetch, cancel_event=None, window=PREFETCH_WINDOW, demand=None
+):
+    """Yield ``(head, body, fingerprint)`` per cluster in order, ``window`` ahead.
 
     Fetches overlap on daemon threads while results are consumed strictly in
     rank order (DupeScores stay rank-ordered) and at most ``window`` bodies are
-    held in memory at once. Stops early once ``cancel_event`` fires. Closing
-    the generator (a cancel, or the caller's cap being met) stops every
-    in-flight fetch from moving on to its cluster's next listing and starts no
-    new ones.
+    held in memory at once. ``demand`` (a zero-arg callable, or None for
+    unbounded) reports how many more items the caller can still use: fetches
+    in flight never exceed it, so a capped round never grabs an NZB it will
+    not consume. Stops early once ``cancel_event`` fires. Closing the generator
+    (a cancel, or the caller's cap being met) stops every in-flight fetch from
+    moving on to its cluster's next listing and starts no new ones.
     """
     window = max(1, window)
     stop = threading.Event()
@@ -368,24 +394,27 @@ def prefetched_clusters(clusters, fetch, cancel_event=None, window=PREFETCH_WIND
     pending = collections.deque()
     remaining = iter(clusters)
 
-    def _submit_next():
-        cluster = next(remaining, None)
-        if cluster is None:
-            return False
-        pending.append(_Fetch(cluster, fetch, stop_events).start())
-        return True
+    def _wanted():
+        limit = demand() if demand is not None else None
+        return window if limit is None else max(0, min(window, limit))
+
+    def _refill():
+        while len(pending) < _wanted():
+            cluster = next(remaining, None)
+            if cluster is None:
+                return
+            pending.append(_Fetch(cluster, fetch, stop_events).start())
 
     try:
-        while len(pending) < window and _submit_next():
-            pass
+        _refill()
         while pending:
             item = pending.popleft().result()
             if _stopped(stop_events):
                 return
             yield item
-            # Refill only once the caller asks for more: a caller that stops
-            # here (cap met) never pays for another grab, and at most
-            # ``window`` bodies (the yielded one included) are ever held.
-            _submit_next()
+            # Refill only once the caller asks for more, and only up to what
+            # it can still use: a caller that stops here never pays for
+            # another grab.
+            _refill()
     finally:
         stop.set()

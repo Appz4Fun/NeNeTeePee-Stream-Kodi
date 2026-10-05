@@ -3193,8 +3193,12 @@ def test_completed_download_records_fleet_pubdates():
         dupe={
             "key": "k",
             "backups": [
-                {"link": "b1", "pubdate": "Tue, 02 Jun 2026 11:00:00 +0000"},
-                {"link": "b2"},  # no pubdate -> skipped, never crashes
+                {
+                    "link": "b1",
+                    "pubdate": "Tue, 02 Jun 2026 11:00:00 +0000",
+                    "_submitted": True,
+                },
+                {"link": "b2", "_submitted": True},  # no pubdate -> skipped
             ],
         },
     )

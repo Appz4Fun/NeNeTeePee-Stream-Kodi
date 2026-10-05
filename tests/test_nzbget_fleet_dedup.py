@@ -177,10 +177,16 @@ def test_clusters_drop_pick_listing_and_group_same_listings():
     assert [[r["link"] for r in c] for c in clusters] == [["b", "d"], ["c"], ["e"]]
 
 
-def test_clusters_remember_listings_across_phases():
+def test_only_sent_listings_cover_later_phases():
+    # Codex r5: a posting whose every listing failed stays uncovered, so a
+    # later phase's mirror of it is still tried; a SENT one covers it.
     dedup = FleetDedup()
-    dedup.clusters([{"link": "b", "size": "200", "pubdate": _PUB}])
-    assert not dedup.clusters([{"link": "z", "size": "200", "pubdate": _PUB_90S}])
+    failed = {"link": "b", "size": "200", "pubdate": _PUB}
+    dedup.clusters([failed])
+    mirror = {"link": "z", "size": "200", "pubdate": _PUB_90S}
+    assert dedup.clusters([mirror]) == [[mirror]]
+    dedup.remember_listing(failed)
+    assert not dedup.clusters([mirror])
 
 
 # --- prefetched_clusters ----------------------------------------------------
@@ -491,8 +497,12 @@ def test_fleet_pubdates_recorded_under_each_backups_own_title():
 
     dupe = {
         "backups": [
-            {"title": "Show S01E02 1080p WEB H264-GRP", "pubdate": _PUB},
-            {"pubdate": _PUB_90S},
+            {
+                "title": "Show S01E02 1080p WEB H264-GRP",
+                "pubdate": _PUB,
+                "_submitted": True,
+            },
+            {"pubdate": _PUB_90S, "_submitted": True},
         ]
     }
     with patch("resources.lib.nzbget_resolver.record_download") as record:
@@ -627,7 +637,9 @@ def test_ledger_skips_backups_the_worker_did_not_submit():
     }
     with patch("resources.lib.nzbget_resolver.record_download") as record:
         _record_fleet_pubdates(dupe, "Pick")
-    assert [c.args[0] for c in record.call_args_list] == ["Sent", "Not Reached Yet"]
+    # Codex r5: a row the worker has not reached yet may still be collapsed or
+    # capped out, so only affirmatively sent rows are recorded.
+    assert [c.args[0] for c in record.call_args_list] == ["Sent"]
 
 
 def test_every_nzb_is_downloaded_and_spooled_before_the_first_send(tmp_path):
@@ -737,3 +749,67 @@ def test_pick_grab_falls_back_to_a_hydra_mirror_of_its_posting():
         "http://h/mirror.nzb",
     ]
     assert append.call_args.kwargs["nzb_bytes"] == body
+
+
+def test_capped_round_never_fetches_past_what_it_can_use():
+    # Codex r5: cap 4 and every append succeeds -> exactly 4 grabs.
+    from resources.lib.nzbget_resolver_dupes import _submit_candidates
+
+    rows = [{"link": "u{}".format(i), "title": "t", "score": 1} for i in range(10)]
+    with patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, side_effect=[(i, None) for i in range(1, 5)]
+    ), patch(_VETO, return_value=False):
+        live = _submit_candidates(rows, "k", lambda *_a: "", limits=(4, None))
+    assert live == [1, 2, 3, 4]
+    assert fetch.call_count == 4
+
+
+def test_spool_memory_fallback_is_bounded():
+    # Codex r5 (P1): with no writable folder, bodies past the memory budget are
+    # not held -- the caller sends them as plain URL appends instead.
+    with patch(
+        "resources.lib.nzbget_fleet_dedup.tempfile.mkdtemp", side_effect=OSError
+    ), patch.object(NzbSpool, "MEMORY_BUDGET", 10):
+        spool = NzbSpool()
+        assert spool.save(b"123456") == b"123456"
+        assert spool.save(b"123456") is None  # 12 bytes > 10-byte budget
+
+
+def test_unspoolable_body_is_sent_as_a_url_append():
+    from resources.lib.nzbget_resolver_dupes import _submit_candidates
+
+    rows = [{"link": "u0", "title": "t", "score": 1}]
+    with patch(_FETCH, side_effect=_valid), patch.object(
+        NzbSpool, "save", return_value=None
+    ), patch(_APPEND, return_value=(1, None)) as append, patch(
+        _VETO, return_value=False
+    ):
+        _submit_candidates(rows, "k", lambda *_a: "")
+    assert append.call_args.args[0] == "u0"
+    assert "nzb_bytes" not in append.call_args.kwargs
+
+
+def test_later_phase_mirror_rescues_a_failed_picker_backup():
+    # Codex r5: a picker backup's only URL is dead; the Hydra phase's mirror of
+    # the same posting must still be fetched and sent.
+    from resources.lib.nzbget_resolver import _submit_backup_fleet
+
+    dead = {"link": "dead", "title": "t", "score": 9, "size": "200", "pubdate": _PUB}
+    mirror = {"link": "mirror", "title": "t", "size": 200, "_posted_epoch": 1791028860}
+    dupe = {
+        "key": "k",
+        "backups": [dead],
+        "max_backups": -1,
+        "hydra_uploads": lambda: [mirror],
+    }
+
+    def _fetch(url):
+        if url == "dead":
+            raise OSError("gone")
+        return _valid(url)
+
+    with patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(None, "fetch failed"), (5, None)]
+    ) as append:
+        _submit_backup_fleet(lambda *_a: "", threading.Event(), "k", dupe, [])
+    assert [c.args[0] for c in append.call_args_list] == ["dead", "mirror"]

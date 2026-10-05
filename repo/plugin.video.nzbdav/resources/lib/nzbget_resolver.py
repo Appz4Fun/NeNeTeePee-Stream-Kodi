@@ -923,14 +923,14 @@ def _play_completed_download(
 
 
 def _record_fleet_pubdates(dupe, title):
-    """Ledger-record every picker backup's post-date under its own title (#372).
+    """Ledger-record every SENT fleet member's post-date under its own title (#372).
 
     Any fleet member can become the SUCCESS row the next picker render reuses
     (the poll follows a promoted backup), and each is a different upload with
     its own pubdate. A backup may carry a different name than the pick (same
     release, other spelling), and the picker looks the ledger up by each row's
     own title, so each backup is recorded under ITS title (``title``, the
-    pick's, only when it has none). Recording the whole fleet keeps the
+    pick's, only when it has none). Recording the sent fleet keeps the
     repost-guard's purpose intact -- an unrelated same-name repost from
     another day is still rejected (its pubdate is never recorded). Extras the
     worker actually submitted (``dupe["extras"]`` rows it flagged
@@ -941,16 +941,11 @@ def _record_fleet_pubdates(dupe, title):
     harmless.
     """
     dupe = dupe or {}
-    # A backup the worker decided not to submit (a collapsed duplicate, or
-    # past the cap) is flagged ``_submitted=False``; an unflagged backup is one
-    # the worker has not reached yet and is recorded as before.
-    backups = [
-        backup for backup in dupe.get("backups") or [] if backup.get("_submitted", True)
-    ]
-    submitted_extras = [
-        extra for extra in dupe.get("extras") or [] if extra.get("_submitted")
-    ]
-    for backup in backups + submitted_extras:
+    # Only rows the worker affirmatively sent (``_submitted`` True) count: the
+    # pick can complete while the worker is still collecting, and a row it has
+    # not reached yet may still be collapsed, capped out, or never sent.
+    rows = list(dupe.get("backups") or []) + list(dupe.get("extras") or [])
+    for backup in (row for row in rows if row.get("_submitted")):
         pubdate = backup.get("pubdate")
         if pubdate:
             record_download(backup.get("title") or title, pubdate)
