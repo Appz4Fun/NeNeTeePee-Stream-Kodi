@@ -263,7 +263,7 @@ def _collect_unique(stream, state, cancel_event, need):
         # committed once its append reaches NZBGet. The round keeps only the
         # token: a fingerprint spilled to disk must not stay alive here.
         token = dedup.remember_posting(fingerprint)
-        fingerprint = None
+        del fingerprint
         kept.append((candidate, handle, token))
         if need is not None:
             tally["wanted"] = need - len(kept)
