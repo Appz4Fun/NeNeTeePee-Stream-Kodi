@@ -110,8 +110,20 @@ def _submit_candidates(
     try:
         while True:
             need = _open_slots(tally, limits)
-            if need == 0 or _fill_done(
-                tally["live"], live_limit, tally["attempts"], max_attempts, cancel_event
+            # The pick is never bounded by the backup limits (it may be 0 when
+            # adopted backups already fill the cap): only a filled-up round
+            # WITHOUT the pick pending stops here -- a cancel always does.
+            if cancel_event is not None and cancel_event.is_set():
+                break
+            if need == 0 or (
+                not tally["pick_pending"]
+                and _fill_done(
+                    tally["live"],
+                    live_limit,
+                    tally["attempts"],
+                    max_attempts,
+                    cancel_event,
+                )
             ):
                 break
             kept = _collect_unique(
@@ -335,7 +347,11 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         if is_pick:
             # For the poll's FORCE rescue: parked on disk NOW, so its bytes
             # are never held while the (possibly huge) backups load and send.
-            _park_pick(candidate, handle)
+            # Re-check cancel/shutdown first: a stopped resolve never rescues,
+            # so it must not wait on a 100 MiB write to slow storage.
+            _report(dedup, "wait", None, None)
+            if cancel_event is None or not cancel_event.is_set():
+                _park_pick(candidate, handle)
         dedup.remember_listing(candidate)
         dedup.commit_posting(token)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to

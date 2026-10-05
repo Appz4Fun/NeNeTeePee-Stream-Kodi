@@ -2165,3 +2165,49 @@ def test_force_rescue_ignores_the_vetoed_pick_lingering_in_the_queue():
     ) as lookup, patch(_APPEND, return_value=(42, None)):
         assert rescue() == 42
     assert lookup.call_args.kwargs["exclude_nzbid"] == 41
+
+
+def test_pick_is_not_parked_once_the_resolve_was_canceled(_fleet_env):
+    # Codex r27 (P2): a cancel landing during the pick's append skips the
+    # (possibly slow, 100 MiB) park -- a canceled resolve never rescues.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+
+    def _append(url, name, **_kw):
+        ctx.cancel_event.set()
+        return 1, None
+
+    with patch("resources.lib.nzbget_fleet_run._park_pick_body") as park, patch(
+        _FETCH, side_effect=_valid
+    ), patch(_APPEND, side_effect=_append):
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    park.assert_not_called()
+
+
+def test_parking_retries_the_system_temp_after_a_failed_write(tmp_path):
+    # Codex r27 (P2): Kodi's temp folder taking the file but failing the write
+    # (disk full) falls through to the system temp directory.
+    from resources.lib import nzbget_fleet_run
+
+    tried = []
+
+    def _write(body, parent):
+        tried.append(parent)
+        return None if parent == str(tmp_path) else "/sys-temp/pick.nzb"
+
+    with patch(
+        "resources.lib.nzbget_resolver._fleet_spool_base", return_value=str(tmp_path)
+    ), patch.object(nzbget_fleet_run, "_write_parked", side_effect=_write):
+        assert nzbget_fleet_run._park_pick_body(b"<nzb/>") == "/sys-temp/pick.nzb"
+    assert tried == [str(tmp_path), None]
+
+
+def test_a_failed_park_write_leaves_no_file(tmp_path):
+    from resources.lib import nzbget_fleet_run
+
+    with patch(
+        "resources.lib.nzbget_fleet_run.os.fdopen", side_effect=OSError(28, "full")
+    ):
+        assert nzbget_fleet_run._write_parked(b"<nzb/>", str(tmp_path)) is None
+    assert not list(tmp_path.iterdir())

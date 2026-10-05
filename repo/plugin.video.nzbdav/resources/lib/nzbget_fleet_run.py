@@ -128,19 +128,33 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
 def _park_pick_body(body):
     """Write the pick's NZB to a private temp file; its path, or None.
 
-    The resolve deletes it when it ends (``_discard_parked_pick``).
+    Kodi's temp folder first, then the system temp directory: a folder that
+    takes the file but then runs out of space falls through to the next one
+    (whole create-and-write retried), so the pick is kept in memory only when
+    no folder can hold it. The resolve deletes the file when it ends
+    (``_discard_parked_pick``).
     """
     if not body:
         return None
     try:
+        preferred = _core._fleet_spool_base()
+    except (OSError, TypeError, ValueError):
+        preferred = None
+    for parent in dict.fromkeys((preferred, None)):
+        path = _write_parked(body, parent)
+        if path is not None:
+            return path
+    return None
+
+
+def _write_parked(body, parent):
+    """One create-and-write attempt in ``parent`` (None = system temp)."""
+    try:
         handle, path = tempfile.mkstemp(
-            prefix="nzbdav-pick-", suffix=".nzb", dir=_core._fleet_spool_base()
+            prefix="nzbdav-pick-", suffix=".nzb", dir=parent
         )
     except (OSError, TypeError, ValueError):
-        try:
-            handle, path = tempfile.mkstemp(prefix="nzbdav-pick-", suffix=".nzb")
-        except OSError:
-            return None
+        return None
     try:
         with os.fdopen(handle, "wb") as out:
             out.write(body)
@@ -310,12 +324,17 @@ def _send_batch(run, candidates, limits, capped):
 
     Backups NZBGet still holds from an earlier play are skipped first
     (``_skip_held``); every NZB this pass got into NZBGet is then recorded in
-    the resubmit ledger.
+    the resubmit ledger. A still-parked backup this pass adopted is a live
+    backup the poll follows, so it takes one of the cap's slots: it is
+    returned with the newly sent ids and shrinks this pass's live limit.
     """
     dupe_key, getter, ctx, dedup, held = run
-    fresh = _skip_held(candidates, held, ctx)
+    fresh, adopted = _skip_held(candidates, held, ctx)
+    live_limit, max_attempts = limits
+    if live_limit is not None:
+        live_limit = max(0, live_limit - len(adopted))
     try:
-        return _core._submit_candidates(
+        live = _core._submit_candidates(
             fresh,
             dupe_key,
             getter,
@@ -323,8 +342,9 @@ def _send_batch(run, candidates, limits, capped):
             submitted_sink=ctx.submitted_nzbids,
             dedup=dedup,
             veto_probe=capped,
-            limits=limits,
+            limits=(live_limit, max_attempts),
         )
+        return list(adopted) + list(live)
     finally:
         nzbget_submit_ledger.record(
             [row for row in fresh if isinstance(row, dict) and row.get("_nzbid")],
@@ -342,12 +362,14 @@ def _skip_held(candidates, held, ctx):
     backup: its NZBID joins ``ctx.adopted_nzbids`` so this resolve's poll
     follows a failover onto it, and the row takes that ``_nzbid`` for the
     completion ledger. A ``"dead"`` copy (failed, or refused as a copy) would
-    only fail again. The pick is always sent.
+    only fail again. The pick is always sent. Returns ``(kept, adopted)``:
+    the candidates to send, and the NZBIDs newly adopted by this call.
     """
     if not held:
-        return list(candidates)
+        return list(candidates), []
     by_link = {entry.get("link"): entry for entry in held}
     kept = []
+    newly = []
     for candidate in candidates:
         entry = None
         if isinstance(candidate, dict) and not candidate.get("_is_pick"):
@@ -364,6 +386,7 @@ def _skip_held(candidates, held, ctx):
             adopted = getattr(ctx, "adopted_nzbids", None)
             if isinstance(adopted, list) and entry.get("nzbid") not in adopted:
                 adopted.append(entry.get("nzbid"))
+                newly.append(entry.get("nzbid"))
         _core.xbmc.log(
             "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
             "(sent in the last day; NZBGet still holds it as {})".format(
@@ -371,7 +394,7 @@ def _skip_held(candidates, held, ctx):
             ),
             _core.xbmc.LOGINFO,
         )
-    return kept
+    return kept, newly
 
 
 def _fleet_backups(dupe, progress, include_loader=True):
