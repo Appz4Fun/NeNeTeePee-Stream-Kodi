@@ -29,6 +29,8 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import xbmcvfs
 
+from resources.lib.http_util import redact_url
+
 # Resolved via special:// (never xbmcaddon.Addon): the RunScript context must
 # not touch Addon(), and translatePath needs no handle.
 _PROFILE_SPECIAL_PATH = "special://profile/addon_data/plugin.video.nzbdav"
@@ -36,24 +38,32 @@ _FILENAME = "nzbget_submitted.json"
 TTL_SECONDS = 24 * 60 * 60
 # A busy day of plays is a few hundred NZBs; the cap only bounds a runaway.
 _MAX_ENTRIES = 5000
-# Query parameters that carry indexer credentials (Newznab ``apikey``,
-# NZBGeek-style ``i``/``r``, generic tokens): never part of the identity and
-# never written to disk.
-_SECRET_PARAMS = frozenset(("apikey", "api_key", "i", "r", "token", "passkey"))
+# Credential parameters beyond the shared ``http_util.redact_url`` set
+# (NZBGeek-style ``i``/``r``, tracker ``passkey``): dropped from the identity.
+_EXTRA_SECRET_PARAMS = frozenset(("i", "r", "passkey"))
+# ``redact_url``'s mask: a masked parameter is dropped from the identity.
+_REDACTED = "REDACTED"
 _LOCK = threading.Lock()
 
 
 def link_key(link):
-    """``link`` without credentials (sorted query, lowercased host), or ""."""
+    """``link`` without credentials (sorted query, lowercased host), or "".
+
+    ``http_util.redact_url`` masks every credential parameter the add-on
+    knows (``apikey``, ``key``, ``auth``, ``password``, ``access_token``...,
+    including inside URL-valued parameters); masked parameters and the extra
+    names are then dropped and any ``user:pass@`` userinfo removed, so
+    nothing secret is written to disk.
+    """
     text = str(link or "").strip()
     if not text:
         return ""
     try:
-        parts = urlsplit(text)
+        parts = urlsplit(redact_url(text))
         query = sorted(
             (name, value)
             for name, value in parse_qsl(parts.query, keep_blank_values=True)
-            if name.lower() not in _SECRET_PARAMS
+            if name.lower() not in _EXTRA_SECRET_PARAMS and value != _REDACTED
         )
     except ValueError:
         return ""

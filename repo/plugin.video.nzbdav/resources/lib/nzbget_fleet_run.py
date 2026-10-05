@@ -105,6 +105,10 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
             _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
     finally:
         dedup.close()
+    # A shutdown requested during the last append's wait may not have been
+    # seen yet: check once more so the resolve never starts polling (several
+    # RPCs before its first waitForAbort) while Kodi is exiting.
+    progress.canceled()
     ctx.fleet_aborted = progress.aborted
     body = pick.pop("_body", None)
     if ctx.cancel_event.is_set():

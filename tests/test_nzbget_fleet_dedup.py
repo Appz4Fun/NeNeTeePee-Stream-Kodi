@@ -2059,3 +2059,63 @@ def test_a_full_spill_disk_keeps_the_fingerprint_in_memory(tmp_path):
     dedup.commit_posting(token)
     assert dedup.known_posting(posting_fingerprint(_nzb(_ids("a", 299) + ["z@x"])))
     dedup.close()
+
+
+def test_well_formed_non_nzb_xml_with_segments_has_no_fingerprint():
+    # Codex r25 (P2): only <nzb><file><segments><segment> counts, so an error
+    # page that merely contains <segment> lets the next listing be tried.
+    page = (
+        b"<error><segment>abc@x</segment><segments><segment>d@x</segment>"
+        b"</segments></error>"
+    )
+    assert posting_fingerprint(page) is None
+    nested = b"<segments><x><segment>z@x</segment></x>"
+    stray = _nzb(_ids("a", 3)).replace(b"<segments>", nested)
+    assert len(posting_fingerprint(stray)) == 3
+
+
+def test_fingerprinting_detaches_every_finished_element():
+    # Codex r25 (P1): a huge <head>/<meta> block must not stay attached to the
+    # root until the parse ends.
+    from resources.lib import xml_safety
+
+    head = "".join('<meta type="t{}">v</meta>'.format(i) for i in range(500))
+    body = _nzb(_ids("a", 5)).replace(
+        b"<file ", "<head>{}</head><file ".format(head).encode("utf-8")
+    )
+    roots = []
+    real = xml_safety.safe_iterparse
+
+    def _capture(source, events=None):
+        for event, elem in real(source, events=events):
+            if event == "start" and not roots:
+                roots.append(elem)
+            yield event, elem
+
+    with patch.object(xml_safety, "safe_iterparse", side_effect=_capture):
+        assert len(posting_fingerprint(body)) == 5
+    assert len(roots[0]) == 0  # nothing finished is still attached
+
+
+def test_fleet_rechecks_shutdown_after_the_final_send(_fleet_env):
+    # Codex r25 (P2): a shutdown requested during the last append must stop the
+    # resolve before it starts polling NZBGet.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+    state = {"exiting": False}
+
+    def _append(url, name, **_kw):
+        if url == "b0":
+            state["exiting"] = True  # Kodi asked to exit during the last append
+        return (2 if url == "b0" else 1), None
+
+    monitor = patch(
+        "resources.lib.nzbget_resolver.xbmc.Monitor",
+        return_value=type("M", (), {"abortRequested": lambda self: state["exiting"]})(),
+    )
+    with monitor, patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=_append
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    assert ctx.fleet_aborted is True and ctx.cancel_event.is_set()

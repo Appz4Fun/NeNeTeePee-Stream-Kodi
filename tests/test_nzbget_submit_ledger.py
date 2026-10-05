@@ -31,6 +31,13 @@ def test_link_key_strips_credentials_and_normalizes():
     assert key == "http://hydra.lan:5076/getnzb/api/42?t=get"
     assert "SECRET" not in key
     assert nzbget_submit_ledger.link_key("https://a/b?b=2&a=1") == "https://a/b?a=1&b=2"
+    # The shared redaction set (key, auth, access_token...) and nested URLs.
+    nested = nzbget_submit_ledger.link_key(
+        "https://p/dl?key=S1&auth=S2&access_token=S3&id=9"
+        "&link=https%3A%2F%2Fidx%2Fget%3Fpassword%3DS4%26id%3D9"
+    )
+    assert not any(secret in nested for secret in ("S1", "S2", "S3", "S4"))
+    assert "id=9" in nested
     assert nzbget_submit_ledger.link_key("") == ""
 
 

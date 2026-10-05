@@ -177,34 +177,44 @@ def posting_fingerprint_file(path):
     straight into the compact array -- 4 bytes per article, no intermediate
     set or sort.
 
-    Each ``<segment>`` is hashed and detached from its parent as soon as it
-    ends, so memory is the fingerprint (4 bytes per article), never the
-    document. None for unparseable or unsafe XML or an NZB without segment
-    Message-IDs.
+    Only a real NZB counts: a ``<segment>`` is hashed when it sits at
+    ``nzb/file/segments/segment``, so other well-formed XML that merely
+    contains ``<segment>`` tags (an indexer error page, say) has no
+    fingerprint and the caller tries the next listing.
+
+    EVERY element is detached from its parent as soon as it ends (segments,
+    files, and ``<head>``/``<meta>`` alike), so memory is the fingerprint (4
+    bytes per article) plus the open path, never the document. None for
+    unparseable or unsafe XML or an NZB without segment Message-IDs.
     """
     from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
 
     hashes = array("I")
     stack = []
+    names = []
     try:
         for event, elem in safe_iterparse(path, events=("start", "end")):
             if event == "start":
                 stack.append(elem)
+                names.append(_local_name(elem.tag))
                 continue
             stack.pop()
-            name = _local_name(elem.tag)
-            if name == "segment":
+            if names.pop() == "segment" and names == _SEGMENT_PATH:
                 msgid = (elem.text or "").strip().strip("<>").lower()
                 if msgid:
                     hashes.append(zlib.crc32(msgid.encode("utf-8")))
-            if name in ("segment", "file") and stack:
+            if stack:
                 # Detach, not just clear: an emptied child still sits in its
-                # parent until the parent ends, so a file with hundreds of
-                # thousands of segments would keep them all.
+                # parent until the parent ends. Each parent then holds at most
+                # one finished child at a time, so ``remove`` stays O(1).
                 stack[-1].remove(elem)
     except (OSError, ParseError, UnsafeXmlError, ValueError):
         return None
     return hashes if hashes else None
+
+
+# The ancestors of a real NZB segment: <nzb><file><segments><segment>.
+_SEGMENT_PATH = ["nzb", "file", "segments"]
 
 
 def _local_name(tag):
