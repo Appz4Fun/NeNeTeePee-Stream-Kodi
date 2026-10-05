@@ -2328,3 +2328,27 @@ def test_a_late_force_rescue_is_ledgered_until_a_confirmed_delete(
         )
     assert bool(nzbget_submit_ledger.held("k", {88: "parked"})) is kept
     assert cancel.called is not aborted
+
+
+def test_a_full_spool_disk_falls_back_to_memory_for_backups(_fleet_env):
+    # Codex r34 (P2): a local write failure is not the listing's fault -- the
+    # backup is fetched into the bounded memory path, and spooling stops.
+    import errno
+
+    from resources.lib import nzbget_api
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    downloads = []
+
+    def _disk_full(url, dest_path, max_bytes=None):
+        downloads.append(url)
+        raise OSError(errno.ENOSPC, "No space left on device")
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
+    with patch.object(nzbget_api, "download_nzb", side_effect=_disk_full), patch(
+        _FETCH, side_effect=_valid
+    ) as fetch, patch(_APPEND, side_effect=[(1, None), (2, None), (3, None)]) as ap:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in ap.call_args_list] == ["pick", "b0", "b1"]
+    assert len(downloads) == 1  # spooling stopped after the first failure
+    assert {c.args[0] for c in fetch.call_args_list} == {"pick", "b0", "b1"}

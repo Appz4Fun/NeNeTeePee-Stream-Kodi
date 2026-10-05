@@ -14,6 +14,7 @@ call time through ``import resources.lib.nzbget_resolver as _core`` so those
 moved name is re-exported from ``nzbget_resolver``.
 """
 
+import errno
 import threading
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
@@ -165,6 +166,17 @@ def _submit_candidates(
 _FLEET_NZB_MAX_BYTES = 32 * 1024 * 1024
 
 
+# Local storage failures of a spool write (vs. an indexer/HTTP error).
+_LOCAL_DISK_ERRNOS = frozenset(
+    code
+    for code in (
+        getattr(errno, name, None)
+        for name in ("ENOSPC", "EDQUOT", "EROFS", "EACCES", "EIO", "EFBIG")
+    )
+    if code is not None
+)
+
+
 def _fleet_fetcher(clusters, spool):
     """The fleet's NZB fetch.
 
@@ -193,7 +205,16 @@ def _fleet_fetcher(clusters, spool):
         path = spool.reserve()
         if path is None:
             return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
-        _core.nzbget_api.download_nzb(url, path, max_bytes=_FLEET_NZB_MAX_BYTES)
+        try:
+            _core.nzbget_api.download_nzb(url, path, max_bytes=_FLEET_NZB_MAX_BYTES)
+        except OSError as exc:
+            if getattr(exc, "errno", None) not in _LOCAL_DISK_ERRNOS:
+                raise  # the indexer's failure: the next listing is tried
+            # Our temp disk failed (full, read-only), not the listing: stop
+            # spooling and take the bounded in-memory path for this one and
+            # every later backup.
+            spool.degrade()
+            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
         fingerprint = posting_fingerprint_file(path)
         if not fingerprint:
             spool.release(path)

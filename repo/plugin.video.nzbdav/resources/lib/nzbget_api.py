@@ -768,7 +768,7 @@ def queue_rows(settings_getter=None):
 
 # Same-key history statuses that make re-sending an NZB pointless: NZBGet
 # already refused it as a copy, or it already failed.
-_DEAD_MEMBER_PREFIXES = ("FAILURE/", "DELETED/COPY")
+_DEAD_MEMBER_PREFIXES = ("FAILURE/", "WARNING/", "DELETED/COPY")
 
 
 def dupekey_member_states(dupe_key, history, queue):
@@ -776,8 +776,9 @@ def dupekey_member_states(dupe_key, history, queue):
 
     ``"parked"``: queued, or a ``DELETED/DUPE`` history backup NZBGet can still
     promote on a failover -- a working backup, so sending another copy is
-    waste. ``"dead"``: a ``FAILURE/*`` or ``DELETED/COPY`` row -- sending it
-    again would fail or be refused again. Anything else (a success, a manual
+    waste. ``"dead"``: a ``FAILURE/*``, ``WARNING/*`` (the resolver's
+    terminal failure too) or ``DELETED/COPY`` row -- sending it again would
+    fail or be refused again. Anything else (a success, a manual
     delete) is absent: a fresh copy of it is a useful backup. Both lists are
     already-read ``history_rows`` / ``queue_rows``.
     """

@@ -449,6 +449,8 @@ class NzbSpool:
 
     def __init__(self, base_dir=None):
         self._dir = None
+        # Set by ``degrade`` once the temp disk fills up mid-fleet.
+        self._full = False
         self._count = 0
         self._in_memory = 0
         # reserve() runs on the parallel fetch threads.
@@ -482,9 +484,17 @@ class NzbSpool:
         self._in_memory += len(body)
         return body
 
+    def degrade(self):
+        """Stop handing out spool paths (the temp disk filled up mid-fleet).
+
+        Files already spooled stay (and are deleted by ``close``); later
+        bodies take the bounded in-memory path.
+        """
+        self._full = True
+
     def reserve(self):
         """A fresh file path in the spool folder (thread-safe), or None."""
-        if self._dir is None:
+        if self._dir is None or self._full:
             return None
         with self._lock:
             self._count += 1

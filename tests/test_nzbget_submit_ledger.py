@@ -486,3 +486,8 @@ def test_cancel_queued_jobs_never_touches_history():
         assert nzbget_api.cancel_queued_jobs(["7", 8, "x"]) is True
     assert calls == ["GroupFinalDelete"]
     assert nzbget_api.cancel_queued_jobs([]) is True
+
+
+def test_warning_statuses_are_dead_members():
+    history = [{"NZBID": 3, "DupeKey": "k", "Status": "WARNING/REPAIRABLE"}]
+    assert nzbget_api.dupekey_member_states("k", history, []) == {3: "dead"}
