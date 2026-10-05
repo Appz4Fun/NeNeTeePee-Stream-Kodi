@@ -794,7 +794,8 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     """Attach the NZBGet Smart-Duplicates submission, only when there is one.
 
     Keeps nzbdav-path params clean: ``_nzbget_dupe`` is present only in NZBGet
-    mode with a computable DupeKey and at least one backup source (#372).
+    mode with a computable DupeKey and at least one backup source (#372). On
+    any other backend it returns before building the backup lookups.
     Reads settings through ``resolver_params["_settings_getter"]`` when present
     (the RunScript/script-play path), else the live Kodi addon settings. Pops any
     inherited ``_nzbget_dupe`` first so a stale value from ``dict(params)`` can't
@@ -808,6 +809,10 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
 
     resolver_params.pop("_nzbget_dupe", None)
     getter = resolver_params.get("_settings_getter")
+    if _dupe_max_backups(getter) is None:
+        # Not the NZBGet backend (or backups are off): no duplicate fleet, so
+        # build none of its lookups and leave the selection untouched.
+        return
     dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter)
     # The fallback loader hands the backup worker the same-content /
     # NZBHydra-deferred duplicate uploads (not just the picker's same-name

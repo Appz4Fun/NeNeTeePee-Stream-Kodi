@@ -740,6 +740,46 @@ def history_rows(settings_getter=None):
     return rows if error is None and isinstance(rows, list) else None
 
 
+def queue_rows(settings_getter=None):
+    """NZBGet's queue (``listgroups``) as a list, or None when it couldn't be read."""
+    rows, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
+    return rows if error is None and isinstance(rows, list) else None
+
+
+# Same-key history statuses that make re-sending an NZB pointless: NZBGet
+# already refused it as a copy, or it already failed.
+_DEAD_MEMBER_PREFIXES = ("FAILURE/", "DELETED/COPY")
+
+
+def dupekey_member_states(dupe_key, history, queue):
+    """``{nzbid: "parked" | "dead"}`` for NZBGet's members of ``dupe_key``.
+
+    ``"parked"``: queued, or a ``DELETED/DUPE`` history backup NZBGet can still
+    promote on a failover -- a working backup, so sending another copy is
+    waste. ``"dead"``: a ``FAILURE/*`` or ``DELETED/COPY`` row -- sending it
+    again would fail or be refused again. Anything else (a success, a manual
+    delete) is absent: a fresh copy of it is a useful backup. Both lists are
+    already-read ``history_rows`` / ``queue_rows``.
+    """
+    states = {}
+    for rows, is_history in ((history or [], True), (queue or [], False)):
+        for row in rows:
+            if not isinstance(row, dict) or not _dupekey_match(row, dupe_key):
+                continue
+            status = str(row.get("Status") or "").upper()
+            if not is_history or status == "DELETED/DUPE":
+                state = "parked"
+            elif status.startswith(_DEAD_MEMBER_PREFIXES):
+                state = "dead"
+            else:
+                continue
+            try:
+                states[int(str(row.get("NZBID")).strip())] = state
+            except (TypeError, ValueError):
+                continue
+    return states
+
+
 def config_options(names, settings_getter=None):
     """Several running-config options from ONE ``config`` RPC.
 
@@ -760,23 +800,23 @@ def config_options(names, settings_getter=None):
     return found
 
 
-def max_dupe_score_by_dupekey(dupe_key, settings_getter=None, history=None):
+def max_dupe_score_by_dupekey(dupe_key, settings_getter=None, history=None, queue=None):
     """Highest DupeScore NZBGet holds for ``dupe_key`` (queue + history), or None.
 
     A fresh fleet must outrank every same-key item NZBGet already has
     (NZBGet only downloads a SCORE-mode duplicate that beats them), and a
     wall-clock score base cannot promise that after the box's clock rolls
-    back. DupeKeys match case-insensitively, like NZBGet's. ``history`` is
-    an already-read ``history_rows`` (else it is fetched). Best-effort: RPC
-    errors are skipped; None when nothing matches.
+    back. DupeKeys match case-insensitively, like NZBGet's. ``history`` and
+    ``queue`` are an already-read ``history_rows`` / ``queue_rows`` (else they
+    are fetched). Best-effort: RPC errors are skipped; None when nothing
+    matches.
     """
     if not dupe_key:
         return None
     if history is None:
         history = history_rows(settings_getter) or []
-    queue, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
-    if error is not None or not isinstance(queue, list):
-        queue = []
+    if queue is None:
+        queue = queue_rows(settings_getter) or []
     best = None
     for rows in (history, queue):
         for row in rows:

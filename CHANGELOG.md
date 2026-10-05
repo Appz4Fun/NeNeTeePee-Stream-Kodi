@@ -85,7 +85,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ("Sending..."), deletes the temp folder, and then shows NZBGet's download
   progress. Each backup costs
   one indexer download. **Maximum standby fallback streams** no longer applies
-  to NZBGet.
+  to NZBGet. A replay within 24 hours skips the backups NZBGet still holds from
+  the earlier play (no second indexer download or append), and only the NZBGet
+  backend ever builds a duplicate fleet.
 - **Backend settings section.** Move backend selection and connection settings
   to the **Playback backend** section in the settings view. Choose nzbdav /
   InfiniDysk, NZBGet, or StreamNZB to show the fields for that backend.

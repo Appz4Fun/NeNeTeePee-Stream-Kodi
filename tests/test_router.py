@@ -4949,7 +4949,7 @@ def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
     # Handle path: no "_settings_getter"; a stale None-getter loader is present.
     params = {"_fallback_candidate_loader": "STALE_NONE_GETTER_LOADER"}
     stub_dupe = {"key": "k", "pick_score": 2, "backups": [{"link": "u", "score": 1}]}
-    with patch(
+    with patch("resources.lib.router_play._dupe_max_backups", return_value=-1), patch(
         "resources.lib.router_play._nzbget_dupe_submission_for_selection",
         return_value=stub_dupe,
     ), patch(
@@ -5253,3 +5253,26 @@ def test_retry_pick_outranks_bigger_earlier_fleet_within_seconds():
     # Intra-fleet ordering is preserved below the base.
     assert retry["pick_score"] == 100003
     assert all(b["score"] < retry["pick_score"] for b in retry["backups"])
+
+
+def test_attach_nzbget_dupe_builds_nothing_off_the_nzbget_backend():
+    # Duplicate fleets are NZBGet-only: on nzbdav (or any other backend) the
+    # attach step must not build the backup lookups or touch the selection.
+    from resources.lib import router_play
+
+    selected = {"link": "p", "title": "Movie.2020.1080p.WEB-DL.x264-GRP"}
+    params = {
+        "_nzbget_dupe": "STALE",
+        "_settings_getter": lambda key, default="": (
+            "0" if key == "playback_backend" else default
+        ),
+    }
+    with patch(
+        "resources.lib.router._fallback_candidate_loader_for_selection"
+    ) as loader, patch("resources.lib.router_play._hydra_uploads_loader") as hydra:
+        filtered = [selected, dict(selected)]
+        router_play._attach_nzbget_dupe(params, selected, filtered, {})
+    assert "_nzbget_dupe" not in params
+    assert "_fallback_stop" not in selected
+    loader.assert_not_called()
+    hydra.assert_not_called()

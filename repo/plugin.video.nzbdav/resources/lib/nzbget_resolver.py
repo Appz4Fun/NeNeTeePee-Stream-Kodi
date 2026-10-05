@@ -20,7 +20,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import nzbget_api
+from resources.lib import nzbget_api, nzbget_submit_ledger
 from resources.lib.download_ledger import record_download
 from resources.lib.http_util import notify as _notify
 from resources.lib.http_util import redact_text as _redact_text
@@ -534,10 +534,9 @@ def _handle_poll_failure(
     if outcome == "canceled":
         if cancel_event is not None:
             cancel_event.set()  # stop the backup worker first
-        nzbget_api.cancel_jobs(
-            _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids),
-            settings_getter=settings_getter,
-        )
+        canceled = _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids)
+        nzbget_api.cancel_jobs(canceled, settings_getter=settings_getter)
+        nzbget_submit_ledger.forget(canceled)
         on_failure(None)
         return True, False
     if outcome == "failed":
@@ -618,6 +617,10 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # NZBIDs the fleet has appended so far -- the cancel path deletes
         # exactly these (plus pick/tracked), never a whole-key sweep.
         self.submitted_nzbids = []
+        # Backups an EARLIER play parked in NZBGet under this DupeKey that the
+        # fleet skipped re-sending (nzbget_submit_ledger): this resolve follows
+        # a failover onto them, but a cancel leaves them parked.
+        self.adopted_nzbids = []
         # Same-key SUCCESS ids snapshotted before the fleet submitted anything
         # (None: the poll snapshots them itself).
         self.preexisting_successes = None
@@ -802,6 +805,7 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         # stay scoped to exactly this resolve's downloads. The fleet records
         # the pick in submitted_nzbids too, so dedupe (order kept).
         owned = [nzbid] + list(getattr(ctx, "submitted_nzbids", None) or [])
+        owned += list(getattr(ctx, "adopted_nzbids", None) or [])
         return list(dict.fromkeys(owned))
 
     result = poll_nzbget_job(
@@ -858,6 +862,8 @@ def _cancel_jobs_in_background(nzbids, settings_getter):
         "nzbget_password": password,
         "nzbget_category": category,
     }
+    # The jobs are about to be deleted: a replay must send them again.
+    nzbget_submit_ledger.forget(nzbids)
 
     def _cleanup():
         try:

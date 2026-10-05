@@ -231,6 +231,23 @@ NZBGet starts downloading:
 Cancel at any step: if you cancel before the upload, nothing is sent to
 NZBGet; if you cancel during it, whatever was already sent is removed.
 
+Playing the same release again within a day doesn't send the same backups
+again. NeNeTeePee-Stream-Kodi remembers every NZB it sent to NZBGet for 24
+hours, in `nzbget_submitted.json` in the add-on's data folder
+(`/storage/.kodi/userdata/addon_data/plugin.video.nzbdav/` on CoreELEC). That
+record keeps the NZB link without its API key. On a replay, a backup is
+skipped before it's downloaded when NZBGet still holds that copy under the
+same duplicate key:
+
+- **Still a backup** (queued, or parked in history as `dupe`): it isn't sent
+  again, and failover can still switch to it during this playback.
+- **Failed, or refused as a copy**: it isn't sent again, because it would fail
+  or be refused again.
+- **Deleted, completed, or gone from NZBGet's history**: it's sent again as a
+  fresh backup.
+
+Your pick is always sent.
+
 !!! warning "Backups use indexer grabs"
     With unlimited backups, every backup costs at least one NZB download from
     your indexer. Backups found by the same-content search (other release

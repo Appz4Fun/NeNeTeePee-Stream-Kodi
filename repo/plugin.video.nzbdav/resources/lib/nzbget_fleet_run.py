@@ -16,6 +16,10 @@ dialog:
 3. "Sending N NZBs to NZBGet..." -- every saved NZB is uploaded, the pick first
    at the top DupeScore; the temp folder is deleted only after all were sent.
 
+A backup an earlier play already sent in the last day (``nzbget_submit_ledger``)
+is skipped before its download when NZBGet still holds that copy under the
+same DupeKey; a still-parked copy joins this resolve's failover tracking.
+
 The caller then polls the pick's download ("Downloading... 0%") as before.
 Names that tests patch on ``nzbget_resolver`` are reached through ``_core``.
 """
@@ -26,8 +30,9 @@ import tempfile
 import time
 
 import resources.lib.nzbget_resolver as _core  # noqa: F401  pylint: disable=unused-import
+from resources.lib import nzbget_submit_ledger
 from resources.lib.fallback_streams import _MAX_FALLBACKS
-from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable
+from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable, same_listing
 
 
 def submit_fleet(ctx, nzb_url, title, dupe_key):
@@ -53,13 +58,14 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     # Every NZBGet call below runs off-thread (abortable): read the connection
     # settings ONCE here on the resolve thread -- no off-thread getSetting.
     getter = _snapshot_getter(getter)
-    dupe_check_off, ctx.preexisting_successes, max_score = _probe_nzbget_config(
-        getter, progress, dupe_key
+    dupe_check_off, ctx.preexisting_successes, max_score, members = (
+        _probe_nzbget_config(getter, progress, dupe_key)
     )
     if progress.canceled():
         ctx.fleet_aborted = progress.aborted
         return None, None
     _lift_scores(dupe, max_score)
+    held = nzbget_submit_ledger.held(dupe_key, members)
     pick = dict(
         dupe.get("pick") or {},
         link=nzb_url,
@@ -92,7 +98,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     limits = (cap, cap + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
     dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
     dedup.aborted = lambda: progress.aborted
-    run = (dupe_key, getter, ctx, dedup)
+    run = (dupe_key, getter, ctx, dedup, held)
     try:
         live = len(_send_batch(run, candidates, limits, capped))
         if capped and not dupe_check_off and pick.get("_nzbid"):
@@ -224,18 +230,22 @@ _PREFLIGHT_BUDGET_SECONDS = 20
 
 
 def _probe_nzbget_config(getter, progress, dupe_key):
-    """Pre-fleet NZBGet probes, abortably: ``(dupecheck_off, preexisting, max)``.
+    """Pre-fleet NZBGet probes, abortably.
 
-    The same-key preexisting-success snapshot and the highest same-key
-    DupeScore (``_lift_scores``) share one ``history`` read (+ ``listgroups``);
-    the ``DupeCheck=no`` check and the HealthCheck=Pause warning share one
-    ``config`` read. They run off-thread behind the cancel/shutdown-aware wait
-    with a shared ``_PREFLIGHT_BUDGET_SECONDS`` budget (an unresponsive NZBGet
-    can't stall playback for minutes), reading only ``getter`` (the caller's
-    settings snapshot). A canceled
-    or failed probe returns ``(True, None, None)``: DupeCheck unknown counts
-    as off (the pick is sent alone), the poll snapshots successes itself, and
-    scores are left as computed.
+    Returns ``(dupecheck_off, preexisting, max_score, members)``.
+
+    The same-key preexisting-success snapshot, the highest same-key DupeScore
+    (``_lift_scores``), and the same-key members an earlier play left in
+    NZBGet (``nzbget_api.dupekey_member_states``, for the resubmit ledger)
+    share one ``history`` and one ``listgroups`` read; the ``DupeCheck=no``
+    check and the HealthCheck=Pause warning share one ``config`` read. They
+    run off-thread behind the cancel/shutdown-aware wait with a shared
+    ``_PREFLIGHT_BUDGET_SECONDS`` budget (an unresponsive NZBGet can't stall
+    playback for minutes), reading only ``getter`` (the caller's settings
+    snapshot). A canceled or failed probe returns ``(True, None, None, {})``:
+    DupeCheck unknown counts as off (the pick is sent alone), the poll
+    snapshots successes itself, scores are left as computed, and nothing is
+    known to be held (nothing is skipped).
     """
 
     give_up_at = time.monotonic() + _PREFLIGHT_BUDGET_SECONDS
@@ -257,20 +267,27 @@ def _probe_nzbget_config(getter, progress, dupe_key):
             else _core._preexisting_success_ids(dupe_key, getter, history=history)
         )
         if _stopped():
-            return True, preexisting, None
+            return True, preexisting, None, {}
+        queue = _core.nzbget_api.queue_rows(getter)
         max_score = _core.nzbget_api.max_dupe_score_by_dupekey(
-            dupe_key, settings_getter=getter, history=history or []
+            dupe_key, settings_getter=getter, history=history or [], queue=queue or []
+        )
+        # Unknown history or queue: claim nothing is held (resend everything).
+        members = (
+            {}
+            if history is None or queue is None
+            else _core.nzbget_api.dupekey_member_states(dupe_key, history, queue)
         )
         if _stopped():
-            return True, preexisting, max_score
+            return True, preexisting, max_score, members
         options = _core.nzbget_api.config_options(
             ("DupeCheck", "HealthCheck"), settings_getter=getter
         )
         if _core._dupe_check_disabled(getter, options=options):
-            return True, preexisting, max_score
+            return True, preexisting, max_score, members
         if not _stopped():
             _core._warn_if_healthcheck_pauses(getter, options=options)
-        return False, preexisting, max_score
+        return False, preexisting, max_score, members
 
     # A timed-out (or failed) probe fails CLOSED: DupeCheck unknown means the
     # pick goes alone, never an unbounded fleet of parallel full downloads.
@@ -278,24 +295,78 @@ def _probe_nzbget_config(getter, progress, dupe_key):
         _probe,
         (progress.cancel_event,),
         progress.canceled,
-        default=(True, None, None),
+        default=(True, None, None, {}),
         deadline=_PREFLIGHT_BUDGET_SECONDS,
     )
 
 
 def _send_batch(run, candidates, limits, capped):
-    """One download-dedupe-send pass of ``_submit_candidates``; LIVE backup ids."""
-    dupe_key, getter, ctx, dedup = run
-    return _core._submit_candidates(
-        candidates,
-        dupe_key,
-        getter,
-        cancel_event=ctx.cancel_event,
-        submitted_sink=ctx.submitted_nzbids,
-        dedup=dedup,
-        veto_probe=capped,
-        limits=limits,
-    )
+    """One download-dedupe-send pass of ``_submit_candidates``; LIVE backup ids.
+
+    Backups NZBGet still holds from an earlier play are skipped first
+    (``_skip_held``); every NZB this pass got into NZBGet is then recorded in
+    the resubmit ledger.
+    """
+    dupe_key, getter, ctx, dedup, held = run
+    fresh = _skip_held(candidates, held, ctx)
+    try:
+        return _core._submit_candidates(
+            fresh,
+            dupe_key,
+            getter,
+            cancel_event=ctx.cancel_event,
+            submitted_sink=ctx.submitted_nzbids,
+            dedup=dedup,
+            veto_probe=capped,
+            limits=limits,
+        )
+    finally:
+        nzbget_submit_ledger.record(
+            [row for row in fresh if isinstance(row, dict) and row.get("_nzbid")],
+            dupe_key,
+        )
+
+
+def _skip_held(candidates, held, ctx):
+    """``candidates`` minus the backups an earlier play left in NZBGet.
+
+    A backup is held when the resubmit ledger has its link (credentials
+    stripped), or a same-listing row, under this DupeKey, and NZBGet still
+    holds that NZBID (``nzbget_submit_ledger.held``). Skipping it saves the
+    indexer grab and the duplicate append. A ``"parked"`` copy is a working
+    backup: its NZBID joins ``ctx.adopted_nzbids`` so this resolve's poll
+    follows a failover onto it, and the row takes that ``_nzbid`` for the
+    completion ledger. A ``"dead"`` copy (failed, or refused as a copy) would
+    only fail again. The pick is always sent.
+    """
+    if not held:
+        return list(candidates)
+    by_link = {entry.get("link"): entry for entry in held}
+    kept = []
+    for candidate in candidates:
+        entry = None
+        if isinstance(candidate, dict) and not candidate.get("_is_pick"):
+            entry = by_link.get(nzbget_submit_ledger.link_key(candidate.get("link")))
+            if entry is None:
+                entry = next(
+                    (row for row in held if same_listing(candidate, row)), None
+                )
+        if entry is None:
+            kept.append(candidate)
+            continue
+        if entry.get("state") == "parked":
+            candidate["_nzbid"] = entry.get("nzbid")
+            adopted = getattr(ctx, "adopted_nzbids", None)
+            if isinstance(adopted, list) and entry.get("nzbid") not in adopted:
+                adopted.append(entry.get("nzbid"))
+        _core.xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Skipped NZBGet duplicate backup '{}' "
+            "(sent in the last day; NZBGet still holds it as {})".format(
+                candidate.get("title") or "", entry.get("state")
+            ),
+            _core.xbmc.LOGINFO,
+        )
+    return kept
 
 
 def _fleet_backups(dupe, progress, include_loader=True):

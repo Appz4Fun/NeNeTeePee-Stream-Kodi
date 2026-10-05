@@ -91,6 +91,20 @@ def _suppress_readahead_daemon(request):
         yield
 
 
+@pytest.fixture(autouse=True)
+def _isolated_nzbget_submit_ledger(tmp_path):
+    """Give every test its own NZBGet resubmit ledger file.
+
+    The mocked ``translatePath`` returns one shared path for the whole run, so
+    without this a fleet test's sends would make a later test skip backups.
+    """
+    from resources.lib import nzbget_submit_ledger
+
+    path = str(tmp_path / "nzbget_submitted.json")
+    with patch.object(nzbget_submit_ledger, "_path", return_value=path):
+        yield
+
+
 @pytest.fixture
 def resolver_mocks():
     """Patch the dependencies that nearly every resolver test needs.
