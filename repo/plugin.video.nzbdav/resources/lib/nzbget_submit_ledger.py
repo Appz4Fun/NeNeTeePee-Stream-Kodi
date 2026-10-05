@@ -116,7 +116,9 @@ def _fresh(entries, now):
     fresh = []
     for entry in entries:
         age = _age(entry, now)
-        if age is not None and 0 <= age < TTL_SECONDS:
+        # A negative age is a clock that moved backward (a box without an RTC
+        # before NTP sync): still fresh within the window, never discarded.
+        if age is not None and -TTL_SECONDS < age < TTL_SECONDS:
             fresh.append(entry)
     return fresh
 

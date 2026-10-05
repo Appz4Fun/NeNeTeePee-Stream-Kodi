@@ -186,8 +186,14 @@ def _park_pick_file(spool_path):
             prefix="nzbdav-pick-", suffix=".nzb", dir=parent
         )
         os.close(handle)
-        os.replace(spool_path, path)
     except (OSError, TypeError, ValueError):
+        return None
+    try:
+        os.replace(spool_path, path)
+    except OSError:
+        # Never leave the empty placeholder behind (nothing else owns it).
+        with contextlib.suppress(OSError):
+            os.remove(path)
         return None
     return path
 

@@ -2468,3 +2468,47 @@ def test_cached_pick_is_left_out_of_the_download_count(_fleet_env, tmp_path):
         submit_fleet(ctx, "pick", "T", "k")
     downloads = [m for _p, m in ctx.dialog.lines if m.startswith("Downloading NZBs")]
     assert downloads == ["Downloading NZBs 1 of 2", "Downloading NZBs 2 of 2"]
+
+
+def test_a_cache_stat_that_fails_to_load_still_shows_the_download(_fleet_env):
+    # Codex r37 (P2): the "cached" flag follows a REAL cache read.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([]))
+    with patch("resources.lib.nzb_cache.load", return_value=None), patch(
+        _FETCH, side_effect=_valid
+    ) as fetch, patch(_APPEND, return_value=(1, None)):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in fetch.call_args_list] == ["pick"]
+    assert "Downloading NZBs 1 of 1" in [m for _p, m in ctx.dialog.lines]
+
+
+def test_a_send_time_cancel_still_keeps_the_spooled_pick(_fleet_env):
+    # Codex r37 (P2): canceled right as the pick's append lands -- the spooled
+    # file is renamed out (instant) so nzb_cache can keep it.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
+
+    def _append(url, name, **_kw):
+        ctx.cancel_event.set()
+        return 1, None
+
+    with patch(_FETCH, side_effect=_valid), patch(_APPEND, side_effect=_append):
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    assert ctx.pick_nzb_path
+    assert pathlib.Path(ctx.pick_nzb_path).read_bytes() == _valid("pick")
+    pathlib.Path(ctx.pick_nzb_path).unlink()
+
+
+def test_a_failed_pick_move_leaves_no_placeholder(tmp_path):
+    # Codex r37 (P3).
+    from resources.lib import nzbget_fleet_run
+
+    spool = tmp_path / "nzbdav-fleet-y"
+    spool.mkdir()
+    source = spool / "00001.nzb"
+    source.write_bytes(b"<nzb/>")
+    with patch.object(nzbget_fleet_run.os, "replace", side_effect=OSError(5, "EIO")):
+        assert nzbget_fleet_run._park_pick_file(str(source)) is None
+    assert not list(tmp_path.glob("nzbdav-pick-*"))

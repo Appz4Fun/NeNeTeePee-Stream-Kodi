@@ -87,11 +87,16 @@ def _submit_candidates(
             usable.append(candidate)
     clusters = dedup.clusters(usable)
     # A pick kept on the box after a canceled play is not downloaded again:
-    # it doesn't count toward (or show) "Downloading NZBs N of M".
+    # its body is read here (the flag reflects a REAL hit), and it doesn't
+    # count toward (or show) "Downloading NZBs N of M".
+    cached_pick = None
     for cluster in clusters[:1]:
         head = cluster[0] if cluster else {}
-        if head.get("_is_pick") and _core.nzb_cache.has(head.get("link")):
-            head["_cached"] = True
+        if head.get("_is_pick"):
+            body = _core.nzb_cache.load(head.get("link"))
+            if body:
+                head["_cached"] = True
+                cached_pick = (head.get("link"), body)
     tally = {
         "live": [],
         "attempts": 0,
@@ -103,7 +108,7 @@ def _submit_candidates(
         "pick_pending": bool(usable and usable[0].get("_is_pick")),
     }
     spool = NzbSpool(dedup.spool_base)
-    fetch = _fleet_fetcher(clusters, spool)
+    fetch = _fleet_fetcher(clusters, spool, cached_pick)
     stream = prefetched_clusters(
         clusters,
         fetch,
@@ -188,7 +193,7 @@ _LOCAL_DISK_ERRNOS = frozenset(
 )
 
 
-def _fleet_fetcher(clusters, spool):
+def _fleet_fetcher(clusters, spool, cached_pick=None):
     """The fleet's NZB fetch.
 
     Each BACKUP streams straight into a spool file and is fingerprinted from
@@ -207,20 +212,28 @@ def _fleet_fetcher(clusters, spool):
         for row in cluster
     }
 
+    cached = dict([cached_pick]) if cached_pick else {}
+    # In-memory backup fetches (no spool folder, or the disk filled up) run
+    # one at a time even when several workers are already in flight.
+    memory_gate = threading.Semaphore(1)
+
+    def _in_memory(url):
+        with memory_gate:
+            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+
     def _fetch(url):
         if url in pick_links:
-            # A pick canceled within the last day kept its NZB on the box:
-            # re-send that instead of another indexer grab.
-            cached = _core.nzb_cache.load(url)
-            if cached:
-                return cached
+            # A pick canceled within the last day kept its NZB on the box
+            # (already read by the caller): re-send it, no indexer grab.
+            if url in cached:
+                return cached.pop(url)
             # The pick is ONE fetch (memory bounded by the full ceiling) and
             # must not fail just because the temp disk is full: fetch it into
             # memory; ``NzbSpool.save(required=True)`` then keeps it either way.
             return _core.nzbget_api.fetch_nzb_bytes(url)
         path = spool.reserve()
         if path is None:
-            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+            return _in_memory(url)
         try:
             _core.nzbget_api.download_nzb(url, path, max_bytes=_FLEET_NZB_MAX_BYTES)
         except OSError as exc:
@@ -230,7 +243,7 @@ def _fleet_fetcher(clusters, spool):
             # spooling and take the bounded in-memory path for this one and
             # every later backup.
             spool.degrade()
-            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+            return _in_memory(url)
         fingerprint = posting_fingerprint_file(path)
         if not fingerprint:
             spool.release(path)
@@ -392,6 +405,11 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
             _report(dedup, "wait", None, None)
             if cancel_event is None or not cancel_event.is_set():
                 _park_pick(candidate, handle)
+            elif isinstance(handle, str):
+                # Canceled: no slow body write, but an instant rename still
+                # keeps the downloaded pick for nzb_cache (a replay re-sends
+                # it instead of another indexer grab).
+                _keep_spooled_pick(candidate, handle)
         dedup.remember_listing(candidate)
         dedup.commit_posting(token)
         # Sink FIRST (round-5 invariant): a cancel mid-batch must be able to
@@ -405,6 +423,15 @@ def _send_kept(kept, dupe_key, settings_getter, run, budget):
         candidate["_submitted"] = not vetoed
         if not vetoed and not is_pick:
             tally["live"].append(nzbid)
+
+
+def _keep_spooled_pick(candidate, handle):
+    """Rename a spooled pick out of the spool (no copy); records ``_body_path``."""
+    from resources.lib.nzbget_fleet_run import _park_pick_file
+
+    path = _park_pick_file(handle)
+    if path is not None:
+        candidate["_body_path"] = path
 
 
 def _park_pick(candidate, handle):

@@ -491,3 +491,12 @@ def test_cancel_queued_jobs_never_touches_history():
 def test_warning_statuses_are_dead_members():
     history = [{"NZBID": 3, "DupeKey": "k", "Status": "WARNING/REPAIRABLE"}]
     assert nzbget_api.dupekey_member_states("k", history, []) == {3: "dead"}
+
+
+def test_a_clock_moved_backward_keeps_entries_fresh():
+    # Codex r37 (P2): a box without an RTC can boot before NTP sync.
+    nzbget_submit_ledger.record([_row("https://idx/a", 1)], "k", now=100000)
+    assert nzbget_submit_ledger.held("k", {1: "parked"}, now=100000 - 3600)
+    assert not nzbget_submit_ledger.held(
+        "k", {1: "parked"}, now=100000 - nzbget_submit_ledger.TTL_SECONDS
+    )
