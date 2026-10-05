@@ -36,8 +36,9 @@ SAME_LISTING_WINDOW_SECONDS = 120
 PREFETCH_WINDOW = 4
 
 # A fingerprint keeps EVERY article's CRC32 (no sampling, so the 1% rule is
-# exact) as a sorted ``array('I')``: 4 bytes per article, so even a large
-# remux fleet stays a few tens of MiB on a CoreELEC box.
+# exact) in an ``array('I')`` built by appending: 4 bytes per article, with no
+# set or sorted copy ever materialized, so even a large remux fleet (and four
+# fingerprints being built at once) stays small on a CoreELEC box.
 _SAME_POSTING_SHARE = 0.01
 
 
@@ -156,7 +157,10 @@ def same_listing(left, right):
 
 
 def posting_fingerprint(nzb_bytes):
-    """Return a sorted ``array('I')`` of every article's CRC32, or None.
+    """Return an ``array('I')`` of every article's CRC32 (document order), or None.
+
+    Appended straight into the compact array -- 4 bytes per article, no
+    intermediate set or sort: the overlap test builds its own probe set.
 
     None for unparseable XML or an NZB without any segment Message-IDs.
     """
@@ -165,16 +169,14 @@ def posting_fingerprint(nzb_bytes):
     root = _parse_nzb_root(nzb_bytes)
     if root is None:
         return None
-    hashes = set()
+    hashes = array("I")
     for file_elem in _children_by_name(root, "file"):
         for segments in _children_by_name(file_elem, "segments"):
             for segment in _children_by_name(segments, "segment"):
                 msgid = (segment.text or "").strip().strip("<>").lower()
                 if msgid:
-                    hashes.add(zlib.crc32(msgid.encode("utf-8")))
-    if not hashes:
-        return None
-    return array("I", sorted(hashes))
+                    hashes.append(zlib.crc32(msgid.encode("utf-8")))
+    return hashes if hashes else None
 
 
 def posting_fingerprint_file(path):
@@ -187,7 +189,7 @@ def posting_fingerprint_file(path):
     """
     from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
 
-    hashes = set()
+    hashes = array("I")
     stack = []
     try:
         for event, elem in safe_iterparse(path, events=("start", "end")):
@@ -199,7 +201,7 @@ def posting_fingerprint_file(path):
             if name == "segment":
                 msgid = (elem.text or "").strip().strip("<>").lower()
                 if msgid:
-                    hashes.add(zlib.crc32(msgid.encode("utf-8")))
+                    hashes.append(zlib.crc32(msgid.encode("utf-8")))
             if name in ("segment", "file") and stack:
                 # Detach, not just clear: an emptied child still sits in its
                 # parent until the parent ends, so a file with hundreds of
@@ -207,7 +209,7 @@ def posting_fingerprint_file(path):
                 stack[-1].remove(elem)
     except (OSError, ParseError, UnsafeXmlError, ValueError):
         return None
-    return array("I", sorted(hashes)) if hashes else None
+    return hashes if hashes else None
 
 
 def _local_name(tag):

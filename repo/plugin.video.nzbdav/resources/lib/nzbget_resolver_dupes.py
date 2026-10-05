@@ -719,10 +719,23 @@ def _pick_rescue_callable(ctx, nzb_url, title):
     """
 
     def _rescue():
+        # Runs behind the abortable wait (two RPCs + an indexer fetch can
+        # each take the RPC timeout), on a settings snapshot taken here on the
+        # resolve thread. An append that lands after a user cancel abandoned
+        # the wait is deleted; after a Kodi shutdown it is left to finish.
+        getter = _rescue_snapshot_getter(ctx.settings_getter)
+        stop = {"aborted": False}
+        return call_abortable(
+            lambda: _rescue_now(getter),
+            (getattr(ctx, "cancel_event", None),),
+            lambda: _rescue_check_cancel(ctx, stop),
+            default=RESCUE_ABANDONED,
+            on_late=lambda nzbid: _rescue_late(nzbid, stop, getter),
+        )
+
+    def _rescue_now(getter):
         dupe = ctx.dupe or {}
-        if _core.nzbget_api.active_group_by_name(
-            title, settings_getter=ctx.settings_getter
-        ):
+        if _core.nzbget_api.active_group_by_name(title, settings_getter=getter):
             _core.xbmc.log(
                 (
                     "NeNeTeePee-Stream-Kodi: NZBGet FORCE rescue skipped -- "
@@ -736,7 +749,7 @@ def _pick_rescue_callable(ctx, nzb_url, title):
             nzbid, error = _core.nzbget_api.append_nzb(
                 nzb_url,
                 title,
-                settings_getter=ctx.settings_getter,
+                settings_getter=getter,
                 dupe_key=dupe.get("key") or "",
                 dupe_score=int(dupe.get("pick_score") or 0),
                 dupe_mode="FORCE",
@@ -777,6 +790,54 @@ def _pick_rescue_callable(ctx, nzb_url, title):
     return _rescue
 
 
+# ``_pick_rescue_callable``'s result when a cancel/shutdown abandoned the
+# rescue: the poll keeps going so its own cancel/abort handling takes over.
+RESCUE_ABANDONED = object()
+
+
+def _rescue_snapshot_getter(settings_getter):
+    """A thread-safe getter over the NZBGet connection settings, read now."""
+    url, user, password, category = _core.nzbget_api._get_settings(settings_getter)
+    snapshot = {
+        "nzbget_url": url,
+        "nzbget_username": user,
+        "nzbget_password": password,
+        "nzbget_category": category,
+    }
+    return lambda key, default="": snapshot.get(key, default)
+
+
+def _rescue_check_cancel(ctx, stop):
+    """Raise the resolve's cancel event on a dialog cancel or Kodi shutdown."""
+    cancel_event = getattr(ctx, "cancel_event", None)
+    if cancel_event is None:
+        return
+    dialog = getattr(ctx, "dialog", None)
+    try:
+        if dialog is not None and dialog.iscanceled() is True:
+            cancel_event.set()
+    except Exception as exc:  # pylint: disable=broad-except
+        _core.xbmc.log(
+            "NeNeTeePee-Stream-Kodi: FORCE rescue dialog check: {}".format(exc),
+            _core.xbmc.LOGDEBUG,
+        )
+    try:
+        if _core.xbmc.Monitor().abortRequested() is True:
+            stop["aborted"] = True
+            cancel_event.set()
+    except Exception as exc:  # pylint: disable=broad-except
+        _core.xbmc.log(
+            "NeNeTeePee-Stream-Kodi: FORCE rescue abort check: {}".format(exc),
+            _core.xbmc.LOGDEBUG,
+        )
+
+
+def _rescue_late(nzbid, stop, getter):
+    """Delete a FORCE re-submit that landed after a user cancel (not shutdown)."""
+    if nzbid and nzbid is not RESCUE_ABANDONED and not stop["aborted"]:
+        _core.nzbget_api.cancel_jobs([nzbid], settings_getter=getter)
+
+
 def _rescue_or_exhausted(state, fleet):
     """Group-follow exhaustion decision, with the one-shot FORCE rescue (#372 r6).
 
@@ -791,6 +852,8 @@ def _rescue_or_exhausted(state, fleet):
         state["rescued"] = True  # one-shot, even if the append fails
         rescue = (fleet or {}).get("rescue")
         new_id = rescue() if rescue else None
+        if new_id is RESCUE_ABANDONED:
+            return None  # canceled/shutting down: the poll loop handles it
         if new_id:
             state["current"] = new_id
             state["promotion_deadline"] = None
@@ -814,6 +877,8 @@ def _rescue_plain_pick(state, fleet):
     state["rescued"] = True
     rescue = (fleet or {}).get("rescue")
     new_id = rescue() if rescue else None
+    if new_id is RESCUE_ABANDONED:
+        return True  # canceled/shutting down: keep polling; the loop exits
     if new_id:
         state["current"] = new_id
         return True

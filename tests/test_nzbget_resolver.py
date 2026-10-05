@@ -3135,6 +3135,7 @@ def test_pick_rescue_callable_skips_force_when_foreign_active_present():
     # and skips without ever calling append.
     from types import SimpleNamespace
 
+    from resources.lib import nzbget_resolver
     from resources.lib.nzbget_resolver import _pick_rescue_callable
 
     ctx = SimpleNamespace(settings_getter=_settings({}), dupe=None, submitted_nzbids=[])
@@ -3143,9 +3144,13 @@ def test_pick_rescue_callable_skips_force_when_foreign_active_present():
         _APPEND
     ) as append:
         assert rescue() is None
-    active_by_name.assert_called_once_with(
-        "The.Movie", settings_getter=ctx.settings_getter
-    )
+    # Called once, on a thread-safe SNAPSHOT of the connection settings (the
+    # rescue runs behind the abortable wait, off the resolve thread).
+    active_by_name.assert_called_once()
+    assert active_by_name.call_args.args == ("The.Movie",)
+    snapshot = active_by_name.call_args.kwargs["settings_getter"]
+    expected = nzbget_resolver.nzbget_api._get_settings(ctx.settings_getter)
+    assert snapshot("nzbget_url") == expected[0]
     append.assert_not_called()
     assert ctx.submitted_nzbids == []
 
@@ -3466,3 +3471,49 @@ def test_manifest_fleet_honors_the_fallback_switch():
         )
         is None
     )
+
+
+def test_force_rescue_is_abandoned_on_cancel_and_late_append_deleted():
+    # Codex r19: the FORCE rescue's RPCs/fetch run behind the abortable wait;
+    # a cancel abandons it, and an append landing afterwards is deleted.
+    import threading
+    import time
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _pick_rescue_callable
+    from resources.lib.nzbget_resolver_dupes import RESCUE_ABANDONED
+
+    release = threading.Event()
+    deleted = []
+
+    class _CancelDialog:  # pylint: disable=too-few-public-methods
+        def iscanceled(self):
+            return True
+
+    def _slow_append(*_a, **_k):
+        release.wait(5)
+        return 77, None
+
+    ctx = SimpleNamespace(
+        settings_getter=_settings({}),
+        dupe={"key": "k", "pick_score": 9},
+        submitted_nzbids=[],
+        dialog=_CancelDialog(),
+        cancel_event=threading.Event(),
+    )
+    rescue = _pick_rescue_callable(ctx, "http://i/x.nzb", "The.Movie")
+    with patch(_ACT_NAME, return_value=False), patch(
+        _APPEND, side_effect=_slow_append
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs",
+        side_effect=lambda ids, settings_getter=None: deleted.extend(ids),
+    ):
+        start = time.monotonic()
+        assert rescue() is RESCUE_ABANDONED
+        assert time.monotonic() - start < 2
+        release.set()
+        for _ in range(100):
+            if deleted:
+                break
+            time.sleep(0.02)
+    assert deleted == [77]
