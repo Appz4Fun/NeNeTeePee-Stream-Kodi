@@ -295,7 +295,11 @@ def _attach_selection_candidates_streaming(
     ):
         return True
 
-    if include_selected_manifest:
+    # The same opt-in stop hook guards the selected manifest: a fleet that was
+    # canceled while an earlier lookup ran must not start a new indexer grab.
+    if include_selected_manifest and not (
+        stop_event is not None and stop_event.is_set()
+    ):
         active[0] += 1
         _fs._start_selection_manifest_fetch("selected", -1, selected, result_queue)
 

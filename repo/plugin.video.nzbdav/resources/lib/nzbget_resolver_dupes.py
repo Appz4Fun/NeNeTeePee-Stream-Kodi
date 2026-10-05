@@ -796,7 +796,9 @@ def _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=None):
             (getattr(ctx, "cancel_event", None),),
             lambda: _rescue_check_cancel(ctx, stop),
             default=RESCUE_ABANDONED,
-            on_late=lambda nzbid: _rescue_late(nzbid, stop, getter),
+            on_late=lambda nzbid: _rescue_late(
+                nzbid, stop, getter, ((ctx.dupe or {}).get("key"), nzb_url)
+            ),
         )
 
     def _rescue_now(getter):
@@ -924,10 +926,22 @@ def _rescue_check_cancel(ctx, stop):
         )
 
 
-def _rescue_late(nzbid, stop, getter):
-    """Delete a FORCE re-submit that landed after a user cancel (not shutdown)."""
-    if nzbid and nzbid is not RESCUE_ABANDONED and not stop["aborted"]:
-        _core.nzbget_api.cancel_jobs([nzbid], settings_getter=getter)
+def _rescue_late(nzbid, stop, getter, pick):
+    """Handle a FORCE re-submit that landed after its wait was abandoned.
+
+    ``pick`` is ``(dupe_key, nzb_url)``. Recorded in the resubmit ledger
+    FIRST -- the job is in NZBGet until a delete is confirmed (and after a
+    Kodi shutdown it is left to finish) -- then, after a user cancel, deleted
+    and forgotten only once NZBGet confirms the delete.
+    """
+    if not nzbid or nzbid is RESCUE_ABANDONED:
+        return
+    dupe_key, nzb_url = pick
+    _core.nzbget_submit_ledger.record([{"link": nzb_url, "_nzbid": nzbid}], dupe_key)
+    if stop["aborted"]:
+        return
+    if _core.nzbget_api.cancel_jobs([nzbid], settings_getter=getter):
+        _core.nzbget_submit_ledger.forget([nzbid])
 
 
 def _rescue_or_exhausted(state, fleet):

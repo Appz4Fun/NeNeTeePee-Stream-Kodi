@@ -2246,3 +2246,49 @@ def test_a_suspended_prefetch_stream_does_not_pin_the_yielded_body():
     gc.collect()
     assert ref() is None
     stream.close()
+
+
+def test_loader_stop_event_also_blocks_the_selected_manifest_fetch():
+    # Codex r31 (P2): a fleet canceled while an earlier lookup ran must not
+    # start the selected release's manifest fetch either.
+    from types import SimpleNamespace
+
+    from resources.lib import fallback_streams
+    from resources.lib import fallback_streams_select_streaming as engine
+
+    stop = threading.Event()
+    stop.set()
+    selected = {"title": "T", "link": "p", "_fallback_stop": stop}
+    state = SimpleNamespace(
+        candidates=[],
+        seen_article_digests=set(),
+        max_candidates=3,
+        seen_candidate_links=set(),
+    )
+    with patch.object(fallback_streams, "_start_selection_manifest_fetch") as start:
+        engine._attach_selection_candidates_streaming(
+            selected, iter([{"link": "c1"}]), state, True
+        )
+    start.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "aborted,deleted,kept",
+    [(False, True, False), (False, False, True), (True, None, True)],
+)
+def test_a_late_force_rescue_is_ledgered_until_a_confirmed_delete(
+    aborted, deleted, kept
+):
+    # Codex r31 (P2): like a late fleet append -- recorded first, forgotten
+    # only after a confirmed delete, kept after a shutdown (left to finish).
+    from resources.lib import nzbget_submit_ledger
+    from resources.lib.nzbget_resolver import _rescue_late
+
+    with patch(
+        "resources.lib.nzbget_resolver.nzbget_api.cancel_jobs", return_value=deleted
+    ) as cancel:
+        _rescue_late(
+            88, {"aborted": aborted}, lambda *_a: "", ("k", "https://idx/pick")
+        )
+    assert bool(nzbget_submit_ledger.held("k", {88: "parked"})) is kept
+    assert cancel.called is not aborted

@@ -46,6 +46,7 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _pick_rescue_callable,
     _preexisting_success_ids,
     _read_poll_interval,
+    _rescue_late,
     _rescue_or_exhausted,
     _rescue_plain_pick,
     _submit_candidates,
