@@ -831,32 +831,54 @@ def _submit_pick(ctx, nzb_url, title, dupe_key):
 def _fetch_pick_body(nzb_url, dupe):
     """The pick's ``(body, fingerprint)`` from its URL or a mirror listing.
 
-    Mirrors are the fleet's picker backups that list the pick's own posting
-    (``same_listing``); the worker never submits those as backups, so they
-    serve here as fallbacks for the pick's grab. A body counts only when it
-    parses as an NZB. ``(None, None)`` when every listing fails (fail-soft).
+    Mirrors are listings of the pick's own posting (``same_listing``): first
+    the picker backups, then NZBHydra's deferred duplicate uploads. The worker
+    never submits those as backups, so they serve here as fallbacks for the
+    pick's grab. A body counts only when it parses as an NZB. ``(None, None)``
+    when every listing fails (fail-soft).
     """
     pick = dupe.get("pick") or {}
-    mirrors = [
-        backup.get("link")
-        for backup in dupe.get("backups") or []
-        if isinstance(backup, dict) and same_listing(pick, backup)
-    ]
-    for url in [nzb_url] + [link for link in mirrors if link and link != nzb_url]:
-        try:
-            body = nzbget_api.fetch_nzb_bytes(url)
-        except Exception as exc:  # pylint: disable=broad-except
-            xbmc.log(
-                "NeNeTeePee-Stream-Kodi: NZBGet pick NZB fetch failed: {}".format(
-                    _redact_text(str(exc))
-                ),
-                xbmc.LOGDEBUG,
-            )
-            continue
-        fingerprint = posting_fingerprint(body) if body else None
-        if fingerprint:
-            return body, fingerprint
+    tried = set()
+    for rows in (
+        lambda: [nzb_url],
+        lambda: _mirror_links(pick, dupe.get("backups")),
+        # Deferred: NZBHydra's hidden duplicate uploads (one internal search,
+        # cached on the selection so the backup worker reuses it) -- only
+        # consulted once the pick and every picker mirror failed.
+        lambda: _mirror_links(pick, _hydra_uploads_for_fleet(dupe)),
+    ):
+        for url in rows():
+            if not url or url in tried:
+                continue
+            tried.add(url)
+            body = _fetch_pick_candidate(url)
+            fingerprint = posting_fingerprint(body) if body else None
+            if fingerprint:
+                return body, fingerprint
     return None, None
+
+
+def _mirror_links(pick, rows):
+    """Links of ``rows`` that list the pick's own posting (``same_listing``)."""
+    return [
+        row.get("link")
+        for row in rows or []
+        if isinstance(row, dict) and same_listing(pick, row)
+    ]
+
+
+def _fetch_pick_candidate(url):
+    """One pick listing's NZB body, or None (logged) on a failed fetch."""
+    try:
+        return nzbget_api.fetch_nzb_bytes(url)
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet pick NZB fetch failed: {}".format(
+                _redact_text(str(exc))
+            ),
+            xbmc.LOGDEBUG,
+        )
+        return None
 
 
 def _play_completed_download(

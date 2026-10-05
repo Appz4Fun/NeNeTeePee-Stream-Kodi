@@ -199,9 +199,10 @@ def test_prefetch_yields_in_rank_order_and_tries_next_listing():
         return _valid(url)
 
     got = list(prefetched_clusters(clusters, _fetch))
+    # The head keeps its slot (title, DupeScore); the mirror only supplies bytes.
     assert [(m["link"], body) for m, body, _fp in got] == [
         ("a", _valid("a")),
-        ("b2", _valid("b2")),
+        ("b1", _valid("b2")),
         ("c", _valid("c")),
     ]
     assert all(fp == posting_fingerprint(body) for _m, body, fp in got)
@@ -211,7 +212,7 @@ def test_prefetch_skips_a_non_nzb_body_to_the_next_listing():
     # An HTTP-200 login / rate-limit page is not a grab: try the next listing.
     pages = {"x": b"<html>rate limited</html>", "y": _valid("y")}
     got = list(prefetched_clusters([[{"link": "x"}, {"link": "y"}]], pages.get))
-    assert [(m["link"], body) for m, body, _fp in got] == [("y", _valid("y"))]
+    assert [(m["link"], body) for m, body, _fp in got] == [("x", _valid("y"))]
 
 
 def test_prefetch_reports_head_when_every_listing_fails():
@@ -670,3 +671,69 @@ def test_spool_keeps_bodies_in_memory_when_disk_is_unavailable():
     assert NzbSpool.load(memory_only.save(b"abc")) == b"abc"
     assert NzbSpool.load(spool.save(b"xyz")) == b"xyz"  # system temp fallback
     spool.close()
+
+
+def test_capped_fleet_backfills_a_vetoed_send_from_the_next_candidate():
+    # Codex r4: cap 1, first append COPY-vetoed -> the second picker backup is
+    # collected and sent; nothing beyond it is ever downloaded.
+    from resources.lib.nzbget_resolver_dupes import _submit_candidates
+
+    rows = [{"link": "u{}".format(i), "title": "t", "score": 9 - i} for i in range(5)]
+    with patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ) as append, patch(_VETO, side_effect=[True, False]):
+        live = _submit_candidates(rows, "k", lambda *_a: "", limits=(1, None))
+    assert live == [2]
+    assert [c.args[0] for c in append.call_args_list] == ["u0", "u1"]
+    assert fetch.call_count == 2
+
+
+def test_capped_extras_fetch_replacements_only_after_a_failure():
+    # Codex r4: one open slot + the veto reserve must not pre-download the
+    # whole reserve; a successful first append costs exactly one grab.
+    from resources.lib.nzbget_resolver_dupes import _submit_extras_until_filled
+
+    rows = [{"link": "e{}".format(i), "title": "t", "score": 1} for i in range(8)]
+    with patch(_FETCH, side_effect=_valid) as fetch, patch(
+        _APPEND, return_value=(4, None)
+    ), patch(_VETO, return_value=False):
+        live = _submit_extras_until_filled(rows, 1, "k", lambda *_a: "", None, [])
+    assert live == [4]
+    assert fetch.call_count == 1
+
+
+def test_pick_grab_falls_back_to_a_hydra_mirror_of_its_posting():
+    from types import SimpleNamespace
+
+    from resources.lib.nzbget_resolver import _submit_pick
+
+    pick = {"link": "http://dead/pick.nzb", "size": "100", "pubdate": _PUB}
+    hydra = [
+        {"link": "http://h/other.nzb", "size": 200, "_posted_epoch": 1791028800},
+        {"link": "http://h/mirror.nzb", "size": 100, "_posted_epoch": 1791028860},
+    ]
+    body = _nzb(_ids("p", 20))
+    ctx = SimpleNamespace(
+        settings_getter=None,
+        dupe={
+            "pick_score": 7,
+            "pick": pick,
+            "backups": [],
+            "hydra_uploads": lambda: hydra,
+        },
+    )
+
+    def _fetch(url):
+        if url == pick["link"]:
+            raise OSError("indexer down")
+        return body
+
+    with patch(_FETCH, side_effect=_fetch) as fetch, patch(
+        _APPEND, return_value=(1, None)
+    ) as append:
+        _submit_pick(ctx, pick["link"], "T", "k")
+    assert [c.args[0] for c in fetch.call_args_list] == [
+        pick["link"],
+        "http://h/mirror.nzb",
+    ]
+    assert append.call_args.kwargs["nzb_bytes"] == body

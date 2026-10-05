@@ -284,11 +284,15 @@ def _stopped(events):
 def _fetch_cluster(cluster, fetch, stop_events):
     """Fetch the first listing of ``cluster`` that returns a valid NZB.
 
-    Returns ``(member, body, fingerprint)``. A body counts only when it parses
-    as an NZB with article Message-IDs, so an HTTP-200 login or rate-limit page
-    falls through to the next listing. ``body`` and ``fingerprint`` are None
-    when every listing failed (the head is returned so the caller can still try
-    a plain append). Stops between listings once any of ``stop_events`` fires.
+    Returns ``(head, body, fingerprint)``: always the cluster's HEAD (its
+    best-ranked listing), so a mirror that supplies the bytes never changes the
+    slot's title or DupeScore -- every listing in a cluster is the same
+    posting, only the head's download URL failed. A body counts only when it
+    parses as an NZB with article Message-IDs, so an HTTP-200 login or
+    rate-limit page falls through to the next listing. ``body`` and
+    ``fingerprint`` are None when every listing failed (the caller can still
+    try a plain append of the head). Stops between listings once any of
+    ``stop_events`` fires.
     """
     for member in cluster:
         if _stopped(stop_events):
@@ -296,7 +300,7 @@ def _fetch_cluster(cluster, fetch, stop_events):
         body = _try_fetch(fetch, member["link"])
         fingerprint = posting_fingerprint(body) if body else None
         if fingerprint:
-            return member, body, fingerprint
+            return cluster[0], body, fingerprint
     return cluster[0], None, None
 
 
