@@ -740,18 +740,22 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
 def _nzbget_loader_setting(key, default=""):
     """``_get_script_setting`` for the NZBGet fleet's fallback loader.
 
-    ``fallback_streams_max`` is the nzbdav proxy's standby cap; NZBGet's
-    backups are bounded by ``nzbget_max_backups`` in the fleet instead, so the
-    loader always scans at its own ceiling (``fallback_streams._MAX_FALLBACKS``,
-    a bound on its manifest-probing cost) and a 0 proxy cap can't switch
-    NZBGet discovery off.
+    ``fallback_streams_max`` is the nzbdav proxy's standby cap, so the NZBGet
+    loader ignores it: it scans up to ``nzbget_max_backups`` (when that is a
+    positive cap) within the loader's own ceiling
+    (``fallback_streams._MAX_FALLBACKS``, a bound on its manifest-probing
+    cost). A 0 proxy cap can't switch NZBGet discovery off, and a small NZBGet
+    cap never pays grabs for candidates it could not submit.
     """
     import resources.lib.router as _router
 
     if key == "fallback_streams_max":
         from resources.lib.fallback_streams import _MAX_FALLBACKS
 
-        return str(_MAX_FALLBACKS)
+        cap = _parse_max_backups(
+            _router._get_script_setting("nzbget_max_backups", "-1")
+        )
+        return str(min(_MAX_FALLBACKS, cap) if cap > 0 else _MAX_FALLBACKS)
     return _router._get_script_setting(key, default)
 
 

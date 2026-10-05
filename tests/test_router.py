@@ -4962,10 +4962,13 @@ def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
     # pinned to the loader's own ceiling: NZBGet's cap is nzbget_max_backups.
     getter = seen.get("getter")
     assert getter is router_play._nzbget_loader_setting
-    with patch("resources.lib.router._get_script_setting", return_value="0") as xml:
-        assert getter("fallback_streams_max", "5") == "5"
-        assert getter("hydra_url", "") == "0"
-    xml.assert_called_once_with("hydra_url", "")
+    with patch("resources.lib.router._get_script_setting", return_value="-1") as xml:
+        assert getter("fallback_streams_max", "0") == "5"  # never the proxy cap
+        assert getter("hydra_url", "") == "-1"
+    xml.assert_any_call("hydra_url", "")
+    # A small NZBGet cap bounds the loader's (grab-costing) scan too.
+    with patch("resources.lib.router._get_script_setting", return_value="2"):
+        assert getter("fallback_streams_max", "0") == "2"
     assert params["_nzbget_dupe"]["loader"] == "FRESH_LOADER"
 
 

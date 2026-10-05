@@ -613,9 +613,12 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # Set on user-cancel so the background backup worker stops submitting
         # more duplicates (#372 round 2).
         self.cancel_event = threading.Event()
-        # NZBIDs the backup worker has appended so far -- the cancel path
-        # deletes exactly these (plus pick/tracked), never a whole-key sweep.
+        # NZBIDs the fleet has appended so far -- the cancel path deletes
+        # exactly these (plus pick/tracked), never a whole-key sweep.
         self.submitted_nzbids = []
+        # Same-key SUCCESS ids snapshotted before the fleet submitted anything
+        # (None: the poll snapshots them itself).
+        self.preexisting_successes = None
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -743,13 +746,11 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
     """
     getter = ctx.settings_getter
     dupe_key = (ctx.dupe or {}).get("key") or ""
-    preexisting = None
     if dupe_key:
         from resources.lib.nzbget_fleet_run import submit_fleet
 
-        # Snapshot same-key successes BEFORE the (slow) foreground fleet: one
-        # that lands while it downloads/sends is not stale.
-        preexisting = _preexisting_success_ids(dupe_key, getter)
+        # submit_fleet snapshots same-key successes (abortably) BEFORE it
+        # submits anything, into ctx.preexisting_successes.
         nzbid, error = submit_fleet(ctx, nzb_url, title, dupe_key)
         if ctx.cancel_event.is_set():
             # Canceled while finding/downloading/sending: delete whatever this
@@ -785,7 +786,7 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         dupe_key=dupe_key,
         fleet={
             "owned_nzbids": _owned_fleet_nzbids,
-            "preexisting_successes": preexisting,
+            "preexisting_successes": getattr(ctx, "preexisting_successes", None),
             # #372 r6: a confirmed COPY veto (pick died DELETED/COPY, group
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
             # the pick. Built on both the fleet and plain paths (the dict is

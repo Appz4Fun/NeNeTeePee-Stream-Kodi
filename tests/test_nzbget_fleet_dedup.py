@@ -1084,29 +1084,104 @@ def test_stale_successes_use_the_snapshot_taken_before_the_fleet():
     late.assert_not_called()
 
 
-def test_resolve_snapshots_successes_before_submitting_the_fleet():
-    from resources.lib.nzbget_resolver import _submit_poll_resolve
+def test_fleet_snapshots_successes_abortably_before_any_download(_fleet_env):
+    # Codex r11/r12: the snapshot precedes every fetch and runs behind the
+    # abortable wait; the poll then gets it via ctx.preexisting_successes.
+    from resources.lib.nzbget_fleet_run import submit_fleet
 
     order = []
-    ctx = _fleet_ctx({"key": "k"})
-    ctx.on_failure = lambda _m: None
-    ctx.timeout = 1
-    ctx.interval = 0
+    ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
 
     def _snapshot(*_a):
         order.append("snapshot")
         return (3,)
 
-    def _fleet(*_a):
-        order.append("fleet")
-        return 9, None
+    def _fetch(url):
+        order.append("fetch " + url)
+        return _valid(url)
 
     with patch(
         "resources.lib.nzbget_resolver._preexisting_success_ids", side_effect=_snapshot
-    ), patch("resources.lib.nzbget_fleet_run.submit_fleet", side_effect=_fleet), patch(
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api._get_settings",
+        return_value=("http://n", "u", "p", ""),
+    ), patch(
+        _FETCH, side_effect=_fetch
+    ), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert order[0] == "snapshot"
+    assert ctx.preexisting_successes == (3,)
+
+
+def test_resolve_passes_the_fleet_snapshot_to_the_poll():
+    from resources.lib.nzbget_resolver import _submit_poll_resolve
+
+    ctx = _fleet_ctx({"key": "k"})
+    ctx.on_failure = lambda _m: None
+    ctx.timeout = 1
+    ctx.interval = 0
+
+    def _fleet(ctx_, *_a):
+        ctx_.preexisting_successes = (3,)
+        return 9, None
+
+    with patch(
+        "resources.lib.nzbget_fleet_run.submit_fleet", side_effect=_fleet
+    ), patch(
         "resources.lib.nzbget_resolver.poll_nzbget_job",
         return_value={"outcome": "timeout"},
     ) as poll:
         _submit_poll_resolve(ctx, "pick", "T", None, None)
-    assert order == ["snapshot", "fleet"]
     assert poll.call_args.kwargs["fleet"]["preexisting_successes"] == (3,)
+
+
+def test_hung_history_snapshot_is_cancelable(_fleet_env):
+    import time
+
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    release = threading.Event()
+
+    def _hung(*_a):
+        release.wait(10)
+        return ()
+
+    class _CancelNow(_Dialog):
+        def iscanceled(self):
+            return True
+
+    ctx = _fleet_ctx(_fleet_dupe([]), dialog=_CancelNow())
+    start = time.monotonic()
+    with patch(
+        "resources.lib.nzbget_resolver._preexisting_success_ids", side_effect=_hung
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api._get_settings",
+        return_value=("http://n", "u", "p", ""),
+    ), patch(
+        _APPEND
+    ) as append:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    release.set()
+    assert time.monotonic() - start < 2
+    append.assert_not_called()
+
+
+def test_capped_fleet_skips_the_loader_when_rows_cover_the_cap(_fleet_env):
+    # Codex r12: the loader downloads manifests; don't run it when the picker
+    # rows + Hydra uploads already cover a positive cap.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    loader_calls = []
+    dupe = _fleet_dupe(
+        [{"link": "b0"}],
+        max_backups=1,
+        loader=lambda: loader_calls.append(1) or [{"link": "x"}],
+    )
+    ctx = _fleet_ctx(dupe)
+    with patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, side_effect=[(1, None), (2, None)]
+    ), patch(_VETO, return_value=False):
+        submit_fleet(ctx, "pick", "T", "k")
+    assert not loader_calls

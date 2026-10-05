@@ -28,9 +28,11 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     """Download, dedupe, and send the pick plus its backups; ``(nzbid, error)``.
 
     ``nzbid`` is the pick's NZBGet id (None when its append failed, with
-    NZBGet's ``error``). A user cancel sets ``ctx.cancel_event`` and returns
-    ``(None, None)``; anything already appended is in ``ctx.submitted_nzbids``
-    for the caller to delete.
+    NZBGet's ``error``). ``ctx.preexisting_successes`` receives the same-key
+    SUCCESS ids snapshotted before anything was submitted (None if unknown).
+    A user cancel sets ``ctx.cancel_event`` and returns ``(None, None)``;
+    anything already appended is in ``ctx.submitted_nzbids`` for the caller
+    to delete.
     """
     dupe = ctx.dupe if isinstance(ctx.dupe, dict) else {}
     getter = ctx.settings_getter
@@ -44,7 +46,9 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         _is_pick=True,
     )
     candidates = [pick]
-    dupe_check_off = _probe_nzbget_config(getter, progress)
+    dupe_check_off, ctx.preexisting_successes = _probe_nzbget_config(
+        getter, progress, dupe_key
+    )
     if progress.canceled():
         return None, None
     if dupe_check_off:
@@ -82,14 +86,16 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
 
 
-def _probe_nzbget_config(getter, progress):
-    """``DupeCheck=no`` check plus the HealthCheck=Pause warning, abortably.
+def _probe_nzbget_config(getter, progress, dupe_key):
+    """Pre-fleet NZBGet probes, abortably: ``(dupecheck_off, preexisting)``.
 
-    Both are NZBGet ``config`` RPCs that can each hang for the RPC timeout, so
-    they run off-thread behind the cancel/shutdown-aware wait. The thread
-    reads only a snapshot of the connection settings taken HERE on the resolve
-    thread (no off-thread Kodi ``getSetting``). Returns True when DupeCheck is
-    off; a canceled or failed probe returns False (assume the default, on).
+    The same-key preexisting-success snapshot (history), the ``DupeCheck=no``
+    check, and the HealthCheck=Pause warning are RPCs that can each hang for
+    the RPC timeout, so they run off-thread behind the cancel/shutdown-aware
+    wait. The thread reads only a snapshot of the connection settings taken
+    HERE on the resolve thread (no off-thread Kodi ``getSetting``). A canceled
+    or failed probe returns ``(False, None)`` (DupeCheck assumed on; the poll
+    then snapshots successes itself).
     """
     url, user, password, category = _core.nzbget_api._get_settings(getter)
     snapshot = {
@@ -103,15 +109,16 @@ def _probe_nzbget_config(getter, progress):
         return snapshot.get(key, default)
 
     def _probe():
+        # Same-key successes BEFORE this fleet submits anything: one another
+        # resolve lands while this fleet downloads/sends is not stale.
+        preexisting = _core._preexisting_success_ids(dupe_key, _snapshot_getter)
         if _core._dupe_check_disabled(_snapshot_getter):
-            return True
+            return True, preexisting
         _core._warn_if_healthcheck_pauses(_snapshot_getter)
-        return False
+        return False, preexisting
 
-    return bool(
-        call_abortable(
-            _probe, (progress.cancel_event,), progress.canceled, default=False
-        )
+    return call_abortable(
+        _probe, (progress.cancel_event,), progress.canceled, default=(False, None)
     )
 
 
@@ -126,13 +133,24 @@ def _fleet_backups(dupe, progress):
     """
     backups = list(dupe.get("backups") or [])
 
+    cap = dupe.get("max_backups")
+    capped = isinstance(cap, int) and cap > 0
+
     def _extras():
+        hydra = _core._hydra_uploads_for_fleet(dupe)
+        # The loader downloads NZB manifests to compare candidates: skip it
+        # when a positive cap is already covered by the picker rows and
+        # NZBHydra's uploads (they rank first, so its rows would never be
+        # needed unless those collapse; the fill loop has the rest).
+        loader = dupe.get("loader")
+        if capped and len(backups) + len(hydra) >= cap:
+            loader = None
         return _core._extra_backups_from_loader(
-            dupe.get("loader"),
+            loader,
             [backup.get("link") for backup in backups],
             limit=None,
             score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
-            leading=_core._hydra_uploads_for_fleet(dupe),
+            leading=hydra,
             pick=dupe.get("pick"),
         )
 
