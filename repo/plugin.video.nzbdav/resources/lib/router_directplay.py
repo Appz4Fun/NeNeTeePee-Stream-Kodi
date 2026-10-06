@@ -76,12 +76,20 @@ def _direct_play_prepare_and_serve(
     listitem = _router.xbmcgui.ListItem(path=proxy_url)
     listitem.setMimeType("video/x-matroska")
     listitem.setContentLookup(False)
-    from resources.lib.playback_context import metadata_from_params, prepare_playback
+    from resources.lib import playback_context
 
-    prepare_playback(
-        listitem, metadata_from_params(params), home=_router.xbmcgui.Window(10000)
-    )
-    _router.xbmcplugin.setResolvedUrl(handle, True, listitem)
+    home = _router.xbmcgui.Window(10000)
+    try:
+        with playback_context.handoff(home=home) as session:
+            playback_context.prepare_playback(
+                listitem,
+                playback_context.metadata_from_params(params),
+                home=home,
+                session_token=session,
+            )
+            _router.xbmcplugin.setResolvedUrl(handle, True, listitem)
+    except RuntimeError:
+        _router.xbmcplugin.setResolvedUrl(handle, False, _router.xbmcgui.ListItem())
 
 
 def _direct_play_split_auth(url):

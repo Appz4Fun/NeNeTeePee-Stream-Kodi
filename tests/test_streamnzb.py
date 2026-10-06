@@ -715,12 +715,12 @@ def test_picker_applies_configured_filters_and_size_sort(player_mocks):
 
 
 @pytest.mark.parametrize("handle", [None, 7])
-@pytest.mark.parametrize("kind", ["movie", "episode"])
+@pytest.mark.parametrize("kind", ["movie", "episode", "series"])
 def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
     player_mocks, monkeypatch, handle, kind
 ):
 
-    from resources.lib import playback_context
+    from resources.lib import playback_context, playback_handoff
 
     properties = {"TMDbHelper.PlayerInfoString": "stale"}
     home = player_mocks["gui"].Window.return_value
@@ -728,6 +728,8 @@ def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
     home.setProperty.side_effect = properties.__setitem__
     home.clearProperty.side_effect = lambda key: properties.pop(key, None)
     monkeypatch.setattr(playback_context, "xbmcgui", player_mocks["gui"])
+    monkeypatch.setattr(playback_handoff, "xbmcgui", player_mocks["gui"])
+    expected_kind = "movie" if kind == "movie" else "episode"
     params = {
         "type": kind,
         "title": "Predestination",
@@ -735,7 +737,7 @@ def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
         "tmdb_id": "206487",
         "imdb": "tt2397535",
     }
-    if kind == "episode":
+    if kind in ("episode", "series"):
         params.update(
             title="Shrinking",
             season="1",
@@ -748,7 +750,7 @@ def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
 
     def check_item(item):
         tag = item.getVideoInfoTag()
-        tag.setMediaType.assert_called_with(kind)
+        tag.setMediaType.assert_called_with(expected_kind)
         tag.setTitle.assert_called_with(
             "Predestination" if kind == "movie" else "Imposter Syndrome"
         )
@@ -756,7 +758,7 @@ def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
         assert ids["tmdb"] == ("206487" if kind == "movie" else "424242")
         context = json.loads(properties["TMDbHelper.PlayerInfoString"])
         assert context["tmdb_id"] == ("206487" if kind == "movie" else "136311")
-        assert context["tmdb_type"] == kind
+        assert context["tmdb_type"] == expected_kind
         item.setProperty.assert_any_call("StartOffset", "137.0")
         if kind == "movie":
             tag.setYear.assert_called_with(2014)

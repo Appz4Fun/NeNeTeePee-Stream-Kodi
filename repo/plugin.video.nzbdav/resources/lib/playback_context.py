@@ -9,9 +9,18 @@ TMDb Helper remains the sole owner of Trakt progress and watched submissions.
 
 import json
 import re
+import uuid
 
 import xbmc
 import xbmcgui
+
+from resources.lib.playback_handoff import (
+    PENDING_PROPERTY,
+    SESSION_PROPERTY,
+    handoff,
+)
+
+__all__ = ["handoff", "metadata_from_params", "prepare_playback"]
 
 _IMDB_ID = re.compile(r"^tt[0-9]+$")
 
@@ -39,6 +48,8 @@ def _identifier(value):
 def _normalize(metadata):
     """Whitelist and validate an IPC snapshot; never persist URLs or settings."""
     mediatype = _text(metadata.get("mediatype"))
+    if mediatype == "series":
+        mediatype = "episode"
     if mediatype not in ("movie", "episode"):
         return {}
     clean = {"mediatype": mediatype, "title": _text(metadata.get("title"))}
@@ -75,6 +86,8 @@ def metadata_from_params(params):
     if isinstance(snapshot, dict):
         return _normalize(snapshot)
     mediatype = _text(params.get("type"))
+    if mediatype == "series":
+        mediatype = "episode"
     metadata = {
         "mediatype": mediatype,
         "title": params.get("title"),
@@ -158,7 +171,7 @@ def _playerstring(metadata):
     return context
 
 
-def prepare_playback(listitem, metadata, home=None):
+def prepare_playback(listitem, metadata, home=None, session_token=None):
     """Apply identity and publish scrobbler context immediately before playback.
 
     Leave the property in place through asynchronous AV startup. Unknown
@@ -173,6 +186,10 @@ def prepare_playback(listitem, metadata, home=None):
         xbmc.log("NZB-DAV: Kodi playback metadata unavailable", xbmc.LOGWARNING)
     try:
         home = home if home is not None else xbmcgui.Window(10000)
+        if session_token is None:
+            session_token = uuid.uuid4().hex
+            home.setProperty(PENDING_PROPERTY, session_token)
+        home.setProperty(SESSION_PROPERTY, session_token)
         home.setProperty("nzbdav.playback_metadata", json.dumps(metadata))
         context = _playerstring(metadata)
         if context:
@@ -191,4 +208,5 @@ def prepare_playback(listitem, metadata, home=None):
                 try:
                     home.clearProperty(key)
                 except RuntimeError:
+                    # The GUI is unavailable; cleanup must not stop playback.
                     pass

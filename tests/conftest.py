@@ -181,3 +181,15 @@ def resolver_mocks():
             dialog=dialog,
             monitor=monitor,
         )
+
+
+@pytest.fixture(autouse=True)
+def _isolated_playback_handoff_lock(monkeypatch):
+    """Use real process locking without touching a Kodi profile in unit tests."""
+    from resources.lib import playback_handoff
+
+    with tempfile.TemporaryDirectory(prefix="nzbdav-handoff-test-") as folder:
+        monkeypatch.setattr(
+            playback_handoff, "_lock_path", lambda: os.path.join(folder, "handoff.lock")
+        )
+        yield

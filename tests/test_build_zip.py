@@ -48,6 +48,7 @@ def test_real_package_contains_scrobbling_helper_and_matching_boundary_sources(
         addon = REPO_ROOT / "repo/plugin.video.nzbdav"
         for path in (
             "resources/lib/playback_context.py",
+            "resources/lib/playback_handoff.py",
             "resources/lib/player_upgrade.py",
             "resources/lib/nzbget_resolver.py",
             "resources/lib/streamnzb_player.py",

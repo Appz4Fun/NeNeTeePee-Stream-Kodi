@@ -1200,11 +1200,14 @@ def resolve_and_play_nzbget(
 
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
-        playback_context.prepare_playback(
-            listitem, playback_context.metadata_from_params(params)
-        )
-        _arm_playback_monitor(video_url, resume_seconds, resume_key)
-        xbmcplugin.setResolvedUrl(handle, True, listitem)
+        with playback_context.handoff() as session:
+            playback_context.prepare_playback(
+                listitem,
+                playback_context.metadata_from_params(params),
+                session_token=session,
+            )
+            _arm_playback_monitor(video_url, resume_seconds, resume_key)
+            xbmcplugin.setResolvedUrl(handle, True, listitem)
 
     def on_failure(message):
         _resolve_failure(handle, message)
@@ -1253,11 +1256,14 @@ def play_nzbget(
 
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
-        playback_context.prepare_playback(
-            listitem, playback_context.metadata_from_params(resolve_params)
-        )
-        _arm_playback_monitor(video_url, resume_seconds, resume_key)
-        xbmc.Player().play(video_url, listitem)
+        with playback_context.handoff() as session:
+            playback_context.prepare_playback(
+                listitem,
+                playback_context.metadata_from_params(resolve_params),
+                session_token=session,
+            )
+            _arm_playback_monitor(video_url, resume_seconds, resume_key)
+            xbmc.Player().play(video_url, listitem)
 
     def on_failure(message):
         if message:

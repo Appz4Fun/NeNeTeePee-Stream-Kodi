@@ -11,7 +11,8 @@ Canonical movie/show/episode identity is captured before selecting a release.
 Release filenames, URLs, resume keys, and backend job identities remain separate.
 Final VideoInfoTag fields and Home-window `TMDbHelper.PlayerInfoString` are
 prepared before playback. Unknown or unusable identity clears stale context.
-Series IDs use `tvshow.tmdb`; episode IDs use `tmdb`.
+Series IDs use `tvshow.tmdb`; episode IDs use `tmdb`. StreamNZB
+`type=series` inputs normalize to canonical episode metadata.
 
 | Backend/path | Final boundary | Regression coverage |
 | --- | --- | --- |
@@ -25,7 +26,10 @@ Series IDs use `tvshow.tmdb`; episode IDs use `tmdb`.
 Resume/start-over properties remain on the same decorated item. StreamNZB
 retains its server-owned retry/failover and does not gain addon retry workers.
 A service retry canceled or replaced during its delay cannot republish an old
-session's identity.
+session's identity. Fresh playback reserves a session token before publishing
+context. A process lock covers metadata publication through the native playback
+call, so a concurrent reconnect cannot replace the next item's identity. Service
+snapshots and cleanup respect that reservation.
 
 ## Automatic player upgrade
 
@@ -76,6 +80,6 @@ actual Trakt requests, and independently read history are separate gates.
 A code PR does not itself publish an addon release.
 
 Validation of the implementation before PR review: `just lint`, `just test`
-(3,219 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
+(3,228 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
 passed. Native deployment and real Trakt watched-history verification are
 reported separately; they are not established by these checks.

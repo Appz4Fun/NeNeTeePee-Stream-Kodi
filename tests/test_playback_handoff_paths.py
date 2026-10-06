@@ -50,8 +50,9 @@ def _playback_kodi_fixture(monkeypatch):
         monkeypatch.setattr(module, "xbmcgui", gui)
         monkeypatch.setattr(module, "xbmc", xbmc)
         monkeypatch.setattr(module, "xbmcplugin", plugin)
-    from resources.lib import playback_context
+    from resources.lib import playback_context, playback_handoff
 
+    monkeypatch.setattr(playback_handoff, "xbmcgui", gui)
     monkeypatch.setattr(playback_context, "xbmcgui", gui)
     monkeypatch.setattr(service, "xbmcgui", gui)
     monkeypatch.setattr(service, "_HOME_WINDOW", home)
@@ -442,3 +443,235 @@ def test_property_publication_failure_still_reaches_final_playback(
         assert plugin.setResolvedUrl.call_args.args[1] is True
         item = plugin.setResolvedUrl.call_args.args[2]
     item.getVideoInfoTag.return_value.setTitle.assert_called_with("Arrival")
+
+
+@pytest.mark.parametrize("entry", ["retry", "handler"])
+def test_new_context_before_active_flag_blocks_old_retry(
+    playback_kodi, monkeypatch, entry
+):
+    player, _plugin, home, properties = playback_kodi
+    monitor = service.NzbdavPlayer()
+    monitor._state = service.PlaybackState.ERROR
+    monitor._stream_url = "old-stream"
+    monitor._playback_metadata = dict(EPISODE)
+    monitor._monitor = MagicMock()
+    monitor._monitor.waitForAbort.return_value = False
+    monitor._await_playback_start = MagicMock(return_value=True)
+    monitor._read_settings = MagicMock(return_value=(True, 3, 0))
+    monitor.play = MagicMock()
+    original = home.setProperty.side_effect
+    raced = []
+
+    def publish(key, value):
+        original(key, value)
+        if (
+            key == "TMDbHelper.PlayerInfoString"
+            and json.loads(value).get("tmdb_id") == MOVIE["tmdb_id"]
+        ):
+            assert properties.get("nzbdav.active") != "true"
+            raced.append(True)
+            if entry == "retry":
+                monitor._retry_playback(3, 0)
+            else:
+                monitor._handle_error_retry(0, "old")
+
+    home.setProperty.side_effect = publish
+    monkeypatch.setattr(
+        resolver,
+        "_make_playable_listitem",
+        lambda path, _headers: resolver.xbmcgui.ListItem(path=path),
+    )
+    resolver._finish_player_playback(
+        {
+            "stream_url": "new-stream",
+            "stream_headers": {},
+            "_playback_metadata": dict(MOVIE),
+        }
+    )
+    assert raced
+    monitor.play.assert_not_called()
+    player.play.assert_called_once()
+    assert (
+        json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"]
+        == MOVIE["tmdb_id"]
+    )
+    assert json.loads(properties["nzbdav.playback_metadata"]) == MOVIE
+
+
+def test_new_start_waits_for_retry_native_call_before_publishing_context(
+    playback_kodi, monkeypatch
+):
+    import threading
+
+    from resources.lib import playback_handoff
+
+    player, _plugin, home, properties = playback_kodi
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "old",
+            playback_handoff.PENDING_PROPERTY: "old",
+        }
+    )
+    monitor = service.NzbdavPlayer()
+    monitor._state = service.PlaybackState.ERROR
+    monitor._stream_url = "old-stream"
+    monitor._playback_session = "old"
+    monitor._playback_metadata = dict(EPISODE)
+    monitor._monitor = MagicMock()
+    monitor._monitor.waitForAbort.return_value = False
+    monitor._await_playback_start = MagicMock(return_value=True)
+    old_started, new_reserved, release_old = (threading.Event() for _ in range(3))
+    calls, errors = [], []
+    original = home.setProperty.side_effect
+
+    def publish(key, value):
+        original(key, value)
+        if key == playback_handoff.PENDING_PROPERTY and value != "old":
+            new_reserved.set()
+
+    def old_play(_url, _item):
+        calls.append(
+            ("old", json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"])
+        )
+        old_started.set()
+        assert release_old.wait(3)
+
+    def new_play(_url, _item):
+        calls.append(
+            ("new", json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"])
+        )
+
+    def run(action):
+        try:
+            action()
+        except BaseException as error:
+            errors.append(error)
+
+    home.setProperty.side_effect = publish
+    monitor.play = MagicMock(side_effect=old_play)
+    player.play.side_effect = new_play
+    monkeypatch.setattr(
+        resolver,
+        "_make_playable_listitem",
+        lambda path, _headers: resolver.xbmcgui.ListItem(path=path),
+    )
+    old_thread = threading.Thread(
+        target=lambda: run(lambda: monitor._retry_playback(3, 0))
+    )
+    new_thread = threading.Thread(
+        target=lambda: run(
+            lambda: resolver._finish_player_playback(
+                {
+                    "stream_url": "new-stream",
+                    "stream_headers": {},
+                    "_playback_metadata": dict(MOVIE),
+                }
+            )
+        )
+    )
+    old_thread.start()
+    try:
+        assert old_started.wait(3), errors
+        new_thread.start()
+        assert new_reserved.wait(3), errors
+        assert (
+            json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"]
+            == EPISODE["tmdb_id"]
+        )
+    finally:
+        release_old.set()
+        old_thread.join(3)
+        if new_thread.ident is not None:
+            new_thread.join(3)
+    assert not old_thread.is_alive() and not new_thread.is_alive()
+    assert not errors
+    assert calls == [("old", EPISODE["tmdb_id"]), ("new", MOVIE["tmdb_id"])]
+
+
+@pytest.mark.parametrize("uses_proxy", [False, True])
+def test_old_stop_callback_cannot_clear_new_handoff_or_proxy(
+    playback_kodi, monkeypatch, uses_proxy
+):
+    from resources.lib import playback_handoff
+
+    player, _plugin, _home, properties = playback_kodi
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "old",
+            playback_handoff.PENDING_PROPERTY: "old",
+        }
+    )
+    properties["nzbdav.proxy_port"] = "42469"
+    url = "http://127.0.0.1:42469/stream/new" if uses_proxy else "new-stream"
+    monitor = service.NzbdavPlayer(proxy=MagicMock())
+    monitor._state = service.PlaybackState.MONITORING
+    monitor._playback_session = "old"
+    monitor._playback_metadata = dict(EPISODE)
+    monkeypatch.setattr(
+        resolver,
+        "_make_playable_listitem",
+        lambda path, _headers: resolver.xbmcgui.ListItem(path=path),
+    )
+    player.play.side_effect = lambda *_args: monitor.onPlayBackStopped()
+    resolver._finish_player_playback(
+        {
+            "stream_url": url,
+            "stream_headers": {},
+            "_playback_metadata": dict(MOVIE),
+        }
+    )
+    assert properties["nzbdav.active"] == "true"
+    assert json.loads(properties["nzbdav.playback_metadata"]) == MOVIE
+    if uses_proxy:
+        monitor._proxy.clear_sessions.assert_not_called()
+    else:
+        monitor._proxy.clear_sessions.assert_called_once()
+    monitor._check_active()
+    assert monitor._playback_metadata == MOVIE
+
+
+def test_service_waits_for_complete_handoff_snapshot(playback_kodi):
+    from resources.lib import playback_handoff
+
+    _player, _plugin, _home, properties = playback_kodi
+    properties.update(
+        {
+            "nzbdav.active": "true",
+            "nzbdav.playback_metadata": json.dumps(MOVIE),
+            playback_handoff.SESSION_PROPERTY: "new",
+            playback_handoff.PENDING_PROPERTY: "new",
+        }
+    )
+    monitor = service.NzbdavPlayer()
+    with playback_handoff.snapshot_guard(wait=True) as locked:
+        assert locked
+        monitor._check_active()
+        assert properties["nzbdav.active"] == "true"
+        assert monitor._state == service.PlaybackState.IDLE
+    monitor._check_active()
+    assert monitor._playback_metadata == MOVIE
+    assert monitor._playback_session == "new"
+
+
+def test_aborted_handoff_restores_prior_reservation(playback_kodi, monkeypatch):
+    from resources.lib import playback_handoff
+
+    _player, _plugin, home, properties = playback_kodi
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "old",
+            playback_handoff.PENDING_PROPERTY: "old",
+        }
+    )
+    with playback_handoff.snapshot_guard(wait=True) as locked:
+        assert locked
+        monkeypatch.setattr(
+            playback_handoff.xbmc.Monitor.return_value.waitForAbort,
+            "side_effect",
+            lambda _delay: True,
+        )
+        with pytest.raises(RuntimeError, match="interrupted"):
+            with playback_handoff.handoff(home=home):
+                pytest.fail("A contended canceled handoff must not enter playback")
+    assert properties[playback_handoff.PENDING_PROPERTY] == "old"
+    assert properties[playback_handoff.SESSION_PROPERTY] == "old"

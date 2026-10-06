@@ -191,11 +191,18 @@ def _complete_playback(handle, succeeded, item, resume_key, captured, metadata=N
     try:
         if handle is not None:
             if succeeded:
-                playback_context.prepare_playback(item, metadata or {})
-            xbmcplugin.setResolvedUrl(
-                handle, succeeded, item if succeeded else xbmcgui.ListItem()
-            )
-            handed_off = succeeded
+                try:
+                    with playback_context.handoff() as session:
+                        playback_context.prepare_playback(
+                            item, metadata or {}, session_token=session
+                        )
+                        xbmcplugin.setResolvedUrl(handle, True, item)
+                    handed_off = True
+                except RuntimeError:
+                    notify("StreamNZB", string(30610))
+                    xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
+            else:
+                xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
     finally:
         _finish_resume_state(resume_key, captured, handed_off)
 
@@ -227,8 +234,9 @@ def play_streamnzb(params, settings_getter, handle=None):
         chosen = _choose_resume(item, resume_key, captured)
         _ensure_resume_not_cancelled(chosen, monitor)
         if handle is None:
-            playback_context.prepare_playback(item, metadata)
-            xbmc.Player().play(path, item)
+            with playback_context.handoff() as session:
+                playback_context.prepare_playback(item, metadata, session_token=session)
+                xbmc.Player().play(path, item)
         succeeded = True
     except StreamNZBCancelled:
         if handle is None:
