@@ -2638,6 +2638,11 @@ def test_handle_search_auto_select_passes_clean_params_to_resolver(
     args, kwargs = mock_resolve_and_play.call_args
     assert args == (chosen["link"], chosen["title"])
     resolver_params = dict(kwargs["params"])
+    assert resolver_params.pop("_playback_metadata") == {
+        "mediatype": "movie",
+        "title": "The Matrix",
+        "tmdb_id": "603",
+    }
     loader = resolver_params.pop("_fallback_candidate_loader")
     assert loader is None
     assert resolver_params == {
@@ -2831,6 +2836,11 @@ def test_handle_search_picker_passes_clean_params_to_resolver(
     args, kwargs = mock_resolve_and_play.call_args
     assert args == (chosen["link"], chosen["title"])
     resolver_params = dict(kwargs["params"])
+    assert resolver_params.pop("_playback_metadata") == {
+        "mediatype": "movie",
+        "title": "The Matrix",
+        "tmdb_id": "603",
+    }
     loader = resolver_params.pop("_fallback_candidate_loader")
     assert loader is None
     assert resolver_params == {
@@ -3583,6 +3593,11 @@ def test_handle_search_picker_fetches_fallbacks_after_selection(
     args, kwargs = mock_resolve_and_play.call_args
     assert args == (primary["link"], primary["title"])
     resolver_params = dict(kwargs["params"])
+    assert resolver_params.pop("_playback_metadata") == {
+        "mediatype": "movie",
+        "title": "The Matrix",
+        "tmdb_id": "603",
+    }
     loader = resolver_params.pop("_fallback_candidate_loader")
     assert callable(loader)
     assert resolver_params == {

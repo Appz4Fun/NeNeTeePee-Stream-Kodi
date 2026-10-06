@@ -46,15 +46,15 @@ def test_episode_metadata_uses_kodi_api_methods():
             streamnzb.StreamEntry("Release", "", URL), dict(EPISODE, title="Show")
         )
     info.setTvShowTitle.assert_called_once_with("Show")
-    info.setSeason.assert_called_once_with(0)
-    info.setEpisode.assert_called_once_with(1)
+    info.setSeason.assert_called_with(0)
+    info.setEpisode.assert_called_with(1)
 
 
 def test_tmdbhelper_episode_template_uses_show_tmdb_placeholder():
     from resources.lib.player_installer import PLAYER_JSON
 
     assert "tmdb_id={tmdb}," in PLAYER_JSON["play_episode"]
-    assert "tmdb_id={tmdb_id}" in PLAYER_JSON["play_movie"]
+    assert "tmdb_id={tmdb}" in PLAYER_JSON["play_movie"]
 
 
 @pytest.mark.parametrize(
@@ -651,9 +651,9 @@ def test_nzbget_delegation_respects_dropdown(backend, expected):
 def test_episode_listitem_uses_canonical_numbers(player_mocks):
     streamnzb_player.play_streamnzb(EPISODE, settings, handle=7)
     info = player_mocks["gui"].ListItem.return_value.getVideoInfoTag.return_value
-    info.setSeason.assert_called_once_with(0)
-    info.setEpisode.assert_called_once_with(1)
-    info.setMediaType.assert_called_once_with("episode")
+    info.setSeason.assert_called_with(0)
+    info.setEpisode.assert_called_with(1)
+    info.setMediaType.assert_called_with("episode")
 
 
 def test_stream_label_prefers_release_filename():
@@ -712,3 +712,69 @@ def test_picker_applies_configured_filters_and_size_sort(player_mocks):
     assert mocks["gui"].ListItem.call_args.kwargs["label"] == (
         "Large.2160p.REMUX.x265-GRP"
     )
+
+
+@pytest.mark.parametrize("handle", [None, 7])
+@pytest.mark.parametrize("kind", ["movie", "episode"])
+def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
+    player_mocks, monkeypatch, handle, kind
+):
+
+    from resources.lib import playback_context
+
+    properties = {"TMDbHelper.PlayerInfoString": "stale"}
+    home = player_mocks["gui"].Window.return_value
+    home.getProperty.side_effect = lambda key: properties.get(key, "")
+    home.setProperty.side_effect = properties.__setitem__
+    home.clearProperty.side_effect = lambda key: properties.pop(key, None)
+    monkeypatch.setattr(playback_context, "xbmcgui", player_mocks["gui"])
+    params = {
+        "type": kind,
+        "title": "Predestination",
+        "year": "2014",
+        "tmdb_id": "206487",
+        "imdb": "tt2397535",
+    }
+    if kind == "episode":
+        params.update(
+            title="Shrinking",
+            season="1",
+            episode="6",
+            tvshow_tmdb_id="136311",
+            episode_tmdb_id="424242",
+            episode_title="Imposter Syndrome",
+        )
+    player_mocks["choose"].side_effect = lambda *_args: 137.0
+
+    def check_item(item):
+        tag = item.getVideoInfoTag()
+        tag.setMediaType.assert_called_with(kind)
+        tag.setTitle.assert_called_with(
+            "Predestination" if kind == "movie" else "Imposter Syndrome"
+        )
+        ids = tag.setUniqueIDs.call_args.args[0]
+        assert ids["tmdb"] == ("206487" if kind == "movie" else "424242")
+        context = json.loads(properties["TMDbHelper.PlayerInfoString"])
+        assert context["tmdb_id"] == ("206487" if kind == "movie" else "136311")
+        assert context["tmdb_type"] == kind
+        item.setProperty.assert_any_call("StartOffset", "137.0")
+        if kind == "movie":
+            tag.setYear.assert_called_with(2014)
+            assert ids["imdb"] == "tt2397535"
+        else:
+            assert ids["tvshow.tmdb"] == "136311"
+
+    if handle is None:
+        player_mocks["kodi"].Player.return_value.play.side_effect = (
+            lambda _path, item: check_item(item)
+        )
+    else:
+        player_mocks["plugin"].setResolvedUrl.side_effect = (
+            lambda _handle, success, item: check_item(item) if success else None
+        )
+    streamnzb_player.play_streamnzb(params, settings, handle)
+    player_mocks["notify"].assert_not_called()
+    if handle is None:
+        player_mocks["kodi"].Player.return_value.play.assert_called_once()
+    else:
+        assert player_mocks["plugin"].setResolvedUrl.call_args.args[1] is True

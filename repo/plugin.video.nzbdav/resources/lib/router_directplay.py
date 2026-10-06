@@ -31,7 +31,7 @@ def _direct_play_parse_fallback_urls(fallback_urls_raw):
 
 
 def _direct_play_prepare_and_serve(
-    handle, primary_url, primary_auth, fallback_urls, validate_url
+    handle, primary_url, primary_auth, fallback_urls, validate_url, params=None
 ):
     """Build fallback sources, prepare the proxy, and hand Kodi the proxy URL.
 
@@ -76,6 +76,11 @@ def _direct_play_prepare_and_serve(
     listitem = _router.xbmcgui.ListItem(path=proxy_url)
     listitem.setMimeType("video/x-matroska")
     listitem.setContentLookup(False)
+    from resources.lib.playback_context import metadata_from_params, prepare_playback
+
+    prepare_playback(
+        listitem, metadata_from_params(params), home=_router.xbmcgui.Window(10000)
+    )
     _router.xbmcplugin.setResolvedUrl(handle, True, listitem)
 
 

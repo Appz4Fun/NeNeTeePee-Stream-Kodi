@@ -25,10 +25,14 @@ if lib_path not in sys.path:
     sys.path.insert(0, lib_path)
 
 from resources.lib.playback_backend import migrate_backend  # noqa: E402
+from resources.lib.player_installer import (  # noqa: E402
+    upgrade_installed_tmdbhelper_player,
+)
 from resources.lib.router import route  # noqa: E402
 from resources.lib.script_player import run_tmdb_play  # noqa: E402
 
 migrate_backend()
+upgrade_installed_tmdbhelper_player()
 
 if len(sys.argv) > 1 and sys.argv[1] == "tmdb_play":
     run_tmdb_play(sys.argv[2:])

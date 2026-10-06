@@ -14,6 +14,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
+from resources.lib import playback_context
 from resources.lib.filter import filter_results
 from resources.lib.http_util import notify
 from resources.lib.i18n import string
@@ -185,10 +186,12 @@ def _choose_resume(item, key, captured):
     return chosen
 
 
-def _complete_playback(handle, succeeded, item, resume_key, captured):
+def _complete_playback(handle, succeeded, item, resume_key, captured, metadata=None):
     handed_off = succeeded and handle is None
     try:
         if handle is not None:
+            if succeeded:
+                playback_context.prepare_playback(item, metadata or {})
             xbmcplugin.setResolvedUrl(
                 handle, succeeded, item if succeeded else xbmcgui.ListItem()
             )
@@ -213,8 +216,10 @@ def play_streamnzb(params, settings_getter, handle=None):
     item = None
     resume_key = ""
     captured = 0.0
+    metadata = {}
     try:
         params = _recover_episode_numbers(params)
+        metadata = playback_context.metadata_from_params(params)
         monitor = xbmc.Monitor()
         entry = _select_stream(params, settings_getter, monitor)
         item, path = _playback_listitem(entry, params)
@@ -222,6 +227,7 @@ def play_streamnzb(params, settings_getter, handle=None):
         chosen = _choose_resume(item, resume_key, captured)
         _ensure_resume_not_cancelled(chosen, monitor)
         if handle is None:
+            playback_context.prepare_playback(item, metadata)
             xbmc.Player().play(path, item)
         succeeded = True
     except StreamNZBCancelled:
@@ -237,4 +243,4 @@ def play_streamnzb(params, settings_getter, handle=None):
             xbmc.LOGERROR,
         )
     finally:
-        _complete_playback(handle, succeeded, item, resume_key, captured)
+        _complete_playback(handle, succeeded, item, resume_key, captured, metadata)

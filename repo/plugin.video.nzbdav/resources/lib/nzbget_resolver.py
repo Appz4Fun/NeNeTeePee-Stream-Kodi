@@ -1196,8 +1196,13 @@ def resolve_and_play_nzbget(
     title = unquote(params.get("title", "")) or "submission"
 
     def on_success(video_url):
+        from resources.lib import playback_context
+
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
+        playback_context.prepare_playback(
+            listitem, playback_context.metadata_from_params(params)
+        )
         _arm_playback_monitor(video_url, resume_seconds, resume_key)
         xbmcplugin.setResolvedUrl(handle, True, listitem)
 
@@ -1244,8 +1249,13 @@ def play_nzbget(
         settings_getter = resolve_params.get("_settings_getter")
 
     def on_success(video_url):
+        from resources.lib import playback_context
+
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
+        playback_context.prepare_playback(
+            listitem, playback_context.metadata_from_params(resolve_params)
+        )
         _arm_playback_monitor(video_url, resume_seconds, resume_key)
         xbmc.Player().play(video_url, listitem)
 

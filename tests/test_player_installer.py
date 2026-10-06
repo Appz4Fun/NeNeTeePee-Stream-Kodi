@@ -123,7 +123,7 @@ def test_player_json_uses_script_handoff_instead_of_plugin_media_url():
     assert "type=movie" in PLAYER_JSON["play_movie"]
     assert "title={title_url}" in PLAYER_JSON["play_movie"]
     # tmdb_id must be forwarded so resolver can clear TMDBHelper bookmarks
-    assert "tmdb_id={tmdb_id}" in PLAYER_JSON["play_movie"]
+    assert "tmdb_id={tmdb}" in PLAYER_JSON["play_movie"]
     assert PLAYER_JSON["play_episode"].startswith(
         "executebuiltin://RunScript("
         "special://home/addons/plugin.video.nzbdav/addon.py,tmdb_play,"

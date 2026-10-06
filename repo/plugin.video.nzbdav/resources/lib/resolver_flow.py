@@ -323,6 +323,11 @@ def _resolve_play_ready_stream(
         _reject_resolve_handle(handle)
         return dialog
     _resolver._arm_live_fallback_push(prepared, fallback_state, stream_url, dead=dead)
+    from resources.lib.playback_context import metadata_from_params
+
+    metadata = metadata_from_params(params)
+    if metadata:
+        prepared["_playback_metadata"] = metadata
     _resolver._finish_direct_playback(
         handle, prepared, resume_key=release_id, resume_seconds=chosen
     )
@@ -493,6 +498,11 @@ def _resolve_and_play_ready_stream(
         _resolver._stop_fallback_submit_worker(fallback_state, cancel_submitted=True)
         return dialog
     _resolver._arm_live_fallback_push(prepared, fallback_state, stream_url, dead=dead)
+    from resources.lib.playback_context import metadata_from_params
+
+    metadata = metadata_from_params(resume_params)
+    if metadata:
+        prepared["_playback_metadata"] = metadata
     _resolver._finish_player_playback(
         prepared, resume_key=release_id, resume_seconds=chosen
     )

@@ -42,6 +42,7 @@ def test_check_active_reads_window_properties(mock_window):
         "nzbdav.resume_key",
         "nzbdav.resume_offset",
         "nzbdav.stream_title",
+        "nzbdav.playback_metadata",
     }
 
 

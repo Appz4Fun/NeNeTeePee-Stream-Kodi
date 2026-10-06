@@ -4,6 +4,7 @@
 """NeNeTeePee-Stream-Kodi proxy and playback monitoring service."""
 
 import faulthandler
+import json
 import os
 import sys
 import threading
@@ -26,7 +27,7 @@ if lib_path not in sys.path:
 import xbmc  # noqa: E402
 import xbmcaddon  # noqa: E402
 import xbmcgui  # noqa: E402
-from resources.lib import resume_store  # noqa: E402
+from resources.lib import playback_context, resume_store  # noqa: E402
 from resources.lib.http_util import notify as _notify  # noqa: E402
 from resources.lib.stream_proxy import StreamProxy  # noqa: E402
 
@@ -45,6 +46,7 @@ _PROP_STREAM_URL = "nzbdav.stream_url"
 _PROP_RESUME_KEY = "nzbdav.resume_key"
 _PROP_RESUME_OFFSET = "nzbdav.resume_offset"
 _PROP_STREAM_TITLE = "nzbdav.stream_title"
+_PROP_PLAYBACK_METADATA = "nzbdav.playback_metadata"
 _PROP_ACTIVE = "nzbdav.active"
 # Persistent live-playback liveness flag (distinct from the consume-once
 # ``_PROP_ACTIVE`` handoff signal): set while the service monitors a stream and
@@ -152,6 +154,8 @@ class NzbdavPlayer(xbmc.Player):
         self._state_lock = threading.RLock()
         self._state = PlaybackState.IDLE
         self._stream_url = ""
+        self._playback_metadata = {}
+        self._session_generation = 0
         self._resume_key = ""
         self._title = ""
         self._last_position = 0.0
@@ -229,6 +233,16 @@ class NzbdavPlayer(xbmc.Player):
         if active != "true":
             return
         with self._state_lock:
+            self._session_generation += 1
+            try:
+                snapshot = json.loads(
+                    _HOME_WINDOW.getProperty(_PROP_PLAYBACK_METADATA) or "{}"
+                )
+            except (ValueError, TypeError):
+                snapshot = {}
+            self._playback_metadata = playback_context.metadata_from_params(
+                {"_playback_metadata": snapshot}
+            )
             self._stream_url = _HOME_WINDOW.getProperty(_PROP_STREAM_URL)
             self._resume_key = _HOME_WINDOW.getProperty(_PROP_RESUME_KEY)
             self._last_position = _coerce_resume_offset(
@@ -257,6 +271,7 @@ class NzbdavPlayer(xbmc.Player):
                 _PROP_RESUME_KEY,
                 _PROP_RESUME_OFFSET,
                 _PROP_STREAM_TITLE,
+                _PROP_PLAYBACK_METADATA,
             )
         )
         # Raise the persistent liveness flag now that the service is monitoring this
@@ -304,6 +319,9 @@ class NzbdavPlayer(xbmc.Player):
         standby-submit window. ``nzbdav.active`` is cleared as a belt-and-braces
         measure (it is normally already consumed by ``_check_active``).
         """
+        with self._state_lock:
+            self._playback_metadata = {}
+            self._session_generation += 1
         self._clear_props(
             (
                 _PROP_PLAYING,
@@ -312,10 +330,11 @@ class NzbdavPlayer(xbmc.Player):
                 _PROP_RESUME_KEY,
                 _PROP_RESUME_OFFSET,
                 _PROP_STREAM_TITLE,
+                _PROP_PLAYBACK_METADATA,
             )
         )
 
-    def _enter_idle_and_clear(self):
+    def _enter_idle_and_clear(self, generation=None):
         """Transition to IDLE and clear the IPC properties (incl. liveness).
 
         Used by tick()'s terminal failure paths (never-started, retries
@@ -327,8 +346,10 @@ class NzbdavPlayer(xbmc.Player):
         only these end-of-the-line transitions clear it.
         """
         with self._state_lock:
+            if generation is not None and generation != self._session_generation:
+                return
             self._state = PlaybackState.IDLE
-        self._clear_stream_properties()
+            self._clear_stream_properties()
 
     def _save_stable_resume(self, resume_key, position, av_started):
         """Persist the last position under the original source stream identity."""
@@ -466,6 +487,8 @@ class NzbdavPlayer(xbmc.Player):
             stream_url = self._stream_url
             position = self._last_position
             retry_count = self._retry_count
+            generation = self._session_generation
+            metadata = dict(self._playback_metadata)
 
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Retrying '{}' from {:.0f}s ({}/{})".format(
@@ -485,9 +508,16 @@ class NzbdavPlayer(xbmc.Player):
         if self._monitor.waitForAbort(retry_delay):
             return False
 
-        li = xbmcgui.ListItem(path=stream_url)
-        li.setProperty("StartOffset", str(position))
-        self.play(stream_url, li)
+        with self._state_lock:
+            if (
+                self._state == PlaybackState.IDLE
+                or generation != self._session_generation
+            ):
+                return False
+            li = xbmcgui.ListItem(path=stream_url)
+            li.setProperty("StartOffset", str(position))
+            playback_context.prepare_playback(li, metadata, home=_HOME_WINDOW)
+            self.play(stream_url, li)
 
         return self._await_playback_start()
 
@@ -592,13 +622,15 @@ class NzbdavPlayer(xbmc.Player):
 
     def _handle_error_retry(self, retry_count, title):
         """Drive the ERROR-state retry decision (retry, give up, or relaunch)."""
+        with self._state_lock:
+            generation = self._session_generation
         enabled, max_retries, retry_delay = self._read_settings()
         if not enabled:
             from resources.lib.i18n import addon_name as _addon_name
             from resources.lib.i18n import string as _s
 
             _notify(_addon_name(), _s(30115), 8000)
-            self._enter_idle_and_clear()
+            self._enter_idle_and_clear(generation=generation)
             return
 
         if retry_count >= max_retries:
@@ -612,11 +644,11 @@ class NzbdavPlayer(xbmc.Player):
             from resources.lib.i18n import fmt as _f
 
             _notify(_addon_name(), _f(30116, max_retries), 8000)
-            self._enter_idle_and_clear()
+            self._enter_idle_and_clear(generation=generation)
             return
 
         if not self._retry_playback(max_retries, retry_delay):
-            self._enter_idle_and_clear()
+            self._enter_idle_and_clear(generation=generation)
 
 
 def check_cache_warning(state):
@@ -646,6 +678,7 @@ def _clear_stale_ipc_properties():
         _PROP_RESUME_KEY,
         _PROP_RESUME_OFFSET,
         _PROP_STREAM_TITLE,
+        _PROP_PLAYBACK_METADATA,
         _PROP_PROXY_TOKEN,
     ):
         try:
@@ -706,6 +739,9 @@ def main():
     """Service entry point—runs for the lifetime of Kodi."""
     monitor = xbmc.Monitor()
 
+    from resources.lib.player_installer import upgrade_installed_tmdbhelper_player
+
+    upgrade_installed_tmdbhelper_player()
     _clear_stale_ipc_properties()
 
     proxy = _start_proxy(monitor)
