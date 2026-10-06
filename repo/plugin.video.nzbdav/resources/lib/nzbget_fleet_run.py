@@ -136,6 +136,8 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
     try:
         if prepared is None:
             live = len(_send_batch(run, candidates, limits, capped))
+            if capped and not dupe_check_off and pick.get("_nzbid"):
+                _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
         else:
             from resources.lib.nzbget_resolver_dupes import _send_kept
 
@@ -157,9 +159,6 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
                 (ctx.cancel_event, ctx.submitted_nzbids, capped, prepared_dedup),
                 (limits, tally),
             )
-            live = len(tally["live"])
-        if prepared is None and capped and not dupe_check_off and pick.get("_nzbid"):
-            _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
     finally:
         dedup.close()
     # A shutdown requested during the last append's wait may not have been

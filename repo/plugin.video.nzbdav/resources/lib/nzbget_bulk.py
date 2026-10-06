@@ -72,12 +72,18 @@ def _existing(ctx, getter, key):
             ctx.bulk_completed = entry
             return None
     queue = nzbget_api.queue_rows(getter)
-    for row in queue or []:
-        if nzbget_api._dupekey_match(row, key):
-            nzbid = nzbget_api._int_nzbid(row.get("NZBID"))
-            if nzbid:
-                ctx.adopted_nzbids = [nzbid]
-                return nzbid
+    matches = [row for row in queue or [] if nzbget_api._dupekey_match(row, key)]
+    matches.sort(key=lambda row: str(row.get("Status") or "").upper() == "PAUSED")
+    for row in matches:
+        nzbid = nzbget_api._int_nzbid(row.get("NZBID"))
+        if nzbid and nzbid > 0:
+            # Keep the whole existing fleet in scope: its next promoted backup
+            # must be followed rather than rejected as another play's download.
+            states = nzbget_api.dupekey_member_states(key, history or [], queue)
+            ctx.adopted_nzbids = [
+                job for job, state in states.items() if state in ("queued", "parked")
+            ]
+            return nzbid
     return None
 
 

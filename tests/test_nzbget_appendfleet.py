@@ -437,3 +437,21 @@ def test_same_slice_cancel_returns_before_stalled_delete(bulk_env):
             release.set()
             worker.join(5)
             assert finished.wait(5)
+
+
+def test_reused_queue_keeps_parked_backups_in_failover_ownership(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    history = [{"NZBID": 99, "DupeKey": "k", "Status": "DELETED/DUPE"}]
+    queue = [
+        {"NZBID": 78, "DupeKey": "k", "Status": "PAUSED"},
+        {"NZBID": 77, "DupeKey": "k", "Status": "DOWNLOADING"},
+    ]
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch.object(
+        nzbget_api, "queue_rows", return_value=queue
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (77, None)
+    assert set(ctx.adopted_nzbids) == {77, 78, 99}
+    fleet.assert_not_called()
+    append.assert_not_called()
