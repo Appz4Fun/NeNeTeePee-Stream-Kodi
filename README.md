@@ -161,7 +161,9 @@ Full walkthrough:
 - **Optional NZBGet backend** *(beta)* as an alternative to nzbdav, playing
   from an SMB share or a local/mounted folder, with
   [Smart Duplicates failover](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/nzbget-backend/#smart-duplicates-failover)
-  to a same-release backup when a download turns out unrepairable.
+  to a same-release backup when a download turns out unrepairable. Servers with
+  `appendfleet` receive one deduplicated fleet of up to 50 NZBs and choose by
+  health; older servers fall back to individual submissions.
 
 Each feature is documented in full under
 [Features](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/).

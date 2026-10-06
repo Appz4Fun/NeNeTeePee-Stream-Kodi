@@ -2149,3 +2149,11 @@ msgstr "Downloading NZBs {} of {}"
 msgctxt "#30617"
 msgid "Sending {} NZBs to NZBGet..."
 msgstr "Sending {} NZBs to NZBGet..."
+
+msgctxt "#30618"
+msgid "NZBGet found {} good candidates; downloading the best copy{}"
+msgstr ""
+
+msgctxt "#30619"
+msgid " ({}% health)"
+msgstr ""

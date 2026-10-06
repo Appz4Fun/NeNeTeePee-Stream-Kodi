@@ -474,3 +474,30 @@ def test_clean_search_query_leaves_plain_title_untouched():
 def test_clean_search_query_handles_empty_and_none():
     assert clean_search_query("") == ""
     assert clean_search_query(None) == ""
+
+
+def test_http_post_json_stream_sets_length_and_auth(tmp_path):
+    body = b'{"method":"appendfleet","params":[]}'
+    path = tmp_path / "request.json"
+    path.write_bytes(body)
+    response = MagicMock()
+    response.__enter__.return_value = response
+    response.getcode.return_value = 200
+    response.read.return_value = b'{"result":42}'
+
+    def post(request, timeout):
+        assert timeout == 300
+        assert request.get_header("Content-length") == str(len(body))
+        assert request.get_header("Authorization").startswith("Basic ")
+        assert request.data.read() == body
+        return response
+
+    with path.open("rb") as stream, patch(
+        "resources.lib.http_util.urlopen", side_effect=post
+    ):
+        assert (
+            http_post_json(
+                "http://server/jsonrpc", stream, timeout=300, basic_auth=("u", "p")
+            )
+            == '{"result":42}'
+        )

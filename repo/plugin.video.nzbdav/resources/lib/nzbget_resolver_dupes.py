@@ -756,9 +756,11 @@ def _extra_backups_from_loader(  # pylint: disable=too-many-arguments
                 continue
             seen.add(link)
             row = {key: candidate[key] for key in _FLEET_ROW_KEYS if key in candidate}
-            row.update(link=link, score=score)
+            row["link"] = link
+            if score is not None:
+                row["score"] = score
+                score -= 1
             extras.append(row)
-            score -= 1
 
     _take(leading or [])
     if loader is not None and (list_cap is None or len(extras) < list_cap):

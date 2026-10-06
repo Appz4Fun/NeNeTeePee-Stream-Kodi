@@ -1875,7 +1875,7 @@ def test_play_nzbget_missing_config_does_not_start_player():
 
 
 @pytest.mark.parametrize("outcome", ["failed", "canceled"])
-def test_play_nzbget_submits_every_manifest_source(outcome):
+def test_play_nzbget_submits_every_manifest_source_on_legacy_server(outcome):
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.history_rows", return_value=[]
     ), patch(
@@ -1888,6 +1888,14 @@ def test_play_nzbget_submits_every_manifest_source(outcome):
         "resources.lib.nzbget_resolver._warn_if_healthcheck_pauses"
     ), patch(
         "resources.lib.nzbget_resolver._copy_vetoed_after_append", return_value=False
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.append_fleet",
+        return_value=(
+            None,
+            __import__("resources.lib.nzbget_api", fromlist=["RpcError"]).RpcError(
+                "Invalid method", {"code": 1, "message": "Invalid method"}
+            ),
+        ),
     ), patch(
         "resources.lib.nzbget_resolver.nzbget_api.append_nzb",
         side_effect=[(42, None), (43, None)],
@@ -1930,7 +1938,8 @@ def test_manifest_fleet_deduplicates_without_truncating_explicit_group():
     assert [b["link"] for b in dupe["backups"]] == sources[:3] + sources[4:]
     assert len(dupe["backups"]) == 7
     assert dupe["max_backups"] == -1  # nzbget_max_backups default: all of them
-    assert all(b["score"] < dupe["pick_score"] for b in dupe["backups"])
+    assert "pick_score" not in dupe
+    assert all("score" not in b for b in dupe["backups"])
     assert "secret" not in dupe["key"]
     reordered = _manifest_dupe_submission(
         sources[0], "Movie", {"_source_urls": sources}

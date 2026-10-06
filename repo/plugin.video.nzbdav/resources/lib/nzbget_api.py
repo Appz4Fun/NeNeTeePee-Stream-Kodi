@@ -51,7 +51,9 @@ def _rpc_url(base_url):
     return "{}/jsonrpc".format(base_url)
 
 
-def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
+def _rpc_call(
+    method, params, settings_getter=None, timeout=_RPC_TIMEOUT, encoded_payload=None
+):
     """Invoke a JSON-RPC method. Returns (result, error).
 
     On success: (result_value, None). On any failure: (None, message_str).
@@ -63,7 +65,11 @@ def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
     # mis-parse fields that appear after ``params`` (maintainer note,
     # forum.nzbget.net t=2209), making append/poll RPCs fail or pick up an
     # extra parameter. Order the payload id -> method -> params accordingly.
-    payload = {"id": 1, "method": method, "params": list(params)}
+    payload = (
+        encoded_payload
+        if encoded_payload is not None
+        else {"id": 1, "method": method, "params": list(params)}
+    )
     try:
         text = _http_post_json(
             _rpc_url(base_url),
@@ -86,8 +92,105 @@ def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
             "NeNeTeePee-Stream-Kodi: NZBGet {} error: {}".format(method, message),
             xbmc.LOGERROR,
         )
-        return None, message
+        return None, RpcError(message, data["error"])
     return data.get("result") if isinstance(data, dict) else None, None
+
+
+class RpcError(str):
+    """Redacted error text retaining the JSON-RPC code for capability checks."""
+
+    def __new__(cls, message, detail):
+        obj = super().__new__(cls, message)
+        obj.code = detail.get("code") if isinstance(detail, dict) else None
+        obj.rpc_message = (
+            detail.get("message", "") if isinstance(detail, dict) else str(detail)
+        )
+        return obj
+
+
+def is_unknown_method(error):
+    """Only a server JSON-RPC method error permits retrying via append."""
+    if not isinstance(error, RpcError):
+        return False
+    message = str(error.rpc_message).strip().lower()
+    return error.code == -32601 or any(
+        message == name or message.startswith(name + ":")
+        for name in (
+            "invalid method",
+            "invalid procedure",
+            "unknown method",
+            "method not found",
+        )
+    )
+
+
+def append_fleet(members, dupe_key, settings_getter=None):
+    """Submit 1..50 ordered, deduplicated manifests for server health ranking."""
+    if not 1 <= len(members) <= 50:
+        return None, "appendfleet requires 1 to 50 members"
+    category = _get_settings(settings_getter)[3]
+    params = [
+        {
+            "DupeKey": dupe_key,
+            "Category": category,
+            "Priority": 0,
+            "Timeout": 45,
+            "Members": members,
+        }
+    ]
+    from resources.lib.nzbget_fleet_payload import fleet_payload
+
+    try:
+        with fleet_payload(params) as payload:
+            _log_fleet_size(params, payload)
+            result, error = _rpc_call(
+                "appendfleet",
+                params,
+                settings_getter=settings_getter,
+                timeout=300,
+                encoded_payload=payload,
+            )
+    except (OSError, TypeError, ValueError) as exc:
+        return None, _redact_text(str(exc))
+    if error is not None:
+        return None, error
+    if (
+        not isinstance(result, dict)
+        or not isinstance(result.get("Chosen"), int)
+        or isinstance(result.get("Chosen"), bool)
+        or result["Chosen"] < 0
+    ):
+        return None, "Invalid appendfleet response; submission may have succeeded"
+    rows = result.get("Members")
+    if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+        return None, "Invalid appendfleet members; submission may have succeeded"
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: NZBGet appendfleet Chosen={} Alive={}".format(
+            result["Chosen"], [row.get("Alive", -1) for row in rows]
+        ),
+        xbmc.LOGINFO,
+    )
+    return result, None
+
+
+def _log_fleet_size(params, payload):
+    """Log only size and count; URL credentials and base64 content stay private."""
+    if payload is not None:
+        payload.seek(0, 2)
+        size = payload.tell()
+        payload.seek(0)
+    else:
+        request = {"id": 1, "method": "appendfleet", "params": params}
+        size = sum(
+            len(chunk.encode("utf-8"))
+            for chunk in json.JSONEncoder().iterencode(request)
+        )
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: NZBGet appendfleet request bytes={} members={}".format(
+            size, len(params[0]["Members"])
+        ),
+        xbmc.LOGINFO,
+    )
 
 
 # Same ceiling as the nzbdav manifest fetch: a broken or hostile indexer

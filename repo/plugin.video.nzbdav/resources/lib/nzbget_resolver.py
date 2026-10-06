@@ -831,6 +831,18 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             return False
     else:
         nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
+    completed = getattr(ctx, "bulk_completed", None)
+    if completed and completed.get("present"):
+        _play_completed_download(
+            ctx,
+            completed["dest_dir"],
+            title,
+            download_pubdate,
+            download_size,
+            job_id=completed.get("nzbid"),
+            job_name=completed.get("job_name") or title,
+        )
+        return False
     if not nzbid:
         # Surface the specific (already-redacted) NZBGet message—auth vs dupe
         # vs "append returned 0"—per the spec error table, else the generic.
@@ -861,7 +873,11 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
             # the pick. Built on both the fleet and plain paths (the dict is
             # always passed to the poll).
-            "rescue": _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=nzbid),
+            "rescue": (
+                None
+                if getattr(ctx, "bulk_fleet", False)
+                else _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=nzbid)
+            ),
         },
     )
     handled, leave_job = _handle_poll_failure(
@@ -1035,7 +1051,7 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     cancellation. Hash the exact group to avoid exposing URL credentials in
     NZBGet's DupeKey.
     """
-    from resources.lib.router_play import _dupe_score_base, _parse_max_backups
+    from resources.lib.router_play import _parse_max_backups
 
     sources = params.get("_source_urls")
     if not isinstance(sources, list):
@@ -1058,15 +1074,9 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     # resubmit ledger's held backups).
     identities = sorted({nzbget_submit_ledger.link_key(url) or url for url in urls})
     key = hashlib.sha256("\n".join(identities).encode("utf-8")).hexdigest()
-    base = _dupe_score_base()
-    backups = [
-        {"link": url, "title": title, "score": base - index}
-        for index, url in enumerate(urls[1:], 1)
-    ]
+    backups = [{"link": url, "title": title} for url in urls[1:]]
     return {
         "key": "btad:" + key,
-        "pick_score": base,
-        "score_base": base,
         "backups": backups,
         "max_backups": cap,
     }

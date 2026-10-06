@@ -4809,10 +4809,9 @@ def test_nzbget_dupe_submission_scores_pick_highest_and_backups_descending():
     assert dupe["key"] == "imdb=42|the-movie-2024-1080p"
     assert [b["link"] for b in dupe["backups"]] == ["http://i/a.nzb", "http://i/b.nzb"]
     # Pick strictly highest; backups strictly lower descending.
-    assert all(b["score"] < dupe["pick_score"] for b in dupe["backups"])
-    assert [b["score"] for b in dupe["backups"]] == sorted(
-        [b["score"] for b in dupe["backups"]], reverse=True
-    )
+    assert "pick_score" not in dupe
+    assert all("score" not in b for b in dupe["backups"])
+    assert "score_base" not in dupe
 
 
 def test_nzbget_dupe_submission_none_when_no_same_name_backups():
@@ -4947,7 +4946,7 @@ def test_script_play_resolve_selected_attaches_nzbget_dupe_end_to_end():
     dupe = captured["params"]["_nzbget_dupe"]
     assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p"
     assert [b["link"] for b in dupe["backups"]] == ["http://i/b.nzb"]
-    assert dupe["backups"][0]["score"] < dupe["pick_score"]
+    assert "score" not in dupe["backups"][0]
 
 
 def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
@@ -5106,6 +5105,9 @@ def test_nzbget_dupe_scores_ride_on_the_wall_clock_base():
         _dupe_setting_getter({"nzbget_enabled": "true"}),
     ), patch("resources.lib.router_play._dupe_score_base", return_value=100000):
         dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity)
+        from resources.lib.nzbget_fleet_run import _prepare_legacy_scores
+
+        _prepare_legacy_scores(dupe)
     assert dupe["score_base"] == 100000
     assert dupe["pick_score"] == 100000  # the pick IS the base
     assert [b["score"] for b in dupe["backups"]] == [100000 - 1]  # below it
@@ -5151,8 +5153,8 @@ def test_attach_nzbget_dupe_allows_loader_only_submission():
     assert dupe["backups"] == []
     assert dupe["loader"] == "LOADER"
     assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p"
-    assert dupe["pick_score"] == 100000  # the pick IS the base
-    assert dupe["score_base"] == 100000
+    assert "pick_score" not in dupe
+    assert "score_base" not in dupe
 
 
 def test_attach_nzbget_dupe_no_loader_only_when_loader_absent():
@@ -5260,12 +5262,16 @@ def test_retry_pick_outranks_bigger_earlier_fleet_within_seconds():
             old = _nzbget_dupe_submission_for_selection(
                 selected, five_backups, identity
             )
+            from resources.lib.nzbget_fleet_run import _prepare_legacy_scores
+
+            _prepare_legacy_scores(old)
         with patch(
             "resources.lib.router_play._dupe_score_base", return_value=100003
         ):  # retry 3 "seconds" later, only one backup this time
             retry = _nzbget_dupe_submission_for_selection(
                 selected, [selected, five_backups[1]], identity
             )
+            _prepare_legacy_scores(retry)
     old_max = max([old["pick_score"]] + [b["score"] for b in old["backups"]])
     assert retry["pick_score"] > old_max  # strictly higher -> NZBGet re-downloads
     # Intra-fleet ordering is preserved below the base.

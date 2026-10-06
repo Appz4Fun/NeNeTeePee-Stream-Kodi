@@ -36,6 +36,13 @@ from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable, same_li
 
 
 def submit_fleet(ctx, nzb_url, title, dupe_key):
+    """Submit one deduplicated bulk fleet, falling back only on unknown method."""
+    from resources.lib.nzbget_bulk import submit_bulk
+
+    return submit_bulk(ctx, nzb_url, title, dupe_key)
+
+
+def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
     """Download, dedupe, and send the pick plus its backups; ``(nzbid, error)``.
 
     ``nzbid`` is the pick's NZBGet id (None when its append failed, with
@@ -64,6 +71,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     if progress.canceled():
         ctx.fleet_aborted = progress.aborted
         return None, None
+    _prepare_legacy_scores(dupe)
     force_pick = not _lift_scores(dupe, max_score)
     held = nzbget_submit_ledger.held(dupe_key, members)
     pick = dict(
@@ -110,7 +118,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         )
     cap = dupe.get("max_backups")
     capped = isinstance(cap, int) and cap > 0
-    if not dupe_check_off:
+    if not dupe_check_off and prepared is None:
         # Unlimited: everything up front (download all, then send all).
         # Capped: the loader (it downloads manifests) waits until the cap is
         # known to be unfilled -- see below.
@@ -126,8 +134,31 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     dedup.aborted = lambda: progress.aborted
     run = (dupe_key, getter, ctx, dedup, held)
     try:
-        live = len(_send_batch(run, candidates, limits, capped))
-        if capped and not dupe_check_off and pick.get("_nzbid"):
+        if prepared is None:
+            live = len(_send_batch(run, candidates, limits, capped))
+        else:
+            from resources.lib.nzbget_resolver_dupes import _send_kept
+
+            kept, prepared_dedup = prepared
+            if dupe_check_off:
+                kept = kept[:1]
+            # Reuse already downloaded and deduplicated bodies on old servers.
+            # Scores are calculated only after appendfleet was refused.
+            for index, (row, _handle, _token) in enumerate(kept):
+                row["score"] = int(dupe.get("pick_score") or 0) - index
+            if pick.get("_dupe_mode"):
+                kept[0][0]["_dupe_mode"] = pick["_dupe_mode"]
+            pick = kept[0][0]
+            tally = {"live": [], "attempts": 0}
+            _send_kept(
+                kept,
+                dupe_key,
+                getter,
+                (ctx.cancel_event, ctx.submitted_nzbids, capped, prepared_dedup),
+                (limits, tally),
+            )
+            live = len(tally["live"])
+        if prepared is None and capped and not dupe_check_off and pick.get("_nzbid"):
             _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
     finally:
         dedup.close()
@@ -217,6 +248,18 @@ def _write_parked(body, parent):
             os.remove(path)
         return None
     return path
+
+
+def _prepare_legacy_scores(dupe):
+    """Assign append scores only after the server rejects appendfleet."""
+    if "pick_score" in dupe:
+        return
+    from resources.lib.router_play import _dupe_score_base
+
+    base = _dupe_score_base()
+    dupe.update(pick_score=base, score_base=base)
+    for index, row in enumerate(dupe.get("backups") or [], 1):
+        row["score"] = base - index
 
 
 def _lift_scores(dupe, max_score):
@@ -487,7 +530,7 @@ def _skip_held(candidates, held, ctx, slots=None):
     return kept, newly
 
 
-def _fleet_backups(dupe, progress, include_loader=True):
+def _fleet_backups(dupe, progress, include_loader=True, ranked=True):
     """The pick's backups in rank order: picker rows, then Hydra (+ loader) extras.
 
     The extras are scored just below the picker rows and shared as
@@ -504,7 +547,9 @@ def _fleet_backups(dupe, progress, include_loader=True):
             dupe.get("loader") if include_loader else None,
             [backup.get("link") for backup in backups],
             limit=None,
-            score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
+            score_base=(
+                int(dupe.get("score_base") or 0) - len(backups) - 1 if ranked else None
+            ),
             leading=_core._hydra_uploads_for_fleet(dupe),
             pick=dupe.get("pick"),
         )
