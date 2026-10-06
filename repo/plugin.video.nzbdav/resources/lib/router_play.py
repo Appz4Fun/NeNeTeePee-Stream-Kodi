@@ -775,12 +775,11 @@ def _nzbget_loader_getter(limit):
 
 
 def _hydra_uploads_loader(selected):
-    """Deferred NZBHydra duplicate-upload lookup for the pick, or ``None`` (#372).
+    """Deferred read of the pick's original Hydra search snapshot, or ``None``.
 
-    NZBHydra's Newznab endpoint shows one row per release group; its internal
-    API returns every upload of the pick's exact title. Runs on the backup
-    worker thread, so it reads settings through the pure-XML
-    ``_get_script_setting`` (never Kodi's off-thread ``getSetting``).
+    This reuses same-title uploads returned before picker filtering, without
+    searching again. Settings use the pure-XML ``_get_script_setting`` so
+    backup workers never call Kodi's off-thread ``getSetting``.
     """
     import resources.lib.router as _router
 
@@ -839,10 +838,8 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     )
     hydra_uploads = _hydra_uploads_loader(selected)
     if dupe is None and (loader is not None or hydra_uploads is not None):
-        # NZBHydra collapsed every mirror into this single picker row: no
-        # same-release backups exist, but the loader / Hydra duplicate lookup
-        # can still surface the collapsed duplicate uploads -- submit a
-        # loader-only fleet (#372 r4).
+        # The picker may have removed peers retained in the original search
+        # snapshot. Let the loaders check it without another indexer search.
         dupe = _loader_only_dupe_submission(selected, identity, getter)
     if dupe:
         dupe["loader"] = loader

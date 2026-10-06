@@ -55,8 +55,10 @@ These settings are in the **Fallback Streams** group on the **Advanced** tab:
 
 ## How a backup is chosen
 
-Candidates come from the search results you picked from. On NZBHydra2, NeNeTeePee-Stream-Kodi
-can also find same-release uploads that Hydra collapsed into one row. Before
+Candidates come from the search results you picked from. NZBHydra2 same-title
+uploads are retained before picker filtering and reused after selection, without
+another search. Uploads hidden by Hydra are unavailable unless included in the
+initial response. Before
 NeNeTeePee-Stream-Kodi reads any NZB, it prefetches only candidates whose indexer size is
 within 25% of your pick.
 

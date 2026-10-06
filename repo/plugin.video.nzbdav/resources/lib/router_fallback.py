@@ -94,13 +94,10 @@ _HYDRA_UPLOADS_CACHE_KEY = "_hydra_duplicate_uploads"
 
 
 def _fetch_fallback_extra_uploads(selected, settings_getter):
-    """Fetch same-title alternate uploads from Hydra's duplicate API (fail-soft).
+    """Read same-title uploads from the initial Hydra search snapshot.
 
-    The picker UX still shows one row per release for clean UI, but the
-    fallback worker needs real same-release/different-upload peers—those are
-    exactly what nzbdav-rs needs to swap to without interrupting playback when
-    the primary stream's articles fail. Returns ``[]`` when the lookup is
-    turned off or raises.
+    Both backup consumers reuse the selected row's snapshot. Missing peers
+    never trigger another search. Returns ``[]`` when disabled or unavailable.
     """
     import resources.lib.router as _router
 
@@ -108,8 +105,8 @@ def _fetch_fallback_extra_uploads(selected, settings_getter):
         selected, settings_getter=settings_getter
     ):
         return []
-    # One Hydra internal search per selection: the NZBGet fleet's duplicate
-    # lookup and its fallback loader both ask for the same title.
+    # Resolve the retained snapshot once per selection: the NZBGet fleet's
+    # duplicate lookup and its fallback loader both ask for the same title.
     cached = selected.get(_HYDRA_UPLOADS_CACHE_KEY)
     if isinstance(cached, list):
         return list(cached)
