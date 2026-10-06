@@ -80,7 +80,9 @@ def _direct_play_prepare_and_serve(
 
     home = _router.xbmcgui.Window(10000)
     try:
-        with playback_context.handoff(home=home) as session:
+        with playback_context.handoff(
+            home=home, monitored=False, play_url=proxy_url
+        ) as session:
             playback_context.prepare_playback(
                 listitem,
                 playback_context.metadata_from_params(params),

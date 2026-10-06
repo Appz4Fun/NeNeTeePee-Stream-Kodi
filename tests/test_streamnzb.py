@@ -11,7 +11,12 @@ from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError, URLError
 
 import pytest
-from resources.lib import playback_backend, router, streamnzb, streamnzb_player
+from resources.lib import (
+    playback_backend,
+    router,
+    streamnzb,
+    streamnzb_player,
+)
 
 MOVIE = {"type": "movie", "imdb": "tt0133093", "title": "The Matrix"}
 EPISODE = {"type": "episode", "tmdb_id": "1399", "season": "0", "episode": "1"}
@@ -326,9 +331,15 @@ def test_cancel_after_response_takes_precedence_over_malformed_json():
 @pytest.fixture(name="player_mocks")
 def _player_mocks():
     """Module-bound Kodi mocks; ensure the player never enters NZB machinery."""
+    from resources.lib import playback_context, playback_handoff
+
     with patch.object(streamnzb_player, "xbmc") as kodi, patch.object(
         streamnzb_player, "xbmcgui"
-    ) as gui, patch.object(streamnzb_player, "xbmcplugin") as plugin, patch.object(
+    ) as gui, patch.object(playback_context, "xbmcgui", gui), patch.object(
+        playback_handoff, "xbmcgui", gui
+    ), patch.object(
+        streamnzb_player, "xbmcplugin"
+    ) as plugin, patch.object(
         streamnzb_player, "fetch_streams"
     ) as fetch, patch.object(
         streamnzb_player, "_open_loading_dialog"
@@ -350,6 +361,17 @@ def _player_mocks():
     ) as consumed, patch.object(
         streamnzb_player, "show_results_dialog"
     ) as picker:
+        properties = {}
+        home = gui.Window.return_value
+        home.getProperty.side_effect = lambda key: properties.get(key, "")
+        home.setProperty.side_effect = properties.__setitem__
+        home.clearProperty.side_effect = lambda key: properties.pop(key, None)
+
+        def make_item(**kwargs):
+            gui.ListItem.return_value.getPath.return_value = kwargs.get("path", "")
+            return gui.ListItem.return_value
+
+        gui.ListItem.side_effect = make_item
         clear.return_value = 0.0
         kodi.Monitor.return_value.abortRequested.return_value = False
         gui.Dialog.return_value.select.return_value = 0
@@ -780,3 +802,54 @@ def test_streamnzb_canonical_scrobble_context_precedes_final_playback(
         player_mocks["kodi"].Player.return_value.play.assert_called_once()
     else:
         assert player_mocks["plugin"].setResolvedUrl.call_args.args[1] is True
+
+
+@pytest.mark.parametrize("handle", [None, 7])
+@pytest.mark.parametrize("old_state", ["MONITORING", "ERROR"])
+@pytest.mark.parametrize("native_failure", [False, True])
+def test_streamnzb_retires_previous_service_session(
+    player_mocks, monkeypatch, handle, old_state, native_failure
+):
+    import service
+    from resources.lib import playback_context, playback_handoff
+
+    mocks = player_mocks
+    properties = {
+        "nzbdav.playback_session": "old",
+        "nzbdav.pending_playback_session": "old",
+        "nzbdav.playing": "true",
+    }
+    home = mocks["gui"].Window.return_value
+    home.getProperty.side_effect = lambda key: properties.get(key, "")
+    home.setProperty.side_effect = properties.__setitem__
+    home.clearProperty.side_effect = lambda key: properties.pop(key, None)
+    monkeypatch.setattr(playback_context, "xbmcgui", mocks["gui"])
+    monkeypatch.setattr(playback_handoff, "xbmcgui", mocks["gui"])
+    monkeypatch.setattr(service, "_HOME_WINDOW", home)
+    monitor = service.NzbdavPlayer()
+    monitor._state = getattr(service.PlaybackState, old_state)
+    monitor._playback_session = "old"
+    retry = MagicMock()
+    monkeypatch.setattr(monitor, "_handle_error_retry", retry)
+
+    def native_result(_handle, success, _item):
+        if success and native_failure:
+            raise RuntimeError("Native resolution failed")
+
+    mocks["plugin"].setResolvedUrl.side_effect = native_result
+    if native_failure:
+        mocks["kodi"].Player.return_value.play.side_effect = RuntimeError(
+            "Native playback failed"
+        )
+    streamnzb_player.play_streamnzb(dict(MOVIE, tmdb_id="603"), settings, handle)
+    assert not properties.get("nzbdav.playing")
+    monitor.tick()
+    assert monitor._state == service.PlaybackState.IDLE
+    retry.assert_not_called()
+    if native_failure:
+        assert not properties.get("TMDbHelper.PlayerInfoString")
+        mocks["notify"].assert_called_once()
+        if handle is not None:
+            assert mocks["plugin"].setResolvedUrl.call_args.args[1] is False
+    else:
+        assert json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"] == "603"

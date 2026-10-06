@@ -15,6 +15,15 @@ from resources.lib.player_upgrade import _lock_player
 
 SESSION_PROPERTY = "nzbdav.playback_session"
 PENDING_PROPERTY = "nzbdav.pending_playback_session"
+MONITOR_PROPERTIES = (
+    "nzbdav.active",
+    "nzbdav.playing",
+    "nzbdav.stream_url",
+    "nzbdav.resume_key",
+    "nzbdav.resume_offset",
+    "nzbdav.stream_title",
+    "nzbdav.playback_metadata",
+)
 
 
 def _lock_path():
@@ -31,7 +40,7 @@ def snapshot_guard(wait=False):
     try:
         lock = open(_lock_path(), "a+b")
     except OSError:
-        yield False
+        yield None
         return
     with lock:
         deadline = time.monotonic() + 5.0
@@ -66,8 +75,33 @@ def session_matches(home, token):
         return False
 
 
+def _clear_properties(home, keys):
+    for key in keys:
+        try:
+            home.clearProperty(key)
+        except RuntimeError:
+            # GUI teardown must not conceal the original playback failure.
+            pass
+
+
+def _rollback_context(home, token):
+    if home is None:
+        return
+    try:
+        if session_token(home) != token:
+            return
+        _clear_properties(
+            home, MONITOR_PROPERTIES + ("TMDbHelper.PlayerInfoString", SESSION_PROPERTY)
+        )
+        if _read_token(home, PENDING_PROPERTY) == token:
+            _clear_properties(home, (PENDING_PROPERTY,))
+    except RuntimeError:
+        # No ownership can be proven while the GUI is unavailable.
+        pass
+
+
 @contextmanager
-def handoff(home=None, expected_session=None):
+def handoff(home=None, expected_session=None, monitored=True, play_url=""):
     """Reserve a fresh start, or reject a retry superseded by another process.
 
     Hold this guard through prepare_playback, monitor properties and native
@@ -93,10 +127,34 @@ def handoff(home=None, expected_session=None):
             ):
                 yield None
                 return
+            if expected_session is None and home is not None:
+                try:
+                    pending = _read_token(home, PENDING_PROPERTY)
+                except RuntimeError:
+                    pending = token
+                if pending != token:
+                    raise RuntimeError("Playback handoff superseded")
+                keys = (
+                    MONITOR_PROPERTIES
+                    if not monitored
+                    else ("nzbdav.active", "nzbdav.playing")
+                )
+                _clear_properties(home, keys)
+                try:
+                    # Keep the new proxy identifiable to an obsolete stop callback,
+                    # even before a monitored route writes ACTIVE last.
+                    home.setProperty("nzbdav.stream_url", play_url)
+                except RuntimeError:
+                    # Playback metadata and native playback still get their chance.
+                    pass
             # Fresh streams still work if optional profile/GUI coordination is
             # unavailable. Retries fail closed when their session cannot be proven.
             entered = True
-            yield token
+            try:
+                yield token
+            except Exception:
+                _rollback_context(home, token)
+                raise
     finally:
         if not entered and expected_session is None and home is not None:
             try:

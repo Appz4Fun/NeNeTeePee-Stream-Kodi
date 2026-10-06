@@ -1135,7 +1135,7 @@ def _run_nzbget_backend(  # pylint: disable=too-many-arguments
             ),
             xbmc.LOGERROR,
         )
-        on_failure(None)
+        on_failure(_string(30121))
     finally:
         _close_dialog(dialog)
         # leave_job documents the timeout policy: on a timeout or aborted outcome
@@ -1200,7 +1200,7 @@ def resolve_and_play_nzbget(
 
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
-        with playback_context.handoff() as session:
+        with playback_context.handoff(play_url=video_url) as session:
             playback_context.prepare_playback(
                 listitem,
                 playback_context.metadata_from_params(params),
@@ -1256,7 +1256,7 @@ def play_nzbget(
 
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
-        with playback_context.handoff() as session:
+        with playback_context.handoff(play_url=video_url) as session:
             playback_context.prepare_playback(
                 listitem,
                 playback_context.metadata_from_params(resolve_params),

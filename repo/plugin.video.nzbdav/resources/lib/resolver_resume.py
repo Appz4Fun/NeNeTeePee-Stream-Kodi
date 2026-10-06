@@ -190,7 +190,7 @@ def _resolve_direct_no_proxy(
     li = _resolver._make_playable_listitem(bust_url, stream_headers)
     _apply_resume_start_offset(li, resume_seconds)
     home = _resolver.xbmcgui.Window(10000)
-    with playback_context.handoff(home=home) as session:
+    with playback_context.handoff(home=home, play_url=play_url) as session:
         playback_context.prepare_playback(
             li, metadata or {}, home=home, session_token=session
         )
@@ -242,7 +242,7 @@ def _finish_direct_playback(handle, prepared, resume_key="", resume_seconds=0.0)
             li = _resolver._make_playable_listitem(bust_url, stream_headers)
             _apply_resume_start_offset(li, resume_seconds)
             play_url = _resolver._build_play_url(bust_url, stream_headers)
-            with playback_context.handoff(home=home) as session:
+            with playback_context.handoff(home=home, play_url=play_url) as session:
                 playback_context.prepare_playback(
                     li,
                     prepared.get("_playback_metadata", {}),
@@ -260,7 +260,7 @@ def _finish_direct_playback(handle, prepared, resume_key="", resume_seconds=0.0)
         _resolver._apply_proxy_mime(li, stream_url, stream_info)
         _apply_resume_start_offset(li, resume_seconds)
 
-        with playback_context.handoff(home=home) as session:
+        with playback_context.handoff(home=home, play_url=proxy_url) as session:
             playback_context.prepare_playback(
                 li,
                 prepared.get("_playback_metadata", {}),
@@ -316,7 +316,7 @@ def _finish_player_playback(prepared, resume_key="", resume_seconds=0.0):
             li = _resolver._make_playable_listitem(bust_url, stream_headers)
             _apply_resume_start_offset(li, resume_seconds)
             play_url = _resolver._build_play_url(bust_url, stream_headers)
-            with playback_context.handoff(home=home) as session:
+            with playback_context.handoff(home=home, play_url=play_url) as session:
                 playback_context.prepare_playback(
                     li,
                     prepared.get("_playback_metadata", {}),
@@ -333,7 +333,7 @@ def _finish_player_playback(prepared, resume_key="", resume_seconds=0.0):
         li.setContentLookup(False)
         _resolver._apply_proxy_mime(li, stream_url, stream_info)
         _apply_resume_start_offset(li, resume_seconds)
-        with playback_context.handoff(home=home) as session:
+        with playback_context.handoff(home=home, play_url=proxy_url) as session:
             playback_context.prepare_playback(
                 li,
                 prepared.get("_playback_metadata", {}),
@@ -355,7 +355,7 @@ def _finish_player_playback(prepared, resume_key="", resume_seconds=0.0):
         "NeNeTeePee-Stream-Kodi: Playing direct (no proxy): {}".format(safe_url),
         _resolver.xbmc.LOGINFO,
     )
-    with playback_context.handoff(home=home) as session:
+    with playback_context.handoff(home=home, play_url=play_url) as session:
         playback_context.prepare_playback(
             li, prepared.get("_playback_metadata", {}), home=home, session_token=session
         )

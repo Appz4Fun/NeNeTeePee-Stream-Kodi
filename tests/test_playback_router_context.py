@@ -103,6 +103,7 @@ def test_direct_url_playback_publishes_movie_context_before_resolving():
         "resources.lib.router.xbmcplugin.setResolvedUrl"
     ) as resolved:
         window = gui.Window.return_value
+        window.getProperty.side_effect = lambda key: properties.get(key, "")
         window.setProperty.side_effect = properties.__setitem__
         window.clearProperty.side_effect = lambda key: properties.pop(key, None)
 
@@ -151,3 +152,71 @@ def test_season_pack_selection_retains_requested_episode_identity(auto_select):
         result["_playback_metadata"]["season"],
         result["_playback_metadata"]["episode"],
     ) == (1, 6)
+
+
+@pytest.mark.parametrize("state", ["MONITORING", "ERROR"])
+@pytest.mark.parametrize("native_failure", [False, True])
+def test_direct_proxy_handoff_retires_old_monitor_and_keeps_new_proxy(
+    state, native_failure
+):
+    from unittest.mock import MagicMock
+
+    import service
+    from resources.lib import router
+
+    properties = {
+        "nzbdav.playback_session": "old",
+        "nzbdav.pending_playback_session": "old",
+        "nzbdav.playing": "true",
+        "nzbdav.proxy_port": "54321",
+    }
+    with patch("resources.lib.router.xbmcgui") as gui, patch(
+        "resources.lib.router._direct_play_head_length", return_value=(123, "")
+    ), patch(
+        "resources.lib.resolver._direct_playback_service_config",
+        return_value=(54321, "token"),
+    ), patch(
+        "resources.lib.resolver._prepare_direct_playback",
+        return_value="http://127.0.0.1:54321/stream/new",
+    ), patch(
+        "resources.lib.router.xbmcplugin.setResolvedUrl"
+    ) as resolved:
+
+        def native_result(_handle, success, _item):
+            if success and native_failure:
+                raise RuntimeError("Native resolution failed")
+
+        resolved.side_effect = native_result
+        home = gui.Window.return_value
+        home.getProperty.side_effect = lambda key: properties.get(key, "")
+        home.setProperty.side_effect = properties.__setitem__
+        home.clearProperty.side_effect = lambda key: properties.pop(key, None)
+        with patch.object(service, "_HOME_WINDOW", home):
+            proxy = MagicMock()
+            monitor = service.NzbdavPlayer(proxy=proxy)
+            monitor._state = getattr(service.PlaybackState, state)
+            monitor._playback_session = "old"
+            monitor._handle_error_retry = MagicMock()
+            router._handle_direct_play(
+                7,
+                {
+                    "primary_url": "https://example.invalid/movie.mkv",
+                    "type": "movie",
+                    "title": "The Matrix",
+                    "tmdb_id": "603",
+                },
+            )
+            assert resolved.call_args.args[1] is not native_failure
+            assert not properties.get("nzbdav.playing")
+            monitor.tick()
+            assert monitor._state == service.PlaybackState.IDLE
+            monitor._handle_error_retry.assert_not_called()
+            if native_failure:
+                proxy.clear_sessions.assert_called_once()
+                assert not properties.get("TMDbHelper.PlayerInfoString")
+                return
+            proxy.clear_sessions.assert_not_called()
+            assert (
+                json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"]
+                == "603"
+            )

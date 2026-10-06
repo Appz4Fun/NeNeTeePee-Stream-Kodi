@@ -29,7 +29,12 @@ A service retry canceled or replaced during its delay cannot republish an old
 session's identity. Fresh playback reserves a session token before publishing
 context. A process lock covers metadata publication through the native playback
 call, so a concurrent reconnect cannot replace the next item's identity. Service
-snapshots and cleanup respect that reservation.
+snapshots and cleanup respect that reservation. Fresh launches revalidate
+ownership after acquiring the lock. Failed native starts clear context only
+when they still own the published session. Unmonitored players retire old
+service liveness and retry state without arming the retry monitor. If the lock
+cannot open, validated ACTIVE-last snapshots still support normal monitoring;
+busy locks defer reads.
 
 ## Automatic player upgrade
 
@@ -80,6 +85,6 @@ actual Trakt requests, and independently read history are separate gates.
 A code PR does not itself publish an addon release.
 
 Validation of the implementation before PR review: `just lint`, `just test`
-(3,231 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
+(3,255 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
 passed. Native deployment and real Trakt watched-history verification are
 reported separately; they are not established by these checks.

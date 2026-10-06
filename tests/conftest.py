@@ -193,3 +193,66 @@ def _isolated_playback_handoff_lock(monkeypatch):
             playback_handoff, "_lock_path", lambda: os.path.join(folder, "handoff.lock")
         )
         yield
+
+
+@pytest.fixture
+def stateful_handoff_windows():
+    """Give legacy bare window mocks Kodi's property read-back semantics.
+
+    The real handoff, ownership validation and file lock remain in use. Preserve
+    existing mock readers for properties that a test configures independently.
+    """
+    from resources.lib import playback_context, playback_handoff
+
+    original = playback_handoff.handoff
+    changed = {}
+
+    def attach(home):
+        old = tuple(
+            getattr(home, name).side_effect
+            for name in ("getProperty", "setProperty", "clearProperty")
+        )
+        values = {}
+
+        def read(key):
+            if key in values:
+                return values[key]
+            if key in (
+                playback_handoff.SESSION_PROPERTY,
+                playback_handoff.PENDING_PROPERTY,
+            ):
+                return ""
+            return old[0](key) if callable(old[0]) else home.getProperty.return_value
+
+        def write(key, value):
+            if callable(old[1]):
+                old[1](key, value)
+            values[key] = value
+
+        def clear(key):
+            if callable(old[2]):
+                old[2](key)
+            values[key] = ""
+
+        home.getProperty.side_effect = read
+        home.setProperty.side_effect = write
+        home.clearProperty.side_effect = clear
+        changed[home] = old
+
+    def stateful(home=None, **kwargs):
+        home = home if home is not None else playback_handoff.xbmcgui.Window(10000)
+        if isinstance(home, MagicMock) and home not in changed:
+            attach(home)
+        return original(home=home, **kwargs)
+
+    try:
+        with patch.object(
+            playback_handoff, "handoff", side_effect=stateful
+        ), patch.object(playback_context, "handoff", side_effect=stateful):
+            yield
+    finally:
+        for home, previous in changed.items():
+            for name, effect in zip(
+                ("getProperty", "setProperty", "clearProperty"), previous
+            ):
+                getattr(home, name).side_effect = effect

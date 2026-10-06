@@ -243,26 +243,33 @@ class NzbdavPlayer(xbmc.Player):
         if active != "true":
             return
         with playback_handoff.snapshot_guard() as locked:
-            if not locked or _HOME_WINDOW.getProperty(_PROP_ACTIVE) != "true":
+            if locked is False or _HOME_WINDOW.getProperty(_PROP_ACTIVE) != "true":
+                return
+            session = playback_handoff.session_token(_HOME_WINDOW)
+            values = {
+                key: _HOME_WINDOW.getProperty(key)
+                for key in playback_handoff.MONITOR_PROPERTIES
+            }
+            if locked is None and (
+                not playback_handoff.session_matches(_HOME_WINDOW, session)
+                or _HOME_WINDOW.getProperty(_PROP_ACTIVE) != "true"
+            ):
+                # ACTIVE is the producer's final commit marker when no lock can open.
                 return
             with self._state_lock:
                 self._session_generation += 1
-                self._playback_session = playback_handoff.session_token(_HOME_WINDOW)
+                self._playback_session = session
                 try:
-                    snapshot = json.loads(
-                        _HOME_WINDOW.getProperty(_PROP_PLAYBACK_METADATA) or "{}"
-                    )
+                    snapshot = json.loads(values[_PROP_PLAYBACK_METADATA] or "{}")
                 except (ValueError, TypeError):
                     snapshot = {}
                 self._playback_metadata = playback_context.metadata_from_params(
                     {"_playback_metadata": snapshot}
                 )
-                self._stream_url = _HOME_WINDOW.getProperty(_PROP_STREAM_URL)
-                self._resume_key = _HOME_WINDOW.getProperty(_PROP_RESUME_KEY)
-                self._last_position = _coerce_resume_offset(
-                    _HOME_WINDOW.getProperty(_PROP_RESUME_OFFSET)
-                )
-                self._title = _HOME_WINDOW.getProperty(_PROP_STREAM_TITLE)
+                self._stream_url = values[_PROP_STREAM_URL]
+                self._resume_key = values[_PROP_RESUME_KEY]
+                self._last_position = _coerce_resume_offset(values[_PROP_RESUME_OFFSET])
+                self._title = values[_PROP_STREAM_TITLE]
                 self._state = PlaybackState.MONITORING
                 self._retry_count = 0
                 self._av_started = False
@@ -544,17 +551,21 @@ class NzbdavPlayer(xbmc.Player):
                 or _HOME_WINDOW.getProperty(_PROP_ACTIVE) == "true"
             ):
                 return False
-            with playback_handoff.handoff(
-                home=_HOME_WINDOW, expected_session=self._playback_session
-            ) as session:
-                if session is None:
-                    return False
-                li = xbmcgui.ListItem(path=stream_url)
-                li.setProperty("StartOffset", str(position))
-                playback_context.prepare_playback(
-                    li, metadata, home=_HOME_WINDOW, session_token=session
-                )
-                self.play(stream_url, li)
+            try:
+                with playback_handoff.handoff(
+                    home=_HOME_WINDOW, expected_session=self._playback_session
+                ) as session:
+                    if session is None:
+                        return False
+                    li = xbmcgui.ListItem(path=stream_url)
+                    li.setProperty("StartOffset", str(position))
+                    playback_context.prepare_playback(
+                        li, metadata, home=_HOME_WINDOW, session_token=session
+                    )
+                    self.play(stream_url, li)
+            except _PLAYER_RUNTIME_ERRORS:
+                # The guard rolled back failed context; keep the service alive.
+                return False
 
         return self._await_playback_start()
 
@@ -591,6 +602,7 @@ class NzbdavPlayer(xbmc.Player):
         ``_retry_playback``)—those re-acquire internally as needed.
         Closes TODO.md §H.2-H16.
         """
+        self._retire_replaced_session()
         self._check_active()
 
         with self._state_lock:
@@ -611,6 +623,35 @@ class NzbdavPlayer(xbmc.Player):
             return
 
         self._handle_error_retry(retry_count, title)
+
+    def _retire_replaced_session(self):
+        """Retire local monitoring after another route commits a replacement.
+
+        StreamNZB and diagnostic direct playback do not publish ACTIVE. Their
+        committed session still retires old ERROR/retry state without clearing
+        the replacement's context or proxy. A pending reservation alone does not.
+        """
+        with playback_handoff.snapshot_guard() as locked:
+            if locked is False:
+                return
+            try:
+                current = playback_handoff.session_token(_HOME_WINDOW)
+            except _PLAYER_RUNTIME_ERRORS:
+                return
+            if not playback_handoff.session_matches(_HOME_WINDOW, current):
+                return
+            with self._state_lock:
+                if (
+                    self._state == PlaybackState.IDLE
+                    or current == self._playback_session
+                ):
+                    return
+                self._state = PlaybackState.IDLE
+                self._session_generation += 1
+                self._playback_metadata = {}
+                resume = (self._resume_key, self._last_position, self._av_started)
+        self._save_stable_resume(*resume)
+        self._cleanup_proxy_session()
 
     def _handle_startup_grace(self):
         """Catch playback that never started; return True if handled terminally.
@@ -660,6 +701,10 @@ class NzbdavPlayer(xbmc.Player):
     def _handle_error_retry(self, retry_count, title):
         """Drive the ERROR-state retry decision (retry, give up, or relaunch)."""
         with self._state_lock:
+            if not playback_handoff.session_matches(
+                _HOME_WINDOW, self._playback_session
+            ):
+                return
             generation = self._session_generation
         enabled, max_retries, retry_delay = self._read_settings()
         if not enabled:

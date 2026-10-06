@@ -19,6 +19,8 @@ from resources.lib.nzbget_resolver import (
     resolve_smb_video,
 )
 
+pytestmark = pytest.mark.usefixtures("stateful_handoff_windows")
+
 
 @pytest.fixture(autouse=True)
 def _download_through_fetch_stub():

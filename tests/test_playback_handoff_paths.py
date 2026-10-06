@@ -675,3 +675,214 @@ def test_aborted_handoff_restores_prior_reservation(playback_kodi, monkeypatch):
                 pytest.fail("A contended canceled handoff must not enter playback")
     assert properties[playback_handoff.PENDING_PROPERTY] == "old"
     assert properties[playback_handoff.SESSION_PROPERTY] == "old"
+
+
+def test_superseded_fresh_reservation_cannot_publish(playback_kodi, monkeypatch):
+
+    from resources.lib import playback_context, playback_handoff
+
+    _player, _plugin, home, properties = playback_kodi
+    original = playback_handoff.snapshot_guard
+    overtaken = False
+    winning_session = []
+
+    def overtake(wait=False):
+        nonlocal overtaken
+        if not overtaken:
+            overtaken = True
+            with playback_handoff.handoff(home=home) as token:
+                playback_context.prepare_playback(MagicMock(), MOVIE, home, token)
+                properties["nzbdav.active"] = "true"
+                winning_session.append(token)
+        return original(wait=wait)
+
+    monkeypatch.setattr(playback_handoff, "snapshot_guard", overtake)
+    with pytest.raises(RuntimeError, match="superseded"):
+        with playback_handoff.handoff(home=home):
+            pytest.fail("The older launch must not enter final playback")
+    assert playback_handoff.session_matches(home, winning_session[0])
+    assert (
+        json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"]
+        == MOVIE["tmdb_id"]
+    )
+    assert properties["nzbdav.active"] == "true"
+
+
+@pytest.mark.parametrize("entry", ["handle", "player"])
+@pytest.mark.parametrize("mode", ["no_proxy", "proxy", "faststart_direct"])
+def test_failed_native_resolver_handoff_clears_owned_context(
+    playback_kodi, entry, mode
+):
+    player, plugin, _home, properties = playback_kodi
+    prepared = {
+        "stream_url": "new-stream",
+        "stream_headers": {},
+        "_playback_metadata": dict(MOVIE),
+    }
+    if mode != "no_proxy":
+        prepared.update(
+            service_port=57800,
+            proxy_url="http://127.0.0.1:57800/stream/new",
+            stream_info={"direct": mode == "faststart_direct"},
+        )
+    player.play.side_effect = RuntimeError("Native playback failed")
+    plugin.setResolvedUrl.side_effect = RuntimeError("Native resolution failed")
+    with pytest.raises(RuntimeError):
+        if entry == "handle":
+            resolver._finish_direct_playback(7, prepared)
+        else:
+            resolver._finish_player_playback(prepared)
+    for key in (
+        "TMDbHelper.PlayerInfoString",
+        "nzbdav.active",
+        "nzbdav.playing",
+        "nzbdav.playback_metadata",
+        "nzbdav.playback_session",
+        "nzbdav.pending_playback_session",
+    ):
+        assert not properties.get(key), key
+
+
+def test_failed_old_handoff_preserves_replacement_context(playback_kodi):
+    from resources.lib import playback_context, playback_handoff
+
+    _player, _plugin, home, properties = playback_kodi
+    with pytest.raises(RuntimeError):
+        with playback_handoff.handoff(home=home) as token:
+            playback_context.prepare_playback(MagicMock(), EPISODE, home, token)
+            playback_context.prepare_playback(MagicMock(), MOVIE, home)
+            properties["nzbdav.active"] = "true"
+            raise RuntimeError("Old native handoff failed")
+    assert playback_handoff.session_matches(
+        home, properties[playback_handoff.SESSION_PROPERTY]
+    )
+    assert properties["nzbdav.active"] == "true"
+    assert (
+        json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"]
+        == MOVIE["tmdb_id"]
+    )
+
+
+def test_unavailable_profile_lock_keeps_successful_playback_monitored(
+    playback_kodi, monkeypatch
+):
+    from resources.lib import playback_handoff
+
+    _player, _plugin, _home, properties = playback_kodi
+    monkeypatch.setattr(
+        playback_handoff,
+        "_lock_path",
+        MagicMock(side_effect=OSError("Unwritable profile")),
+    )
+    resolver._finish_player_playback(
+        {
+            "stream_url": "new-stream",
+            "stream_headers": {},
+            "_playback_metadata": dict(MOVIE),
+        },
+        resume_key="movie-key",
+        resume_seconds=137.0,
+    )
+    monitor = service.NzbdavPlayer()
+    monitor._check_active()
+    assert monitor._state == service.PlaybackState.MONITORING
+    assert monitor._playback_metadata == MOVIE
+    assert properties["nzbdav.playing"] == "true"
+    saved = MagicMock()
+    monkeypatch.setattr(service.resume_store, "save_resume", saved)
+    monitor.onAVStarted()
+    monitor.onPlayBackStopped()
+    assert saved.call_args.args[:2] == ("movie-key", 137.0)
+    assert not properties.get("nzbdav.playing")
+
+
+@pytest.mark.parametrize("entry", ["handle", "player"])
+def test_nzbget_native_failure_rolls_back_and_completes_failure(
+    monkeypatch, playback_kodi, entry
+):
+    player, plugin, _home, properties = playback_kodi
+    params = {
+        "nzburl": "http://indexer.test/episode.nzb",
+        "title": "release",
+        "_playback_metadata": dict(EPISODE),
+        "_nzbget_completed_job": {
+            "name": "release",
+            "status": "SUCCESS/UNPACK",
+            "nzbid": 42,
+            "dest_dir": "/dl/tv/Show",
+        },
+    }
+    monkeypatch.setattr(
+        nzbget_resolver.nzbget_api, "completed_base_dir", lambda **_kw: "/dl"
+    )
+    monkeypatch.setattr(
+        nzbget_resolver,
+        "poll_nzbget_job",
+        lambda *_a, **_kw: {"outcome": "success", "dest_dir": "/dl/tv/Show"},
+    )
+    monkeypatch.setattr(
+        nzbget_resolver,
+        "resolve_smb_video",
+        lambda *_a, **_kw: "smb://host/completed/video.mkv",
+    )
+    notified = MagicMock()
+    monkeypatch.setattr(nzbget_resolver, "_notify", notified)
+    player.play.side_effect = RuntimeError("Native play failure")
+
+    def resolve_result(_handle, success, _item):
+        if success:
+            raise RuntimeError("Native resolve failure")
+
+    plugin.setResolvedUrl.side_effect = resolve_result
+    settings = {
+        "nzbget_url": "http://box:6789",
+        "nzbget_smb_root": "smb://host/completed",
+        "download_timeout": "600",
+    }
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    if entry == "handle":
+        nzbget_resolver.resolve_and_play_nzbget(7, params, settings_getter=getter)
+        assert plugin.setResolvedUrl.call_args.args[1] is False
+    else:
+        nzbget_resolver.play_nzbget(
+            params["nzburl"], params["title"], params=params, settings_getter=getter
+        )
+        notified.assert_called_once()
+    for key in (
+        "TMDbHelper.PlayerInfoString",
+        "nzbdav.active",
+        "nzbdav.playback_metadata",
+        "nzbdav.playback_session",
+        "nzbdav.pending_playback_session",
+    ):
+        assert not properties.get(key), key
+    nzbget_resolver.xbmcgui.DialogProgress.return_value.close.assert_called_once()
+
+
+def test_retry_native_failure_clears_context_without_stopping_service(playback_kodi):
+    from resources.lib import playback_handoff
+
+    _player, _plugin, _home, properties = playback_kodi
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "old",
+            playback_handoff.PENDING_PROPERTY: "old",
+            "nzbdav.playing": "true",
+        }
+    )
+    monitor = service.NzbdavPlayer()
+    monitor._state = service.PlaybackState.ERROR
+    monitor._playback_session = "old"
+    monitor._playback_metadata = dict(EPISODE)
+    monitor._stream_url = "old-stream"
+    monitor._monitor = MagicMock()
+    monitor._monitor.waitForAbort.return_value = False
+    monitor.play = MagicMock(side_effect=RuntimeError("Native retry failure"))
+    assert not monitor._retry_playback(3, 0)
+    assert not properties.get("TMDbHelper.PlayerInfoString")
+    assert not properties.get("nzbdav.playing")
+    monitor.tick()
+    assert monitor._state == service.PlaybackState.IDLE
