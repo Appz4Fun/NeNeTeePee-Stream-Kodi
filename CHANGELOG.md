@@ -68,6 +68,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > Merged on `main` after 2.0.0-beta.2 and not in any release yet. These
 > changes ship in the next beta build.
 
+### Fixed
+
+- **NZBHydra2 duplicate-uploads lookup.** NZBHydra2 refuses internal API
+  requests without its XSRF token (HTTP 403), even with its authentication
+  turned off, so the NZBGet backup search never saw Hydra's hidden duplicate
+  uploads. The add-on now retries once with the token Hydra hands back.
+
 ### Added
 
 - **NZBGet submits every same-release NZB as a duplicate backup.** The new
