@@ -171,13 +171,24 @@ def prepare_playback(listitem, metadata, home=None):
     except (RuntimeError, TypeError, ValueError, AttributeError, OverflowError):
         metadata = {}
         xbmc.log("NZB-DAV: Kodi playback metadata unavailable", xbmc.LOGWARNING)
-    home = home if home is not None else xbmcgui.Window(10000)
-    home.setProperty("nzbdav.playback_metadata", json.dumps(metadata))
-    context = _playerstring(metadata)
-    if context:
-        home.setProperty("TMDbHelper.PlayerInfoString", json.dumps(context))
+    try:
+        home = home if home is not None else xbmcgui.Window(10000)
+        home.setProperty("nzbdav.playback_metadata", json.dumps(metadata))
+        context = _playerstring(metadata)
+        if context:
+            home.setProperty("TMDbHelper.PlayerInfoString", json.dumps(context))
+            xbmc.log(
+                "NZB-DAV: Playback context {}".format(json.dumps(context)), xbmc.LOGINFO
+            )
+        else:
+            home.clearProperty("TMDbHelper.PlayerInfoString")
+    except RuntimeError:
         xbmc.log(
-            "NZB-DAV: Playback context {}".format(json.dumps(context)), xbmc.LOGINFO
+            "NZB-DAV: Kodi playback context publication unavailable", xbmc.LOGWARNING
         )
-    else:
-        home.clearProperty("TMDbHelper.PlayerInfoString")
+        if home is not None:
+            for key in ("TMDbHelper.PlayerInfoString", "nzbdav.playback_metadata"):
+                try:
+                    home.clearProperty(key)
+                except RuntimeError:
+                    pass

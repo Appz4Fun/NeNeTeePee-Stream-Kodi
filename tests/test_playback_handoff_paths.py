@@ -407,3 +407,38 @@ def test_pending_handoff_during_retry_delay_keeps_new_identity(playback_kodi, en
     monitor._check_active()
     assert monitor._stream_url == "new-stream"
     assert monitor._playback_metadata == MOVIE
+
+
+@pytest.mark.parametrize("entry", ["player", "handle"])
+def test_property_publication_failure_still_reaches_final_playback(
+    playback_kodi, monkeypatch, entry
+):
+    player, plugin, home, _properties = playback_kodi
+    original = home.setProperty.side_effect
+
+    def publish(key, value):
+        if key == "TMDbHelper.PlayerInfoString":
+            raise RuntimeError("GUI unavailable")
+        original(key, value)
+
+    home.setProperty.side_effect = publish
+    monkeypatch.setattr(
+        resolver,
+        "_make_playable_listitem",
+        lambda path, _headers: resolver.xbmcgui.ListItem(path=path),
+    )
+    prepared = {
+        "stream_url": "https://example.invalid/movie.mkv",
+        "stream_headers": {},
+        "_playback_metadata": dict(MOVIE),
+    }
+    if entry == "player":
+        resolver._finish_player_playback(prepared)
+        player.play.assert_called_once()
+        item = player.play.call_args.args[1]
+    else:
+        resolver._finish_direct_playback(7, prepared)
+        plugin.setResolvedUrl.assert_called_once()
+        assert plugin.setResolvedUrl.call_args.args[1] is True
+        item = plugin.setResolvedUrl.call_args.args[2]
+    item.getVideoInfoTag.return_value.setTitle.assert_called_with("Arrival")

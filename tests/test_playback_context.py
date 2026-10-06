@@ -171,3 +171,52 @@ def test_native_metadata_failure_clears_context_without_breaking_playback_bounda
     )
     assert home.getProperty("TMDbHelper.PlayerInfoString") == ""
     assert json.loads(home.getProperty("nzbdav.playback_metadata")) == {}
+
+
+@pytest.mark.parametrize("failure", ["window", "snapshot", "playerstring"])
+def test_property_publication_failure_keeps_decorated_item_usable(
+    home, monkeypatch, failure
+):
+    from resources.lib import playback_context
+
+    item = MagicMock()
+    if failure == "window":
+        monkeypatch.setattr(
+            playback_context.xbmcgui,
+            "Window",
+            MagicMock(side_effect=RuntimeError("GUI unavailable")),
+        )
+        target = None
+    else:
+        target = home
+        failing_key = (
+            "nzbdav.playback_metadata"
+            if failure == "snapshot"
+            else "TMDbHelper.PlayerInfoString"
+        )
+        original = home.setProperty.side_effect
+
+        def publish(key, value):
+            if key == failing_key:
+                raise RuntimeError("GUI unavailable")
+            original(key, value)
+
+        home.setProperty.side_effect = publish
+    playback_context.prepare_playback(
+        item,
+        playback_context.metadata_from_params(
+            {"type": "movie", "title": "Predestination", "tmdb_id": "206487"}
+        ),
+        target,
+    )
+    item.getVideoInfoTag.return_value.setTitle.assert_called_with("Predestination")
+    item.getVideoInfoTag.return_value.setMediaType.assert_called_with("movie")
+    if target is not None:
+        assert home.getProperty("TMDbHelper.PlayerInfoString") == ""
+
+
+def test_property_clear_failure_does_not_escape_unknown_identity_boundary(home):
+    from resources.lib.playback_context import prepare_playback
+
+    home.clearProperty.side_effect = RuntimeError("GUI unavailable")
+    prepare_playback(MagicMock(), {}, home)
