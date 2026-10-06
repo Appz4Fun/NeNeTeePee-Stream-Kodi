@@ -397,6 +397,7 @@ class NzbdavPlayer(xbmc.Player):
             try:
                 duration = self.getTotalTime()
             except _PLAYER_RUNTIME_ERRORS:
+                # Unknown duration preserves a useful resume point without guessing.
                 pass
         try:
             resume_store.save_resume(resume_key, position, duration=duration)
