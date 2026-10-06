@@ -19,6 +19,7 @@ from resources.lib.http_util import http_download as _http_download
 from resources.lib.http_util import http_get as _http_get
 from resources.lib.http_util import http_post_json as _http_post_json
 from resources.lib.http_util import redact_text as _redact_text
+from resources.lib.nzbget_fleet_identity import release_name
 
 _RPC_TIMEOUT = 30
 
@@ -404,7 +405,7 @@ def history_status(nzbid, settings_getter=None):
                 "status": status,
                 "dest_dir": _dest_dir(item),
                 "nzbid": item.get("NZBID"),
-                "job_name": str(item.get("Name") or ""),
+                "job_name": release_name(item.get("Name")),
             }
     return {"present": False, "success": False, "status": "", "dest_dir": ""}
 
@@ -447,7 +448,7 @@ def _matched_nzbget_history_result(item):
     return ExactJobLookup.valid(
         {
             "nzbid": item.get("NZBID"),
-            "name": str(item.get("Name") or ""),
+            "name": release_name(item.get("Name")),
             "status": status,
             "dest_dir": dest_dir,
         }
@@ -590,7 +591,7 @@ def _completed_job_entry(item):
     status = str(item.get("Status") or "")
     if not status.startswith("SUCCESS"):
         return None
-    name = item.get("Name")
+    name = release_name(item.get("Name"))
     if not name:
         return None
     return {
@@ -797,7 +798,7 @@ def _group_name_match(group, target, exclude_nzbid):
         return False
     if exclude_nzbid is not None and _same_nzbid(group.get("NZBID"), exclude_nzbid):
         return False
-    return str(group.get("NZBName") or "").strip().lower() == target
+    return release_name(group.get("NZBName")).strip().lower() == target
 
 
 def active_group_by_name(nzb_name, exclude_nzbid=None, settings_getter=None):
@@ -1001,7 +1002,7 @@ def _success_history_entry(item, dupe_key):
     return {
         "present": True,
         "nzbid": item.get("NZBID"),
-        "job_name": str(item.get("Name") or ""),
+        "job_name": release_name(item.get("Name")),
         "dest_dir": _dest_dir(item),
     }
 

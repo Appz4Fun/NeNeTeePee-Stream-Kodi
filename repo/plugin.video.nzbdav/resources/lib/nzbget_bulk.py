@@ -13,6 +13,7 @@ from resources.lib.nzbget_fleet_dedup import (
     call_abortable,
     prefetched_clusters,
 )
+from resources.lib.nzbget_fleet_identity import member_filename, record_members
 
 
 def submit_bulk(ctx, nzb_url, title, dupe_key):
@@ -184,6 +185,7 @@ def _collect_send(ctx, candidates, count, state):
             if isinstance(limit, dict):
                 limit["n"] = remaining
             more = run._loader_extras(dupe, progress, candidates[1:], ranked=False)
+            candidates = list(candidates) + list(more)
             capped = (
                 isinstance(dupe.get("max_backups"), int) and dupe["max_backups"] >= 0
             )
@@ -238,7 +240,7 @@ def _send(ctx, kept, state, candidates):
     def send():
         members = [
             {
-                "NZBFilename": "{}.nzb".format(row.get("title") or "submission"),
+                "NZBFilename": member_filename(row, number),
                 **(
                     {"ContentPath": handle}
                     if isinstance(handle, str)
@@ -249,7 +251,7 @@ def _send(ctx, kept, state, candidates):
                     }
                 ),
             }
-            for row, handle, _token in kept
+            for number, (row, handle, _token) in enumerate(kept, 1)
         ]
         if ctx.cancel_event.is_set():
             return None, None
@@ -260,8 +262,9 @@ def _send(ctx, kept, state, candidates):
         (ctx.cancel_event,),
         progress.canceled,
         default=(None, "Fleet submission interrupted"),
-        on_late=lambda result: _late(result, getter, progress),
+        on_late=lambda result: _late(result, getter, progress, kept, key),
     )
+    mapped = record_members(reply, kept, key) if reply and reply.get("Chosen") else []
     if progress.canceled():
         # The RPC may finish in the same slice that observes cancellation;
         # call_abortable then returns normally rather than invoking on_late.
@@ -304,7 +307,11 @@ def _send(ctx, kept, state, candidates):
             if reply.get("Reason") == "ALL_DEAD"
             else "NZBGet queued no working copy"
         )
-    ctx.submitted_nzbids.extend(_live_ids(reply))
+    live_ids = _live_ids(reply)
+    ctx.submitted_nzbids.extend(live_ids)
+    # A server omitting echoed member identity cannot safely leave anonymous
+    # parked backups for replay. Cancel deletes those fresh IDs in full.
+    ctx.bulk_unrecorded_nzbids = [nzbid for nzbid in live_ids if nzbid not in mapped]
     ctx.fleet_pick_nzbid = chosen
     _health_message(progress, reply)
     # Rows are returned in health rank, not request order. Do not assign IDs
@@ -314,6 +321,8 @@ def _send(ctx, kept, state, candidates):
 
 def _live_ids(reply):
     """Only queued/backup IDs belong to cancellation and failover tracking."""
+    if not reply.get("Chosen"):
+        return []
     ids = [
         row.get("NZBID")
         for row in reply.get("Members", [])
@@ -329,11 +338,16 @@ def _live_ids(reply):
     )
 
 
-def _late(result, getter, progress):
+def _late(result, getter, progress, kept, key):
     """A fleet accepted after user cancel is cleaned up; shutdown leaves it running."""
     reply, _error = result
-    if reply and not progress.aborted:
-        nzbget_api.cancel_jobs(_live_ids(reply), settings_getter=getter)
+    if reply:
+        if reply.get("Chosen"):
+            record_members(reply, kept, key)
+        if not progress.aborted:
+            ids = _live_ids(reply)
+            if nzbget_api.cancel_jobs(ids, settings_getter=getter):
+                nzbget_submit_ledger.forget(ids)
 
 
 def _health_message(progress, reply):

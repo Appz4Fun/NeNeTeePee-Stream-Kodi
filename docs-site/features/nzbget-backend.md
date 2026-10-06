@@ -165,6 +165,10 @@ completed file after checking that Kodi can read it. A missing or unreadable
 completed file produces an explicit error without submitting a new download.
 If every copy is dead, the add-on reports that no working copy
 exists. Request size, chosen ID, and the health list are logged for debugging.
+Bulk job names include a copy number so replies can be matched after health
+ranking. History views show the original release name. Recorded backup
+identities support replay without new indexer grabs. A server that omits
+member identity has its anonymous backups removed on cancellation.
 
 Older NZBGet servers that return an unknown-method error (including
 `Invalid procedure`) receive the existing individual `append` calls, using

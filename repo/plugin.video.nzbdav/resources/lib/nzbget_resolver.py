@@ -554,6 +554,11 @@ def _handle_poll_failure(
         running, backups = _canceled_resolve_split(
             nzbid, poll_result, submitted_nzbids, adopted_nzbids
         )
+        missing = set(
+            str(job) for job in (poll_result or {}).get("unrecorded_nzbids", []) or []
+        )
+        running += [job for job in backups if str(job) in missing]
+        backups = [job for job in backups if str(job) not in missing]
         _cancel_jobs_in_background(running, settings_getter, backups=backups)
         on_failure(None)
         return True, False
@@ -822,10 +827,16 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             if ctx.submitted_nzbids:
                 # The pick goes; its parked backups stay for a replay.
                 pick_id = getattr(ctx, "fleet_pick_nzbid", None)
+                missing = getattr(ctx, "bulk_unrecorded_nzbids", None) or []
                 _cancel_jobs_in_background(
-                    [pick_id] if pick_id else [],
+                    ([pick_id] if pick_id else [])
+                    + [job for job in missing if job != pick_id],
                     getter,
-                    backups=[job for job in ctx.submitted_nzbids if job != pick_id],
+                    backups=[
+                        job
+                        for job in ctx.submitted_nzbids
+                        if job != pick_id and job not in missing
+                    ],
                 )
             ctx.on_failure(None)
             return False
@@ -876,6 +887,8 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             ),
         },
     )
+    if getattr(ctx, "bulk_unrecorded_nzbids", None):
+        result["unrecorded_nzbids"] = ctx.bulk_unrecorded_nzbids
     handled, leave_job = _handle_poll_failure(
         result["outcome"],
         nzbid,
