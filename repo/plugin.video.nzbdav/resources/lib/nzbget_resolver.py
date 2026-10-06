@@ -838,7 +838,11 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
     if not nzbid:
         # Surface the specific (already-redacted) NZBGet message—auth vs dupe
         # vs "append returned 0"—per the spec error table, else the generic.
-        ctx.on_failure(error or _string(30222))
+        ctx.on_failure(
+            None
+            if getattr(ctx, "bulk_reuse_unreadable", False)
+            else error or _string(30222)
+        )
         return False
 
     def _owned_fleet_nzbids():

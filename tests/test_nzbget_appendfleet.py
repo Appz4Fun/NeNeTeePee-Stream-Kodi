@@ -663,3 +663,133 @@ def test_bulk_loader_sees_only_remaining_unique_slots(bulk_env):
     )
     assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
     assert len(fleet.call_args.args[0]) == 3
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_parked_backup_is_adopted_before_any_indexer_grab(bulk_env, legacy):
+    from resources.lib import nzbget_submit_ledger
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, fetch = bulk_env
+    link = "http://indexer/held"
+    ctx.dupe.update(max_backups=1, backups=[{"link": link, "title": "T"}])
+    history = [{"NZBID": 77, "DupeKey": "k", "Status": "DELETED/DUPE"}]
+    held = [
+        {"link": nzbget_submit_ledger.link_key(link), "nzbid": 77, "state": "parked"}
+    ]
+    if legacy:
+        fleet.return_value = (
+            None,
+            nzbget_api.RpcError(
+                "Invalid procedure", {"code": 1, "message": "Invalid procedure"}
+            ),
+        )
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch.object(
+        nzbget_submit_ledger, "held", return_value=held
+    ), patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
+    ), patch.object(
+        nzbget_api, "download_nzb"
+    ) as download:
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert ctx.adopted_nzbids == [77]
+    assert len(fleet.call_args.args[0]) == 1
+    download.assert_not_called()
+    assert fetch.call_count == 1
+    assert append.call_count == (1 if legacy else 0)
+    if legacy:
+        from resources.lib.nzbget_resolver import _discard_parked_pick
+
+        _discard_parked_pick(ctx)
+
+
+def test_legacy_scores_include_unused_hydra_refill(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    ctx.dupe.update(max_backups=1, backups=[{"link": "backup", "title": "T"}])
+    extra = {"link": "hydra", "title": "T"}
+
+    def discover(dupe, *_args, **_kwargs):
+        dupe["extras"] = [extra]
+        return dupe["backups"] + [extra]
+
+    fleet.return_value = (
+        None,
+        nzbget_api.RpcError(
+            "Invalid procedure", {"code": 1, "message": "Invalid procedure"}
+        ),
+    )
+    append.side_effect = [(42, None), (43, None), (44, None)]
+    with patch(
+        "resources.lib.nzbget_fleet_run._fleet_backups", side_effect=discover
+    ), patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
+    ), patch(
+        "resources.lib.nzbget_resolver._copy_vetoed_after_append",
+        side_effect=[False, True, False],
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    scores = [call.kwargs["dupe_score"] for call in append.call_args_list]
+    assert scores[0] > scores[1] > scores[2] > 0
+    from resources.lib.nzbget_resolver import _discard_parked_pick
+
+    _discard_parked_pick(ctx)
+
+
+def test_unreadable_reuse_preserves_its_existing_notification(bulk_env):
+    from unittest.mock import Mock
+
+    from resources.lib import nzbget_resolver as core
+
+    ctx, fleet, append, _fetch = bulk_env
+    ctx.on_failure = Mock()
+    history = [
+        {"NZBID": 77, "DupeKey": "k", "Status": "SUCCESS/ALL", "DestDir": "/done"}
+    ]
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch.object(
+        core, "_reuse_completed_job", return_value=core.SMB_UNREADABLE
+    ):
+        assert core._submit_poll_resolve(ctx, "pick", "T", "", "") is False
+    ctx.on_failure.assert_called_once_with(None)
+    fleet.assert_not_called()
+    append.assert_not_called()
+
+
+def test_adopted_backup_consumes_legacy_attempt_budget(bulk_env):
+    from resources.lib import nzbget_resolver as core
+    from resources.lib import nzbget_submit_ledger
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    link = "http://indexer/held"
+    ctx.dupe.update(
+        max_backups=2,
+        backups=[
+            {"link": link, "title": "T"},
+            {"link": "backup", "title": "T"},
+            {"link": "unused", "title": "T"},
+        ],
+    )
+    history = [{"NZBID": 77, "DupeKey": "k", "Status": "DELETED/DUPE"}]
+    held = [
+        {"link": nzbget_submit_ledger.link_key(link), "nzbid": 77, "state": "parked"}
+    ]
+    fleet.return_value = (
+        None,
+        nzbget_api.RpcError(
+            "Invalid procedure", {"code": 1, "message": "Invalid procedure"}
+        ),
+    )
+    append.side_effect = [(42, None), (43, None), (44, None)]
+    original = core._submit_candidates
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch.object(
+        nzbget_submit_ledger, "held", return_value=held
+    ), patch.object(core, "_dupe_check_disabled", return_value=False), patch.object(
+        core, "_copy_vetoed_after_append", side_effect=[False, True, False]
+    ), patch.object(
+        core, "_submit_candidates", side_effect=original
+    ) as submit:
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert submit.call_args.kwargs["limits"] == (1, 5)
+    core._discard_parked_pick(ctx)

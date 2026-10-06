@@ -150,8 +150,12 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
                 kept = kept[:1]
             # Reuse already downloaded and deduplicated bodies on old servers.
             # Scores are calculated only after appendfleet was refused.
-            for index, (row, _handle, _token) in enumerate(kept):
-                row["score"] = int(dupe.get("pick_score") or 0) - index
+            prior = (
+                prepared[2]
+                if len(prepared) > 2
+                else [row for row, _handle, _token in kept]
+            )
+            _score_prepared(dupe, kept, prior)
             if pick.get("_dupe_mode"):
                 kept[0][0]["_dupe_mode"] = pick["_dupe_mode"]
             pick = kept[0][0]
@@ -168,14 +172,10 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
                 [row for row, _handle, _token in kept if row.get("_nzbid")], dupe_key
             )
             if capped and not dupe_check_off and pick.get("_nzbid"):
-                prior = (
-                    prepared[2]
-                    if len(prepared) > 2
-                    else [row for row, _handle, _token in kept]
+                live = len(tally["live"]) + len(
+                    getattr(ctx, "adopted_nzbids", []) or []
                 )
-                _refill_prepared(
-                    run, dupe, progress, (cap, len(tally["live"]), kept, prior)
-                )
+                _refill_prepared(run, dupe, progress, (cap, live, kept, prior))
 
     finally:
         dedup.close()
@@ -200,6 +200,18 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
         ctx.pick_nzb_bytes = body
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _score_prepared(dupe, kept, prior):
+    """Assign old-server scores to the full sequence, including unused extras."""
+    ranked = [kept[0][0]] + list(prior) + [row for row, _handle, _token in kept]
+    seen = {}
+    base = int(dupe.get("pick_score") or 0)
+    for row in ranked:
+        link = row.get("link")
+        if link not in seen:
+            seen[link] = base - len(seen)
+        row["score"] = seen[link]
 
 
 def _refill_prepared(run, dupe, progress, state):

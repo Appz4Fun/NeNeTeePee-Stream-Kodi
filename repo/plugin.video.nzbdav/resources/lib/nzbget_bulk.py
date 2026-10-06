@@ -6,7 +6,7 @@ import base64
 import threading
 import time
 
-from resources.lib import nzbget_api
+from resources.lib import nzbget_api, nzbget_submit_ledger
 from resources.lib.nzbget_fleet_dedup import (
     FleetDedup,
     NzbSpool,
@@ -66,9 +66,15 @@ def submit_bulk(ctx, nzb_url, title, dupe_key):
         dupe, progress, include_loader=False, ranked=False
     )
     cap = dupe.get("max_backups")
-    count = min(50, cap + 1) if isinstance(cap, int) and cap >= 0 else 50
+    capped = isinstance(cap, int) and cap >= 0
+    ctx.bulk_held = nzbget_submit_ledger.held(dupe_key, probe.get("members"))
+    candidates, adopted = run._skip_held(
+        candidates, ctx.bulk_held, ctx, slots=cap if capped else None
+    )
+    count = min(50, cap + 1 - len(adopted)) if capped else 50
     dedup = FleetDedup(spool_base=core._fleet_spool_base(), progress=progress.update)
     dedup.aborted = lambda: progress.aborted
+    dedup.attempts_used = len(adopted)
     try:
         result = _collect_send(
             ctx, candidates, count, (dupe_key, getter, progress, dedup)
@@ -108,6 +114,11 @@ def _existing(getter, key, stopped):
     queue = nzbget_api.queue_rows(getter)
     if stopped():
         return result
+    result["members"] = (
+        nzbget_api.dupekey_member_states(key, history or [], queue)
+        if queue is not None
+        else None
+    )
     matches = [row for row in queue or [] if nzbget_api._dupekey_match(row, key)]
     matches.sort(key=lambda row: str(row.get("Status") or "").upper() == "PAUSED")
     for row in matches:
@@ -134,6 +145,9 @@ def _use_completed(ctx, completed, progress):
     )
     if progress.canceled():
         ctx.fleet_aborted = progress.aborted
+        return None, None
+    if url is core.SMB_UNREADABLE:
+        ctx.bulk_reuse_unreadable = True
         return None, None
     if url:
         ctx.bulk_completed = completed
@@ -170,7 +184,20 @@ def _collect_send(ctx, candidates, count, state):
             if isinstance(limit, dict):
                 limit["n"] = remaining
             more = run._loader_extras(dupe, progress, candidates[1:], ranked=False)
-            kept += _collect_rows(more, remaining, (ctx, dedup, spool, progress))
+            capped = (
+                isinstance(dupe.get("max_backups"), int) and dupe["max_backups"] >= 0
+            )
+            more, adopted = run._skip_held(
+                more,
+                getattr(ctx, "bulk_held", None),
+                ctx,
+                slots=remaining if capped else None,
+            )
+            dedup.attempts_used = getattr(dedup, "attempts_used", 0) + len(adopted)
+            if capped:
+                remaining -= len(adopted)
+            if remaining:
+                kept += _collect_rows(more, remaining, (ctx, dedup, spool, progress))
         if progress.canceled():
             return None, None
         return _send(ctx, kept, (key, getter, progress, dedup), candidates)
