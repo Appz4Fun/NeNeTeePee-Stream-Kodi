@@ -544,7 +544,7 @@ def test_new_start_waits_for_retry_native_call_before_publishing_context(
     def run(action):
         try:
             action()
-        except BaseException as error:
+        except Exception as error:  # pylint: disable=broad-exception-caught
             errors.append(error)
 
     home.setProperty.side_effect = publish

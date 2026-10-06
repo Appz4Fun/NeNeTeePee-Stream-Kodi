@@ -295,6 +295,7 @@ class NzbdavPlayer(xbmc.Player):
             try:
                 _HOME_WINDOW.setProperty(_PROP_PLAYING, "true")
             except _PLAYER_RUNTIME_ERRORS:
+                # GUI teardown can drop this optional flag; keep playback running.
                 pass
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Service monitoring stream '{}'".format(title),
