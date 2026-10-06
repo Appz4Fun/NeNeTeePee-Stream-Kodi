@@ -58,7 +58,7 @@ def test_automatic_upgrade_preserves_custom_fields_and_original_backup(
         assert updated[field] == original[field]
     for field in ("play_movie", "play_episode", "is_resolvable"):
         assert updated[field] == player_installer.PLAYER_JSON[field]
-    backups = list(installed_player.parent.glob("nzbdav.json.*.bak"))
+    backups = list(installed_player.parent.glob("nzbdav.*.bak"))
     assert len(backups) == 1
     assert json.loads(backups[0].read_text()) == original
 
@@ -115,7 +115,7 @@ def test_automatic_upgrade_defers_while_another_process_holds_lock(installed_pla
     import fcntl
 
     installed_player.write_text(json.dumps(_old_player()))
-    with open(str(installed_player) + ".upgrade.lock", "a+b") as lock:
+    with open(installed_player.with_suffix(".upgrade.lock"), "a+b") as lock:
         fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         assert player_installer.upgrade_installed_tmdbhelper_player() == "deferred"
     assert player_installer.upgrade_installed_tmdbhelper_player() == "updated"
@@ -187,3 +187,43 @@ def test_upgrade_error_does_not_escape_public_startup_hook(installed_player):
         side_effect=RuntimeError("VFS failure"),
     ):
         assert player_installer.upgrade_installed_tmdbhelper_player() == "failed"
+
+
+def test_migration_artifacts_are_not_tmdbhelper_player_candidates(installed_player):
+    import ast
+    from functools import cached_property
+    from pathlib import Path
+    from types import SimpleNamespace
+
+    fixture = Path(__file__).parent / "fixtures/tmdbhelper_6_17_5_contract.txt"
+    source = ast.parse(fixture.read_text())
+    selected = [
+        node
+        for node in source.body
+        if getattr(node, "name", "") in ("get_files_in_folder", "PlayerMeta")
+    ]
+    namespace = {
+        "cached_property": cached_property,
+        "loads": json.loads,
+        "read_file": lambda filename: Path(filename).read_text(),
+        "xbmcvfs": SimpleNamespace(
+            listdir=lambda _folder: (
+                [],
+                [p.name for p in installed_player.parent.iterdir()],
+            )
+        ),
+    }
+    exec(  # pylint: disable=exec-used
+        compile(ast.Module(body=selected, type_ignores=[]), str(fixture), "exec"),
+        namespace,
+    )
+    installed_player.write_text(json.dumps(_old_player()))
+    assert player_installer.upgrade_installed_tmdbhelper_player() == "updated"
+    # Exercise the installed unanchored scan and JSON reader together.
+    candidates = namespace["get_files_in_folder"](
+        str(installed_player.parent), r".*\.json"
+    )
+    assert candidates == ["nzbdav.json"]
+    reader = namespace["PlayerMeta"](str(installed_player.parent) + "/", candidates[0])
+    assert reader.meta["schema_version"] == 10
+    assert reader.meta["plugin"] == "plugin.video.nzbdav"

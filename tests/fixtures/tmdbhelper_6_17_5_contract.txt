@@ -592,3 +592,30 @@ class PlayerResolverBase:
     def execute_action(self):
         kodi_log(['lib.player - executing action:\n', self.action], 1)
         executebuiltin(self.action)
+
+# files/futils.py SHA256: 50fff352551f8eadf91b4fce7bd8a0ad839a64ecbc0efeba9fb970086dc8ffe3
+
+def get_files_in_folder(folder, regex):
+    import re
+    return [x for x in xbmcvfs.listdir(folder)[1] if re.match(regex, x)]
+
+# player/config/meta.py SHA256: acaaffc63c90af245229b7e6d2ac1d8d141ab6885cf3d2d122db7b46e747ff14
+class PlayerMeta:
+
+    def __init__(self, folder, filename, providers=None, show_disabled=False):
+        self.folder = folder
+        self.filename = filename
+        self.providers = providers
+        self.show_disabled = show_disabled
+
+    @cached_property
+    def filenameandpath(self):
+        return self.folder + self.filename
+
+    @cached_property
+    def data(self):
+        return read_file(self.filenameandpath)
+
+    @cached_property
+    def meta(self):
+        return loads(self.data) or {}

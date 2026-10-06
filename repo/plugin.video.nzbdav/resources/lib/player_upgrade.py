@@ -50,7 +50,7 @@ def _read_player(path, definition):
 
 def _replace_player(path, original, player):
     """Back up, stage, validate and replace without truncating the live file."""
-    backup = path + "." + uuid.uuid4().hex + ".bak"
+    backup = os.path.splitext(path)[0] + "." + uuid.uuid4().hex + ".bak"
     shutil.copy2(path, backup)
     with open(backup, "rb") as saved:
         if saved.read() != original:
@@ -79,7 +79,7 @@ def upgrade_player(folder, definition):
     path = os.path.join(folder, "nzbdav.json")
     if not os.path.isfile(path):
         return "absent"
-    lock_path = path + ".upgrade.lock"
+    lock_path = os.path.splitext(path)[0] + ".upgrade.lock"
     if os.path.islink(path) or os.path.islink(lock_path):
         return "failed"
     try:

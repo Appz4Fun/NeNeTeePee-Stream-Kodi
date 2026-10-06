@@ -38,7 +38,7 @@ not installed automatically. Malformed files and write/backup failures leave
 the original in place and log a local diagnostic. Migration is silent and does
 not change TMDbHelper settings or authentication.
 
-Backups are `nzbdav.json.<unique-id>.bak` beside the existing player. Automatic
+Backups are `nzbdav.<unique-id>.bak` beside the existing player. Automatic
 migration uses a process lock and validated atomic replacement. The manual
 installer remains available. It has its existing separate settings behavior.
 
@@ -76,6 +76,6 @@ actual Trakt requests, and independently read history are separate gates.
 A code PR does not itself publish an addon release.
 
 Validation of the implementation before PR review: `just lint`, `just test`
-(3,218 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
+(3,219 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
 passed. Native deployment and real Trakt watched-history verification are
 reported separately; they are not established by these checks.
