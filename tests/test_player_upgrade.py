@@ -227,3 +227,21 @@ def test_migration_artifacts_are_not_tmdbhelper_player_candidates(installed_play
     reader = namespace["PlayerMeta"](str(installed_player.parent) + "/", candidates[0])
     assert reader.meta["schema_version"] == 10
     assert reader.meta["plugin"] == "plugin.video.nzbdav"
+
+
+@pytest.mark.parametrize("failure", ["stage", "replace"])
+def test_repeated_failed_upgrade_does_not_accumulate_backups(installed_player, failure):
+    original = json.dumps(_old_player())
+    installed_player.write_text(original)
+    target = {"stage": "tempfile.mkstemp", "replace": "os.replace"}[failure]
+    with patch(
+        "resources.lib.player_upgrade." + target,
+        side_effect=OSError("Persistent failure"),
+    ):
+        for _ in range(4):
+            assert player_installer.upgrade_installed_tmdbhelper_player() == "failed"
+    assert installed_player.read_text() == original
+    assert not list(installed_player.parent.glob("*.bak"))
+    assert not list(installed_player.parent.glob(".nzbdav-player-*"))
+    assert player_installer.upgrade_installed_tmdbhelper_player() == "updated"
+    assert len(list(installed_player.parent.glob("*.bak"))) == 1

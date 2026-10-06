@@ -51,12 +51,16 @@ def _read_player(path, definition):
 def _replace_player(path, original, player):
     """Back up, stage, validate and replace without truncating the live file."""
     backup = os.path.splitext(path)[0] + "." + uuid.uuid4().hex + ".bak"
-    shutil.copy2(path, backup)
-    with open(backup, "rb") as saved:
-        if saved.read() != original:
-            raise OSError("Player backup verification failed")
-    fd, stage = tempfile.mkstemp(prefix=".nzbdav-player-", dir=os.path.dirname(path))
+    stage = None
+    installed = False
     try:
+        shutil.copy2(path, backup)
+        with open(backup, "rb") as saved:
+            if saved.read() != original:
+                raise OSError("Player backup verification failed")
+        fd, stage = tempfile.mkstemp(
+            prefix=".nzbdav-player-", dir=os.path.dirname(path)
+        )
         with os.fdopen(fd, "w", encoding="utf-8") as output:
             json.dump(player, output, indent=4)
             output.write("\n")
@@ -69,9 +73,14 @@ def _replace_player(path, original, player):
             if current.read() != original:
                 raise OSError("Player changed during upgrade")
         os.replace(stage, path)
+        installed = True
     finally:
-        if os.path.exists(stage):
-            os.unlink(stage)
+        try:
+            if stage is not None and os.path.exists(stage):
+                os.unlink(stage)
+        finally:
+            if not installed and os.path.exists(backup):
+                os.unlink(backup)
 
 
 def upgrade_player(folder, definition):

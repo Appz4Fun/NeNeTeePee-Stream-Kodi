@@ -56,6 +56,7 @@ _PROP_PLAYING = "nzbdav.playing"
 _PROP_PROXY_PORT = "nzbdav.proxy_port"
 _PROP_PROXY_TOKEN = "nzbdav.proxy_token"  # nosec B105 — settings key, not a secret
 
+_DURATION_UNSET = object()
 _HOME_WINDOW = xbmcgui.Window(10000)
 _PLAYER_RUNTIME_ERRORS = (
     AttributeError,
@@ -160,6 +161,7 @@ class NzbdavPlayer(xbmc.Player):
         self._resume_key = ""
         self._title = ""
         self._last_position = 0.0
+        self._last_duration = None
         self._retry_count = 0
         self._av_started = False
         self._play_time = 0.0
@@ -269,6 +271,7 @@ class NzbdavPlayer(xbmc.Player):
                 self._stream_url = values[_PROP_STREAM_URL]
                 self._resume_key = values[_PROP_RESUME_KEY]
                 self._last_position = _coerce_resume_offset(values[_PROP_RESUME_OFFSET])
+                self._last_duration = None
                 self._title = values[_PROP_STREAM_TITLE]
                 self._state = PlaybackState.MONITORING
                 self._retry_count = 0
@@ -383,15 +386,18 @@ class NzbdavPlayer(xbmc.Player):
             self._state = PlaybackState.IDLE
             self._clear_stream_properties()
 
-    def _save_stable_resume(self, resume_key, position, av_started):
+    def _save_stable_resume(
+        self, resume_key, position, av_started, duration=_DURATION_UNSET
+    ):
         """Persist the last position under the original source stream identity."""
         if not resume_key or not av_started or position <= 0.0:
             return
-        duration = None
-        try:
-            duration = self.getTotalTime()
-        except _PLAYER_RUNTIME_ERRORS:
-            pass
+        if duration is _DURATION_UNSET:
+            duration = None
+            try:
+                duration = self.getTotalTime()
+            except _PLAYER_RUNTIME_ERRORS:
+                pass
         try:
             resume_store.save_resume(resume_key, position, duration=duration)
         except _PLAYER_RUNTIME_ERRORS:
@@ -507,8 +513,14 @@ class NzbdavPlayer(xbmc.Player):
                 return
         except _PLAYER_RUNTIME_ERRORS:
             return
+        try:
+            duration = float(self.getTotalTime())
+        except _PLAYER_RUNTIME_ERRORS:
+            duration = 0.0
         with self._state_lock:
             self._last_position = position
+            if duration > 0:
+                self._last_duration = duration
 
     def _retry_playback(self, max_retries, retry_delay):
         """Attempt to resume playback from last known position."""
@@ -649,7 +661,12 @@ class NzbdavPlayer(xbmc.Player):
                 self._state = PlaybackState.IDLE
                 self._session_generation += 1
                 self._playback_metadata = {}
-                resume = (self._resume_key, self._last_position, self._av_started)
+                resume = (
+                    self._resume_key,
+                    self._last_position,
+                    self._av_started,
+                    self._last_duration,
+                )
         self._save_stable_resume(*resume)
         self._cleanup_proxy_session()
 

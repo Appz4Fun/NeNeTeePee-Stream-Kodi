@@ -747,12 +747,13 @@ def test_failed_old_handoff_preserves_replacement_context(playback_kodi):
     from resources.lib import playback_context, playback_handoff
 
     _player, _plugin, home, properties = playback_kodi
+    native_start = MagicMock(side_effect=RuntimeError("Old native handoff failed"))
     with pytest.raises(RuntimeError):
         with playback_handoff.handoff(home=home) as token:
             playback_context.prepare_playback(MagicMock(), EPISODE, home, token)
             playback_context.prepare_playback(MagicMock(), MOVIE, home)
             properties["nzbdav.active"] = "true"
-            raise RuntimeError("Old native handoff failed")
+            native_start()
     assert playback_handoff.session_matches(
         home, properties[playback_handoff.SESSION_PROPERTY]
     )
@@ -886,3 +887,88 @@ def test_retry_native_failure_clears_context_without_stopping_service(playback_k
     assert not properties.get("nzbdav.playing")
     monitor.tick()
     assert monitor._state == service.PlaybackState.IDLE
+
+
+@pytest.mark.parametrize("entry", ["handle", "player"])
+def test_required_session_write_failure_cancels_handoff_without_stale_monitor(
+    playback_kodi, entry
+):
+    from resources.lib import playback_handoff
+
+    player, plugin, home, properties = playback_kodi
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "old",
+            playback_handoff.PENDING_PROPERTY: "old",
+            "nzbdav.playing": "true",
+        }
+    )
+    original = home.setProperty.side_effect
+
+    def publish(key, value):
+        if key == playback_handoff.SESSION_PROPERTY:
+            raise RuntimeError("Session write failed")
+        original(key, value)
+
+    home.setProperty.side_effect = publish
+    prepared = {
+        "stream_url": "new-stream",
+        "stream_headers": {},
+        "_playback_metadata": dict(MOVIE),
+    }
+    with pytest.raises(RuntimeError, match="Session write failed"):
+        if entry == "handle":
+            resolver._finish_direct_playback(7, prepared)
+        else:
+            resolver._finish_player_playback(prepared)
+    player.play.assert_not_called()
+    plugin.setResolvedUrl.assert_not_called()
+    for key in (
+        "TMDbHelper.PlayerInfoString",
+        "nzbdav.active",
+        "nzbdav.playing",
+        playback_handoff.SESSION_PROPERTY,
+        playback_handoff.PENDING_PROPERTY,
+    ):
+        assert not properties.get(key), key
+
+
+@pytest.mark.parametrize("snapshot_duration", [7200.0, None])
+def test_retirement_never_uses_replacement_duration_for_old_resume(
+    playback_kodi, monkeypatch, tmp_path, snapshot_duration
+):
+    from resources.lib import playback_handoff, resume_store
+
+    _player, _plugin, _home, properties = playback_kodi
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "old",
+            playback_handoff.PENDING_PROPERTY: "old",
+        }
+    )
+    monitor = service.NzbdavPlayer()
+    monitor._state = service.PlaybackState.MONITORING
+    monitor._playback_session = "old"
+    monitor._resume_key = "old-movie"
+    monitor._av_started = True
+    monitor.isPlaying = MagicMock(return_value=True)
+    monitor.getTime = MagicMock(return_value=500.0)
+    monitor.getTotalTime = MagicMock(return_value=snapshot_duration or 0.0)
+    monitor._save_position()
+    monitor.getTotalTime.return_value = 600.0
+    properties.update(
+        {
+            playback_handoff.SESSION_PROPERTY: "new",
+            playback_handoff.PENDING_PROPERTY: "new",
+        }
+    )
+    save = resume_store.save_resume
+    path = str(tmp_path / "resume.json")
+
+    def persist(key, position, duration=None):
+        save(key, position, duration=duration, path=path)
+
+    monkeypatch.setattr(service.resume_store, "save_resume", persist)
+    monitor._retire_replaced_session()
+    assert resume_store.get_resume("old-movie", path=path) == 500.0
+    assert monitor.getTotalTime.call_count == 1

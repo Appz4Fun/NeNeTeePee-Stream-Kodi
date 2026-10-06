@@ -88,7 +88,10 @@ def _rollback_context(home, token):
     if home is None:
         return
     try:
-        if session_token(home) != token:
+        if (
+            session_token(home) != token
+            and _read_token(home, PENDING_PROPERTY) != token
+        ):
             return
         _clear_properties(
             home, MONITOR_PROPERTIES + ("TMDbHelper.PlayerInfoString", SESSION_PROPERTY)

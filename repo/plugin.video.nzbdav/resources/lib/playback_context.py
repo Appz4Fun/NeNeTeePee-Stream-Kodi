@@ -178,6 +178,8 @@ def prepare_playback(listitem, metadata, home=None, session_token=None):
     identity clears stale context from earlier playback. The NZB-DAV snapshot
     lets the service restore exactly this identity on a stream reconnect.
     """
+    required_session = session_token is not None
+    session_write_failed = False
     metadata = _normalize(metadata) if isinstance(metadata, dict) else {}
     try:
         _apply_metadata(listitem, metadata)
@@ -189,7 +191,11 @@ def prepare_playback(listitem, metadata, home=None, session_token=None):
         if session_token is None:
             session_token = uuid.uuid4().hex
             home.setProperty(PENDING_PROPERTY, session_token)
-        home.setProperty(SESSION_PROPERTY, session_token)
+        try:
+            home.setProperty(SESSION_PROPERTY, session_token)
+        except RuntimeError:
+            session_write_failed = True
+            raise
         home.setProperty("nzbdav.playback_metadata", json.dumps(metadata))
         context = _playerstring(metadata)
         if context:
@@ -210,3 +216,6 @@ def prepare_playback(listitem, metadata, home=None, session_token=None):
                 except RuntimeError:
                     # The GUI is unavailable; cleanup must not stop playback.
                     pass
+        if required_session and session_write_failed:
+            # Final handoffs require a committed owner before arming monitoring.
+            raise
