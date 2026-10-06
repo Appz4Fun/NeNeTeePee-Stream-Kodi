@@ -496,8 +496,8 @@ def _duplicate_upload_from_raw(raw, title, picked_link):
     return upload
 
 
-def _cache_search_uploads(results):
-    """Retain same-title rows from this response before picker filtering.
+def _cache_search_uploads(results, uploads=None):
+    """Attach retained Hydra uploads to every provider's matching result rows.
 
     Rows of one title share a snapshot, so memory grows with the response,
     not with the number of pairs. Copies contain only the parsed fields:
@@ -505,11 +505,43 @@ def _cache_search_uploads(results):
     with a copied selection and expires with it, without global state.
     """
     groups = {}
-    for row in results:
-        groups.setdefault(row.get("title", ""), []).append(dict(row))
+    for row in results if uploads is None else uploads:
+        groups.setdefault(row.get("title", ""), []).append(_plain_search_result(row))
     snapshots = {title: tuple(rows) for title, rows in groups.items()}
     for row in results:
-        row[_SEARCH_UPLOADS_KEY] = snapshots[row.get("title", "")]
+        snapshot = snapshots.get(row.get("title", ""))
+        if snapshot is not None:
+            row[_SEARCH_UPLOADS_KEY] = snapshot
+        else:
+            row.pop(_SEARCH_UPLOADS_KEY, None)
+
+
+def _plain_search_result(row):
+    """Copy a result without retained snapshots or selection-local peer caches."""
+    return {
+        key: value
+        for key, value in row.items()
+        if key not in (_SEARCH_UPLOADS_KEY, "_hydra_duplicate_uploads")
+    }
+
+
+def split_search_uploads(results):
+    """Return cacheable results and one copy of each retained upload group.
+
+    JSON cannot preserve the shared references attached to in-memory rows.
+    Store uploads once beside the results and rebuild sharing on cache reads.
+    Neither the results nor their snapshots are mutated by serialization.
+    """
+    plain = []
+    uploads = []
+    seen_groups = set()
+    for row in results:
+        plain.append(_plain_search_result(row))
+        group = row.get(_SEARCH_UPLOADS_KEY, ())
+        if id(group) not in seen_groups:
+            seen_groups.add(id(group))
+            uploads.extend(_plain_search_result(peer) for peer in group)
+    return plain, uploads
 
 
 def fetch_release_duplicate_uploads(picked, settings_getter=None):

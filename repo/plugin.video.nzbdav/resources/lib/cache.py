@@ -109,7 +109,13 @@ def _read_fresh_cache(path, cache_ttl, title):
         # Best-effort mtime update; still return the cache hit if it fails.
         pass
     xbmc.log("NeNeTeePee-Stream-Kodi: Cache hit for '{}'".format(title), xbmc.LOGDEBUG)
-    return data.get("results", [])
+    results = data.get("results", [])
+    uploads = data.get("hydra_uploads")
+    if isinstance(results, list) and isinstance(uploads, list):
+        from resources.lib.hydra import _cache_search_uploads
+
+        _cache_search_uploads(results, uploads)
+    return results
 
 
 def get_cached(search_type, title, **kwargs):
@@ -143,7 +149,14 @@ def set_cached(search_type, title, results, **kwargs):
     path = os.path.join(_get_cache_dir(), key + ".json")
 
     try:
-        data = {"timestamp": time.time(), "results": results}
+        from resources.lib.hydra import split_search_uploads
+
+        plain_results, uploads = split_search_uploads(results)
+        data = {
+            "timestamp": time.time(),
+            "results": plain_results,
+            "hydra_uploads": uploads,
+        }
         # Atomic write: dump to a sibling temp file then os.replace onto the
         # final path. A concurrent get_cached() sees either the old file
         # or the new file, never a half-written JSON blob that would

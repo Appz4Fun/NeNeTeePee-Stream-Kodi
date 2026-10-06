@@ -16,7 +16,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 from resources.lib.http_util import pubdate_to_epoch
-from resources.lib.hydra import _DEFAULT_HYDRA_URL
+from resources.lib.hydra import _DEFAULT_HYDRA_URL, _SEARCH_UPLOADS_KEY
 from resources.lib.nzbdav_api import completed_jobs_lookup_done
 
 # Pre-read defaults for the provider-search settings snapshot
@@ -388,7 +388,9 @@ def _hydra_lookup_enabled_by_settings(settings_getter):
 
 
 def _hydra_lookup_enabled_by_selection(selected):
-    """Hydra-duplicate gate inferred from the selected row's own fields."""
+    """Recognize retained Hydra peers even when another provider was selected."""
+    if selected.get(_SEARCH_UPLOADS_KEY):
+        return True
     if "indexer" not in selected and "link" not in selected:
         return False
     indexer = str(selected.get("indexer", "") or "").lower()

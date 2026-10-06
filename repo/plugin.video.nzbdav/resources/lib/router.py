@@ -523,6 +523,7 @@ def _collect_provider_outcomes(provider_outcomes):
     result; otherwise ``None``.
     """
     all_results = []
+    hydra_results = []
     errors = []
     for provider_label, outcome in provider_outcomes:
         provider_results, provider_error = outcome
@@ -536,8 +537,14 @@ def _collect_provider_outcomes(provider_outcomes):
             errors.append(provider_error)
         else:
             all_results.extend(provider_results)
+            if provider_label == "NZBHydra2":
+                hydra_results.extend(provider_results)
 
     deduped = _dedupe_results_by_link(all_results)
+    if hydra_results:
+        from resources.lib.hydra import _cache_search_uploads
+
+        _cache_search_uploads(deduped, hydra_results)
 
     if not deduped and errors:
         return [], errors[0]
