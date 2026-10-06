@@ -8,6 +8,12 @@ import pytest
 from resources.lib import nzbget_api
 
 
+@pytest.fixture(autouse=True)
+def _no_live_config():
+    with patch.object(nzbget_api, "config_options", return_value={}):
+        yield
+
+
 def test_appendfleet_uses_authenticated_long_rpc_without_scores():
     members = [
         {"NZBFilename": "movie.nzb", "Content": base64.b64encode(b"nzb").decode()}
@@ -166,6 +172,12 @@ def _bulk_env():
         adopted_nzbids=[],
     )
     with ExitStack() as stack:
+        stack.enter_context(
+            patch(
+                "resources.lib.nzbget_resolver._reuse_completed_job",
+                return_value="smb://host/done/movie.mkv",
+            )
+        )
         for name, value in [("history_rows", []), ("queue_rows", [])]:
             stack.enter_context(patch.object(nzbget_api, name, return_value=value))
         fetch = stack.enter_context(
@@ -455,3 +467,199 @@ def test_reused_queue_keeps_parked_backups_in_failover_ownership(bulk_env):
     assert set(ctx.adopted_nzbids) == {77, 78, 99}
     fleet.assert_not_called()
     append.assert_not_called()
+
+
+def test_capped_bulk_skips_loader_when_picker_fills_slots(bulk_env):
+    from unittest.mock import Mock
+
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, _fleet, _append, _fetch = bulk_env
+    loader = Mock(return_value=[])
+    ctx.dupe.update(
+        max_backups=1, backups=[{"link": "backup", "title": "T"}], loader=loader
+    )
+
+    def discover(dupe, _progress, include_loader=True, **_kwargs):
+        return dupe["backups"] + (dupe["loader"]() if include_loader else [])
+
+    with patch("resources.lib.nzbget_fleet_run._fleet_backups", side_effect=discover):
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    loader.assert_not_called()
+
+
+def test_bulk_checks_healthcheck_warning(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, _fleet, _append, _fetch = bulk_env
+    with patch.object(
+        nzbget_api, "config_options", return_value={"healthcheck": "pause"}
+    ), patch("resources.lib.nzbget_resolver._warn_if_healthcheck_pauses") as warn:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert warn.call_args.kwargs["options"]["healthcheck"] == "pause"
+
+
+def test_abandoned_preflight_cannot_overwrite_accepted_fleet(bulk_env):
+    import threading
+
+    from resources.lib import nzbget_bulk
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, _fleet, _append, _fetch = bulk_env
+    release = threading.Event()
+    done = threading.Event()
+    original_wait, original_probe = nzbget_bulk.call_abortable, nzbget_bulk._existing
+
+    def slow_history(*_args):
+        assert release.wait(5)
+        return [
+            {"NZBID": 99, "DupeKey": "k", "Status": "SUCCESS/ALL", "DestDir": "/stale"}
+        ]
+
+    def wait(func, *args, **kwargs):
+        if kwargs.get("deadline") == 20:
+            kwargs["deadline"] = 0.03
+        return original_wait(func, *args, **kwargs)
+
+    def probe(*args):
+        try:
+            return original_probe(*args)
+        finally:
+            done.set()
+
+    with patch.object(
+        nzbget_api, "history_rows", side_effect=slow_history
+    ), patch.object(nzbget_bulk, "call_abortable", side_effect=wait), patch.object(
+        nzbget_bulk, "_existing", side_effect=probe
+    ):
+        try:
+            assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+        finally:
+            release.set()
+            assert done.wait(5)
+    assert not getattr(ctx, "bulk_completed", None)
+    assert ctx.fleet_pick_nzbid == 42
+
+
+def test_missing_completed_file_fails_without_a_second_download(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, fetch = bulk_env
+    history = [
+        {"NZBID": 77, "DupeKey": "k", "Status": "SUCCESS/ALL", "DestDir": "/missing"}
+    ]
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch(
+        "resources.lib.nzbget_resolver._reuse_completed_job", return_value=None
+    ), patch(
+        "resources.lib.nzbget_resolver._string",
+        return_value="Completed file unavailable",
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (
+            None,
+            "Completed file unavailable",
+        )
+    assert not getattr(ctx, "bulk_completed", None)
+    fleet.assert_not_called()
+    append.assert_not_called()
+    fetch.assert_not_called()
+
+
+def test_capped_legacy_refills_a_rejected_prepared_backup(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    ctx.dupe.update(
+        max_backups=1,
+        backups=[{"link": "backup", "title": "T"}],
+        loader=lambda: [{"link": "replacement", "title": "T"}],
+        loader_limit={"n": 1},
+    )
+    fleet.return_value = (
+        None,
+        nzbget_api.RpcError(
+            "Invalid procedure", {"code": 1, "message": "Invalid procedure"}
+        ),
+    )
+    append.side_effect = [(42, None), (43, None), (44, None)]
+    with patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
+    ), patch(
+        "resources.lib.nzbget_resolver._copy_vetoed_after_append",
+        side_effect=[False, True, False],
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert [call.args[0] for call in append.call_args_list] == [
+        "pick",
+        "backup",
+        "replacement",
+    ]
+    from resources.lib.nzbget_resolver import _discard_parked_pick
+
+    _discard_parked_pick(ctx)
+
+
+def test_completed_history_returns_before_unrelated_probes(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, _fleet, _append, _fetch = bulk_env
+    history = [
+        {"NZBID": 77, "DupeKey": "k", "Status": "SUCCESS/ALL", "DestDir": "/done"}
+    ]
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch.object(
+        nzbget_api, "queue_rows"
+    ) as queue, patch.object(nzbget_api, "config_options") as config:
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    queue.assert_not_called()
+    config.assert_not_called()
+
+
+def test_capped_legacy_refills_from_unused_picker_rows(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    ctx.dupe.update(
+        max_backups=1,
+        backups=[{"link": "backup", "title": "T"}, {"link": "unused", "title": "T"}],
+    )
+    fleet.return_value = (
+        None,
+        nzbget_api.RpcError(
+            "Invalid procedure", {"code": 1, "message": "Invalid procedure"}
+        ),
+    )
+    append.side_effect = [(42, None), (43, None), (44, None)]
+    with patch(
+        "resources.lib.nzbget_resolver._dupe_check_disabled", return_value=False
+    ), patch(
+        "resources.lib.nzbget_resolver._copy_vetoed_after_append",
+        side_effect=[False, True, False],
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert [call.args[0] for call in append.call_args_list] == [
+        "pick",
+        "backup",
+        "unused",
+    ]
+    from resources.lib.nzbget_resolver import _discard_parked_pick
+
+    _discard_parked_pick(ctx)
+
+
+def test_bulk_loader_sees_only_remaining_unique_slots(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, _append, _fetch = bulk_env
+    limit = {"n": 2}
+
+    def loader():
+        assert limit["n"] == 1
+        return [{"link": "loader-copy", "title": "T"}]
+
+    ctx.dupe.update(
+        max_backups=2,
+        backups=[{"link": "backup", "title": "T"}],
+        loader=loader,
+        loader_limit=limit,
+    )
+    assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert len(fleet.call_args.args[0]) == 3

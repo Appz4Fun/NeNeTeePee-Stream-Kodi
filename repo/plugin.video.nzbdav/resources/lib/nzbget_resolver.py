@@ -831,17 +831,9 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             return False
     else:
         nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
-    completed = getattr(ctx, "bulk_completed", None)
-    if completed and completed.get("present"):
-        _play_completed_download(
-            ctx,
-            completed["dest_dir"],
-            title,
-            download_pubdate,
-            download_size,
-            job_id=completed.get("nzbid"),
-            job_name=completed.get("job_name") or title,
-        )
+    completed_url = getattr(ctx, "bulk_completed_url", None)
+    if completed_url:
+        ctx.on_success(completed_url)
         return False
     if not nzbid:
         # Surface the specific (already-redacted) NZBGet message—auth vs dupe

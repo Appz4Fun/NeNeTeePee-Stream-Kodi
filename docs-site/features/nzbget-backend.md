@@ -161,7 +161,9 @@ The add-on tracks the returned `Chosen` NZBID and follows NZBGet's automatic
 failover to another member. An incomplete ranking response needs no extra
 submission. Accepted fleets are never resent or FORCE-resubmitted. A release
 already queued is followed; a release already downloaded is played from its
-completed file. If every copy is dead, the add-on reports that no working copy
+completed file after checking that Kodi can read it. A missing or unreadable
+completed file produces an explicit error without submitting a new download.
+If every copy is dead, the add-on reports that no working copy
 exists. Request size, chosen ID, and the health list are logged for debugging.
 
 Older NZBGet servers that return an unknown-method error (including

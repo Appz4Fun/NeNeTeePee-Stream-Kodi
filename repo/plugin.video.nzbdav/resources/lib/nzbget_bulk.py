@@ -3,6 +3,8 @@
 """One deduplicated appendfleet submission; server owns ranking and failover."""
 
 import base64
+import threading
+import time
 
 from resources.lib import nzbget_api
 from resources.lib.nzbget_fleet_dedup import (
@@ -26,23 +28,43 @@ def submit_bulk(ctx, nzb_url, title, dupe_key):
     getter = run._snapshot_getter(ctx.settings_getter)
     ctx.bulk_fleet = True
     progress.finding()
-    existing = call_abortable(
-        lambda: _existing(ctx, getter, dupe_key),
+    give_up_at = time.monotonic() + 20
+    abandoned = threading.Event()
+
+    def stopped():
+        return (
+            abandoned.is_set()
+            or ctx.cancel_event.is_set()
+            or time.monotonic() >= give_up_at
+        )
+
+    probe = call_abortable(
+        lambda: _existing(getter, dupe_key, stopped),
         (ctx.cancel_event,),
         progress.canceled,
-        default=None,
+        default={},
         deadline=20,
     )
+    abandoned.set()
     if progress.canceled():
         ctx.fleet_aborted = progress.aborted
         return None, None
+    # Only the waiting caller owns ctx. Abandoned workers return data and
+    # cannot overwrite a later accepted fleet's playback/failover state.
+    ctx.preexisting_successes = probe.get("successes")
+    core._warn_if_healthcheck_pauses(getter, options=probe.get("options", {}))
+    if probe.get("completed"):
+        return _use_completed(ctx, probe["completed"], progress)
+    existing = probe.get("chosen")
     if existing:
+        ctx.adopted_nzbids = probe.get("adopted", [])
         ctx.fleet_pick_nzbid = existing
         return existing, None
-    if getattr(ctx, "bulk_completed", None):
-        return None, None
     pick = dict(dupe.get("pick") or {}, link=nzb_url, title=title, _is_pick=True)
-    candidates = [pick] + run._fleet_backups(dupe, progress, ranked=False)
+    # Discover the loader only after dedup proves the leading rows leave room.
+    candidates = [pick] + run._fleet_backups(
+        dupe, progress, include_loader=False, ranked=False
+    )
     cap = dupe.get("max_backups")
     count = min(50, cap + 1) if isinstance(cap, int) and cap >= 0 else 50
     dedup = FleetDedup(spool_base=core._fleet_spool_base(), progress=progress.update)
@@ -58,33 +80,66 @@ def submit_bulk(ctx, nzb_url, title, dupe_key):
     return result
 
 
-def _existing(ctx, getter, key):
-    """Reuse same-key SUCCESS or queued work before paying indexer grabs."""
+def _existing(getter, key, stopped):
+    """Return preflight data without ever mutating the live submit context."""
+    result = {}
+    if stopped():
+        return result
     history = nzbget_api.history_rows(getter)
-    ctx.preexisting_successes = (
+    result["successes"] = (
         nzbget_api.success_ids_by_dupekey(key, getter, history=history)
         if history is not None
         else None
     )
-    for row in history or []:
-        entry = nzbget_api._success_history_entry(row, key)
-        if entry:
-            ctx.bulk_completed = entry
-            return None
+    if stopped():
+        return result
+    result["completed"] = next(
+        (
+            entry
+            for entry in (
+                nzbget_api._success_history_entry(row, key) for row in history or []
+            )
+            if entry
+        ),
+        None,
+    )
+    if result["completed"]:
+        return result
     queue = nzbget_api.queue_rows(getter)
+    if stopped():
+        return result
     matches = [row for row in queue or [] if nzbget_api._dupekey_match(row, key)]
     matches.sort(key=lambda row: str(row.get("Status") or "").upper() == "PAUSED")
     for row in matches:
         nzbid = nzbget_api._int_nzbid(row.get("NZBID"))
         if nzbid and nzbid > 0:
-            # Keep the whole existing fleet in scope: its next promoted backup
-            # must be followed rather than rejected as another play's download.
             states = nzbget_api.dupekey_member_states(key, history or [], queue)
-            ctx.adopted_nzbids = [
+            result["adopted"] = [
                 job for job, state in states.items() if state in ("queued", "parked")
             ]
-            return nzbid
-    return None
+            result["chosen"] = nzbid
+            break
+    if not stopped():
+        result["options"] = nzbget_api.config_options(("HealthCheck",), getter)
+    return result
+
+
+def _use_completed(ctx, completed, progress):
+    """Reuse only readable files; never resubmit a server-confirmed download."""
+    from resources.lib import nzbget_resolver as core
+
+    url = core._reuse_completed_job(
+        dict(completed, name=completed.get("name") or completed.get("job_name", "")),
+        ctx,
+    )
+    if progress.canceled():
+        ctx.fleet_aborted = progress.aborted
+        return None, None
+    if url:
+        ctx.bulk_completed = completed
+        ctx.bulk_completed_url = url
+        return None, None
+    return None, core._string(30620)
 
 
 def _collect_send(ctx, candidates, count, state):
@@ -99,8 +154,36 @@ def _collect_send(ctx, candidates, count, state):
         if link:
             seen.add(link)
             usable.append(row)
-    clusters = dedup.clusters(usable)
     spool = NzbSpool(dedup.spool_base)
+    try:
+        kept = _collect_rows(usable, count, (ctx, dedup, spool, progress))
+        if progress.canceled():
+            return None, None
+        if not kept or kept[0][1] is None:
+            return None, "NZB download failed"
+        remaining = count - len(kept)
+        if remaining and (ctx.dupe or {}).get("loader") is not None:
+            from resources.lib import nzbget_fleet_run as run
+
+            dupe = ctx.dupe
+            limit = dupe.get("loader_limit")
+            if isinstance(limit, dict):
+                limit["n"] = remaining
+            more = run._loader_extras(dupe, progress, candidates[1:], ranked=False)
+            kept += _collect_rows(more, remaining, (ctx, dedup, spool, progress))
+        if progress.canceled():
+            return None, None
+        return _send(ctx, kept, (key, getter, progress, dedup), candidates)
+    finally:
+        spool.close()
+
+
+def _collect_rows(rows, count, state):
+    """Collect one bounded phase while sharing spool and posting fingerprints."""
+    from resources.lib import nzbget_resolver_dupes as engine
+
+    ctx, dedup, spool, progress = state
+    clusters = dedup.clusters(rows)
     fetch = engine._fleet_fetcher(clusters, spool)
     tally = {"wanted": count, "seen": 0, "total": len(clusters)}
     stream = prefetched_clusters(
@@ -111,20 +194,14 @@ def _collect_send(ctx, candidates, count, state):
         on_wait=progress.canceled,
     )
     try:
-        kept = engine._collect_unique(
+        return engine._collect_unique(
             stream, (dedup, spool, tally, fetch), ctx.cancel_event, count
         )
-        if progress.canceled():
-            return None, None
-        if not kept or kept[0][1] is None:
-            return None, "NZB download failed"
-        return _send(ctx, kept, (key, getter, progress, dedup))
     finally:
         stream.close()
-        spool.close()
 
 
-def _send(ctx, kept, state):
+def _send(ctx, kept, state, candidates):
     """Build ordered payload off-thread, retain bodies for an explicit fallback."""
     from resources.lib import nzbget_fleet_run as run
 
@@ -170,7 +247,7 @@ def _send(ctx, kept, state):
         ctx.bulk_fleet = False
         pick = kept[0][0]
         return run._submit_legacy_fleet(
-            ctx, pick["link"], pick["title"], key, prepared=(kept, dedup)
+            ctx, pick["link"], pick["title"], key, prepared=(kept, dedup, candidates)
         )
     if error or not reply:
         return None, error or "Invalid appendfleet response"
@@ -178,16 +255,22 @@ def _send(ctx, kept, state):
     chosen = reply["Chosen"]
     if not chosen:
         if reply.get("Reason") == "ALREADY_DOWNLOADED":
-            ctx.bulk_completed = nzbget_api.history_success_by_dupekey(
-                key, settings_getter=getter
+            completed = call_abortable(
+                lambda: nzbget_api.history_success_by_dupekey(
+                    key, settings_getter=getter
+                ),
+                (ctx.cancel_event,),
+                progress.canceled,
+                default={"present": False},
             )
-            return None, (
-                None
-                if ctx.bulk_completed.get("present")
-                else (
+            if completed.get("present"):
+                return _use_completed(ctx, completed, progress)
+            return (
+                None,
+                (
                     "NZBGet reports this release already downloaded, "
                     "but its completed file could not be found"
-                )
+                ),
             )
         return None, (
             "NZBGet found no working copy"

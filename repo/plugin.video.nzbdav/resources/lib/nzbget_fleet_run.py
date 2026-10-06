@@ -130,7 +130,11 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
     # probes each append for a DELETED/COPY veto so the next round can
     # backfill that backup's slot.
     limits = (cap, cap + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
-    dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
+    dedup = (
+        prepared[1]
+        if prepared is not None
+        else FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
+    )
     dedup.aborted = lambda: progress.aborted
     run = (dupe_key, getter, ctx, dedup, held)
     try:
@@ -141,7 +145,7 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
         else:
             from resources.lib.nzbget_resolver_dupes import _send_kept
 
-            kept, prepared_dedup = prepared
+            kept, prepared_dedup = prepared[:2]
             if dupe_check_off:
                 kept = kept[:1]
             # Reuse already downloaded and deduplicated bodies on old servers.
@@ -159,6 +163,20 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
                 (ctx.cancel_event, ctx.submitted_nzbids, capped, prepared_dedup),
                 (limits, tally),
             )
+            dedup.attempts_used = getattr(dedup, "attempts_used", 0) + tally["attempts"]
+            nzbget_submit_ledger.record(
+                [row for row, _handle, _token in kept if row.get("_nzbid")], dupe_key
+            )
+            if capped and not dupe_check_off and pick.get("_nzbid"):
+                prior = (
+                    prepared[2]
+                    if len(prepared) > 2
+                    else [row for row, _handle, _token in kept]
+                )
+                _refill_prepared(
+                    run, dupe, progress, (cap, len(tally["live"]), kept, prior)
+                )
+
     finally:
         dedup.close()
     # A shutdown requested during the last append's wait may not have been
@@ -182,6 +200,21 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
         ctx.pick_nzb_bytes = body
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _refill_prepared(run, dupe, progress, state):
+    """Older servers: fill rejected slots from unused rows, then loader extras."""
+    cap, live, kept, prior = state
+    dedup = run[3]
+    dedup.end_round()  # failed appends must not cover an unsent posting
+    covered_links = {row.get("link") for row, _handle, _token in kept}
+    remaining = [row for row in prior if row.get("link") not in covered_links]
+    budget = max(
+        0, cap + _core._MAX_VETO_REPLACEMENTS - getattr(dedup, "attempts_used", 0)
+    )
+    if live < cap and remaining and budget:
+        live += len(_send_batch(run, remaining, (cap - live, budget), True))
+    _fill_from_loader(dupe, progress, run, (cap, live, prior[1:]))
 
 
 def _park_pick_body(body):
@@ -560,7 +593,7 @@ def _fleet_backups(dupe, progress, include_loader=True, ranked=True):
     return backups + extras
 
 
-def _loader_extras(dupe, progress, prior):
+def _loader_extras(dupe, progress, prior, ranked=True):
     """The fallback loader's extras, ranked below ``prior`` (abortable).
 
     Scored just below the lowest-scored row already in the fleet and added to
@@ -568,15 +601,17 @@ def _loader_extras(dupe, progress, prior):
     """
     if dupe.get("loader") is None:
         return []
-    scores = [int(row.get("score") or 0) for row in prior if isinstance(row, dict)]
-    floor = min(scores) if scores else int(dupe.get("score_base") or 0)
+    floor = 0
+    if ranked:
+        scores = [int(row.get("score") or 0) for row in prior if isinstance(row, dict)]
+        floor = min(scores) if scores else int(dupe.get("score_base") or 0)
 
     def _extras():
         return _core._extra_backups_from_loader(
             dupe.get("loader"),
             [row.get("link") for row in prior if isinstance(row, dict)],
             limit=None,
-            score_base=floor - 1,
+            score_base=floor - 1 if ranked else None,
             pick=dupe.get("pick"),
         )
 
