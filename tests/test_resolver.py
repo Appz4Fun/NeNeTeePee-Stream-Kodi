@@ -59,6 +59,8 @@ from resources.lib.resolver import (
     resolve_and_play,
 )
 
+pytestmark = pytest.mark.usefixtures("stateful_handoff_windows")
+
 
 @pytest.fixture(autouse=True)
 def _no_resume_store_disk_writes():

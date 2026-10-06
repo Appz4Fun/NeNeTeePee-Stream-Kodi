@@ -634,7 +634,7 @@ def _handle_direct_play(handle, params):
         return
 
     _direct_play_prepare_and_serve(
-        handle, primary_url, primary_auth, fallback_urls, _validate_url
+        handle, primary_url, primary_auth, fallback_urls, _validate_url, params=params
     )
 
 
@@ -733,6 +733,8 @@ def _handle_search(handle, params):
     title, season, episode = _lookup_search_episode_args(
         params, search_type, title, season, episode, imdb
     )
+    if search_type == "episode":
+        params.update(title=title, season=season, episode=episode)
     _attach_episode_context(params, params, title=title, season=season, episode=episode)
     pack_result = _season_pack_result(params.get("_episode_context"))
 
@@ -791,6 +793,8 @@ def _handle_script_play(params):
     title, season, episode = _script_play_resolve_episode_args(
         params, search_type, title, season, episode, imdb
     )
+    if search_type == "episode":
+        params.update(title=title, season=season, episode=episode)
     _attach_episode_context(params, params, title=title, season=season, episode=episode)
     pack_result = _season_pack_result(
         params.get("_episode_context"), settings_getter=_get_script_setting

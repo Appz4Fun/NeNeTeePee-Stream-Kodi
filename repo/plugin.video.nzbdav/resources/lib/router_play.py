@@ -23,6 +23,8 @@ import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
+from resources.lib import playback_context
+
 
 def _search_with_cache(search_type, title, cache_kwargs):
     """Return ``(results, search_error)`` from cache or a provider query.
@@ -122,7 +124,9 @@ def _play_identity(params, title, season, episode):
     (``_resolve_play_episode_args`` may have backfilled them from InfoLabels or
     an IMDB lookup, so the raw params can be stale for those three).
     """
+    identity = dict(params, title=title, season=season, episode=episode)
     return {
+        "_playback_metadata": playback_context.metadata_from_params(identity),
         "type": params.get("type", "movie"),
         "title": title,
         "year": params.get("year", ""),
@@ -425,6 +429,9 @@ def _handle_play_auto_select(handle, best, filtered, identity=None):
         "_fallback_candidates": [],
         "_fallback_candidate_loader": _selection_fallback_loader(target, provider_rows),
     }
+    resolver_params["_playback_metadata"] = playback_context.metadata_from_params(
+        identity or {}
+    )
     _attach_episode_context(resolver_params, identity or {})
     _attach_nzbget_dupe(resolver_params, target, provider_rows, identity)
     _ensure_nzbget_completed_hint(target)
@@ -862,6 +869,9 @@ def _handle_play_resolve_selection(
         "_fallback_candidates": [],
         "_fallback_candidate_loader": _selection_fallback_loader(target, provider_rows),
     }
+    resolver_params["_playback_metadata"] = playback_context.metadata_from_params(
+        identity or {}
+    )
     _attach_episode_context(resolver_params, identity or {})
     _attach_nzbget_dupe(resolver_params, target, provider_rows, identity)
     _apply_completed_job_hint(resolver_params, target, completed_jobs)
@@ -943,6 +953,9 @@ def _handle_search_auto_select(params, best, filtered):
 
     target, provider_rows = _selection_target(best, filtered)
     resolver_params = dict(params)
+    resolver_params["_playback_metadata"] = playback_context.metadata_from_params(
+        params
+    )
     resolver_params["_fallback_candidates"] = []
     resolver_params["_fallback_candidate_loader"] = _selection_fallback_loader(
         target, provider_rows
@@ -964,6 +977,9 @@ def _handle_search_resolve_selection(params, selected, filtered, completed_jobs)
 
     target, provider_rows = _selection_target(selected, filtered)
     resolver_params = dict(params)
+    resolver_params["_playback_metadata"] = playback_context.metadata_from_params(
+        params
+    )
     resolver_params["_fallback_candidates"] = []
     resolver_params["_fallback_candidate_loader"] = _selection_fallback_loader(
         target, provider_rows

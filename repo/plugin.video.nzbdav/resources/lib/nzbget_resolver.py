@@ -1135,7 +1135,7 @@ def _run_nzbget_backend(  # pylint: disable=too-many-arguments
             ),
             xbmc.LOGERROR,
         )
-        on_failure(None)
+        on_failure(_string(30121))
     finally:
         _close_dialog(dialog)
         # leave_job documents the timeout policy: on a timeout or aborted outcome
@@ -1196,10 +1196,18 @@ def resolve_and_play_nzbget(
     title = unquote(params.get("title", "")) or "submission"
 
     def on_success(video_url):
+        from resources.lib import playback_context
+
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
-        _arm_playback_monitor(video_url, resume_seconds, resume_key)
-        xbmcplugin.setResolvedUrl(handle, True, listitem)
+        with playback_context.handoff(play_url=video_url) as session:
+            playback_context.prepare_playback(
+                listitem,
+                playback_context.metadata_from_params(params),
+                session_token=session,
+            )
+            _arm_playback_monitor(video_url, resume_seconds, resume_key)
+            xbmcplugin.setResolvedUrl(handle, True, listitem)
 
     def on_failure(message):
         _resolve_failure(handle, message)
@@ -1244,10 +1252,18 @@ def play_nzbget(
         settings_getter = resolve_params.get("_settings_getter")
 
     def on_success(video_url):
+        from resources.lib import playback_context
+
         listitem = xbmcgui.ListItem(path=video_url)
         _apply_resume(listitem, resume_seconds)
-        _arm_playback_monitor(video_url, resume_seconds, resume_key)
-        xbmc.Player().play(video_url, listitem)
+        with playback_context.handoff(play_url=video_url) as session:
+            playback_context.prepare_playback(
+                listitem,
+                playback_context.metadata_from_params(resolve_params),
+                session_token=session,
+            )
+            _arm_playback_monitor(video_url, resume_seconds, resume_key)
+            xbmc.Player().play(video_url, listitem)
 
     def on_failure(message):
         if message:

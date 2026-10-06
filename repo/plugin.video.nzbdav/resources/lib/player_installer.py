@@ -32,7 +32,7 @@ TMDBHELPER_PLAYER_PATH = _player_path_for(TMDBHELPER_ADDON_ID)
 # Bump this when PLAYER_JSON's shape changes in a way that requires the
 # installer to overwrite an older generation. The installer ignores the user's
 # manual edits only when the stored schema_version differs from this value.
-_PLAYER_SCHEMA_VERSION = 9
+_PLAYER_SCHEMA_VERSION = 10
 
 PLAYER_JSON = {
     "name": "NeNeTeePee-Stream-Kodi",
@@ -43,14 +43,15 @@ PLAYER_JSON = {
     "play_movie": (
         "executebuiltin://RunScript("
         "special://home/addons/plugin.video.nzbdav/addon.py,tmdb_play,"
-        "type=movie,title={title_url},year={year},imdb={imdb},tmdb_id={tmdb_id})"
+        "type=movie,title={title_url},year={year},imdb={imdb},tmdb_id={tmdb})"
     ),
     "play_episode": (
         "executebuiltin://RunScript("
         "special://home/addons/plugin.video.nzbdav/addon.py,tmdb_play,"
         "type=episode,title={showname_url},year={showyear},season={season},"
         "episode={episode},imdb={imdb},tmdb_id={tmdb},tvdb={tvdb},"
-        "ep_season={ep_showseason},ep_episode={ep_showepisode})"
+        "ep_season={ep_showseason},ep_episode={ep_showepisode},"
+        "tvshow_tmdb_id={tmdb},episode_tmdb_id={eptmdb},episode_title={title_url})"
     ),
 }
 
@@ -284,3 +285,19 @@ def install_player_other():
 
     target = targets[selected]
     _install_player_to_path(target["label"], target["path"])
+
+
+def upgrade_installed_tmdbhelper_player():
+    """Silently migrate an existing player without changing TMDbHelper settings."""
+    from resources.lib.player_upgrade import upgrade_player
+
+    try:
+        folder = xbmcvfs.translatePath(TMDBHELPER_PLAYER_PATH)
+        if not _player_path_inside_profile(folder):
+            return "failed"
+        return upgrade_player(folder, PLAYER_JSON)
+    except Exception:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Automatic player upgrade failed", xbmc.LOGWARNING
+        )
+        return "failed"

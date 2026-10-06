@@ -239,3 +239,13 @@ version; see [AGENTS.md](AGENTS.md#release-checklist).
 ## License
 
 GPLv3. See [LICENSE](LICENSE) for details.
+
+
+### TMDbHelper player updates
+
+Existing NZB-DAV TMDbHelper players upgrade automatically when the addon service
+starts or the updated addon is invoked. No manual player reinstall is needed
+after an update. Migration backs up the old player and preserves custom name,
+priority, and unrelated fields. A first-time player installation is still done
+from addon settings. See [playback identity handoff](docs/scrobbling-handoff.md)
+for backend coverage and validation details.
