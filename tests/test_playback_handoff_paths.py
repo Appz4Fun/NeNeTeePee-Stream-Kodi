@@ -368,3 +368,42 @@ def test_replaced_session_during_retry_delay_cannot_publish_old_context(
     monitor.play.assert_not_called()
     assert properties["TMDbHelper.PlayerInfoString"] == "new-session"
     assert monitor._playback_metadata == MOVIE
+
+
+@pytest.mark.parametrize("entry", ["retry", "handler"])
+def test_pending_handoff_during_retry_delay_keeps_new_identity(playback_kodi, entry):
+    _player, _plugin, _home, properties = playback_kodi
+    monitor = service.NzbdavPlayer()
+    monitor._state = service.PlaybackState.ERROR
+    monitor._stream_url = "old-stream"
+    monitor._playback_metadata = dict(EPISODE)
+    monitor._monitor = MagicMock()
+    monitor.play = MagicMock()
+    monitor._read_settings = MagicMock(return_value=(True, 3, 0))
+
+    def pending_handoff(_delay):
+        properties.update(
+            {
+                "nzbdav.active": "true",
+                "nzbdav.stream_url": "new-stream",
+                "nzbdav.playback_metadata": json.dumps(MOVIE),
+                "TMDbHelper.PlayerInfoString": json.dumps(
+                    {"tmdb_type": "movie", "tmdb_id": "329865"}
+                ),
+            }
+        )
+        monitor.onAVStarted()
+        return False
+
+    monitor._monitor.waitForAbort.side_effect = pending_handoff
+    if entry == "retry":
+        assert not monitor._retry_playback(3, 0)
+    else:
+        monitor._handle_error_retry(0, "old")
+    monitor.play.assert_not_called()
+    assert properties["nzbdav.active"] == "true"
+    assert json.loads(properties["nzbdav.playback_metadata"]) == MOVIE
+    assert json.loads(properties["TMDbHelper.PlayerInfoString"])["tmdb_id"] == "329865"
+    monitor._check_active()
+    assert monitor._stream_url == "new-stream"
+    assert monitor._playback_metadata == MOVIE

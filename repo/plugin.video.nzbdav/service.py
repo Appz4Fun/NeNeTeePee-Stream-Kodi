@@ -346,7 +346,9 @@ class NzbdavPlayer(xbmc.Player):
         only these end-of-the-line transitions clear it.
         """
         with self._state_lock:
-            if generation is not None and generation != self._session_generation:
+            if (
+                generation is not None and generation != self._session_generation
+            ) or _HOME_WINDOW.getProperty(_PROP_ACTIVE) == "true":
                 return
             self._state = PlaybackState.IDLE
             self._clear_stream_properties()
@@ -512,6 +514,7 @@ class NzbdavPlayer(xbmc.Player):
             if (
                 self._state == PlaybackState.IDLE
                 or generation != self._session_generation
+                or _HOME_WINDOW.getProperty(_PROP_ACTIVE) == "true"
             ):
                 return False
             li = xbmcgui.ListItem(path=stream_url)
