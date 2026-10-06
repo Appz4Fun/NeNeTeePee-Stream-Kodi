@@ -80,6 +80,6 @@ actual Trakt requests, and independently read history are separate gates.
 A code PR does not itself publish an addon release.
 
 Validation of the implementation before PR review: `just lint`, `just test`
-(3,228 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
+(3,231 passed, 4 skipped), `just compat-3-8`, whitespace checks and `just release`
 passed. Native deployment and real Trakt watched-history verification are
 reported separately; they are not established by these checks.

@@ -389,13 +389,17 @@ def parse_results(xml_text):
 def _fetch_hydra_internal_search(base_url, title):
     """POST to Hydra's internal search API and return its raw search results.
 
+    Hydra protects its internal API with an XSRF check even when its own
+    authentication is off: a POST without the token is refused with 403 and
+    a ``HYDRA-XSRF-TOKEN`` cookie. The request is then retried once with that
+    token echoed back (cookie + ``X-XSRF-TOKEN`` header), the way Hydra's web
+    UI does it.
+
     Returns a list of raw result dicts (empty on any network/parse failure).
     """
     import json as _json
     from urllib.error import HTTPError as _HTTPError
     from urllib.error import URLError as _URLError
-    from urllib.request import Request as _Request
-    from urllib.request import urlopen as _urlopen
 
     payload = {
         "query": title,
@@ -404,16 +408,15 @@ def _fetch_hydra_internal_search(base_url, title):
         "loadAll": True,
     }
     body = _json.dumps(payload).encode("utf-8")
-    request = _Request(
-        "{}/internalapi/search".format(base_url),
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
+    url = "{}/internalapi/search".format(base_url)
     try:
-        # nosemgrep
-        with _urlopen(request, timeout=30) as response:  # nosec B310
-            data = _json.load(response)
+        try:
+            data = _post_internal_json(url, body)
+        except _HTTPError as error:
+            token = _xsrf_token(error)
+            if error.code != 403 or not token:
+                raise
+            data = _post_internal_json(url, body, token)
     except (_HTTPError, _URLError, OSError, ValueError) as error:
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Hydra duplicate-uploads lookup failed: {}".format(
@@ -422,11 +425,41 @@ def _fetch_hydra_internal_search(base_url, title):
             xbmc.LOGDEBUG,
         )
         return []
-
     if not isinstance(data, dict):
         return []
     search_results = data.get("searchResults", [])
     return search_results if isinstance(search_results, list) else []
+
+
+# Hydra's XSRF cookie; its value goes back as the X-XSRF-TOKEN header.
+_HYDRA_XSRF_COOKIE = "HYDRA-XSRF-TOKEN"
+
+
+def _xsrf_token(error):
+    """The ``HYDRA-XSRF-TOKEN`` value a refused request was handed, or ""."""
+    headers = getattr(error, "headers", None)
+    cookies = headers.get_all("Set-Cookie") if headers is not None else None
+    for cookie in cookies or ():
+        name, _, rest = str(cookie).partition("=")
+        if name.strip() == _HYDRA_XSRF_COOKIE:
+            return rest.split(";", 1)[0].strip()
+    return ""
+
+
+def _post_internal_json(url, body, xsrf_token=None):
+    """POST ``body`` as JSON to Hydra's internal API and decode the answer."""
+    import json as _json
+    from urllib.request import Request as _Request
+    from urllib.request import urlopen as _urlopen
+
+    headers = {"Content-Type": "application/json"}
+    if xsrf_token:
+        headers["Cookie"] = "{}={}".format(_HYDRA_XSRF_COOKIE, xsrf_token)
+        headers["X-XSRF-TOKEN"] = xsrf_token
+    request = _Request(url, data=body, headers=headers, method="POST")
+    # nosemgrep
+    with _urlopen(request, timeout=30) as response:  # nosec B310
+        return _json.load(response)
 
 
 def _duplicate_upload_from_raw(raw, title, picked_link):
