@@ -15,6 +15,7 @@ modules (mocked once in conftest) so they are imported normally.
 """
 
 import re
+import threading
 import time
 
 import xbmc
@@ -525,17 +526,18 @@ def _content_prefix(identity):
 
 
 def _release_dupe_key(identity, release_title):
-    """Build the NZBGet DupeKey grouping a pick with its same-name backups (#372).
+    """Build the NZBGet DupeKey grouping a pick with its same-release backups (#372).
 
-    The key is scoped to the SELECTED RELEASE (its normalized release name), not
-    just the content: the backups are exact same-name reposts, so keying on the
-    release name groups them while keeping a DIFFERENT release of the same
-    content (a 4K remux vs a prior 1080p encode, or a different episode of a
-    show) under a DIFFERENT key -- so NZBGet never suppresses a later distinct
-    pick as a duplicate of an earlier one. A canonical content id (imdb= /
-    tvdbid=-S-E / themoviedb=, per nzbget.com/documentation/rss/#duplicates) is
-    prefixed for namespacing when available. Returns "" when the release name is
-    unusable (then the pick is a plain single submit).
+    The key is scoped to the SELECTED RELEASE (the pick's normalized release
+    name), not just the content: every backup is submitted under the pick's
+    key, so keying on the release name groups them while keeping a DIFFERENT
+    release of the same content (a 4K remux vs a prior 1080p encode, or a
+    different episode of a show) under a DIFFERENT key -- so NZBGet never
+    suppresses a later distinct pick as a duplicate of an earlier one. A
+    canonical content id (imdb= / tvdbid=-S-E / themoviedb=, per
+    nzbget.com/documentation/rss/#duplicates) is prefixed for namespacing when
+    available. Returns "" when the release name is unusable (then the pick is a
+    plain single submit).
     """
     slug = _key_title_slug(release_title)
     if not slug:
@@ -544,56 +546,82 @@ def _release_dupe_key(identity, release_title):
     return "{}|{}".format(prefix, slug) if prefix else "nzbdav:{}".format(slug)
 
 
-def _is_same_name_backup(result, target, selected_link, seen):
-    """Whether a picker row is a usable same-name backup for the pick (#372).
-
-    Requires a dict row with a link that is neither the pick's nor already
-    collected, and a normalized release name matching the pick's. Split out of
-    ``_same_name_backups`` so the collection loop stays simple.
-    """
-    if not isinstance(result, dict):
+def _is_backup_row(result, selected_link, seen):
+    """Whether a picker row is a dict with a link not yet collected (#372)."""
+    if not isinstance(result, dict) or result.get("_season_pack"):
         return False
     link = result.get("link")
-    if not link or link == selected_link or link in seen:
-        return False
-    return _normalize_release_name(result.get("title")) == target
+    return bool(link) and link != selected_link and link not in seen
 
 
-def _same_name_backups(selected, filtered, max_backups):
-    """The other picker results sharing the pick's release name, deduped/capped."""
+def _backup_row(result):
+    """The fleet row for a picker result (#372).
+
+    Carries the row's post-date and size: each backup is a DIFFERENT upload, a
+    follow-to-backup success is ledger-recorded under the backup's own identity
+    so the picker's repost-guard recognizes it, and the worker's same-listing
+    dedup compares size + post date.
+    """
+    return {
+        "link": result["link"],
+        "title": result.get("title"),
+        "pubdate": result.get("pubdate"),
+        "size": result.get("size"),
+    }
+
+
+def _same_release_backups(selected, filtered):
+    """The other picker results that are the pick's release, deduped/capped.
+
+    Exact same-name rows (case/whitespace-normalized) come first, then rows
+    that ``nzbget_fleet_dedup.same_release`` accepts under a different name, each
+    group in picker order. Every such row is returned: ``nzbget_max_backups``
+    caps the LIVE backups in the worker, after same-posting dedup, so a row
+    that collapses as a duplicate never uses up a slot.
+    """
+    from resources.lib.nzbget_fleet_dedup import same_release
+
     target = _normalize_release_name(selected.get("title"))
     selected_link = selected.get("link")
-    backups = []
+    exact = []
+    similar = []
     seen = set()
     for result in filtered or []:
-        if not _is_same_name_backup(result, target, selected_link, seen):
+        if not _is_backup_row(result, selected_link, seen):
+            continue
+        if _normalize_release_name(result.get("title")) == target:
+            exact.append(result)
+        elif same_release(selected, result):
+            similar.append(result)
+        else:
             continue
         seen.add(result["link"])
-        # Carry the row's post-date: each same-name backup is a DIFFERENT
-        # upload, and a follow-to-backup success is ledger-recorded under the
-        # backup's own identity so the picker's repost-guard recognizes it.
-        backups.append(
-            {
-                "link": result["link"],
-                "title": result.get("title"),
-                "pubdate": result.get("pubdate"),
-            }
-        )
-        if len(backups) >= max_backups:
-            break
-    return backups
+    return [_backup_row(result) for result in exact + similar]
+
+
+def _parse_max_backups(raw):
+    """``nzbget_max_backups`` as an int: -1 unlimited, 0 off, N a cap.
+
+    Blank or unparseable values fall back to the default, unlimited; any
+    negative value means unlimited.
+    """
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return -1
+    return -1 if value < 0 else value
 
 
 def _dupe_max_backups(getter):
     """Settings gate for the duplicate fleet: the configured backup count, or ``None``.
 
     ``None`` (plain single submit) when the NZBGet backend is off, fallback
-    streams are turned off, or the parsed ``fallback_streams_max`` cap is
-    zero/negative; else exactly what the user configured for "Maximum standby
-    fallback streams" -- no additional code-level ceiling. ``getter`` reads
-    settings on the RunScript/script-play path; ``None`` reads the live Kodi
-    addon settings. Split out of ``_nzbget_dupe_submission_for_selection`` so
-    the submission builder stays simple.
+    streams are turned off, or ``nzbget_max_backups`` is 0. Otherwise the
+    parsed ``nzbget_max_backups``: -1 (the default) submits every
+    same-release NZB found, a positive value caps the backups. ``getter``
+    reads settings on the RunScript/script-play path; ``None`` reads the live
+    Kodi addon settings. Split out of ``_nzbget_dupe_submission_for_selection``
+    so the submission builder stays simple.
     """
     import resources.lib.router as _router
 
@@ -610,28 +638,24 @@ def _dupe_max_backups(getter):
     fallback_on = _read("fallback_streams_enabled", "true").lower() != "false"
     if not (nzbget_on and fallback_on):
         return None
-    try:
-        max_backups = int(_read("fallback_streams_max", "5") or 5)
-    except (TypeError, ValueError):
-        max_backups = 5
-    return max_backups if max_backups > 0 else None
+    max_backups = _parse_max_backups(_read("nzbget_max_backups", "-1"))
+    return None if max_backups == 0 else max_backups
 
 
 def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=None):
     """Build the NZBGet Smart-Duplicates submission for a pick (#372).
 
-    Returns ``{"key", "pick_score", "backups": [{"link","title","score"}]}`` when
-    the NZBGet backend is on, fallback streams are enabled, a DupeKey is
-    computable, AND there is at least one same-release-name backup on the picker
-    (reposts / mirrors) -- else ``None`` (plain single submit). The pick takes
-    the top DupeScore and the same-name backups strictly lower descending scores
-    (count-based, so always positive and pick-highest for any fleet size), so
-    NZBGet downloads the pick and parks the rest in history as duplicate backups,
-    failing over on an unrepairable download. Bounded by ``fallback_streams_max``
-    -- the user's own "Maximum standby fallback streams" setting, with no
-    additional code-level ceiling. ``getter`` reads settings on the
-    RunScript/script-play path (``_get_script_setting``); ``None`` reads the live
-    Kodi addon settings. Empty on the nzbdav backend (its own live fallback).
+    Returns ``{"key", "pick_score", "backups": [{"link","title","score",...}]}``
+    when the NZBGet backend is on, fallback streams are enabled, a DupeKey is
+    computable, AND there is at least one same-release backup on the picker
+    (reposts / mirrors / other names of the same release) -- else ``None``
+    (plain single submit). The pick takes the top DupeScore and the backups
+    strictly lower descending scores, so NZBGet downloads the pick and parks the
+    rest in history as duplicate backups, failing over on an unrepairable
+    download. Bounded by ``nzbget_max_backups`` (-1, the default, is
+    unlimited). ``getter`` reads settings on the RunScript/script-play path
+    (``_get_script_setting``); ``None`` reads the live Kodi addon settings.
+    Empty on the nzbdav backend (its own live fallback).
     """
     max_backups = _dupe_max_backups(getter)
     if max_backups is None:
@@ -639,7 +663,7 @@ def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=N
     key = _release_dupe_key(identity or {}, selected.get("title"))
     if not key:
         return None
-    backups = _same_name_backups(selected, filtered, max_backups)
+    backups = _same_release_backups(selected, filtered)
     if not backups:
         return None
     base = _dupe_score_base()
@@ -648,10 +672,10 @@ def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=N
     # fleet regardless of their relative sizes -- base+count offsets would let
     # an old 5-backup pick beat a seconds-later loader-only retry.
     scored = [dict(b, score=base - 1 - i) for i, b in enumerate(backups)]
-    # Carry the standby cap so the backup worker can bound its loader-widened
-    # extras by the cap's REMAINING slots (same-name backups + extras must not
-    # exceed "Maximum standby fallback streams"), and the score base so the
-    # extras ride below it too.
+    # Carry the cap so the backup worker can bound its widened extras by the
+    # cap's REMAINING slots (backups + extras must not exceed
+    # nzbget_max_backups; -1 = unlimited), and the score base so the extras
+    # ride below it too.
     return {
         "key": key,
         "pick_score": base,
@@ -689,10 +713,10 @@ def _dupe_score_base():
 
 
 def _loader_only_dupe_submission(selected, identity, getter=None):
-    """A Smart-Duplicates submission with NO same-name backups (#372 r4).
+    """A Smart-Duplicates submission with NO same-release picker backups (#372 r4).
 
     NZBHydra collapses same-release mirrors into a single picker row, so
-    ``filtered`` can hold no same-name backup while the fallback loader can
+    ``filtered`` can hold no same-release backup while the fallback loader can
     still surface the collapsed duplicate uploads. The caller only uses this
     when that loader EXISTS; the fleet is then loader-extras-only. Same gates
     as ``_nzbget_dupe_submission_for_selection``; returns ``None`` when they
@@ -714,11 +738,64 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
     }
 
 
+def _nzbget_loader_getter(limit):
+    """``_get_script_setting`` for the NZBGet fleet's fallback loader.
+
+    ``fallback_streams_max`` is the nzbdav proxy's standby cap, so the NZBGet
+    loader ignores it. ``limit`` is a ``{"n": ...}`` holder the fleet sets
+    to the number of candidates it can still use (raising it after a rejected
+    append); unset, the loader scans up to ``nzbget_max_backups`` when that is
+    a positive cap. Always within the loader's own ceiling
+    (``fallback_streams._MAX_FALLBACKS``, a bound on its manifest-probing
+    cost); a 0 proxy cap can't switch NZBGet discovery off.
+    """
+    import resources.lib.router as _router
+
+    def _getter(key, default=""):
+        if key != "fallback_streams_max":
+            return _router._get_script_setting(key, default)
+        from resources.lib.fallback_streams import _MAX_FALLBACKS
+
+        wanted = limit.get("n")
+        if wanted is None:
+            cap = _parse_max_backups(
+                _router._get_script_setting("nzbget_max_backups", "-1")
+            )
+            wanted = cap if cap > 0 else _MAX_FALLBACKS
+        return str(max(1, min(_MAX_FALLBACKS, int(wanted))))
+
+    return _getter
+
+
+def _hydra_uploads_loader(selected):
+    """Deferred NZBHydra duplicate-upload lookup for the pick, or ``None`` (#372).
+
+    NZBHydra's Newznab endpoint shows one row per release group; its internal
+    API returns every upload of the pick's exact title. Runs on the backup
+    worker thread, so it reads settings through the pure-XML
+    ``_get_script_setting`` (never Kodi's off-thread ``getSetting``).
+    """
+    import resources.lib.router as _router
+
+    if not _router._hydra_duplicate_lookup_enabled(
+        selected, settings_getter=_router._get_script_setting
+    ):
+        return None
+
+    def _load():
+        from resources.lib.router_fallback import _fetch_fallback_extra_uploads
+
+        return _fetch_fallback_extra_uploads(selected, _router._get_script_setting)
+
+    return _load
+
+
 def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     """Attach the NZBGet Smart-Duplicates submission, only when there is one.
 
     Keeps nzbdav-path params clean: ``_nzbget_dupe`` is present only in NZBGet
-    mode with a computable DupeKey and at least one same-name backup (#372).
+    mode with a computable DupeKey and at least one backup source (#372). On
+    any other backend it returns before building the backup lookups.
     Reads settings through ``resolver_params["_settings_getter"]`` when present
     (the RunScript/script-play path), else the live Kodi addon settings. Pops any
     inherited ``_nzbget_dupe`` first so a stale value from ``dict(params)`` can't
@@ -732,6 +809,10 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
 
     resolver_params.pop("_nzbget_dupe", None)
     getter = resolver_params.get("_settings_getter")
+    if _dupe_max_backups(getter) is None:
+        # Not the NZBGet backend (or backups are off): no duplicate fleet, so
+        # build none of its lookups and leave the selection untouched.
+        return
     dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter)
     # The fallback loader hands the backup worker the same-content /
     # NZBHydra-deferred duplicate uploads (not just the picker's same-name
@@ -741,16 +822,29 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     # handle-based /play path that one carries a None getter and would call
     # xbmcaddon.Addon().getSetting off the main thread (a CoreELEC crash class
     # the snapshot design exists to avoid).
+    loader_limit = {"n": None}
+    # Lets the fleet stop the loader's manifest engine on cancel/shutdown.
+    loader_stop = threading.Event()
+    if isinstance(selected, dict):
+        selected["_fallback_stop"] = loader_stop
     loader = _router._fallback_candidate_loader_for_selection(
-        selected, filtered, settings_getter=_router._get_script_setting
+        selected, filtered, settings_getter=_nzbget_loader_getter(loader_limit)
     )
-    if dupe is None and loader is not None:
+    hydra_uploads = _hydra_uploads_loader(selected)
+    if dupe is None and (loader is not None or hydra_uploads is not None):
         # NZBHydra collapsed every mirror into this single picker row: no
-        # same-name backups exist, but the loader can still surface the
-        # collapsed duplicate uploads -- submit a loader-only fleet (#372 r4).
+        # same-release backups exist, but the loader / Hydra duplicate lookup
+        # can still surface the collapsed duplicate uploads -- submit a
+        # loader-only fleet (#372 r4).
         dupe = _loader_only_dupe_submission(selected, identity, getter)
     if dupe:
         dupe["loader"] = loader
+        dupe["loader_limit"] = loader_limit
+        dupe["loader_stop"] = loader_stop
+        dupe["hydra_uploads"] = hydra_uploads
+        # The pick's listing evidence: the worker never re-submits another
+        # listing of the pick's own posting.
+        dupe["pick"] = _backup_row(selected) if selected.get("link") else None
         resolver_params["_nzbget_dupe"] = dupe
 
 

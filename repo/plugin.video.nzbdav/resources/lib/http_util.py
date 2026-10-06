@@ -255,6 +255,57 @@ def http_get(url, timeout=15, headers=None, max_bytes=None):
         return body.decode("utf-8", errors="replace")
 
 
+_DOWNLOAD_CHUNK_BYTES = 64 * 1024
+
+
+def http_download(url, dest_path, timeout=15, headers=None, max_bytes=None):
+    """Stream an HTTP GET body to ``dest_path`` without holding it in memory.
+
+    Same scheme allowlist, User-Agent, and status handling as ``http_get``,
+    but the body is copied to disk in ``_DOWNLOAD_CHUNK_BYTES`` chunks.
+    ``max_bytes`` caps the body (``HttpResponseTooLarge``). On ANY failure the
+    partial file is removed and the error re-raised. Returns the byte count.
+    """
+    import contextlib
+    import os
+
+    scheme = urlsplit(url).scheme.lower()
+    if scheme not in _ALLOWED_HTTP_SCHEMES:
+        raise ValueError("unsupported URL scheme: {!r}".format(scheme))
+    request_headers = {"User-Agent": _HTTP_USER_AGENT}
+    if headers:
+        request_headers.update(headers)
+    req = Request(url, headers=request_headers)
+    try:
+        # nosemgrep
+        with urlopen(  # nosec B310 — scheme allowlist enforced above
+            req, timeout=timeout
+        ) as resp, open(dest_path, "wb") as out:
+            status = _response_status(resp)
+            if status is not None and not 200 <= status < 300:
+                raise OSError("HTTP status {}".format(status))
+            return _copy_capped(resp, out, max_bytes)
+    except BaseException:
+        with contextlib.suppress(OSError):
+            os.remove(dest_path)
+        raise
+
+
+def _copy_capped(resp, out, max_bytes):
+    """Copy ``resp`` to ``out`` in chunks, enforcing ``max_bytes``."""
+    total = 0
+    while True:
+        chunk = resp.read(_DOWNLOAD_CHUNK_BYTES)
+        if not chunk:
+            return total
+        total += len(chunk)
+        if max_bytes is not None and total > int(max_bytes):
+            raise HttpResponseTooLarge(
+                "HTTP response exceeds {} bytes".format(max_bytes)
+            )
+        out.write(chunk)
+
+
 def http_post_json(url, payload, timeout=15, headers=None, basic_auth=None):
     """POST ``payload`` as a JSON body and return the response text.
 

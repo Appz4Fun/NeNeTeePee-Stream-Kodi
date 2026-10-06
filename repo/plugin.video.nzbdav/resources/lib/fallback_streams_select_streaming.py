@@ -219,7 +219,13 @@ def _attach_selection_candidates_streaming(
     settle_deadline = [None]
     max_workers = min(max_candidates, _fs._MAX_FALLBACKS)
 
+    stop_event = selected.get("_fallback_stop") if isinstance(selected, dict) else None
+
     def _start_candidate_fetch():
+        # Opt-in stop hook (the NZBGet fleet sets it on cancel/shutdown): no
+        # NEW manifest fetch starts once it fires; in-flight ones finish.
+        if stop_event is not None and stop_event.is_set():
+            candidate_exhausted[0] = True
         if candidate_exhausted[0]:
             return False
         if pending_to_start:
@@ -289,7 +295,11 @@ def _attach_selection_candidates_streaming(
     ):
         return True
 
-    if include_selected_manifest:
+    # The same opt-in stop hook guards the selected manifest: a fleet that was
+    # canceled while an earlier lookup ran must not start a new indexer grab.
+    if include_selected_manifest and not (
+        stop_event is not None and stop_event.is_set()
+    ):
         active[0] += 1
         _fs._start_selection_manifest_fetch("selected", -1, selected, result_queue)
 

@@ -15,6 +15,7 @@ import xbmc
 import xbmcaddon
 
 from resources.lib.exact_job import ExactJobLookup
+from resources.lib.http_util import http_download as _http_download
 from resources.lib.http_util import http_get as _http_get
 from resources.lib.http_util import http_post_json as _http_post_json
 from resources.lib.http_util import redact_text as _redact_text
@@ -89,12 +90,34 @@ def _rpc_call(method, params, settings_getter=None, timeout=_RPC_TIMEOUT):
     return data.get("result") if isinstance(data, dict) else None, None
 
 
-def _fetch_nzb_bytes(nzb_url):
-    """Fetch the NZB body. Returns bytes. Raises on failure."""
-    body = _http_get(nzb_url, timeout=_RPC_TIMEOUT)
+# Same ceiling as the nzbdav manifest fetch: a broken or hostile indexer
+# response must not be buffered whole on a small CoreELEC box (the duplicate
+# fleet prefetches several at once).
+_MAX_NZB_BYTES = 100 * 1024 * 1024
+
+
+def _fetch_nzb_bytes(nzb_url, max_bytes=_MAX_NZB_BYTES):
+    """Fetch the NZB body. Returns bytes. Raises on failure or over the cap."""
+    body = _http_get(nzb_url, timeout=_RPC_TIMEOUT, max_bytes=max_bytes)
     if isinstance(body, str):
         body = body.encode("utf-8")
     return body
+
+
+def fetch_nzb_bytes(nzb_url, max_bytes=_MAX_NZB_BYTES):
+    """Public NZB fetch for callers that inspect the body before ``append_nzb``.
+
+    Raises on failure (or past ``max_bytes``), like ``_fetch_nzb_bytes``.
+    """
+    return _fetch_nzb_bytes(nzb_url, max_bytes=max_bytes)
+
+
+def download_nzb(nzb_url, dest_path, max_bytes=_MAX_NZB_BYTES):
+    """Stream an NZB straight to ``dest_path`` (never fully in memory).
+
+    Raises on failure or past ``max_bytes``; a partial file is removed.
+    """
+    return _http_download(nzb_url, dest_path, timeout=_RPC_TIMEOUT, max_bytes=max_bytes)
 
 
 def _append_params(
@@ -145,16 +168,19 @@ def append_nzb(
     dupe_key="",
     dupe_score=0,
     dupe_mode="SCORE",
+    nzb_bytes=None,
 ):
     """Fetch the NZB and submit it to NZBGet via append.
 
     Returns (nzbid, error). On success (int > 0, None); on failure
     (None, message). ``dupe_key``/``dupe_score``/``dupe_mode`` drive NZBGet
     Smart Duplicates (#372); their defaults reproduce the pre-#372 single submit.
+    ``nzb_bytes`` skips the fetch when the caller already holds the body.
     """
     _base_url, _user, _password, category = _get_settings(settings_getter)
     try:
-        nzb_bytes = _fetch_nzb_bytes(nzb_url)
+        if nzb_bytes is None:
+            nzb_bytes = _fetch_nzb_bytes(nzb_url)
     except Exception as exc:  # pylint: disable=broad-except
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: NZBGet NZB fetch failed: {}").format(
@@ -546,19 +572,39 @@ def cancel_jobs(nzbids, settings_getter=None):
     the same tolerance ``_same_nzbid`` applies) and deduped across types:
     ``editqueue`` expects an integer array, and one bad member would fail the
     whole batch. Empty input is a no-op; best-effort like ``cancel_job``.
+    Returns True when both deletes went through (or there was nothing to
+    delete), False when either RPC failed.
     """
+    ids = _int_ids(nzbids)
+    if not ids:
+        return True
+    history_ok = _final_delete("HistoryFinalDelete", ids, settings_getter)
+    queue_ok = _final_delete("GroupFinalDelete", ids, settings_getter)
+    return history_ok and queue_ok
+
+
+def cancel_queued_jobs(nzbids, settings_getter=None):
+    """Final-delete only the QUEUED members of ``nzbids``; history is kept.
+
+    A canceled play's backups that NZBGet parked in history (``DELETED/DUPE``)
+    stay there for a replay to reuse; any that sit in the queue (downloading
+    or waiting) are removed so a cancel never leaves a download running. A
+    manual final-delete of the pick does not make NZBGet promote a parked
+    backup (verified against NZBGet), so the kept ones stay parked. True when
+    the delete went through or there was nothing to delete.
+    """
+    ids = _int_ids(nzbids)
+    return _final_delete("GroupFinalDelete", ids, settings_getter) if ids else True
+
+
+def _int_ids(nzbids):
+    """``nzbids`` as unique ints, order kept (``editqueue`` wants an int array)."""
     ids = []
     for nzbid in nzbids or []:
-        try:
-            value = int(str(nzbid).strip())
-        except (TypeError, ValueError):
-            continue
-        if value not in ids:
+        value = _int_nzbid(nzbid)
+        if value is not None and value not in ids:
             ids.append(value)
-    if not ids:
-        return
-    _final_delete("HistoryFinalDelete", ids, settings_getter)
-    _final_delete("GroupFinalDelete", ids, settings_getter)
+    return ids
 
 
 def _dupekey_match(item, dupe_key):
@@ -703,17 +749,131 @@ def _nzbid_in(nzbid, nzbids):
     return any(_same_nzbid(nzbid, other) for other in nzbids or ())
 
 
-def success_ids_by_dupekey(dupe_key, settings_getter=None):
+def history_rows(settings_getter=None):
+    """NZBGet's history as a list (one RPC), or None when it couldn't be read.
+
+    Lets a caller that needs several facts from history (same-key successes,
+    the highest same-key score) read it once; None keeps "unknown" distinct
+    from an empty history.
+    """
+    rows, error = _rpc_call("history", [False], settings_getter=settings_getter)
+    return rows if error is None and isinstance(rows, list) else None
+
+
+def queue_rows(settings_getter=None):
+    """NZBGet's queue (``listgroups``) as a list, or None when it couldn't be read."""
+    rows, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
+    return rows if error is None and isinstance(rows, list) else None
+
+
+# Same-key history statuses that make re-sending an NZB pointless: NZBGet
+# already refused it as a copy, or it already failed.
+_DEAD_MEMBER_PREFIXES = ("FAILURE/", "WARNING/", "DELETED/COPY")
+
+
+def dupekey_member_states(dupe_key, history, queue):
+    """``{nzbid: "queued" | "parked" | "dead"}`` for NZBGet's members of ``dupe_key``.
+
+    ``"queued"``: in the queue (downloading, waiting or paused).
+
+    ``"parked"``: a ``DELETED/DUPE`` history backup NZBGet can still
+    promote on a failover -- a working backup, so sending another copy is
+    waste. ``"dead"``: a ``FAILURE/*``, ``WARNING/*`` (the resolver's
+    terminal failure too) or ``DELETED/COPY`` row -- sending it again would
+    fail or be refused again. Anything else (a success, a manual
+    delete) is absent: a fresh copy of it is a useful backup. Both lists are
+    already-read ``history_rows`` / ``queue_rows``.
+    """
+    states = {}
+    for rows, is_history in ((history or [], True), (queue or [], False)):
+        for row in rows:
+            if not isinstance(row, dict) or not _dupekey_match(row, dupe_key):
+                continue
+            status = str(row.get("Status") or "").upper()
+            if not is_history:
+                state = "queued"
+            elif status == "DELETED/DUPE":
+                state = "parked"
+            elif status.startswith(_DEAD_MEMBER_PREFIXES):
+                state = "dead"
+            else:
+                continue
+            nzbid = _int_nzbid(row.get("NZBID"))
+            if nzbid is not None:
+                states[nzbid] = state
+    return states
+
+
+def _int_nzbid(value):
+    """``value`` as an int NZBID (listgroups may send a string), or None."""
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def config_options(names, settings_getter=None):
+    """Several running-config options from ONE ``config`` RPC.
+
+    Returns ``{lowercased name: lowercased value}`` for the requested names
+    that exist; ``{}`` when the RPC fails (callers treat it as best-effort).
+    """
+    rows, error = _rpc_call("config", [], settings_getter=settings_getter)
+    if error is not None or not isinstance(rows, list):
+        return {}
+    wanted = {str(name).lower() for name in names}
+    found = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("Name", "")).lower()
+        if name in wanted:
+            found[name] = str(row.get("Value", "")).strip().lower()
+    return found
+
+
+def max_dupe_score_by_dupekey(dupe_key, settings_getter=None, history=None, queue=None):
+    """Highest DupeScore NZBGet holds for ``dupe_key`` (queue + history), or None.
+
+    A fresh fleet must outrank every same-key item NZBGet already has
+    (NZBGet only downloads a SCORE-mode duplicate that beats them), and a
+    wall-clock score base cannot promise that after the box's clock rolls
+    back. DupeKeys match case-insensitively, like NZBGet's. ``history`` and
+    ``queue`` are an already-read ``history_rows`` / ``queue_rows`` (else they
+    are fetched). Best-effort: RPC errors are skipped; None when nothing
+    matches.
+    """
+    if not dupe_key:
+        return None
+    if history is None:
+        history = history_rows(settings_getter) or []
+    if queue is None:
+        queue = queue_rows(settings_getter) or []
+    best = None
+    for rows in (history, queue):
+        for row in rows:
+            if not isinstance(row, dict) or not _dupekey_match(row, dupe_key):
+                continue
+            try:
+                score = int(row.get("DupeScore"))
+            except (TypeError, ValueError):
+                continue
+            best = score if best is None else max(best, score)
+    return best
+
+
+def success_ids_by_dupekey(dupe_key, settings_getter=None, history=None):
     """NZBIDs of every SUCCESS history row sharing ``dupe_key`` (#372 round 4).
 
     Snapshotted when a dupe-enabled poll starts so group-follow can exclude
     successes that PREDATE the resolve (see ``history_success_by_dupekey``).
+    ``history`` is an already-read ``history_rows`` (else it is fetched).
     Best-effort: an RPC error or empty history yields ``[]``.
     """
     if not dupe_key:
         return []
-    hist, error = _rpc_call("history", [False], settings_getter=settings_getter)
-    if error is not None or not isinstance(hist, list):
+    hist = history_rows(settings_getter) if history is None else history
+    if hist is None:
         return []
     ids = []
     for item in hist:
@@ -750,5 +910,9 @@ def _final_delete(command, ids, settings_getter):
     editqueue would be a pointless round-trip on every cancel.
     """
     if not ids:
-        return
-    _rpc_call("editqueue", [command, "", ids], settings_getter=settings_getter)
+        return True
+    result, error = _rpc_call(
+        "editqueue", [command, "", ids], settings_getter=settings_getter
+    )
+    # editqueue answers ``true`` on success; ``false`` (or nothing) is a failure.
+    return error is None and result is True

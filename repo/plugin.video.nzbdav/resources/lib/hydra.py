@@ -444,7 +444,7 @@ def _duplicate_upload_from_raw(raw, title, picked_link):
     # Hydra's internal API uses different field names than the public
     # Newznab one. Normalize back into the addon's standard result
     # shape so downstream filter/profile/peer code is unchanged.
-    return {
+    upload = {
         "title": raw.get("title", ""),
         "link": link,
         "size": raw.get("size", "") or "",
@@ -452,6 +452,13 @@ def _duplicate_upload_from_raw(raw, title, picked_link):
         "pubdate": "",
         "age": "",
     }
+    # Usenet post time (epoch seconds), kept out of ``pubdate`` so the nzbdav
+    # fallback's post-date clustering is unchanged; the NZBGet fleet's
+    # same-listing dedup reads it.
+    epoch = raw.get("epoch")
+    if isinstance(epoch, int) and not isinstance(epoch, bool) and epoch > 0:
+        upload["_posted_epoch"] = epoch
+    return upload
 
 
 def fetch_release_duplicate_uploads(picked, settings_getter=None):

@@ -35,6 +35,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | Test NZBGet Connection[^source-action_test_nzbget]<br>`action_test_nzbget` | Button | Verify NZBGet is reachable with the current URL and credentials. Visible when playback_backend = 1. |
 | Completed Folder (SMB or Local Path)[^source-nzbget_smb_root]<br>`nzbget_smb_root` | Empty | smb:// URL or local/mounted path of NZBGet's completed-downloads base, used to play the finished file. Visible when playback_backend = 1. |
 | Test Completed Folder[^source-action_test_nzbget_smb]<br>`action_test_nzbget_smb` | Button | Verify the completed-downloads folder (SMB share or local path) is reachable. Visible when playback_backend = 1. |
+| Maximum duplicate backups<br>`nzbget_max_backups` | -1 | How many other NZBs of the same release NeNeTeePee-Stream-Kodi sends to NZBGet as duplicate backups. `-1` sends every same-release NZB it finds, `0` sends none (a plain single submit), and a positive number sends at most that many. Every backup costs one indexer download, which counts against indexer API and grab limits. **Enable fallback streams** must be on. See [Smart Duplicates failover](../features/nzbget-backend.md#smart-duplicates-failover). Visible when playback_backend = 1. |
 
 ## Source notes
 

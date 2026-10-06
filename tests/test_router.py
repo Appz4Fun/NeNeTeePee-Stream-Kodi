@@ -4862,10 +4862,13 @@ def test_nzbget_dupe_submission_caps_backups_by_setting():
     identity = {"type": "movie", "imdb": "tt1"}
     with patch(
         "resources.lib.router._get_addon_setting",
-        _dupe_setting_getter({"nzbget_enabled": "true", "fallback_streams_max": "3"}),
+        _dupe_setting_getter({"nzbget_enabled": "true", "nzbget_max_backups": "3"}),
     ):
         dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity)
-    assert len(dupe["backups"]) == 3
+    # Every same-release row is carried; the worker caps LIVE backups at 3
+    # after same-posting dedup, so collapsed rows never use up a slot.
+    assert dupe["max_backups"] == 3
+    assert len(dupe["backups"]) == 10
 
 
 def test_release_dupe_key_episode_without_numeric_se_stays_distinct():
@@ -4946,7 +4949,7 @@ def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
     # Handle path: no "_settings_getter"; a stale None-getter loader is present.
     params = {"_fallback_candidate_loader": "STALE_NONE_GETTER_LOADER"}
     stub_dupe = {"key": "k", "pick_score": 2, "backups": [{"link": "u", "score": 1}]}
-    with patch(
+    with patch("resources.lib.router_play._dupe_max_backups", return_value=-1), patch(
         "resources.lib.router_play._nzbget_dupe_submission_for_selection",
         return_value=stub_dupe,
     ), patch(
@@ -4955,14 +4958,27 @@ def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
     ):
         router_play._attach_nzbget_dupe(params, {"link": "p"}, [{"link": "p"}], {})
 
-    assert seen.get("getter") is _get_script_setting
+    # The pure-XML script getter (thread-safe), with fallback_streams_max
+    # replaced by the NZBGet fleet's own demand: never the proxy cap.
+    getter = seen.get("getter")
+    limit = params["_nzbget_dupe"]["loader_limit"]
+    with patch("resources.lib.router._get_script_setting", return_value="-1") as xml:
+        assert getter("fallback_streams_max", "0") == "5"
+        assert getter("hydra_url", "") == "-1"
+    xml.assert_any_call("hydra_url", "")
+    # A small NZBGet cap bounds the loader's (grab-costing) scan too ...
+    with patch("resources.lib.router._get_script_setting", return_value="2"):
+        assert getter("fallback_streams_max", "0") == "2"
+    # ... and the fleet raises the demand on the fly after a rejection.
+    limit["n"] = 3
+    assert getter("fallback_streams_max", "0") == "3"
     assert params["_nzbget_dupe"]["loader"] == "FRESH_LOADER"
 
 
 def test_nzbget_dupe_submission_reports_standby_max_for_extras_bound():
     # The submission carries max_backups so the backup worker can bound its loader
-    # extras against the same "Maximum standby fallback streams" cap (round-2
-    # review finding: extras must count against the standby cap).
+    # extras against the same nzbget_max_backups cap (round-2 review finding:
+    # extras must count against the cap).
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
     selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
@@ -4974,31 +4990,31 @@ def test_nzbget_dupe_submission_reports_standby_max_for_extras_bound():
     identity = {"type": "movie", "imdb": "tt0133093"}
     with patch(
         "resources.lib.router._get_addon_setting",
-        _dupe_setting_getter({"nzbget_enabled": "true", "fallback_streams_max": "2"}),
+        _dupe_setting_getter({"nzbget_enabled": "true", "nzbget_max_backups": "2"}),
     ):
         dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity)
-    assert dupe["max_backups"] == 2  # exactly fallback_streams_max
+    assert dupe["max_backups"] == 2  # exactly nzbget_max_backups
     assert len(dupe["backups"]) == 2  # same-name backups already capped at 2
 
 
-def test_nzbget_dupe_submission_honors_fallback_streams_max_above_five():
-    # No code-level ceiling: fallback_streams_max is honored as configured,
-    # even over the old hard-coded cap of 5.
+def test_nzbget_dupe_submission_unlimited_by_default():
+    # nzbget_max_backups defaults to -1: every same-release row is a backup,
+    # with no cap at all (fallback_streams_max no longer applies to NZBGet).
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
     selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
     filtered = [selected] + [
         {"link": "http://i/{}.nzb".format(i), "title": "The Matrix 1999 1080p"}
-        for i in range(8)
+        for i in range(60)
     ]
     identity = {"type": "movie", "imdb": "tt0133093"}
     with patch(
         "resources.lib.router._get_addon_setting",
-        _dupe_setting_getter({"nzbget_enabled": "true", "fallback_streams_max": "8"}),
+        _dupe_setting_getter({"nzbget_enabled": "true", "fallback_streams_max": "2"}),
     ):
         dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity)
-    assert dupe["max_backups"] == 8
-    assert len(dupe["backups"]) == 8
+    assert dupe["max_backups"] == -1
+    assert len(dupe["backups"]) == 60
 
 
 def test_hydra_duplicate_lookup_enabled_with_default_url_left_unset():
@@ -5237,3 +5253,26 @@ def test_retry_pick_outranks_bigger_earlier_fleet_within_seconds():
     # Intra-fleet ordering is preserved below the base.
     assert retry["pick_score"] == 100003
     assert all(b["score"] < retry["pick_score"] for b in retry["backups"])
+
+
+def test_attach_nzbget_dupe_builds_nothing_off_the_nzbget_backend():
+    # Duplicate fleets are NZBGet-only: on nzbdav (or any other backend) the
+    # attach step must not build the backup lookups or touch the selection.
+    from resources.lib import router_play
+
+    selected = {"link": "p", "title": "Movie.2020.1080p.WEB-DL.x264-GRP"}
+    params = {
+        "_nzbget_dupe": "STALE",
+        "_settings_getter": lambda key, default="": (
+            "0" if key == "playback_backend" else default
+        ),
+    }
+    with patch(
+        "resources.lib.router._fallback_candidate_loader_for_selection"
+    ) as loader, patch("resources.lib.router_play._hydra_uploads_loader") as hydra:
+        filtered = [selected, dict(selected)]
+        router_play._attach_nzbget_dupe(params, selected, filtered, {})
+    assert "_nzbget_dupe" not in params
+    assert "_fallback_stop" not in selected
+    loader.assert_not_called()
+    hydra.assert_not_called()

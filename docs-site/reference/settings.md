@@ -80,6 +80,7 @@ The URL, username, password, category, and completed-folder fields appear on
 | NZBGet Password | `nzbget_password` | *(empty)* | NZBGet control password. Stored hidden. |
 | NZBGet Category | `nzbget_category` | *(empty)* | Category to submit under; also used to locate the completed file. |
 | Completed Folder (SMB or Local Path) | `nzbget_smb_root` | *(empty)* | `smb://` URL or local/mounted path of NZBGet's completed-downloads base. An [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs) is recommended. |
+| Maximum duplicate backups | `nzbget_max_backups` | `-1` | Same-release NZBs to send to NZBGet as duplicate backups. `-1` sends every one found, `0` sends none, and a positive number sends at most that many. Each backup costs one indexer download. |
 
 **Actions:** *Test NZBGet Connection*, *Test Completed Folder*.
 
@@ -258,7 +259,7 @@ See [Fallback streams](../features/fallback-streams.md).
 | Setting | ID | Default | Description |
 |---------|----|---------|-------------|
 | Enable fallback streams | `fallback_streams_enabled` | `true` | Enable nzbdav / InfiniDysk proxy fallback or NZBGet duplicate-backup submission. StreamNZB ignores it. |
-| Maximum standby fallback streams | `fallback_streams_max` | `5` | nzbdav / InfiniDysk clamps the standby limit to 0–5. NZBGet honors the positive duplicate-backup count without that ceiling; 0 or less turns off its duplicate backups. |
+| Maximum standby fallback streams | `fallback_streams_max` | `5` | nzbdav / InfiniDysk clamps the standby limit to 0–5. NZBGet and StreamNZB ignore it; NZBGet uses `nzbget_max_backups`. |
 | Seconds into playback before submitting fallback backups | `fallback_submit_delay` | `120` | Delay before backups are submitted. `0` submits immediately. |
 
 ### Proxy

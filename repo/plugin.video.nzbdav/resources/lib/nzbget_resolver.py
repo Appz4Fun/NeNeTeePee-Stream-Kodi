@@ -9,7 +9,9 @@ here. Honors the same ``setResolvedUrl``-on-failure contract as the nzbdav
 path: exactly one resolution per exit, failures resolve False.
 """
 
+import contextlib
 import hashlib
+import os
 import threading
 import time
 from urllib.parse import unquote
@@ -18,7 +20,7 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import nzbget_api
+from resources.lib import nzb_cache, nzbget_api, nzbget_submit_ledger
 from resources.lib.download_ledger import record_download
 from resources.lib.http_util import notify as _notify
 from resources.lib.http_util import redact_text as _redact_text
@@ -32,26 +34,23 @@ from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _MAX_VETO_REPLACEMENTS,
     _append_one_backup,
     _canceled_resolve_nzbids,
-    _cleanup_canceled_submissions,
+    _canceled_resolve_split,
     _copy_vetoed_after_append,
     _dupe_check_disabled,
-    _dupe_worker_should_skip,
     _extra_backups_from_loader,
+    _fill_done,
+    _fleet_spool_base,
+    _hydra_uploads_for_fleet,
     _is_copy_failure,
     _is_copy_veto_status,
     _load_extra_candidates,
-    _loader_extras_for_fleet,
-    _nothing_to_submit,
     _pick_rescue_callable,
     _preexisting_success_ids,
     _read_poll_interval,
+    _rescue_late,
     _rescue_or_exhausted,
     _rescue_plain_pick,
-    _snapshot_conn_getter,
-    _spawn_dupe_backups,
-    _submit_backup_fleet,
-    _submit_dupe_backups,
-    _submit_extras_until_filled,
+    _submit_candidates,
     _usable_backup_link,
     _warn_if_healthcheck_pauses,
 )
@@ -128,10 +127,11 @@ def poll_nzbget_job(
     failover: if the tracked member fails, a promoted backup (a new active NZBID
     under the same DupeKey) is tracked instead, or an already-completed group
     member is played, before the resolve is reported failed. ``fleet`` carries
-    two callables: ``is_submitting`` (the backup worker's ``Thread.is_alive``)
-    keeps the poll from declaring the group exhausted while backups are still
-    being appended, and ``owned_nzbids`` (the pick + the worker's appends so
-    far) scopes failover tracking to THIS resolve -- an overlapping play of the
+    ``owned_nzbids`` (the pick + every backup this resolve appended), which
+    scopes failover tracking to THIS resolve, and an optional
+    ``is_submitting`` callable that keeps the poll from declaring the group
+    exhausted while backups are still being appended (the foreground fleet
+    sends every backup before polling, so it passes none) -- an overlapping play of the
     same release shares the stable DupeKey, and its active download must never
     be adopted (or later canceled). NZBGet preserves NZBIDs across
     history<->queue moves, so a promoted backup always surfaces under an id
@@ -155,7 +155,7 @@ def poll_nzbget_job(
         "rescued": False,
     }
     if dupe_key:
-        state["stale_successes"] = _preexisting_success_ids(dupe_key, settings_getter)
+        state["stale_successes"] = _stale_successes(dupe_key, settings_getter, fleet)
     while time.monotonic() < deadline:
         if dialog.iscanceled():
             # Carry the CURRENTLY tracked NZBID (the promoted backup once
@@ -173,6 +173,34 @@ def poll_nzbget_job(
         if monitor.waitForAbort(interval):
             return {"outcome": "aborted"}
     return {"outcome": "timeout"}
+
+
+def _stale_successes(dupe_key, settings_getter, fleet):
+    """Same-key SUCCESS ids that predate this resolve (group-follow ignores them).
+
+    This fleet's own members are never stale: with the foreground fleet, a
+    backup appended early can complete before the poll even starts, and it
+    must stay playable.
+    """
+    fleet = fleet or {}
+    owned_nzbids = fleet.get("owned_nzbids")
+    owned = list(owned_nzbids() or []) if owned_nzbids is not None else []
+    # The foreground fleet snapshots BEFORE it submits: a success another
+    # resolve produced while this fleet was still downloading/sending is not
+    # stale and must stay playable.
+    preexisting = fleet.get("preexisting_successes")
+    if preexisting is None:
+        preexisting = _preexisting_success_ids(dupe_key, settings_getter)
+    # str/int tolerant: some NZBGet builds serialize history NZBIDs as strings.
+    # Same-key jobs that were still QUEUED when the fleet ran (known only when
+    # its history read failed) finished during this resolve: not stale.
+    live = list(fleet.get("queue_era_nzbids") or [])
+    return tuple(
+        nzbid
+        for nzbid in preexisting
+        if not nzbget_api._nzbid_in(nzbid, owned)
+        and not nzbget_api._nzbid_in(nzbid, live)
+    )
 
 
 def _update_active_dialog(dialog, group):
@@ -371,7 +399,8 @@ def _owned_nzbid(nzbid, fleet):
     owned = (fleet or {}).get("owned_nzbids")
     if owned is None:
         return True
-    return nzbid in tuple(owned())
+    # str/int tolerant: listgroups can serialize a promoted NZBID as a string.
+    return nzbget_api._nzbid_in(nzbid, tuple(owned()))
 
 
 def _promotion_still_pending(promoted, fleet, foreign_active=False):
@@ -497,6 +526,7 @@ def _handle_poll_failure(
     cancel_event=None,
     poll_result=None,
     submitted_nzbids=None,
+    adopted_nzbids=None,
 ):
     """Dispatch a non-success poll outcome to its failure callback.
 
@@ -506,8 +536,14 @@ def _handle_poll_failure(
     finish for a later retry. The success outcome returns ``(False, False)``
     so the caller proceeds to the SMB resolve. ``poll_result`` (the poll's
     terminal dict) carries the currently tracked member and any
-    paused-promoted member ids; ``submitted_nzbids`` are the backup worker's
-    appends so far.
+    paused-promoted member ids; ``submitted_nzbids`` are the fleet's appends.
+    ``adopted_nzbids`` are backups an EARLIER play sent (the resubmit ledger):
+    the poll may track them, but a cancel never deletes them -- another
+    resolve may still rely on them. A cancel stops what is downloading (the
+    pick, the tracked or paused-promoted member) and keeps this play's parked
+    backups for a replay to reuse (see ``_canceled_resolve_split``). The
+    deletes run in the background, so a stalled NZBGet never holds the cancel
+    (or its dialog cleanup) open.
     """
     if outcome in ("timeout", "aborted"):
         on_failure(_string(30101))
@@ -515,10 +551,10 @@ def _handle_poll_failure(
     if outcome == "canceled":
         if cancel_event is not None:
             cancel_event.set()  # stop the backup worker first
-        nzbget_api.cancel_jobs(
-            _canceled_resolve_nzbids(nzbid, poll_result, submitted_nzbids),
-            settings_getter=settings_getter,
+        running, backups = _canceled_resolve_split(
+            nzbid, poll_result, submitted_nzbids, adopted_nzbids
         )
+        _cancel_jobs_in_background(running, settings_getter, backups=backups)
         on_failure(None)
         return True, False
     if outcome == "failed":
@@ -596,9 +632,24 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # Set on user-cancel so the background backup worker stops submitting
         # more duplicates (#372 round 2).
         self.cancel_event = threading.Event()
-        # NZBIDs the backup worker has appended so far -- the cancel path
-        # deletes exactly these (plus pick/tracked), never a whole-key sweep.
+        # NZBIDs the fleet has appended so far -- the cancel path deletes
+        # exactly these (plus pick/tracked), never a whole-key sweep.
         self.submitted_nzbids = []
+        # Backups an EARLIER play parked in NZBGet under this DupeKey that the
+        # fleet skipped re-sending (nzbget_submit_ledger): this resolve follows
+        # a failover onto them, but a cancel never deletes them.
+        self.adopted_nzbids = []
+        # Same-key SUCCESS ids snapshotted before the fleet submitted anything
+        # (None: the poll snapshots them itself).
+        self.preexisting_successes = None
+        # True when the foreground fleet stopped for a Kodi shutdown (vs a
+        # user cancel): its appended jobs are left to finish.
+        self.fleet_aborted = False
+        # The pick's downloaded NZB parked on disk, re-sent by the FORCE
+        # rescue; deleted when the resolve ends. ``pick_nzb_bytes`` holds it
+        # only when no temp folder could take it.
+        self.pick_nzb_path = None
+        self.pick_nzb_bytes = None
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -659,7 +710,34 @@ def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
     if not nzb_url:
         ctx.on_failure(_string(30223))
         return False
-    return _submit_poll_resolve(ctx, nzb_url, title, meta[0], meta[1])
+    try:
+        return _submit_poll_resolve(ctx, nzb_url, title, meta[0], meta[1])
+    finally:
+        _discard_parked_pick(ctx, nzb_url)
+
+
+def _discard_parked_pick(ctx, nzb_url=None):
+    """Drop the pick NZB ``submit_fleet`` parked for the FORCE rescue.
+
+    After a USER cancel (not a Kodi shutdown) the file is kept in
+    ``nzb_cache`` for a day instead: the cancel deleted the pick from NZBGet,
+    and a replay re-sends this file rather than grabbing it from the indexer
+    again. Otherwise it is deleted.
+    """
+    path = getattr(ctx, "pick_nzb_path", None)
+    if path:
+        canceled = getattr(ctx, "cancel_event", None)
+        user_cancel = (
+            canceled is not None
+            and canceled.is_set()
+            and not getattr(ctx, "fleet_aborted", False)
+        )
+        if not (user_cancel and nzb_url and nzb_cache.keep(nzb_url, path)):
+            with contextlib.suppress(OSError):
+                os.remove(path)
+        ctx.pick_nzb_path = None
+    if getattr(ctx, "pick_nzb_bytes", None) is not None:
+        ctx.pick_nzb_bytes = None
 
 
 def _close_dialog(dialog):
@@ -717,36 +795,55 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
     size/pubdate/indexer corroboration, so a same-named repost could play the
     wrong job; NZBGet's own dupe handling covers a still-in-flight re-submit.
 
-    When the picker computed a Smart-Duplicates submission (#372), the pick is
-    submitted with the shared DupeKey at the top DupeScore so NZBGet keeps it the
-    active download (the one this poll tracks); otherwise it is a plain single
-    submit unchanged from pre-#372. Once queued, the release's duplicate backups
-    are submitted off-thread so NZBGet can fail over to one if the pick is
-    unrepairable.
+    When the picker computed a Smart-Duplicates submission (#372), the pick and
+    every backup are downloaded, deduplicated, and sent together first
+    (``nzbget_fleet_run.submit_fleet``, behind the progress dialog), the pick
+    at the top DupeScore so NZBGet keeps it the active download (the one this
+    poll tracks); otherwise it is a plain single submit unchanged from
+    pre-#372.
     """
     getter = ctx.settings_getter
     dupe_key = (ctx.dupe or {}).get("key") or ""
-    nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
+    if dupe_key:
+        from resources.lib.nzbget_fleet_run import submit_fleet
+
+        # submit_fleet snapshots same-key successes (abortably) BEFORE it
+        # submits anything, into ctx.preexisting_successes.
+        nzbid, error = submit_fleet(ctx, nzb_url, title, dupe_key)
+        if ctx.cancel_event.is_set():
+            if getattr(ctx, "fleet_aborted", False):
+                # Kodi is shutting down: like the poll's ``aborted`` outcome,
+                # leave anything already appended to finish for a later retry.
+                ctx.on_failure(_string(30101))
+                return True
+            # User cancel while finding/downloading/sending: delete whatever
+            # this resolve already appended -- in the background, so a stalled
+            # NZBGet can't hold the cancel (and the dialog) open -- then exit.
+            if ctx.submitted_nzbids:
+                # The pick goes; its parked backups stay for a replay.
+                pick_id = getattr(ctx, "fleet_pick_nzbid", None)
+                _cancel_jobs_in_background(
+                    [pick_id] if pick_id else [],
+                    getter,
+                    backups=[job for job in ctx.submitted_nzbids if job != pick_id],
+                )
+            ctx.on_failure(None)
+            return False
+    else:
+        nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
     if not nzbid:
         # Surface the specific (already-redacted) NZBGet message—auth vs dupe
         # vs "append returned 0"—per the spec error table, else the generic.
         ctx.on_failure(error or _string(30222))
         return False
 
-    # Pick is queued at the top DupeScore: submit the release's duplicate backups
-    # so NZBGet can fail over to one if the pick is unrepairable (#372). Off-thread
-    # so it never delays the poll below; scores (not order) keep the pick active.
-    backups_thread = _spawn_dupe_backups(ctx) if dupe_key else None
-
-    def _backups_still_submitting():
-        # Don't exhaust the failover grace while the backup worker is still
-        # appending candidates (a fast-fail pick can beat a slow indexer).
-        return backups_thread is not None and backups_thread.is_alive()
-
     def _owned_fleet_nzbids():
-        # The pick plus every backup appended so far -- failover tracking and
-        # cancel stay scoped to exactly this resolve's downloads.
-        return [nzbid] + list(getattr(ctx, "submitted_nzbids", None) or [])
+        # The pick plus every backup appended -- failover tracking and cancel
+        # stay scoped to exactly this resolve's downloads. The fleet records
+        # the pick in submitted_nzbids too, so dedupe (order kept).
+        owned = [nzbid] + list(getattr(ctx, "submitted_nzbids", None) or [])
+        owned += list(getattr(ctx, "adopted_nzbids", None) or [])
+        return list(dict.fromkeys(owned))
 
     result = poll_nzbget_job(
         nzbid,
@@ -757,13 +854,14 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         interval=ctx.interval,
         dupe_key=dupe_key,
         fleet={
-            "is_submitting": _backups_still_submitting,
             "owned_nzbids": _owned_fleet_nzbids,
+            "preexisting_successes": getattr(ctx, "preexisting_successes", None),
+            "queue_era_nzbids": getattr(ctx, "queue_era_nzbids", None),
             # #372 r6: a confirmed COPY veto (pick died DELETED/COPY, group
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
             # the pick. Built on both the fleet and plain paths (the dict is
             # always passed to the poll).
-            "rescue": _pick_rescue_callable(ctx, nzb_url, title),
+            "rescue": _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=nzbid),
         },
     )
     handled, leave_job = _handle_poll_failure(
@@ -774,6 +872,7 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         cancel_event=ctx.cancel_event,
         poll_result=result,
         submitted_nzbids=list(getattr(ctx, "submitted_nzbids", None) or []),
+        adopted_nzbids=list(getattr(ctx, "adopted_nzbids", None) or []),
     )
     if handled:
         return leave_job
@@ -789,12 +888,66 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
     return leave_job
 
 
-def _submit_pick(ctx, nzb_url, title, dupe_key):
-    """Append the pick, with the #372 Smart-Duplicates fields when computed.
+def _cancel_jobs_in_background(nzbids, settings_getter, backups=()):
+    """Best-effort cancel cleanup on a daemon thread (never blocks a cancel).
 
-    The pick carries the shared DupeKey at the top DupeScore so NZBGet keeps it
-    the active download; without a ``dupe_key`` this is a plain single submit
-    unchanged from pre-#372. Returns ``append_nzb``'s ``(nzbid, error)``.
+    ``nzbids`` (the pick and any running member) are final-deleted from
+    history and queue, and forgotten by the resubmit ledger once NZBGet
+    confirms. ``backups`` are final-deleted from the QUEUE only: parked ones
+    stay in history (and in the ledger) for a replay to reuse. The connection
+    settings are read here, on the resolve thread; the thread only sees that
+    snapshot. A thread that can't start skips the cleanup.
+    """
+    url, user, password, category = nzbget_api._get_settings(settings_getter)
+    snapshot = {
+        "nzbget_url": url,
+        "nzbget_username": user,
+        "nzbget_password": password,
+        "nzbget_category": category,
+    }
+
+    def _cleanup():
+        try:
+            deleted = nzbget_api.cancel_jobs(
+                nzbids,
+                settings_getter=lambda key, default="": snapshot.get(key, default),
+            )
+            if deleted:
+                # Gone from NZBGet: a replay must send them again. A failed
+                # delete keeps the ledger, so a replay still reuses the jobs.
+                nzbget_submit_ledger.forget(nzbids)
+            if backups:
+                nzbget_api.cancel_queued_jobs(
+                    backups,
+                    settings_getter=lambda key, default="": snapshot.get(key, default),
+                )
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet cancel cleanup failed: {}".format(
+                    _redact_text(str(exc))
+                ),
+                xbmc.LOGWARNING,
+            )
+
+    try:
+        threading.Thread(
+            target=_cleanup, name="nzbdav-nzbget-cancel", daemon=True
+        ).start()
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet cancel cleanup thread failed: {}".format(
+                exc
+            ),
+            xbmc.LOGWARNING,
+        )
+
+
+def _submit_pick(ctx, nzb_url, title, dupe_key):
+    """Append the pick as a plain single submit (no Smart-Duplicates fleet).
+
+    The fleet path (``dupe_key`` set) goes through
+    ``nzbget_fleet_run.submit_fleet`` instead; ``dupe_key`` is accepted for the
+    FORCE-rescue call shape. Returns ``append_nzb``'s ``(nzbid, error)``.
     """
     dupe = ctx.dupe or {}
     return nzbget_api.append_nzb(
@@ -820,13 +973,13 @@ def _play_completed_download(
 
     Recording happens BEFORE the SMB mapping, which can still fail without
     un-completing the download (fail-soft): the picker's "DL" tag must reflect
-    the box's history even when the share is unreachable right now. The whole
-    fleet's post-dates are recorded, not just the pick's: failover can complete
-    under ANY same-name backup (a different upload with its own pubdate), and
-    the picker's repost-guard only tags rows whose pubdate the ledger knows.
+    the box's history even when the share is unreachable right now. When
+    failover completed a BACKUP (a different upload with its own pubdate), that
+    backup's post-date is recorded too, so the picker's repost-guard -- which
+    only tags rows whose pubdate the ledger knows -- recognizes it.
     """
     record_download(title, download_pubdate, download_size)
-    _record_fleet_pubdates(getattr(ctx, "dupe", None), title)
+    _record_fleet_pubdates(getattr(ctx, "dupe", None), title, job_id)
     video_url = _resolve_completed_smb(
         dest_dir,
         ctx,
@@ -848,32 +1001,41 @@ def _play_completed_download(
     ctx.on_success(video_url)
 
 
-def _record_fleet_pubdates(dupe, title):
-    """Ledger-record every same-name backup's post-date under ``title`` (#372).
+def _record_fleet_pubdates(dupe, title, completed_nzbid=None):
+    """Ledger-record the fleet member that COMPLETED, under its own title (#372).
 
-    Any fleet member can become the SUCCESS row the next picker render reuses
-    (the poll follows a promoted backup), and each is a different upload with
-    its own pubdate. Recording the whole fleet keeps the repost-guard's
-    purpose intact -- an unrelated same-name repost from another day is still
-    rejected (its pubdate is never recorded). Loader extras need no entries:
-    NZBHydra collapsed them, so no picker row carries their pubdate; their
-    completion tags through the pick's own recorded row. record_download is
-    best-effort and dedups epochs, so double-recording is harmless.
+    Parked Smart-Duplicate backups never download -- only the member NZBGet
+    finished (``completed_nzbid``, the poll's terminal NZBID) has files on
+    disk, so only its post-date may vouch for a picker row. A backup can carry
+    a different name than the pick (same release, other spelling), and the
+    picker looks the ledger up by each row's own title, so it is recorded under
+    ITS title (``title``, the pick's, only when it has none). A completed
+    member without a pubdate (an NZBHydra duplicate upload) has nothing to
+    record. record_download is best-effort and dedups epochs.
     """
-    for backup in (dupe or {}).get("backups") or []:
-        pubdate = backup.get("pubdate")
-        if pubdate:
-            record_download(title, pubdate)
+    if completed_nzbid is None:
+        return
+    dupe = dupe or {}
+    rows = list(dupe.get("backups") or []) + list(dupe.get("extras") or [])
+    for row in rows:
+        # str/int tolerant: the terminal history NZBID may be a string.
+        if row.get("pubdate") and nzbget_api._same_nzbid(
+            row.get("_nzbid"), completed_nzbid
+        ):
+            record_download(row.get("title") or title, row["pubdate"])
 
 
-def _manifest_dupe_submission(nzb_url, title, params):
+def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     """Join explicit manifest sources to the tracked Smart-Duplicates flow.
 
     The manifest already defines the selected group, so include every distinct
-    alternative. The existing worker still enforces DupeCheck and cancellation.
-    Hash the exact group to avoid exposing URL credentials in NZBGet's DupeKey.
+    alternative, gated by ``fallback_streams_enabled`` and bounded by
+    ``nzbget_max_backups`` like any NZBGet fleet (either can turn manifest
+    backups off). The fleet still enforces DupeCheck and
+    cancellation. Hash the exact group to avoid exposing URL credentials in
+    NZBGet's DupeKey.
     """
-    from resources.lib.router_play import _dupe_score_base
+    from resources.lib.router_play import _dupe_score_base, _parse_max_backups
 
     sources = params.get("_source_urls")
     if not isinstance(sources, list):
@@ -883,7 +1045,19 @@ def _manifest_dupe_submission(nzb_url, title, params):
     )
     if len(urls) < 2:
         return None
-    key = hashlib.sha256("\n".join(sorted(urls)).encode("utf-8")).hexdigest()
+    getter = _bind_getter(settings_getter)
+    # Same gates as a picker fleet (_dupe_max_backups): the global fallback
+    # switch, then the NZBGet cap (0 = off).
+    if str(getter("fallback_streams_enabled", "true") or "true").lower() == "false":
+        return None
+    cap = _parse_max_backups(getter("nzbget_max_backups", "-1") or "-1")
+    if cap == 0:
+        return None
+    # Hash credential-stripped identities: a regenerated manifest with a
+    # rotated apikey or session token keeps the same DupeKey (and so the
+    # resubmit ledger's held backups).
+    identities = sorted({nzbget_submit_ledger.link_key(url) or url for url in urls})
+    key = hashlib.sha256("\n".join(identities).encode("utf-8")).hexdigest()
     base = _dupe_score_base()
     backups = [
         {"link": url, "title": title, "score": base - index}
@@ -894,7 +1068,7 @@ def _manifest_dupe_submission(nzb_url, title, params):
         "pick_score": base,
         "score_base": base,
         "backups": backups,
-        "max_backups": len(backups),
+        "max_backups": cap,
     }
 
 
@@ -1041,7 +1215,7 @@ def resolve_and_play_nzbget(
             params.get("_download_size"),
         ),
         completed_job=params.get("_nzbget_completed_job"),
-        dupe=_manifest_dupe_submission(nzb_url, title, params),
+        dupe=_manifest_dupe_submission(nzb_url, title, params, settings_getter),
         season_pack_record=params.get("_season_pack"),
         episode_context=params.get("_episode_context"),
     )
@@ -1090,7 +1264,7 @@ def play_nzbget(
             resolve_params.get("_download_size"),
         ),
         completed_job=resolve_params.get("_nzbget_completed_job"),
-        dupe=_manifest_dupe_submission(nzb_url, title, resolve_params),
+        dupe=_manifest_dupe_submission(nzb_url, title, resolve_params, settings_getter),
         season_pack_record=resolve_params.get("_season_pack"),
         episode_context=resolve_params.get("_episode_context"),
     )

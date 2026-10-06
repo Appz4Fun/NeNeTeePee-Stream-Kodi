@@ -1,0 +1,776 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 nzbdav contributors
+
+"""Same-release selection and same-posting dedup for the NZBGet duplicate fleet.
+
+The NZBGet backend submits every NZB of the picked release as a Smart-Duplicates
+backup (#372). Two NZBs that describe the SAME Usenet posting add nothing as a
+backup, so this module collapses them before submission:
+
+* **Same listing** (no fetch): several indexers list one posting with the same
+  size and a post date within ``SAME_LISTING_WINDOW_SECONDS``. Only one listing
+  per posting is fetched, which saves scarce indexer grabs; the others stay as
+  fallbacks for a grab that fails.
+* **Same posting** (after fetch): two NZBs sharing more than 1% of their article
+  Message-IDs (measured against the smaller set) are the same posting -- an
+  indexer re-lists a posting with one re-uploaded segment, while distinct
+  postings share none. A byte-identical repost with 0% shared IDs is a
+  DIFFERENT posting and the best kind of backup, so it is kept.
+
+Release identity never uses size: postings of one release can differ by GBs.
+"""
+
+import collections
+import io
+import os
+import shutil
+import tempfile
+import threading
+import time
+import zlib
+from array import array
+
+import xbmc
+
+from resources.lib.http_util import pubdate_to_epoch, redact_text
+
+SAME_LISTING_WINDOW_SECONDS = 120
+PREFETCH_WINDOW = 4
+
+# A fingerprint keeps EVERY article's CRC32 (no sampling, so the 1% rule is
+# exact) in an ``array('I')`` built by appending: 4 bytes per article, with no
+# set or sorted copy ever materialized, so even a large remux fleet (and four
+# fingerprints being built at once) stays small on a CoreELEC box.
+_SAME_POSTING_SHARE = 0.01
+
+
+# Release variants the fallback-stream gates leave open (the stream proxy's
+# byte checks cover them there; an NZBGet failover plays whatever it gets).
+_VARIANT_FLAGS = (
+    "3d",
+    "dubbed",
+    "subbed",
+    "hardcoded",
+    "extended",
+    "unrated",
+    "uncensored",
+    "remastered",
+)
+
+
+def _variant_signature(title):
+    """PTT variant flags plus sorted languages for a release title."""
+    from resources.lib.ptt import parse_title
+
+    parsed = parse_title(str(title or ""))
+    flags = tuple(bool(parsed.get(key)) for key in _VARIANT_FLAGS)
+    languages = tuple(
+        sorted(str(lang).lower() for lang in parsed.get("languages") or [])
+    )
+    return flags, languages
+
+
+def _movie_years_match(pick, row):
+    """For a movie pick, both parsed years must be equal -- absent included.
+
+    ``_same_content`` lets a missing year match any year because the stream
+    proxy byte-verifies a switch; an NZBGet failover has no such check, so a
+    yearless ``Dune.1080p`` must never back up ``Dune.1984``. Episodes (any
+    season/episode evidence on the pick) keep the content gate's rules.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    _title, pick_year, seasons, episodes, _part = _fs._release_identity(pick)
+    if seasons or episodes:
+        return True
+    return pick_year == _fs._release_identity(row)[1]
+
+
+def same_variant(pick, row):
+    """The NZBGet-only gates: variant tags, languages, and the movie year.
+
+    ``row`` must carry the pick's 3D, dub/sub, hardsub, and cut flags and its
+    languages, and a movie row the pick's exact year. The fallback loader's
+    same-content extras skip these upstream (the stream proxy byte-verifies a
+    switch there), but an NZBGet failover plays whatever it promotes.
+    Fail-closed on a parse error.
+    """
+    try:
+        return _variant_signature(pick.get("title")) == _variant_signature(
+            row.get("title")
+        ) and _movie_years_match(pick, row)
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
+def same_release(pick, row):
+    """Whether ``row`` is the same release as ``pick`` (fail-closed).
+
+    Reuses the hardened fallback-stream gates: ``_same_content`` (title, year or
+    SxxEyy, part, edition, PROPER/REPACK) plus the same-group profile match
+    (group and resolution parsed and equal, no conflicting profile, HDR, or
+    audio fields). Those gates are deliberately loose for the stream proxy,
+    which byte-verifies a fallback before switching; an NZBGet failover has no
+    such check, so the 3D, dubbed/MULTi, subbed, hardcoded-subs, cut flags and
+    the language set must match exactly too. Any parse error rejects.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    try:
+        return (
+            bool(_fs._same_content(pick, row))
+            and bool(_fs._metadata_profiles_match(pick, row, require_same_group=True))
+            and same_variant(pick, row)
+        )
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
+def _size_bytes(row):
+    try:
+        return int(str(row.get("size") or "").strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _posted_epoch(row):
+    epoch = row.get("_posted_epoch")
+    if isinstance(epoch, int) and epoch > 0:
+        return epoch
+    pubdate = row.get("pubdate")
+    return pubdate_to_epoch(pubdate) if pubdate else None
+
+
+def same_listing(left, right):
+    """Whether two indexer rows list the same posting (equal size, close post date).
+
+    Rows missing a size or a parseable post date never match.
+    """
+    if not isinstance(left, dict) or not isinstance(right, dict):
+        return False
+    size = _size_bytes(left)
+    if size <= 0 or size != _size_bytes(right):
+        return False
+    left_epoch = _posted_epoch(left)
+    right_epoch = _posted_epoch(right)
+    if left_epoch is None or right_epoch is None:
+        return False
+    return abs(left_epoch - right_epoch) <= SAME_LISTING_WINDOW_SECONDS
+
+
+def posting_fingerprint(nzb_bytes):
+    """``posting_fingerprint_file`` for an NZB already in memory.
+
+    Parsed with the same streaming, element-detaching parser (over an
+    in-memory stream), so a segment-heavy NZB never becomes a full tree.
+    None for unparseable or unsafe XML or an NZB without segment Message-IDs.
+    """
+    if not nzb_bytes:
+        return None
+    return posting_fingerprint_file(io.BytesIO(bytes(nzb_bytes)))
+
+
+def posting_fingerprint_file(path):
+    """The posting fingerprint of an NZB file (a path or a binary stream).
+
+    An ``array('I')`` of every article's CRC32 (document order), appended
+    straight into the compact array -- 4 bytes per article, no intermediate
+    set or sort.
+
+    Only a real NZB counts: a ``<segment>`` is hashed when it sits at
+    ``nzb/file/segments/segment``, so other well-formed XML that merely
+    contains ``<segment>`` tags (an indexer error page, say) has no
+    fingerprint and the caller tries the next listing.
+
+    EVERY element is detached from its parent as soon as it ends (segments,
+    files, and ``<head>``/``<meta>`` alike), so memory is the fingerprint (4
+    bytes per article) plus the open path, never the document. None for
+    unparseable or unsafe XML or an NZB without segment Message-IDs.
+    """
+    from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
+
+    hashes = array("I")
+    stack = []
+    names = []
+    try:
+        for event, elem in safe_iterparse(path, events=("start", "end")):
+            if event == "start":
+                stack.append(elem)
+                names.append(_local_name(elem.tag))
+                continue
+            stack.pop()
+            if names.pop() == "segment" and names == _SEGMENT_PATH:
+                msgid = (elem.text or "").strip().strip("<>").lower()
+                if msgid:
+                    hashes.append(zlib.crc32(msgid.encode("utf-8")))
+            if stack:
+                # Detach, not just clear: an emptied child still sits in its
+                # parent until the parent ends. Each parent then holds at most
+                # one finished child at a time, so ``remove`` stays O(1).
+                stack[-1].remove(elem)
+    except (OSError, ParseError, UnsafeXmlError, ValueError):
+        return None
+    return hashes if hashes else None
+
+
+# The ancestors of a real NZB segment: <nzb><file><segments><segment>.
+_SEGMENT_PATH = ["nzb", "file", "segments"]
+
+
+def _local_name(tag):
+    return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
+
+
+# Overlap is counted a chunk of the probe at a time, so a comparison never
+# boxes more than this many CRC32s into a Python set at once.
+_PROBE_CHUNK = 65536
+
+
+def _shares_posting(fingerprint, other):
+    """Whether two fingerprints share more than 1% of the smaller article set.
+
+    Never materializes either fingerprint as one big set: each 64k-article
+    slice of ``fingerprint`` becomes a small set that is intersected with
+    ``other`` (iterated in C), stopping as soon as the threshold is crossed.
+    """
+    smaller = min(len(fingerprint), len(other))
+    if smaller == 0:
+        return False
+    needed = smaller * _SAME_POSTING_SHARE
+    shared = 0
+    for start in range(0, len(fingerprint), _PROBE_CHUNK):
+        chunk = set(fingerprint[start : start + _PROBE_CHUNK])
+        shared += len(chunk.intersection(other))
+        if shared > needed:
+            return True
+    return False
+
+
+def same_posting(left, right):
+    """Whether two fingerprints share more than 1% of the smaller article set."""
+    if not left or not right:
+        return False
+    return _shares_posting(left, right)
+
+
+class FleetDedup:
+    """Listings and postings already covered by one fleet (the pick included).
+
+    ``spool_base`` is the directory the fleet's NzbSpool folders go under
+    (resolved on the resolve thread; None = the system temp directory).
+    ``progress`` is an optional ``(phase, done, total)`` callback for the
+    resolve's progress dialog.
+    """
+
+    # Fingerprints held in memory at once; past this they spill to disk (a
+    # 600k-article remux NZB is ~2.4 MiB), so an unlimited fleet of huge
+    # NZBs keeps a bounded footprint on a CoreELEC box.
+    MEMORY_BUDGET = 16 * 1024 * 1024
+
+    def __init__(self, pick=None, spool_base=None, progress=None):
+        self._listings = [pick] if isinstance(pick, dict) else []
+        # Each entry is an in-memory ``array('I')`` or the path it spilled to.
+        self._fingerprints = []
+        # Kept this round but not (yet) in NZBGet, as ``(token, entry)``: still
+        # deduped against, but dropped at the round's end unless committed by
+        # a successful append. Callers hold the token, never the array, so a
+        # spilled fingerprint really leaves memory.
+        self._pending = []
+        self._last_token = 0
+        self._in_memory = 0
+        self._spill_dir = None
+        self.spool_base = spool_base
+        self.progress = progress
+        # Optional zero-arg callable: True once Kodi is shutting down (vs a
+        # user cancel) -- late appends are then left to finish, not deleted.
+        self.aborted = None
+
+    def clusters(self, candidates):
+        """Group ``candidates`` into same-listing clusters, in rank order.
+
+        A candidate that lists an already-COVERED posting (the pick, or a
+        backup this fleet already sent -- see ``remember_listing``) is dropped.
+        Each returned cluster is a list whose head is its best-ranked listing;
+        the rest are fallbacks for a failed grab. Nothing is remembered here: a
+        posting whose every listing failed stays uncovered, so a later phase
+        (NZBHydra uploads, loader extras) can still supply a working mirror.
+        """
+        clusters = []
+        for candidate in candidates:
+            if any(same_listing(candidate, known) for known in self._listings):
+                continue
+            home = None
+            for cluster in clusters:
+                if same_listing(candidate, cluster[0]):
+                    home = cluster
+                    break
+            if home is None:
+                clusters.append([candidate])
+            else:
+                home.append(candidate)
+        return clusters
+
+    def remember_listing(self, row):
+        """Mark ``row``'s posting covered (call once its NZB reached NZBGet).
+
+        Every listing in a cluster is within the same-listing window of its
+        head, so remembering the head covers the whole cluster.
+        """
+        if isinstance(row, dict):
+            self._listings.append(row)
+
+    def known_posting(self, fingerprint):
+        """Whether ``fingerprint`` is the same posting as one sent or kept."""
+        entries = self._fingerprints + [entry for _token, entry in self._pending]
+        if not fingerprint or not entries:
+            return False
+        return any(
+            _shares_posting(fingerprint, _load_fingerprint(entry)) for entry in entries
+        )
+
+    def remember_posting(self, fingerprint):
+        """Hold ``fingerprint`` for this round; its token for ``commit_posting``.
+
+        Only the stored entry is kept (in memory within the budget, else its
+        spill file); drop the array itself once this returns. None when there
+        is no fingerprint.
+        """
+        if not fingerprint:
+            return None
+        self._last_token += 1
+        self._pending.append((self._last_token, self._store(fingerprint)))
+        return self._last_token
+
+    def commit_posting(self, token):
+        """Mark a posting covered for good (its NZB reached NZBGet).
+
+        ``token`` is what ``remember_posting`` returned; a fingerprint array
+        that was never remembered is stored directly.
+        """
+        if token is None:
+            return
+        if isinstance(token, int):
+            for index, (held, entry) in enumerate(self._pending):
+                if held == token:
+                    del self._pending[index]
+                    self._fingerprints.append(entry)
+                    return
+            return
+        if token:
+            self._fingerprints.append(self._store(token))
+
+    def end_round(self):
+        """Forget postings kept this round that never reached NZBGet.
+
+        A row whose append failed (or whose body couldn't be stored) does not
+        block a later phase's mirror of the same posting.
+        """
+        for _token, entry in self._pending:
+            self._forget(entry)
+        self._pending = []
+
+    def close(self):
+        """Delete any spilled fingerprints (call when the fleet is done)."""
+        if self._spill_dir is not None:
+            shutil.rmtree(self._spill_dir, ignore_errors=True)
+            self._spill_dir = None
+
+    def _store(self, fingerprint):
+        """Keep ``fingerprint`` in memory within the budget, else on disk."""
+        size = len(fingerprint) * fingerprint.itemsize
+        if self._in_memory + size <= self.MEMORY_BUDGET:
+            self._in_memory += size
+            return fingerprint
+        path = self._spill_path()
+        if path is not None:
+            try:
+                with open(path, "wb") as handle:
+                    fingerprint.tofile(handle)
+                return path
+            except OSError:
+                _remove_quietly(path)
+        # No disk either: keep it (exact dedup beats an unbounded re-grab).
+        self._in_memory += size
+        return fingerprint
+
+    def _forget(self, entry):
+        if isinstance(entry, str):
+            _remove_quietly(entry)
+        else:
+            self._in_memory = max(0, self._in_memory - len(entry) * entry.itemsize)
+
+    def _spill_path(self):
+        if self._spill_dir is None:
+            for parent in (self.spool_base, None):
+                try:
+                    self._spill_dir = tempfile.mkdtemp(
+                        prefix="nzbdav-fingerprints-", dir=parent
+                    )
+                    break
+                except (OSError, TypeError, ValueError):
+                    continue
+        if self._spill_dir is None:
+            return None
+        try:
+            handle, path = tempfile.mkstemp(dir=self._spill_dir, suffix=".crc")
+        except OSError:
+            # Disk full or out of inodes: _store keeps it in memory instead.
+            return None
+        os.close(handle)
+        return path
+
+
+def _load_fingerprint(entry):
+    """An in-memory fingerprint, or one read back from its spill file."""
+    if not isinstance(entry, str):
+        return entry
+    loaded = array("I")
+    try:
+        with open(entry, "rb") as handle:
+            loaded.frombytes(handle.read())
+    except OSError:
+        return array("I")
+    return loaded
+
+
+class NzbSpool:
+    """Unique NZB bodies held on disk until every one has been sent to NZBGet.
+
+    One private ``nzbdav-fleet-*`` folder per batch, under ``base_dir`` (Kodi's
+    temp folder) or the system temp directory. A body that cannot be written
+    (no folder, disk full) is kept in memory only while the in-memory total
+    stays under ``MEMORY_BUDGET``; past it ``save`` returns None and the
+    caller drops that backup, so a spool failure never exhausts a CoreELEC
+    box's RAM (the pick is always kept). ``close`` deletes the folder and
+    everything in it.
+    """
+
+    MEMORY_BUDGET = 64 * 1024 * 1024
+
+    def __init__(self, base_dir=None):
+        self._dir = None
+        # Set by ``degrade`` once the temp disk fills up mid-fleet.
+        self._full = False
+        self._count = 0
+        self._in_memory = 0
+        # reserve() runs on the parallel fetch threads.
+        self._lock = threading.Lock()
+        for parent in (base_dir, None):
+            try:
+                self._dir = tempfile.mkdtemp(prefix="nzbdav-fleet-", dir=parent)
+                break
+            except (OSError, TypeError, ValueError):
+                continue
+
+    def save(self, body, required=False):
+        """Store ``body``; returns a ``load`` handle (a path, the bytes, or None).
+
+        None means the body could be neither written nor held within the
+        memory budget: the caller drops that backup (re-fetching it would cost
+        another indexer grab on the resolve thread). ``required`` (the pick)
+        is always kept, in memory if need be.
+        """
+        path = self.reserve()
+        if path is not None:
+            try:
+                with open(path, "wb") as handle:
+                    handle.write(body)
+                return path
+            except OSError:
+                # A partial write (disk full) must not hold space.
+                _remove_quietly(path)
+        if not required and self._in_memory + len(body) > self.MEMORY_BUDGET:
+            return None
+        self._in_memory += len(body)
+        return body
+
+    def on_disk(self):
+        """Whether new bodies still go to disk (else they are held in memory)."""
+        return self._dir is not None and not self._full
+
+    def degrade(self):
+        """Stop handing out spool paths (the temp disk filled up mid-fleet).
+
+        Files already spooled stay (and are deleted by ``close``); later
+        bodies take the bounded in-memory path.
+        """
+        self._full = True
+
+    def reserve(self):
+        """A fresh file path in the spool folder (thread-safe), or None."""
+        if self._dir is None or self._full:
+            return None
+        with self._lock:
+            self._count += 1
+            count = self._count
+        return os.path.join(self._dir, "{:05d}.nzb".format(count))
+
+    def release(self, handle):
+        """Free a handle once its whole send round is done.
+
+        An in-memory body gives its bytes back to the budget; a spooled file is
+        deleted, so a capped fleet's later replacement rounds have room on a
+        small temp partition.
+        """
+        if isinstance(handle, (bytes, bytearray)):
+            self._in_memory = max(0, self._in_memory - len(handle))
+        elif handle:
+            _remove_quietly(handle)
+
+    @staticmethod
+    def load(handle):
+        """The stored body, or None when it can no longer be read."""
+        if handle is None or isinstance(handle, (bytes, bytearray)):
+            return handle
+        try:
+            with open(handle, "rb") as stored:
+                return stored.read()
+        except OSError:
+            return None
+
+    def close(self):
+        if self._dir is not None:
+            shutil.rmtree(self._dir, ignore_errors=True)
+            self._dir = None
+
+
+def _remove_quietly(path):
+    """Delete a spool file; a missing or locked one is not an error."""
+    try:
+        os.remove(path)
+    except OSError as exc:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet fleet spool cleanup: {}".format(exc),
+            xbmc.LOGDEBUG,
+        )
+
+
+def _stopped(events):
+    return any(event is not None and event.is_set() for event in events)
+
+
+def _fetch_cluster(cluster, fetch, stop_events):
+    """Fetch the first listing of ``cluster`` that returns a valid NZB.
+
+    Returns ``(head, payload, fingerprint)``: always the cluster's HEAD (its
+    best-ranked listing), so a mirror that supplies the bytes never changes the
+    slot's title or DupeScore -- every listing in a cluster is the same
+    posting, only the head's download URL failed. A body counts only when it
+    parses as an NZB with article Message-IDs, so an HTTP-200 login or
+    rate-limit page falls through to the next listing. ``payload`` is a spool
+    path or NZB bytes; it and ``fingerprint`` are None when every listing
+    failed. Stops between listings once any of ``stop_events`` fires.
+    """
+    for member in cluster:
+        if _stopped(stop_events):
+            break
+        payload, fingerprint = _as_payload(_try_fetch(fetch, member["link"]))
+        if fingerprint:
+            return cluster[0], payload, fingerprint
+    return cluster[0], None, None
+
+
+def _as_payload(result):
+    """Normalize a fetch result to ``(payload, fingerprint)``.
+
+    A fetch returns either NZB bytes (fingerprinted here) or an already
+    spooled ``(path, fingerprint)`` pair (streamed to disk and fingerprinted
+    by the fetch itself).
+    """
+    if isinstance(result, tuple):
+        return result
+    if not result:
+        return None, None
+    fingerprint = posting_fingerprint(result)
+    return (result, fingerprint) if fingerprint else (None, None)
+
+
+def _try_fetch(fetch, url):
+    """One listing's NZB body, or None (logged) when the indexer fetch fails."""
+    try:
+        return fetch(url)
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup NZB fetch failed, "
+            "trying the next listing: {}".format(redact_text(str(exc))),
+            xbmc.LOGDEBUG,
+        )
+        return None
+
+
+class _Fetch:
+    """One cluster's fetch, run on its own daemon thread or inline.
+
+    A daemon thread per fetch (never a ``ThreadPoolExecutor``, whose workers
+    are non-daemon and joined at interpreter exit) keeps an in-flight indexer
+    request from delaying Kodi shutdown. When a thread cannot start (thread
+    exhaustion on a small box) the fetch is skipped rather than run inline --
+    an inline request could not be canceled -- and the cluster reports no body
+    (that backup is dropped; for the pick the resolve reports the failure).
+    """
+
+    def __init__(self, cluster, fetch, stop_events):
+        self._args = (cluster, fetch, stop_events)
+        self._done = threading.Event()
+        self._value = (cluster[0], None, None)
+
+    def start(self):
+        try:
+            threading.Thread(
+                target=self._run, name="nzbdav-nzbget-prefetch", daemon=True
+            ).start()
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet fleet fetch thread failed to "
+                "start, leaving the NZB to NZBGet: {}".format(exc),
+                xbmc.LOGWARNING,
+            )
+            self._done.set()
+        return self
+
+    def _run(self):
+        try:
+            self._value = _fetch_cluster(*self._args)
+        finally:
+            self._done.set()
+
+    def result(self, stop_events=(), on_wait=None):
+        """The fetch's result; abandons the wait once a stop event fires.
+
+        Waits in short slices, calling ``on_wait`` between them (the caller's
+        chance to notice a dialog cancel or Kodi shutdown), so a stalled
+        indexer never pins the resolve thread for its whole HTTP timeout. An
+        abandoned fetch finishes on its daemon thread and is ignored.
+        """
+        while not self._done.wait(_WAIT_SLICE_SECONDS):
+            if on_wait is not None:
+                on_wait()
+            if _stopped(stop_events):
+                return self._value[0], None, None
+        return self._value
+
+
+# How often a wait on an in-flight fetch re-checks for a cancel or shutdown.
+_WAIT_SLICE_SECONDS = 0.2
+
+
+def fetch_cluster_abortable(cluster, fetch, stop_events=(), on_wait=None):
+    """Fetch one cluster off-thread and wait abortably; ``(head, body, fp)``."""
+    return _Fetch(cluster, fetch, stop_events).start().result(stop_events, on_wait)
+
+
+def call_abortable(  # pylint: disable=too-many-arguments
+    func, stop_events=(), on_wait=None, default=None, on_late=None, deadline=None
+):
+    """Run ``func()`` on a daemon thread; ``default`` if stopped or failed.
+
+    For a slow NZBGet/indexer call on the resolve thread: the wait re-checks
+    ``on_wait``/``stop_events`` every slice, so a dialog cancel or Kodi
+    shutdown abandons it at once. A thread that cannot start, or a raising
+    ``func``, yields ``default``. ``on_late(value)`` runs on the worker thread
+    when ``func`` finishes AFTER the wait was abandoned (e.g. to delete an
+    append that landed after a cancel). ``deadline`` (seconds) abandons the
+    wait once it passes, like a stop event, returning ``default``.
+    """
+    done = threading.Event()
+    lock = threading.Lock()
+    box = {"value": default, "abandoned": False}
+
+    def _run():
+        try:
+            box["value"] = func()
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: NZBGet fleet call failed: {}".format(
+                    redact_text(str(exc))
+                ),
+                xbmc.LOGDEBUG,
+            )
+        finally:
+            with lock:
+                done.set()
+                late = box["abandoned"]
+        if late and on_late is not None:
+            on_late(box["value"])
+
+    try:
+        threading.Thread(target=_run, name="nzbdav-nzbget-lookup", daemon=True).start()
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet fleet lookup thread failed to start: "
+            "{}".format(exc),
+            xbmc.LOGWARNING,
+        )
+        return default
+    give_up_at = None if deadline is None else time.monotonic() + deadline
+    while not done.wait(_WAIT_SLICE_SECONDS):
+        if on_wait is not None:
+            on_wait()
+        overdue = give_up_at is not None and time.monotonic() >= give_up_at
+        if overdue or _stopped(stop_events):
+            with lock:
+                if not done.is_set():
+                    box["abandoned"] = True
+                    return default
+            break
+    return box["value"]
+
+
+def prefetched_clusters(  # pylint: disable=too-many-arguments
+    clusters,
+    fetch,
+    cancel_event=None,
+    window=PREFETCH_WINDOW,
+    demand=None,
+    on_wait=None,
+):
+    """Yield ``(head, body, fingerprint)`` per cluster in order, ``window`` ahead.
+
+    Fetches overlap on daemon threads while results are consumed strictly in
+    rank order (DupeScores stay rank-ordered) and at most ``window`` bodies are
+    held in memory at once. ``demand`` (a zero-arg callable, or None for
+    unbounded) reports how many more items the caller can still use: fetches
+    in flight never exceed it, so a capped round never grabs an NZB it will
+    not consume. ``on_wait`` (optional) is called while waiting on a slow fetch,
+    so the caller can raise ``cancel_event`` on a dialog cancel or Kodi
+    shutdown. Stops early once ``cancel_event`` fires. Closing the generator
+    (a cancel, or the caller's cap being met) stops every in-flight fetch from
+    moving on to its cluster's next listing and starts no new ones.
+    """
+    # ``window`` may be a callable re-read before each refill (the fleet
+    # serializes fetches once its spool can only hold bodies in memory).
+    window_of = window if callable(window) else (lambda: window)
+    stop = threading.Event()
+    stop_events = (cancel_event, stop)
+    pending = collections.deque()
+    remaining = iter(clusters)
+
+    def _wanted():
+        size = max(1, int(window_of()))
+        limit = demand() if demand is not None else None
+        return size if limit is None else max(0, min(size, limit))
+
+    def _refill():
+        while len(pending) < _wanted():
+            cluster = next(remaining, None)
+            if cluster is None:
+                return
+            pending.append(_Fetch(cluster, fetch, stop_events).start())
+
+    try:
+        _refill()
+        while pending:
+            # Hand the item over without keeping a local reference: a caller
+            # that stops consuming (its round's demand met) leaves this frame
+            # suspended, and a still-bound ``item`` would pin the yielded NZB
+            # body (up to 100 MiB for the pick) through the whole send.
+            ready = [pending.popleft().result(stop_events, on_wait)]
+            if _stopped(stop_events):
+                return
+            yield ready.pop()
+            # Refill only once the caller asks for more, and only up to what
+            # it can still use: a caller that stops here never pays for
+            # another grab.
+            _refill()
+    finally:
+        stop.set()

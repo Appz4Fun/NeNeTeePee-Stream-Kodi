@@ -2129,3 +2129,23 @@ msgstr "Copy the existing stream token from StreamNZB stream settings or its Str
 msgctxt "#30612"
 msgid "Select nzbdav / InfiniDysk, NZBGet or StreamNZB, then configure the selected backend below."
 msgstr "Select nzbdav / InfiniDysk, NZBGet or StreamNZB, then configure the selected backend below."
+
+msgctxt "#30613"
+msgid "Maximum duplicate backups"
+msgstr "Maximum duplicate backups"
+
+msgctxt "#30614"
+msgid "How many other NZBs of the same release to send to NZBGet as duplicate backups. -1 sends every one found, 0 sends none."
+msgstr "How many other NZBs of the same release to send to NZBGet as duplicate backups. -1 sends every one found, 0 sends none."
+
+msgctxt "#30615"
+msgid "Looking for duplicate NZBs..."
+msgstr "Looking for duplicate NZBs..."
+
+msgctxt "#30616"
+msgid "Downloading NZBs {} of {}"
+msgstr "Downloading NZBs {} of {}"
+
+msgctxt "#30617"
+msgid "Sending {} NZBs to NZBGet..."
+msgstr "Sending {} NZBs to NZBGet..."

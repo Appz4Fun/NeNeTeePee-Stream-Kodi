@@ -42,7 +42,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
 | Enable fallback streams[^source-fallback_streams_enabled]<br>`fallback_streams_enabled` | On | For nzbdav / InfiniDysk, prepare validated proxy backup streams and try another source when the current source fails. For NZBGet, allow duplicate-backup NZB submission. This does not guarantee an uninterrupted switch and does not control StreamNZB. |
-| Maximum standby fallback streams[^source-fallback_streams_max]<br>`fallback_streams_max` | 5 | For nzbdav / InfiniDysk, limit standby proxy streams per title; runtime values are clamped to 0–5. For NZBGet, limit submitted duplicate backups; positive values are honored without an additional ceiling of 5. A value of 0 or less turns off NZBGet duplicate backups. StreamNZB ignores this setting. |
+| Maximum standby fallback streams[^source-fallback_streams_max]<br>`fallback_streams_max` | 5 | For nzbdav / InfiniDysk, limit standby proxy streams per title; runtime values are clamped to 0–5. NZBGet and StreamNZB ignore this setting. For NZBGet duplicate backups, use **Maximum duplicate backups** (`nzbget_max_backups`) in the [backend settings](backend.md). |
 | Seconds into playback before submitting fallback backups[^source-fallback_submit_delay]<br>`fallback_submit_delay` | 120 | For nzbdav / InfiniDysk, wait this many seconds into playback before submitting proxy fallback backups. 0 submits immediately. This delay does not control NZBGet duplicate-backup submission or StreamNZB. |
 
 ### Proxy

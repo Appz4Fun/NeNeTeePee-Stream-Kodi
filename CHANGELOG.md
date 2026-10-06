@@ -70,6 +70,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **NZBGet submits every same-release NZB as a duplicate backup.** The new
+  **Maximum duplicate backups** setting (`nzbget_max_backups`, default `-1`)
+  sends every same-release NZB to NZBGet as a Smart Duplicates backup; `0`
+  sends none and a positive number caps the count. Same release now means the
+  same name, or a different name with the same title, year or episode, part,
+  edition, PROPER/REPACK, group, and resolution, and backups include
+  NZBHydra2's hidden duplicate uploads. NeNeTeePee-Stream-Kodi skips listings
+  of the same Usenet posting (same size posted within 120 seconds, or more than
+  1% shared article IDs), keeps re-uploads with different article IDs,
+  and shows the whole process in the progress dialog: it downloads every NZB
+  (your pick included, "Downloading NZBs 1 of 25"), saves the unique ones to
+  Kodi's temp folder, uploads them all to NZBGet at once with your pick first
+  ("Sending..."), deletes the temp folder, and then shows NZBGet's download
+  progress. Each backup costs
+  one indexer download. **Maximum standby fallback streams** no longer applies
+  to NZBGet. A replay within 24 hours skips the backups NZBGet still holds from
+  the earlier play (no second indexer download or append), and only the NZBGet
+  backend ever builds a duplicate fleet. Canceling a play removes the pick (and
+  anything queued) but keeps its parked backups, so a quick replay reuses them,
+  and keeps the pick's NZB file on the box for a day so the replay re-sends it
+  without another indexer download.
 - **Backend settings section.** Move backend selection and connection settings
   to the **Playback backend** section in the settings view. Choose nzbdav /
   InfiniDysk, NZBGet, or StreamNZB to show the fields for that backend.
