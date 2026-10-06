@@ -772,9 +772,11 @@ _DEAD_MEMBER_PREFIXES = ("FAILURE/", "WARNING/", "DELETED/COPY")
 
 
 def dupekey_member_states(dupe_key, history, queue):
-    """``{nzbid: "parked" | "dead"}`` for NZBGet's members of ``dupe_key``.
+    """``{nzbid: "queued" | "parked" | "dead"}`` for NZBGet's members of ``dupe_key``.
 
-    ``"parked"``: queued, or a ``DELETED/DUPE`` history backup NZBGet can still
+    ``"queued"``: in the queue (downloading, waiting or paused).
+
+    ``"parked"``: a ``DELETED/DUPE`` history backup NZBGet can still
     promote on a failover -- a working backup, so sending another copy is
     waste. ``"dead"``: a ``FAILURE/*``, ``WARNING/*`` (the resolver's
     terminal failure too) or ``DELETED/COPY`` row -- sending it again would
@@ -788,7 +790,9 @@ def dupekey_member_states(dupe_key, history, queue):
             if not isinstance(row, dict) or not _dupekey_match(row, dupe_key):
                 continue
             status = str(row.get("Status") or "").upper()
-            if not is_history or status == "DELETED/DUPE":
+            if not is_history:
+                state = "queued"
+            elif status == "DELETED/DUPE":
                 state = "parked"
             elif status.startswith(_DEAD_MEMBER_PREFIXES):
                 state = "dead"

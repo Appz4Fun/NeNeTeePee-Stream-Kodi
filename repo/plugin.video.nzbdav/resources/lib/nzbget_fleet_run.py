@@ -79,7 +79,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         # the queue are live (a success they reach later is not stale).
         dupe_check_off = True
         ctx.queue_era_nzbids = list(members or {})
-        if members is not None and not members:
+        if not _key_is_active(members):
             # The queue WAS read and holds nothing under this key: FORCE (no
             # duplicate checks) can't start a parallel download, and it keeps
             # SCORE from parking the pick behind an unseen older success.
@@ -93,9 +93,12 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         )
     if force_pick and not dupe_check_off:
         # The scores can't be lifted above NZBGet's highest same-key score
-        # without leaving its 32-bit range: send the pick alone with FORCE.
+        # without leaving its 32-bit range: send the pick alone -- with FORCE
+        # only when no same-key job is queued (FORCE would download in
+        # parallel with it); otherwise under SCORE.
         dupe_check_off = True
-        pick["_dupe_mode"] = "FORCE"
+        if not _key_is_active(members):
+            pick["_dupe_mode"] = "FORCE"
     candidates = [pick]
     if dupe_check_off:
         # Same-key items would download in parallel instead of parking as
@@ -422,6 +425,20 @@ def _send_batch(run, candidates, limits, capped):
         )
 
 
+# Held copies that are working backups (followed on a failover): queued, or
+# parked in history as DELETED/DUPE.
+_LIVE_MEMBER_STATES = ("queued", "parked")
+
+
+def _key_is_active(members):
+    """Whether NZBGet's queue holds a same-key job (or membership is unknown).
+
+    FORCE disables every duplicate check, so it is only safe when the queue
+    was read and holds nothing under this key.
+    """
+    return members is None or any(state == "queued" for state in members.values())
+
+
 def _skip_held(candidates, held, ctx, slots=None):
     """``candidates`` minus the backups an earlier play left in NZBGet.
 
@@ -454,7 +471,7 @@ def _skip_held(candidates, held, ctx, slots=None):
             kept.append(candidate)
             continue
         room = slots is None or len(newly) < slots
-        if entry.get("state") == "parked" and room:
+        if entry.get("state") in _LIVE_MEMBER_STATES and room:
             candidate["_nzbid"] = entry.get("nzbid")
             adopted = getattr(ctx, "adopted_nzbids", None)
             if isinstance(adopted, list) and entry.get("nzbid") not in adopted:

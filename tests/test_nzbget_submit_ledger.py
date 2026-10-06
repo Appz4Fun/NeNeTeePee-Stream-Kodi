@@ -118,7 +118,7 @@ def test_member_states_classify_parked_dead_and_resendable_rows():
         1: "parked",
         2: "dead",
         3: "dead",
-        7: "parked",
+        7: "queued",
     }
 
 
@@ -497,6 +497,25 @@ def test_a_clock_moved_backward_keeps_entries_fresh():
     # Codex r37 (P2): a box without an RTC can boot before NTP sync.
     nzbget_submit_ledger.record([_row("https://idx/a", 1)], "k", now=100000)
     assert nzbget_submit_ledger.held("k", {1: "parked"}, now=100000 - 3600)
-    assert not nzbget_submit_ledger.held(
-        "k", {1: "parked"}, now=100000 - nzbget_submit_ledger.TTL_SECONDS
+    # Even a reset of more than a day (no RTC) never expires a future entry.
+    assert nzbget_submit_ledger.held(
+        "k", {1: "parked"}, now=100000 - 3 * nzbget_submit_ledger.TTL_SECONDS
     )
+
+
+@pytest.mark.usefixtures("_fleet_env")
+def test_no_force_at_the_score_ceiling_while_the_key_is_queued():
+    # Codex r38 (P2): FORCE would download in parallel with the queued job.
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx = _ctx(_fleet_dupe(_rows(1)))
+    queued = [{"NZBID": 5, "DupeKey": "k", "Status": "DOWNLOADING"}]
+    with patch(_HISTORY, return_value=[]), patch(_QUEUE, return_value=queued), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.max_dupe_score_by_dupekey",
+        return_value=2**31 - 1,
+    ), patch(_FETCH, side_effect=_valid), patch(
+        _APPEND, return_value=(20, None)
+    ) as append:
+        submit_fleet(ctx, "pick", "T", "k")
+    assert [c.args[0] for c in append.call_args_list] == ["pick"]
+    assert append.call_args.kwargs["dupe_mode"] == "SCORE"

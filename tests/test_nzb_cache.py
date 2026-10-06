@@ -89,3 +89,11 @@ def test_a_failed_rename_caches_nothing(tmp_path):
         assert not nzb_cache.keep("https://hydra/getnzb/api/9", source)
     assert os.path.exists(source)
     assert nzb_cache.load("https://hydra/getnzb/api/9") is None
+
+
+def test_reads_expire_old_files_even_without_new_writes(tmp_path):
+    # Codex r38 (P2): the one-day retention holds without later caching.
+    nzb_cache.keep("https://hydra/old", _nzb_file(tmp_path, "o.nzb"), now=1000)
+    late = 1000 + nzb_cache.TTL_SECONDS
+    assert nzb_cache.load("https://hydra/other", now=late) is None
+    assert not os.listdir(nzb_cache._cache_dir())

@@ -117,8 +117,9 @@ def _fresh(entries, now):
     for entry in entries:
         age = _age(entry, now)
         # A negative age is a clock that moved backward (a box without an RTC
-        # before NTP sync): still fresh within the window, never discarded.
-        if age is not None and -TTL_SECONDS < age < TTL_SECONDS:
+        # before NTP sync): never expired for being in the future. NZBGet's
+        # own presence check still decides whether the job is really held.
+        if age is not None and age < TTL_SECONDS:
             fresh.append(entry)
     return fresh
 
@@ -173,7 +174,7 @@ def held(dupe_key, member_states, now=None):
     """Fresh entries for ``dupe_key`` that NZBGet still holds, with their state.
 
     ``member_states`` is ``nzbget_api.dupekey_member_states``; each returned
-    entry is a copy carrying ``"state"`` (``"parked"`` or ``"dead"``).
+    entry is a copy carrying ``"state"`` (``"queued"``, ``"parked"`` or ``"dead"``).
     """
     now = time.time() if now is None else now
     key = _norm_key(dupe_key)

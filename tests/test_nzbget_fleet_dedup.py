@@ -1448,9 +1448,12 @@ def test_in_memory_fallback_caps_backup_fetches_not_the_pick(_fleet_env):
         return _valid(url)
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
-    with patch.object(NzbSpool, "reserve", return_value=None), patch(
-        _FETCH, side_effect=_fetch
-    ), patch(_APPEND, side_effect=[(1, None), (2, None), (3, None)]):
+    # No spool folder at all: reserve() hands out nothing and on_disk() is off.
+    with patch.object(NzbSpool, "reserve", return_value=None), patch.object(
+        NzbSpool, "on_disk", return_value=False
+    ), patch(_FETCH, side_effect=_fetch), patch(
+        _APPEND, side_effect=[(1, None), (2, None), (3, None)]
+    ):
         submit_fleet(ctx, "pick", "T", "k")
     assert caps["pick"] is None
     assert caps["b0"] == caps["b1"] == _FLEET_NZB_MAX_BYTES
@@ -2512,3 +2515,20 @@ def test_a_failed_pick_move_leaves_no_placeholder(tmp_path):
     with patch.object(nzbget_fleet_run.os, "replace", side_effect=OSError(5, "EIO")):
         assert nzbget_fleet_run._park_pick_file(str(source)) is None
     assert not list(tmp_path.glob("nzbdav-pick-*"))
+
+
+def test_only_one_in_memory_backup_body_is_held_unconsumed(tmp_path):
+    # Codex r38 (P1): a worker that finds an in-memory body still pending
+    # drops its listing instead of buffering another one.
+    from resources.lib.nzbget_resolver_dupes import _fleet_fetcher
+
+    spool = NzbSpool(None)
+    spool.degrade()
+    fetch = _fleet_fetcher([[{"link": "b0"}], [{"link": "b1"}]], spool)
+    with patch(_FETCH, side_effect=_valid):
+        first = fetch("b0")
+        assert first and first[0] == _valid("b0")
+        assert fetch("b1") is None  # b0's body is still unconsumed
+        fetch.release_memory()
+        assert fetch("b1")[0] == _valid("b1")
+    spool.close()

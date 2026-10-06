@@ -24,6 +24,7 @@ from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     NzbSpool,
     call_abortable,
     fetch_cluster_abortable,
+    posting_fingerprint,
     posting_fingerprint_file,
     prefetched_clusters,
     same_variant,
@@ -213,13 +214,32 @@ def _fleet_fetcher(clusters, spool, cached_pick=None):
     }
 
     cached = dict([cached_pick]) if cached_pick else {}
-    # In-memory backup fetches (no spool folder, or the disk filled up) run
-    # one at a time even when several workers are already in flight.
-    memory_gate = threading.Semaphore(1)
+    # At most ONE in-memory backup body (no spool folder, or the disk filled
+    # up) may exist unconsumed: a worker that finds one still pending drops
+    # its listing instead of buffering another. The consumer frees the slot
+    # (``release_memory``) once it has taken the body.
+    memory = {"pending": 0}
+    memory_lock = threading.Lock()
+
+    def _release_memory():
+        with memory_lock:
+            memory["pending"] = max(0, memory["pending"] - 1)
 
     def _in_memory(url):
-        with memory_gate:
-            return _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+        with memory_lock:
+            if memory["pending"]:
+                return None
+            memory["pending"] += 1
+        try:
+            body = _core.nzbget_api.fetch_nzb_bytes(url, max_bytes=_FLEET_NZB_MAX_BYTES)
+            fingerprint = posting_fingerprint(body) if body else None
+        except Exception:
+            _release_memory()
+            raise
+        if not fingerprint:
+            _release_memory()
+            return None
+        return body, fingerprint
 
     def _fetch(url):
         if url in pick_links:
@@ -250,6 +270,7 @@ def _fleet_fetcher(clusters, spool, cached_pick=None):
             return None
         return path, fingerprint
 
+    _fetch.release_memory = _release_memory
     return _fetch
 
 
@@ -286,6 +307,11 @@ def _collect_unique(stream, state, cancel_event, need):
             _discard(spool, payload)
             break
         is_pick = bool(candidate.get("_is_pick"))
+        if isinstance(payload, (bytes, bytearray)) and not is_pick:
+            # The in-memory body is taken (the spool's budget owns it now).
+            release = getattr(fetch, "release_memory", None)
+            if release is not None:
+                release()
         if payload is None and is_pick:
             # The pick seeds every later dedup decision: one more (abortable)
             # try at its own URL before giving up.

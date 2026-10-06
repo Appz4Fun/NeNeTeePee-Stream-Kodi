@@ -158,10 +158,11 @@ NZBGet downloads the highest-scored item, which is your pick, so the progress
 bar and completion behave exactly as before. It parks the rest in its history
 as duplicate backups (status `dupe`) without downloading them. The score
 decides which item plays, not the submission order, so your pick stays the
-active download. NeNeTeePee-Stream-Kodi finds, downloads, and sends the
-backups before NZBGet starts on your pick (see
-[Speed and indexer limits](#speed-and-indexer-limits)), so playback starts
-after that step: the more duplicate NZBs a release has, the longer it takes.
+active download. NeNeTeePee-Stream-Kodi finds and downloads every NZB first
+(see [Speed and indexer limits](#speed-and-indexer-limits)), then sends your
+pick first and the backups after it. NZBGet can start downloading your pick as
+soon as it arrives, while the backups are still being sent. The more duplicate
+NZBs a release has, the longer the find-and-download step takes.
 Set **Maximum duplicate backups** lower to shorten it.
 
 Your pick can finish unrepairable: par2 repair fails, unpack fails, or health
@@ -227,8 +228,9 @@ NZBGet starts downloading:
    kept. Each unique NZB is saved to a folder in Kodi's temp directory as soon
    as it passes; duplicates are discarded. If your pick's indexer fails,
    another indexer's copy of the same posting is used.
-3. **Sending 25 NZBs to NZBGet...**: it uploads all the saved NZBs at once,
-   your pick first with the highest score, then deletes the temp folder.
+3. **Sending 25 NZBs to NZBGet...**: it uploads the saved NZBs one after
+   another, your pick first with the highest score (NZBGet may start on it
+   right away), then deletes the temp folder.
 4. **Downloading... 0%**: the usual NZBGet download progress for your pick.
 
 Cancel at any step: if you cancel before the upload, nothing is sent to

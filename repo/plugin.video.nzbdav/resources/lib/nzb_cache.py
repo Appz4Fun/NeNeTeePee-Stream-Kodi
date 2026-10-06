@@ -82,9 +82,12 @@ def load(link, now=None):
     now = time.time() if now is None else now
     try:
         path = _cache_path(link)
-        if path is None or not os.path.isfile(path):
+        if path is None:
             return None
-        if now - os.path.getmtime(path) >= TTL_SECONDS:
+        # Every read also expires old entries, so the one-day retention holds
+        # even when nothing new is ever cached again.
+        _prune(os.path.dirname(path), now)
+        if not os.path.isfile(path):
             return None
         if os.path.getsize(path) > _MAX_BYTES:
             return None
