@@ -433,7 +433,10 @@ def _health_message(progress, reply):
     """Show server health only when it is known, never present -1 as a percent."""
     rows = reply.get("Members", [])
     good = sum(row.get("Status") in ("QUEUED", "BACKUP") for row in rows)
-    chosen = next((row for row in rows if row.get("NZBID") == reply["Chosen"]), {})
+    chosen = next(
+        (row for row in rows if row.get("NZBID") == reply["Chosen"]
+         or row.get("SameAs") == reply["Chosen"]), {}
+    )
     alive = chosen.get("Alive", -1)
     from resources.lib import nzbget_resolver as core
 
@@ -442,4 +445,8 @@ def _health_message(progress, reply):
         if isinstance(alive, (int, float)) and alive >= 0
         else ""
     )
-    progress._update(0, core._fmt(30618, good, health))
+    message = core._fmt(30618, good, health)
+    progress._update(0, message)
+    # Polling immediately replaces progress text; the toast keeps the API's
+    # primary-copy health visible for eight seconds without blocking playback.
+    core._notify(core._addon_name(), message, 8000)
