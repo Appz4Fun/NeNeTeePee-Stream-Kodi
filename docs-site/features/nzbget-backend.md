@@ -150,16 +150,17 @@ as the protocol maximum. Additional candidates are not submitted after that
 fleet is accepted.
 
 The request shares the existing **duplicate key** for the release: the normalized
-release name, prefixed with a content ID when one is known. Members are sent in
-preferred order, without scores. NZBGet health-checks them using its own news
+release name, prefixed with a content ID when one is known. The positional request starts with `DupeKey`, category, priority, and the
+45-second budget, followed by alternating NZB filename and content pairs.
+Members are sent in preferred order, without scores. NZBGet health-checks them using its own news
 servers for up to 45 seconds, starts the best working copy, and keeps backups
-for automatic failover. The HTTP request has a 300-second timeout. The progress
+for automatic failover. The HTTP request has a 75-second timeout (45 seconds plus 30 seconds). The progress
 dialog shows the number of good candidates and the chosen copy's health when
 known. Your initial pick can differ from the copy NZBGet chooses.
 
 The add-on tracks the returned `Chosen` NZBID and follows NZBGet's automatic
 failover to another member. An incomplete ranking response needs no extra
-submission. Accepted fleets are never resent or FORCE-resubmitted. A release
+submission. Accepted fleets are never resent or FORCE-resubmitted. Only `KEY_BUSY` or `SHUTDOWN` replies with no chosen download are retried, up to twice, with a three-second pause. `ALREADY_QUEUED` follows the existing download and preserves its ownership. A release
 already queued is followed; a release already downloaded is played from its
 completed file after checking that Kodi can read it. A missing or unreadable
 completed file produces an explicit error without submitting a new download.
