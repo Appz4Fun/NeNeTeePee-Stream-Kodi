@@ -36,6 +36,13 @@ from resources.lib.nzbget_fleet_dedup import FleetDedup, call_abortable, same_li
 
 
 def submit_fleet(ctx, nzb_url, title, dupe_key):
+    """Submit one deduplicated bulk fleet, falling back only on unknown method."""
+    from resources.lib.nzbget_bulk import submit_bulk
+
+    return submit_bulk(ctx, nzb_url, title, dupe_key)
+
+
+def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
     """Download, dedupe, and send the pick plus its backups; ``(nzbid, error)``.
 
     ``nzbid`` is the pick's NZBGet id (None when its append failed, with
@@ -64,6 +71,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     if progress.canceled():
         ctx.fleet_aborted = progress.aborted
         return None, None
+    _prepare_legacy_scores(dupe)
     force_pick = not _lift_scores(dupe, max_score)
     held = nzbget_submit_ledger.held(dupe_key, members)
     pick = dict(
@@ -110,7 +118,7 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         )
     cap = dupe.get("max_backups")
     capped = isinstance(cap, int) and cap > 0
-    if not dupe_check_off:
+    if not dupe_check_off and prepared is None:
         # Unlimited: everything up front (download all, then send all).
         # Capped: the loader (it downloads manifests) waits until the cap is
         # known to be unfilled -- see below.
@@ -122,13 +130,53 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
     # probes each append for a DELETED/COPY veto so the next round can
     # backfill that backup's slot.
     limits = (cap, cap + _core._MAX_VETO_REPLACEMENTS) if capped else (None, None)
-    dedup = FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
+    dedup = (
+        prepared[1]
+        if prepared is not None
+        else FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
+    )
     dedup.aborted = lambda: progress.aborted
     run = (dupe_key, getter, ctx, dedup, held)
     try:
-        live = len(_send_batch(run, candidates, limits, capped))
-        if capped and not dupe_check_off and pick.get("_nzbid"):
-            _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
+        if prepared is None:
+            live = len(_send_batch(run, candidates, limits, capped))
+            if capped and not dupe_check_off and pick.get("_nzbid"):
+                _fill_from_loader(dupe, progress, run, (cap, live, candidates[1:]))
+        else:
+            from resources.lib.nzbget_resolver_dupes import _send_kept
+
+            kept, prepared_dedup = prepared[:2]
+            if dupe_check_off:
+                kept = kept[:1]
+            # Reuse already downloaded and deduplicated bodies on old servers.
+            # Scores are calculated only after appendfleet was refused.
+            prior = (
+                prepared[2]
+                if len(prepared) > 2
+                else [row for row, _handle, _token in kept]
+            )
+            _score_prepared(dupe, kept, prior)
+            if pick.get("_dupe_mode"):
+                kept[0][0]["_dupe_mode"] = pick["_dupe_mode"]
+            pick = kept[0][0]
+            tally = {"live": [], "attempts": 0}
+            _send_kept(
+                kept,
+                dupe_key,
+                getter,
+                (ctx.cancel_event, ctx.submitted_nzbids, capped, prepared_dedup),
+                (limits, tally),
+            )
+            dedup.attempts_used = getattr(dedup, "attempts_used", 0) + tally["attempts"]
+            nzbget_submit_ledger.record(
+                [row for row, _handle, _token in kept if row.get("_nzbid")], dupe_key
+            )
+            if capped and not dupe_check_off and pick.get("_nzbid"):
+                live = len(tally["live"]) + len(
+                    getattr(ctx, "adopted_nzbids", []) or []
+                )
+                _refill_prepared(run, dupe, progress, (cap, live, kept, prior))
+
     finally:
         dedup.close()
     # A shutdown requested during the last append's wait may not have been
@@ -152,6 +200,33 @@ def submit_fleet(ctx, nzb_url, title, dupe_key):
         ctx.pick_nzb_bytes = body
     nzbid = pick.get("_nzbid")
     return (nzbid, None) if nzbid else (None, pick.get("_append_error"))
+
+
+def _score_prepared(dupe, kept, prior):
+    """Assign old-server scores to the full sequence, including unused extras."""
+    ranked = [kept[0][0]] + list(prior) + [row for row, _handle, _token in kept]
+    seen = {}
+    base = int(dupe.get("pick_score") or 0)
+    for row in ranked:
+        link = row.get("link")
+        if link not in seen:
+            seen[link] = base - len(seen)
+        row["score"] = seen[link]
+
+
+def _refill_prepared(run, dupe, progress, state):
+    """Older servers: fill rejected slots from unused rows, then loader extras."""
+    cap, live, kept, prior = state
+    dedup = run[3]
+    dedup.end_round()  # failed appends must not cover an unsent posting
+    covered_links = {row.get("link") for row, _handle, _token in kept}
+    remaining = [row for row in prior if row.get("link") not in covered_links]
+    budget = max(
+        0, cap + _core._MAX_VETO_REPLACEMENTS - getattr(dedup, "attempts_used", 0)
+    )
+    if live < cap and remaining and budget:
+        live += len(_send_batch(run, remaining, (cap - live, budget), True))
+    _fill_from_loader(dupe, progress, run, (cap, live, prior[1:]))
 
 
 def _park_pick_body(body):
@@ -217,6 +292,18 @@ def _write_parked(body, parent):
             os.remove(path)
         return None
     return path
+
+
+def _prepare_legacy_scores(dupe):
+    """Assign append scores only after the server rejects appendfleet."""
+    if "pick_score" in dupe:
+        return
+    from resources.lib.router_play import _dupe_score_base
+
+    base = _dupe_score_base()
+    dupe.update(pick_score=base, score_base=base)
+    for index, row in enumerate(dupe.get("backups") or [], 1):
+        row["score"] = base - index
 
 
 def _lift_scores(dupe, max_score):
@@ -487,7 +574,7 @@ def _skip_held(candidates, held, ctx, slots=None):
     return kept, newly
 
 
-def _fleet_backups(dupe, progress, include_loader=True):
+def _fleet_backups(dupe, progress, include_loader=True, ranked=True):
     """The pick's backups in rank order: picker rows, then Hydra (+ loader) extras.
 
     The extras are scored just below the picker rows and shared as
@@ -504,7 +591,9 @@ def _fleet_backups(dupe, progress, include_loader=True):
             dupe.get("loader") if include_loader else None,
             [backup.get("link") for backup in backups],
             limit=None,
-            score_base=int(dupe.get("score_base") or 0) - len(backups) - 1,
+            score_base=(
+                int(dupe.get("score_base") or 0) - len(backups) - 1 if ranked else None
+            ),
             leading=_core._hydra_uploads_for_fleet(dupe),
             pick=dupe.get("pick"),
         )
@@ -516,7 +605,7 @@ def _fleet_backups(dupe, progress, include_loader=True):
     return backups + extras
 
 
-def _loader_extras(dupe, progress, prior):
+def _loader_extras(dupe, progress, prior, ranked=True):
     """The fallback loader's extras, ranked below ``prior`` (abortable).
 
     Scored just below the lowest-scored row already in the fleet and added to
@@ -524,15 +613,17 @@ def _loader_extras(dupe, progress, prior):
     """
     if dupe.get("loader") is None:
         return []
-    scores = [int(row.get("score") or 0) for row in prior if isinstance(row, dict)]
-    floor = min(scores) if scores else int(dupe.get("score_base") or 0)
+    floor = 0
+    if ranked:
+        scores = [int(row.get("score") or 0) for row in prior if isinstance(row, dict)]
+        floor = min(scores) if scores else int(dupe.get("score_base") or 0)
 
     def _extras():
         return _core._extra_backups_from_loader(
             dupe.get("loader"),
             [row.get("link") for row in prior if isinstance(row, dict)],
             limit=None,
-            score_base=floor - 1,
+            score_base=floor - 1 if ranked else None,
             pick=dupe.get("pick"),
         )
 

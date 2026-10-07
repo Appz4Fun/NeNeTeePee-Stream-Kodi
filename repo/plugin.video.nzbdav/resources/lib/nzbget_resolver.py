@@ -554,6 +554,11 @@ def _handle_poll_failure(
         running, backups = _canceled_resolve_split(
             nzbid, poll_result, submitted_nzbids, adopted_nzbids
         )
+        missing = set(
+            str(job) for job in (poll_result or {}).get("unrecorded_nzbids", []) or []
+        )
+        running += [job for job in backups if str(job) in missing]
+        backups = [job for job in backups if str(job) not in missing]
         _cancel_jobs_in_background(running, settings_getter, backups=backups)
         on_failure(None)
         return True, False
@@ -822,19 +827,33 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             if ctx.submitted_nzbids:
                 # The pick goes; its parked backups stay for a replay.
                 pick_id = getattr(ctx, "fleet_pick_nzbid", None)
+                missing = getattr(ctx, "bulk_unrecorded_nzbids", None) or []
                 _cancel_jobs_in_background(
-                    [pick_id] if pick_id else [],
+                    ([pick_id] if pick_id else [])
+                    + [job for job in missing if job != pick_id],
                     getter,
-                    backups=[job for job in ctx.submitted_nzbids if job != pick_id],
+                    backups=[
+                        job
+                        for job in ctx.submitted_nzbids
+                        if job != pick_id and job not in missing
+                    ],
                 )
             ctx.on_failure(None)
             return False
     else:
         nzbid, error = _submit_pick(ctx, nzb_url, title, dupe_key)
+    completed_url = getattr(ctx, "bulk_completed_url", None)
+    if completed_url:
+        ctx.on_success(completed_url)
+        return False
     if not nzbid:
         # Surface the specific (already-redacted) NZBGet message—auth vs dupe
         # vs "append returned 0"—per the spec error table, else the generic.
-        ctx.on_failure(error or _string(30222))
+        ctx.on_failure(
+            None
+            if getattr(ctx, "bulk_reuse_unreadable", False)
+            else error or _string(30222)
+        )
         return False
 
     def _owned_fleet_nzbids():
@@ -861,9 +880,15 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
             # otherwise exhausted) is recovered by a one-shot FORCE re-submit of
             # the pick. Built on both the fleet and plain paths (the dict is
             # always passed to the poll).
-            "rescue": _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=nzbid),
+            "rescue": (
+                None
+                if getattr(ctx, "bulk_fleet", False)
+                else _pick_rescue_callable(ctx, nzb_url, title, pick_nzbid=nzbid)
+            ),
         },
     )
+    if getattr(ctx, "bulk_unrecorded_nzbids", None):
+        result["unrecorded_nzbids"] = ctx.bulk_unrecorded_nzbids
     handled, leave_job = _handle_poll_failure(
         result["outcome"],
         nzbid,
@@ -1035,7 +1060,7 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     cancellation. Hash the exact group to avoid exposing URL credentials in
     NZBGet's DupeKey.
     """
-    from resources.lib.router_play import _dupe_score_base, _parse_max_backups
+    from resources.lib.router_play import _parse_max_backups
 
     sources = params.get("_source_urls")
     if not isinstance(sources, list):
@@ -1058,15 +1083,9 @@ def _manifest_dupe_submission(nzb_url, title, params, settings_getter=None):
     # resubmit ledger's held backups).
     identities = sorted({nzbget_submit_ledger.link_key(url) or url for url in urls})
     key = hashlib.sha256("\n".join(identities).encode("utf-8")).hexdigest()
-    base = _dupe_score_base()
-    backups = [
-        {"link": url, "title": title, "score": base - index}
-        for index, url in enumerate(urls[1:], 1)
-    ]
+    backups = [{"link": url, "title": title} for url in urls[1:]]
     return {
         "key": "btad:" + key,
-        "pick_score": base,
-        "score_base": base,
         "backups": backups,
         "max_backups": cap,
     }

@@ -80,7 +80,7 @@ The URL, username, password, category, and completed-folder fields appear on
 | NZBGet Password | `nzbget_password` | *(empty)* | NZBGet control password. Stored hidden. |
 | NZBGet Category | `nzbget_category` | *(empty)* | Category to submit under; also used to locate the completed file. |
 | Completed Folder (SMB or Local Path) | `nzbget_smb_root` | *(empty)* | `smb://` URL or local/mounted path of NZBGet's completed-downloads base. An [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs) is recommended. |
-| Maximum duplicate backups | `nzbget_max_backups` | `-1` | Same-release NZBs to send to NZBGet as duplicate backups. `-1` sends every one found, `0` sends none, and a positive number sends at most that many. Each backup costs one indexer download. |
+| Maximum duplicate backups | `nzbget_max_backups` | `-1` | Same-release NZBs to send to NZBGet as duplicate backups. `-1` fills the fleet (up to 50 total members with `appendfleet`), `0` sends no backups, and a positive number limits backups. Each backup costs one indexer download. |
 
 **Actions:** *Test NZBGet Connection*, *Test Completed Folder*.
 

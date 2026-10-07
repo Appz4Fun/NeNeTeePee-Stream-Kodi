@@ -320,10 +320,21 @@ def http_post_json(url, payload, timeout=15, headers=None, basic_auth=None):
     scheme = urlsplit(url).scheme.lower()
     if scheme not in _ALLOWED_HTTP_SCHEMES:
         raise ValueError("unsupported URL scheme: {!r}".format(scheme))
-    body = _json.dumps(payload).encode("utf-8")
+    # A seekable encoded JSON file lets large NZBGet fleets stream with an
+    # explicit Content-Length (the server need not support chunked uploads).
+    if hasattr(payload, "read"):
+        body = payload
+        position = body.tell()
+        body.seek(0, 2)
+        length = body.tell() - position
+        body.seek(position)
+    else:
+        body = _json.dumps(payload).encode("utf-8")
+        length = len(body)
     request_headers = {
         "User-Agent": _HTTP_USER_AGENT,
         "Content-Type": "application/json",
+        "Content-Length": str(length),
     }
     if headers:
         request_headers.update(headers)
