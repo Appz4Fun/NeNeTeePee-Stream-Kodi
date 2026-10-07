@@ -652,17 +652,9 @@ def _dupe_max_backups(getter):
 def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=None):
     """Build the NZBGet Smart-Duplicates submission for a pick (#372).
 
-    Returns ``{"key", "pick_score", "backups": [{"link","title","score",...}]}``
-    when the NZBGet backend is on, fallback streams are enabled, a DupeKey is
-    computable, AND there is at least one same-release backup on the picker
-    (reposts / mirrors / other names of the same release) -- else ``None``
-    (plain single submit). The pick takes the top DupeScore and the backups
-    strictly lower descending scores, so NZBGet downloads the pick and parks the
-    rest in history as duplicate backups, failing over on an unrepairable
-    download. Bounded by ``nzbget_max_backups`` (-1, the default, is
-    unlimited). ``getter`` reads settings on the RunScript/script-play path
-    (``_get_script_setting``); ``None`` reads the live Kodi addon settings.
-    Empty on the nzbdav backend (its own live fallback).
+    Returns ordered same-release backups with a shared key and backup limit.
+    Bulk submission sends no scores; an older server's append fallback assigns
+    scores after its unknown-method response. Empty on the nzbdav backend.
     """
     max_backups = _dupe_max_backups(getter)
     if max_backups is None:
@@ -673,23 +665,7 @@ def _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter=N
     backups = _same_release_backups(selected, filtered)
     if not backups:
         return None
-    base = _dupe_score_base()
-    # Offsets ride BELOW the base (pick == base, backups descending under it):
-    # any later fleet's pick then strictly outranks every member of an earlier
-    # fleet regardless of their relative sizes -- base+count offsets would let
-    # an old 5-backup pick beat a seconds-later loader-only retry.
-    scored = [dict(b, score=base - 1 - i) for i, b in enumerate(backups)]
-    # Carry the cap so the backup worker can bound its widened extras by the
-    # cap's REMAINING slots (backups + extras must not exceed
-    # nzbget_max_backups; -1 = unlimited), and the score base so the extras
-    # ride below it too.
-    return {
-        "key": key,
-        "pick_score": base,
-        "backups": scored,
-        "max_backups": max_backups,
-        "score_base": base,
-    }
+    return {"key": key, "backups": backups, "max_backups": max_backups}
 
 
 # _dupe_score_base counts seconds from here (2026-01-01 UTC) rather than the
@@ -735,14 +711,7 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
     key = _release_dupe_key(identity or {}, selected.get("title"))
     if not key:
         return None
-    base = _dupe_score_base()
-    return {
-        "key": key,
-        "pick_score": base,
-        "backups": [],
-        "max_backups": max_backups,
-        "score_base": base,
-    }
+    return {"key": key, "backups": [], "max_backups": max_backups}
 
 
 def _nzbget_loader_getter(limit):

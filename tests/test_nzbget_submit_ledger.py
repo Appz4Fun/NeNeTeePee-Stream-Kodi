@@ -154,7 +154,7 @@ def _nzbget_history():
 
 
 def _play(rows, nzbids):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _ctx(_fleet_dupe(rows))
     fetched = []
@@ -226,7 +226,7 @@ def test_unreadable_history_sends_the_pick_alone_with_force():
     # Codex r28 (P2): with NZBGet's history unknown the pick's score can't be
     # lifted above an older same-key item, so SCORE could park it: it goes
     # alone, FORCE, after one retry of the read.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _ctx(_fleet_dupe(_rows(2)))
     with patch(_HISTORY, return_value=None) as history, patch(
@@ -333,7 +333,7 @@ def test_cancel_jobs_reports_a_failed_delete():
 def test_adopted_backups_take_a_slot_of_the_cap(_nzbget_history):
     # Codex r27 (P2): with a cap of 1, an adopted parked backup fills the only
     # slot -- no fresh backup is sent on top of it.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     _play(_rows(1), [10, 11])
     _nzbget_history["history"] = [
@@ -355,7 +355,7 @@ def test_adopted_backups_take_a_slot_of_the_cap(_nzbget_history):
 def test_adoption_is_bounded_by_the_cap(_nzbget_history):
     # Codex r28 (P2): a replay with a lower cap adopts only as many held copies
     # as it has slots; the rest are still skipped (never re-sent).
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     _play(_rows(3), [10, 11, 12, 13])
     _nzbget_history["history"] = [
@@ -382,7 +382,7 @@ def test_a_false_editqueue_result_is_a_failed_delete():
 def test_no_force_while_the_queue_holds_a_same_key_download():
     # Codex r30 (P2): history unreadable but the queue shows this key active --
     # FORCE would start a parallel download, so the pick keeps SCORE.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _ctx(_fleet_dupe(_rows(1)))
     active = [{"NZBID": 5, "DupeKey": "k", "Status": "DOWNLOADING"}]
@@ -506,7 +506,7 @@ def test_a_clock_moved_backward_keeps_entries_fresh():
 @pytest.mark.usefixtures("_fleet_env")
 def test_no_force_at_the_score_ceiling_while_the_key_is_queued():
     # Codex r38 (P2): FORCE would download in parallel with the queued job.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _ctx(_fleet_dupe(_rows(1)))
     queued = [{"NZBID": 5, "DupeKey": "k", "Status": "DOWNLOADING"}]

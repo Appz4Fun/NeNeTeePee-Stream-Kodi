@@ -142,39 +142,39 @@ switch streams live. It relies on NZBGet's own
 [Smart Duplicates](https://nzbget.com/documentation/rss/#duplicates) instead.
 When you pick a release with **Enable fallback streams** on and
 **Maximum duplicate backups** set to anything other than `0`,
-NeNeTeePee-Stream-Kodi also submits other NZBs of the **same release** to
-NZBGet as duplicate backups. By default (`-1`) it sends every same-release NZB it
-finds. A positive value sends at most that many. These are reposts or mirrors
-of the release from other indexers or uploaders. Every submission gets:
+NeNeTeePee-Stream-Kodi gathers NZBs of the **same release**, removes duplicate
+listings and Usenet postings, and submits up to **50 unique members** in one
+`appendfleet` JSON-RPC call. The default backup setting (`-1`) fills this fleet;
+a positive value limits the number of backups, with 49 backups plus your pick
+as the protocol maximum. Additional candidates are not submitted after that
+fleet is accepted.
 
-- a shared **duplicate key** for the release: the normalized release name,
-  prefixed with a content ID when one is known (for example `imdb=<id>`,
-  `themoviedb=<id>`, or `tvdbid=<id>-S<ss>-E<ee>`);
-- its own **duplicate score**: your pick scores highest, and each backup
-  scores strictly lower;
-- **duplicate mode `SCORE`**.
+The request shares the existing **duplicate key** for the release: the normalized
+release name, prefixed with a content ID when one is known. Members are sent in
+preferred order, without scores. NZBGet health-checks them using its own news
+servers for up to 45 seconds, starts the best working copy, and keeps backups
+for automatic failover. The HTTP request has a 300-second timeout. The progress
+dialog shows the number of good candidates and the chosen copy's health when
+known. Your initial pick can differ from the copy NZBGet chooses.
 
-NZBGet downloads the highest-scored item, which is your pick, so the progress
-bar and completion behave exactly as before. It parks the rest in its history
-as duplicate backups (status `dupe`) without downloading them. The score
-decides which item plays, not the submission order, so your pick stays the
-active download. NeNeTeePee-Stream-Kodi finds and downloads every NZB first
-(see [Speed and indexer limits](#speed-and-indexer-limits)), then sends your
-pick first and the backups after it. NZBGet can start downloading your pick as
-soon as it arrives, while the backups are still being sent. The more duplicate
-NZBs a release has, the longer the find-and-download step takes.
-Set **Maximum duplicate backups** lower to shorten it.
+The add-on tracks the returned `Chosen` NZBID and follows NZBGet's automatic
+failover to another member. An incomplete ranking response needs no extra
+submission. Accepted fleets are never resent or FORCE-resubmitted. A release
+already queued is followed; a release already downloaded is played from its
+completed file after checking that Kodi can read it. A missing or unreadable
+completed file produces an explicit error without submitting a new download.
+If every copy is dead, the add-on reports that no working copy
+exists. Request size, chosen ID, and the health list are logged for debugging.
+Bulk job names include a copy number so replies can be matched after health
+ranking. History views show the original release name. Recorded backup
+identities support replay without new indexer grabs. A server that omits
+member identity has its anonymous backups removed on cancellation.
 
-Your pick can finish unrepairable: par2 repair fails, unpack fails, or health
-drops below NZBGet's critical threshold. NZBGet then automatically pulls the
-highest-scored backup out of history and downloads it instead. It doesn't
-combine recovery blocks across releases. It fails over to a whole alternate
-copy and repairs that with its own par2. The add-on **follows this failover
-live within the same play**. It tracks the promoted backup and plays it when
-it completes, or plays a backup that already finished, instead of reporting a
-failed playback. NZBGet may refuse your pick because the same content is
-already in its history. If nothing else in the set can play, NeNeTeePee-Stream-Kodi
-re-submits the pick once with `FORCE`.
+Older NZBGet servers that return an unknown-method error (including
+`Invalid procedure`) receive the existing individual `append` calls, using
+shared duplicate keys and descending scores. Only this legacy path can use the
+existing one-shot FORCE rescue. Authentication, timeout, or other errors do not
+trigger individual appends because a bulk submission may already have succeeded.
 
 If you cancel the play, NeNeTeePee-Stream-Kodi stops what's downloading: it
 removes your pick and any backup NZBGet promoted or queued. The backups NZBGet
@@ -230,19 +230,20 @@ NZBGet starts downloading:
    kept. Each unique NZB is saved to a folder in Kodi's temp directory as soon
    as it passes; duplicates are discarded. If your pick's indexer fails,
    another indexer's copy of the same posting is used.
-3. **Sending 25 NZBs to NZBGet...**: it uploads the saved NZBs one after
-   another, your pick first with the highest score (NZBGet may start on it
-   right away), then deletes the temp folder.
-4. **Downloading... 0%**: the usual NZBGet download progress for your pick.
+3. **Sending 25 NZBs to NZBGet...**: it sends one fleet request, waits for
+   NZBGet's health ranking, then deletes the temp folder. Collection stops
+   once 50 unique members (or your lower configured limit) are ready.
+4. **Downloading... 0%**: the usual download progress for NZBGet's chosen copy.
 
-Cancel at any step: if you cancel before the upload, nothing is sent to
-NZBGet; if you cancel during it, your pick is removed and the backups already
-parked in NZBGet's history are kept for a replay. Your pick's NZB file is kept
-on the Kodi box for a day too, so a replay sends it again without another
-download from the indexer.
+Cancel before upload: nothing is sent. A bulk fleet accepted after user
+cancellation is removed; Kodi shutdown leaves accepted work running. A later
+play follows an existing queued release or plays its completed file.
 
-Playing the same release again within a day doesn't send the same backups
-again. NeNeTeePee-Stream-Kodi remembers every NZB it sent to NZBGet for 24
+On older servers, cancellation keeps parked backups and caches the pick's NZB
+for a day so a replay can reuse them.
+
+On older servers using individual appends, playing the same release again
+within a day does not send the same backups again. NeNeTeePee-Stream-Kodi remembers every NZB it sent to NZBGet for 24
 hours, in `nzbget_submitted.json` in the add-on's data folder
 (`/storage/.kodi/userdata/addon_data/plugin.video.nzbdav/` on CoreELEC). That
 record keeps the NZB link without its API key. On a replay, a backup is

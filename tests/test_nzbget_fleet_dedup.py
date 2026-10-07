@@ -638,7 +638,7 @@ def _fleet_env():
 
 
 def test_fleet_downloads_everything_then_sends_pick_first(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     events = []
     rows = [{"link": "b{}".format(i), "title": "t{}".format(i)} for i in range(3)]
@@ -667,7 +667,7 @@ def test_fleet_downloads_everything_then_sends_pick_first(_fleet_env):
 
 
 def test_fleet_skips_a_backup_of_the_picks_own_posting(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     shared = _ids("s", 200)
     bodies = {
@@ -684,7 +684,7 @@ def test_fleet_skips_a_backup_of_the_picks_own_posting(_fleet_env):
 
 
 def test_fleet_pick_falls_back_to_a_mirror_of_its_posting(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     mirror = {"link": "mirror", "size": "100", "pubdate": _PUB_90S}
     hydra = [{"link": "hydra-mirror", "size": 100, "_posted_epoch": 1791028860}]
@@ -711,7 +711,7 @@ def test_fleet_pick_falls_back_to_a_mirror_of_its_posting(_fleet_env):
 
 
 def test_fleet_failed_pick_append_sends_no_backups(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
     with patch(_FETCH, side_effect=_valid), patch(
@@ -723,7 +723,7 @@ def test_fleet_failed_pick_append_sends_no_backups(_fleet_env):
 
 
 def test_fleet_cancel_while_downloading_sends_nothing(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     rows = [{"link": "b{}".format(i)} for i in range(6)]
     ctx = _fleet_ctx(_fleet_dupe(rows), dialog=_Dialog(cancel_after=2))
@@ -763,7 +763,7 @@ def test_resolve_cancel_during_fleet_deletes_appends_and_exits_silently():
 
 
 def test_fleet_with_dupecheck_off_sends_only_the_pick(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
     with patch(
@@ -777,7 +777,7 @@ def test_fleet_with_dupecheck_off_sends_only_the_pick(_fleet_env):
 
 
 def test_fleet_cap_backfills_a_vetoed_backup(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     rows = [{"link": "b{}".format(i)} for i in range(4)]
     ctx = _fleet_ctx(_fleet_dupe(rows, max_backups=1))
@@ -790,7 +790,7 @@ def test_fleet_cap_backfills_a_vetoed_backup(_fleet_env):
 
 
 def test_fleet_unlimited_skips_the_veto_probe_and_flags_extras(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dupe = _fleet_dupe(
         [{"link": "b0"}],
@@ -806,7 +806,7 @@ def test_fleet_unlimited_skips_the_veto_probe_and_flags_extras(_fleet_env):
 
 
 def test_fleet_dead_backup_is_rescued_by_a_hydra_mirror(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dead = {"link": "dead", "title": "t", "size": "200", "pubdate": _PUB}
     mirror = {"link": "mirror", "size": 200, "_posted_epoch": 1791028860}
@@ -829,7 +829,7 @@ def test_fleet_dead_backup_is_rescued_by_a_hydra_mirror(_fleet_env):
 def test_fleet_retries_the_pick_fetch_so_its_relisting_is_still_caught(_fleet_env):
     # Codex r6: a transient pick fetch failure must not leave the fleet without
     # the pick's fingerprint (a relisting of it would take a backup slot).
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     shared = _ids("s", 200)
     attempts = {"pick": 0}
@@ -854,7 +854,7 @@ def test_fleet_retries_the_pick_fetch_so_its_relisting_is_still_caught(_fleet_en
 
 
 def test_copy_vetoed_rows_are_not_ledger_recorded(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dupe = _fleet_dupe([{"link": "b0"}, {"link": "b1"}], max_backups=2)
     ctx = _fleet_ctx(dupe)
@@ -869,7 +869,7 @@ def test_copy_vetoed_rows_are_not_ledger_recorded(_fleet_env):
 def test_fleet_never_lets_append_nzb_fetch_on_the_resolve_thread(_fleet_env):
     # Codex r9: every fleet append carries its body; a backup with none is
     # dropped and a pick with none fails the resolve with a clear error.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "dead"}, {"link": "ok"}]))
 
@@ -889,7 +889,7 @@ def test_fleet_never_lets_append_nzb_fetch_on_the_resolve_thread(_fleet_env):
 def test_fleet_pick_that_cannot_be_downloaded_fails_without_a_blind_fetch(
     _fleet_env,
 ):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
 
@@ -921,7 +921,7 @@ def test_nzbids_compare_across_json_number_formats():
 
 def test_cancel_during_send_stops_the_remaining_appends(_fleet_env):
     # Codex r7: the dialog is re-checked before every append.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     class _SendCancel(_Dialog):
         def iscanceled(self):
@@ -973,7 +973,7 @@ def test_fleet_progress_treats_kodi_shutdown_as_cancel():
 
 def test_capped_fleet_vetoed_pick_does_not_let_backups_exceed_the_cap(_fleet_env):
     # Codex r7: the cap bounds BACKUPS; a COPY-vetoed pick is not a backup slot.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     rows = [{"link": "b{}".format(i)} for i in range(4)]
     ctx = _fleet_ctx(_fleet_dupe(rows, max_backups=1))
@@ -986,7 +986,7 @@ def test_capped_fleet_vetoed_pick_does_not_let_backups_exceed_the_cap(_fleet_env
 
 def test_slow_hydra_lookup_is_abandoned_on_cancel(_fleet_env):
     # Codex r7: "Looking for duplicate NZBs..." must stay cancelable.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     release = threading.Event()
 
@@ -1021,7 +1021,7 @@ def test_owned_backup_success_is_never_treated_as_stale():
 
 def test_failed_pick_stops_downloading_backups(_fleet_env):
     # Codex r10: no pick, no fleet -> don't spend grabs on backups.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     rows = [{"link": "b{}".format(i)} for i in range(20)]
     ctx = _fleet_ctx(_fleet_dupe(rows))
@@ -1056,7 +1056,7 @@ def test_spool_memory_budget_is_released_after_send():
 def test_config_probe_is_abortable_and_reads_only_a_snapshot(_fleet_env):
     # Codex r10: a hung NZBGet config RPC must not pin the resolve thread, and
     # the probe thread never reads Kodi settings.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     release = threading.Event()
     getters = []
@@ -1125,7 +1125,7 @@ def test_stale_successes_use_the_snapshot_taken_before_the_fleet():
 def test_fleet_snapshots_successes_abortably_before_any_download(_fleet_env):
     # Codex r11/r12: the snapshot precedes every fetch and runs behind the
     # abortable wait; the poll then gets it via ctx.preexisting_successes.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     order = []
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
@@ -1178,7 +1178,7 @@ def test_resolve_passes_the_fleet_snapshot_to_the_poll():
 
 
 def test_hung_history_snapshot_is_cancelable(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     release = threading.Event()
 
@@ -1209,7 +1209,7 @@ def test_hung_history_snapshot_is_cancelable(_fleet_env):
 def test_capped_fleet_skips_the_loader_when_rows_cover_the_cap(_fleet_env):
     # Codex r12: the loader downloads manifests; don't run it when the picker
     # rows + Hydra uploads already cover a positive cap.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     loader_calls = []
     dupe = _fleet_dupe(
@@ -1230,7 +1230,7 @@ def test_capped_fleet_consults_the_loader_when_rows_fail_to_fill_the_cap(
 ):
     # Codex r13: a dead picker backup "covered" the cap by count only; the
     # loader must still supply the replacement.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dupe = _fleet_dupe(
         [{"link": "dead"}],
@@ -1301,7 +1301,7 @@ def test_failed_spool_write_leaves_no_partial_file(tmp_path):
 def test_unsent_posting_does_not_block_a_later_mirror(_fleet_env):
     # Codex r14: a kept row whose append FAILED must not mark its posting
     # covered; a later phase's (loader) relisting of it is still sent.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     shared = _ids("s", 100)
     bodies = {"pick": _ids("p", 50), "b0": shared, "relist": shared[:-1] + ["r@x"]}
@@ -1321,7 +1321,7 @@ def test_unsent_posting_does_not_block_a_later_mirror(_fleet_env):
 def test_loader_is_asked_for_more_after_a_rejected_candidate(_fleet_env):
     # Codex r14: cap 1, the loader's first candidate is COPY-vetoed -> the
     # fleet raises its demand and the loader's next candidate fills the slot.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     limit = {"n": None}
     pool = [{"link": "x1", "title": "X1"}, {"link": "x2", "title": "X2"}]
@@ -1438,7 +1438,7 @@ def test_a_late_backup_append_is_only_removed_from_the_queue():
 def test_in_memory_fallback_caps_backup_fetches_not_the_pick(_fleet_env):
     # Without a spool folder, parallel backup bodies are held in memory, so
     # they keep the tighter cap; the pick keeps the full ceiling.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
     from resources.lib.nzbget_resolver_dupes import _FLEET_NZB_MAX_BYTES
 
     caps = {}
@@ -1463,7 +1463,7 @@ def test_each_nzb_streams_to_disk_in_one_download(_fleet_env, tmp_path):
     # Codex r17: every NZB is streamed straight to a spool file at the full
     # ceiling -- one GET each, never held whole in memory, never re-fetched.
     from resources.lib import nzbget_api
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     downloads = []
 
@@ -1496,7 +1496,7 @@ def test_each_nzb_streams_to_disk_in_one_download(_fleet_env, tmp_path):
 def test_loader_batches_share_the_fleet_replacement_budget(_fleet_env):
     # Codex r16: cap 1 + budget 6; six rejected picker backups exhaust it, so
     # the loader is never consulted for more appends.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     loader_calls = []
     rows = [{"link": "b{}".format(i)} for i in range(6)]
@@ -1654,7 +1654,7 @@ def test_streaming_fingerprint_detaches_parsed_segments(tmp_path):
 def test_pick_is_fetched_into_memory_so_a_full_disk_cannot_fail_it(_fleet_env):
     # Codex r18: the spool's disk being full must not fail the pick.
     from resources.lib import nzbget_api
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     def _disk_full(url, dest_path, max_bytes=None):
         raise OSError("No space left on device")
@@ -1670,7 +1670,7 @@ def test_pick_is_fetched_into_memory_so_a_full_disk_cannot_fail_it(_fleet_env):
 def test_loader_widens_past_filtered_out_rows(_fleet_env):
     # Codex r18: the loader's first rows are a German variant (filtered out);
     # the fleet keeps widening until a suitable candidate appears.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     limit = {"n": None}
     pool = [
@@ -1726,7 +1726,7 @@ def test_cancel_cleanup_runs_off_the_resolve_thread_on_a_snapshot():
 def test_fleet_scores_are_lifted_above_nzbgets_highest_same_key_score(_fleet_env):
     # Codex r20: after a clock rollback the wall-clock base can fall below an
     # earlier same-key item; the fleet shifts every score above it.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dupe = _fleet_dupe([{"link": "b0"}, {"link": "b1"}])
     ctx = _fleet_ctx(dupe)
@@ -1789,7 +1789,7 @@ def test_force_rescue_resends_the_fleets_pick_body():
 
 
 def test_fleet_hands_the_pick_body_to_the_resolve(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([]))
     with patch(_FETCH, side_effect=_valid), patch(_APPEND, return_value=(1, None)):
@@ -1815,7 +1815,7 @@ def test_preflight_coalesces_rpcs_and_has_a_budget(_fleet_env):
     # Codex r21: one history + one listgroups + one config read, under a
     # shared budget -- an unresponsive NZBGet can't stall playback for minutes.
     from resources.lib import nzbget_api
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     calls = []
 
@@ -1840,7 +1840,7 @@ def test_preflight_coalesces_rpcs_and_has_a_budget(_fleet_env):
 
 def test_preflight_budget_abandons_a_hung_probe(_fleet_env):
     from resources.lib import nzbget_fleet_run
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     release = threading.Event()
 
@@ -1876,7 +1876,7 @@ def test_max_dupe_score_matches_dupekeys_case_insensitively():
 def test_failed_history_read_leaves_the_snapshot_unknown(_fleet_env):
     # Codex r22: a failed history RPC is "unknown" (None), not "no successes",
     # so the poll takes its own snapshot instead of trusting an empty one.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([]))
     with patch(
@@ -1916,7 +1916,7 @@ def test_append_landing_after_cancel_skips_the_veto_probe():
 
 
 def test_canceled_fleet_does_not_park_the_pick(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     class _CancelOnSend(_Dialog):
         def iscanceled(self):
@@ -1984,7 +1984,7 @@ def test_overlap_probe_works_in_bounded_chunks():
 
 def test_unknown_dupecheck_sends_only_the_pick(_fleet_env):
     # Codex r23 (P1): config unreadable -> fail closed -> pick alone.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
     with patch(
@@ -2003,7 +2003,7 @@ def test_unknown_dupecheck_sends_only_the_pick(_fleet_env):
 
 def test_timed_out_preflight_sends_only_the_pick(_fleet_env):
     from resources.lib import nzbget_fleet_run
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     release = threading.Event()
 
@@ -2023,7 +2023,7 @@ def test_timed_out_preflight_sends_only_the_pick(_fleet_env):
 
 
 def test_pick_body_stays_in_memory_when_no_temp_folder_takes_it(_fleet_env):
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([]))
     with patch(
@@ -2161,7 +2161,7 @@ def test_fingerprinting_detaches_every_finished_element():
 def test_fleet_rechecks_shutdown_after_the_final_send(_fleet_env):
     # Codex r25 (P2): a shutdown requested during the last append must stop the
     # resolve before it starts polling NZBGet.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
     state = {"exiting": False}
@@ -2185,7 +2185,7 @@ def test_fleet_rechecks_shutdown_after_the_final_send(_fleet_env):
 def test_pick_is_parked_before_any_backup_is_sent(_fleet_env):
     # Codex r26 (P1): the pick's bytes are moved to disk right after its own
     # append, never held while the backups load and send.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     events = []
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}, {"link": "b1"}]))
@@ -2231,7 +2231,7 @@ def test_force_rescue_ignores_the_vetoed_pick_lingering_in_the_queue():
 def test_pick_is_not_parked_once_the_resolve_was_canceled(_fleet_env):
     # Codex r27 (P2): a cancel landing during the pick's append skips the
     # (possibly slow, 100 MiB) park -- a canceled resolve never rescues.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
 
@@ -2345,7 +2345,7 @@ def test_a_full_spool_disk_falls_back_to_memory_for_backups(_fleet_env):
     import errno
 
     from resources.lib import nzbget_api
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     downloads = []
 
@@ -2366,7 +2366,7 @@ def test_a_full_spool_disk_falls_back_to_memory_for_backups(_fleet_env):
 def test_a_cached_pick_is_resent_without_an_indexer_grab(_fleet_env, tmp_path):
     # Owner request: a pick canceled within a day re-sends its kept NZB.
     from resources.lib import nzb_cache
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     source = tmp_path / "pick.nzb"
     source.write_bytes(_valid("pick"))
@@ -2398,7 +2398,7 @@ def test_a_lift_past_the_32_bit_score_range_sends_the_pick_alone_with_force(
     _fleet_env,
 ):
     # Codex r35 (P2): never emit an out-of-range DupeScore.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
     with patch(
@@ -2416,7 +2416,7 @@ def test_a_lift_past_the_32_bit_score_range_sends_the_pick_alone_with_force(
 def test_prefetch_is_serialized_once_the_spool_holds_bodies_in_memory(_fleet_env):
     # Codex r36 (P1): without a writable temp folder, bodies come back into
     # memory, so the fleet fetches one at a time instead of four.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     active = {"now": 0, "peak": 0}
     lock = threading.Lock()
@@ -2441,7 +2441,7 @@ def test_prefetch_is_serialized_once_the_spool_holds_bodies_in_memory(_fleet_env
 def test_a_cached_pick_never_shows_downloading_nzbs(_fleet_env, tmp_path):
     # Owner request: NZBs already on the box are sent, not "downloaded".
     from resources.lib import nzb_cache
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     source = tmp_path / "pick.nzb"
     source.write_bytes(_valid("pick"))
@@ -2459,7 +2459,7 @@ def test_a_cached_pick_never_shows_downloading_nzbs(_fleet_env, tmp_path):
 
 def test_cached_pick_is_left_out_of_the_download_count(_fleet_env, tmp_path):
     from resources.lib import nzb_cache
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     source = tmp_path / "pick.nzb"
     source.write_bytes(_valid("pick"))
@@ -2475,7 +2475,7 @@ def test_cached_pick_is_left_out_of_the_download_count(_fleet_env, tmp_path):
 
 def test_a_cache_stat_that_fails_to_load_still_shows_the_download(_fleet_env):
     # Codex r37 (P2): the "cached" flag follows a REAL cache read.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([]))
     with patch("resources.lib.nzb_cache.load", return_value=None), patch(
@@ -2489,7 +2489,7 @@ def test_a_cache_stat_that_fails_to_load_still_shows_the_download(_fleet_env):
 def test_a_send_time_cancel_still_keeps_the_spooled_pick(_fleet_env):
     # Codex r37 (P2): canceled right as the pick's append lands -- the spooled
     # file is renamed out (instant) so nzb_cache can keep it.
-    from resources.lib.nzbget_fleet_run import submit_fleet
+    from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     ctx = _fleet_ctx(_fleet_dupe([{"link": "b0"}]))
 

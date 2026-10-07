@@ -2149,3 +2149,15 @@ msgstr "Downloading NZBs {} of {}"
 msgctxt "#30617"
 msgid "Sending {} NZBs to NZBGet..."
 msgstr "Sending {} NZBs to NZBGet..."
+
+msgctxt "#30618"
+msgid "NZBGet found {} good candidates; downloading the best copy{}"
+msgstr ""
+
+msgctxt "#30619"
+msgid " ({}% health)"
+msgstr ""
+
+msgctxt "#30620"
+msgid "NZBGet already downloaded this release, but its completed file is unavailable. Check the completed folder or share. No new download was submitted."
+msgstr ""
