@@ -70,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Reuse NZBHydra2 results after selection.** Backup discovery now reads a
+  snapshot of the initial response instead of running another title search.
+  Repeated lookups and missing snapshots never trigger a new search. Backups
+  are limited to uploads Hydra returned; NZB downloading and deduplication
+  still run after selection.
+
 - **NZBHydra2 duplicate-uploads lookup.** NZBHydra2 refuses internal API
   requests without its XSRF token (HTTP 403), even with its authentication
   turned off, so the NZBGet backup search never saw Hydra's hidden duplicate
@@ -83,7 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sends none and a positive number caps the count. Same release now means the
   same name, or a different name with the same title, year or episode, part,
   edition, PROPER/REPACK, group, and resolution, and backups include
-  NZBHydra2's hidden duplicate uploads. NeNeTeePee-Stream-Kodi skips listings
+  same-title uploads retained from the initial NZBHydra2 response. NeNeTeePee-Stream-Kodi skips listings
   of the same Usenet posting (same size posted within 120 seconds, or more than
   1% shared article IDs), keeps re-uploads with different article IDs,
   and shows the whole process in the progress dialog: it downloads every NZB

@@ -29,6 +29,7 @@ from resources.lib.newznab_caps import fetch_caps
 from resources.lib.search_planner import SearchQuery, plan_newznab_search
 
 NEWZNAB_NS = "http://www.newznab.com/DTD/2010/feeds/attributes/"
+_SEARCH_UPLOADS_KEY = "_hydra_search_uploads"
 
 # settings.xml schema default. Injected settings getters (_get_script_setting
 # and the main-thread snapshots the NZBGet dupe loader is built with) read the
@@ -293,6 +294,7 @@ def _execute_hydra_plan(base_url, plan, title, has_provider_caps):
     if error:
         return [], error
 
+    _cache_search_uploads(results)
     xbmc.log(
         ("NeNeTeePee-Stream-Kodi: Hydra returned {} results for '{}'").format(
             len(results), title
@@ -494,34 +496,72 @@ def _duplicate_upload_from_raw(raw, title, picked_link):
     return upload
 
 
-def fetch_release_duplicate_uploads(picked, settings_getter=None):
-    """Return all Usenet uploads that share ``picked``'s release title.
+def _cache_search_uploads(results, uploads=None):
+    """Attach retained Hydra uploads to every provider's matching result rows.
 
-    NZBHydra2's standard Newznab endpoint deduplicates results so the
-    runtime picker only sees one row per release group. This calls the
-    internal API with ``showSingleResultPerSearchResultGroup=false`` and
-    keeps rows whose exact ``title`` matches ``picked``'s, so the
-    resolver's fallback worker has real same-release/different-upload
-    peers to feed nzbdav-rs ahead of the first article failure.
+    Rows of one title share a snapshot, so memory grows with the response,
+    not with the number of pairs. Copies contain only the parsed fields:
+    no recursive references or later picker mutations. The snapshot travels
+    with a copied selection and expires with it, without global state.
     """
-    try:
-        base_url, _api_key = _get_settings(settings_getter)
-    except _HYDRA_REQUEST_ERRORS:
-        return []
-    if not base_url:
-        return []
-    title = picked.get("title", "") if isinstance(picked, dict) else ""
-    if not title:
-        return []
+    groups = {}
+    for row in results if uploads is None else uploads:
+        groups.setdefault(row.get("title", ""), []).append(_plain_search_result(row))
+    snapshots = {title: tuple(rows) for title, rows in groups.items()}
+    for row in results:
+        snapshot = snapshots.get(row.get("title", ""))
+        if snapshot is not None:
+            row[_SEARCH_UPLOADS_KEY] = snapshot
+        else:
+            row.pop(_SEARCH_UPLOADS_KEY, None)
 
-    raw_results = _fetch_hydra_internal_search(base_url, title)
-    picked_link = picked.get("link", "") if isinstance(picked, dict) else ""
+
+def _plain_search_result(row):
+    """Copy a result without retained snapshots or selection-local peer caches."""
+    return {
+        key: value
+        for key, value in row.items()
+        if key not in (_SEARCH_UPLOADS_KEY, "_hydra_duplicate_uploads")
+    }
+
+
+def split_search_uploads(results):
+    """Return cacheable results and one copy of each retained upload group.
+
+    JSON cannot preserve the shared references attached to in-memory rows.
+    Store uploads once beside the results and rebuild sharing on cache reads.
+    Neither the results nor their snapshots are mutated by serialization.
+    """
+    plain = []
     uploads = []
-    for raw in raw_results:
-        upload = _duplicate_upload_from_raw(raw, title, picked_link)
-        if upload is not None:
-            uploads.append(upload)
-    return uploads
+    seen_groups = set()
+    for row in results:
+        plain.append(_plain_search_result(row))
+        group = row.get(_SEARCH_UPLOADS_KEY, ())
+        if id(group) not in seen_groups:
+            seen_groups.add(id(group))
+            uploads.extend(_plain_search_result(peer) for peer in group)
+    return plain, uploads
+
+
+def fetch_release_duplicate_uploads(picked, settings_getter=None):
+    """Return same-title uploads retained from the initial Hydra response.
+
+    Selection must never start another indexer search. Hydra may omit
+    duplicates from its Newznab response; only uploads actually returned
+    there are available as backups. A missing snapshot yields no extra
+    uploads. ``settings_getter`` remains accepted for existing callers.
+    """
+    del settings_getter
+    if not isinstance(picked, dict) or not picked.get("title"):
+        return []
+    title = picked["title"]
+    picked_link = picked.get("link")
+    return [
+        dict(row)
+        for row in picked.get(_SEARCH_UPLOADS_KEY, ())
+        if row.get("title") == title and row.get("link") and row["link"] != picked_link
+    ]
 
 
 def _source_url_hostname(source_url):

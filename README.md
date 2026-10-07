@@ -29,6 +29,10 @@ StreamNZB supplies the release list and playback URL, with no NeNeTeePee-Stream-
 WebDAV, or proxy configuration required. See the
 [StreamNZB setup and recovery limits](docs-site/features/streamnzb-backend.md).
 
+NZBHydra2 backup discovery reuses the initial search response after you pick an
+NZB. It does not run another indexer search; uploads hidden by Hydra are not
+available as backups unless Hydra returned them in that response.
+
 ## 📖 Full documentation
 
 **This README is the short version. The complete guide, with every setting, every

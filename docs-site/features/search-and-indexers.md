@@ -17,10 +17,8 @@ NZBHydra2** is off.
     and point NeNeTeePee-Stream-Kodi at it. Hydra gives you a much better interface for
     managing indexers and searches, and it's highly configurable: per-indexer
     limits, categories, and priorities, all in one place. You don't lose
-    anything by going through it. NeNeTeePee-Stream-Kodi still shows which indexer each result
-    came from, in the results list's **Indexer** column. On NZBHydra2,
-    [fallback streams](fallback-streams.md) can also find same-release uploads
-    that Hydra merged into a single result.
+    the indexer label: NeNeTeePee-Stream-Kodi shows which indexer each result
+    came from in the results list's **Indexer** column.
 
 ### NZBHydra2
 
@@ -34,6 +32,11 @@ Until you refresh, NeNeTeePee-Stream-Kodi searches a changed URL with a default 
 For episodes, NeNeTeePee-Stream-Kodi prefers a TVDB id, then an IMDb id; for movies it uses
 the IMDb id. If the first query returns nothing, it retries with a plain title
 search, so a missing or mismatched id doesn't leave you with zero results.
+
+After selection, backup discovery reuses a snapshot of the initial response,
+including same-title rows retained before picker filtering. It never starts
+another Hydra search. Uploads Hydra hid from that response are unavailable as
+backups; NZB downloading and deduplication still run after selection.
 
 ### Prowlarr
 

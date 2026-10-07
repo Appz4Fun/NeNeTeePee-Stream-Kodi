@@ -197,9 +197,11 @@ A result is a backup when either of these is true:
   failover never plays a different language or a 3D version.
 
 NeNeTeePee-Stream-Kodi never uses file size to decide whether two results are
-the same release. The backup pool also includes the duplicate uploads of your
-picked title that NZBHydra2 hides by default. Exact-name matches rank first,
-then the other same-release results, then the NZBHydra2 duplicate uploads.
+the same release. The backup pool reuses same-title uploads retained from the
+initial NZBHydra2 response before picker filtering. It does not search again
+after selection, including when no cached peers exist. Uploads hidden by Hydra
+are unavailable unless included in that response. Exact-name matches rank
+first, then the other same-release results, then the retained NZBHydra2 uploads.
 
 ### Skipping the same Usenet posting
 
@@ -221,7 +223,7 @@ When you pick a release, the progress dialog walks through every NZB before
 NZBGet starts downloading:
 
 1. **Looking for duplicate NZBs...**: NeNeTeePee-Stream-Kodi gathers the
-   same-release results, NZBHydra2's hidden duplicate uploads, and the other
+   same-release results, retained NZBHydra2 uploads, and the other
    same-content uploads.
 2. **Downloading NZBs 1 of 25** ... **25 of 25**: it downloads every NZB file
    itself, your pick included, and checks each one against the NZBs it already
@@ -260,7 +262,7 @@ Your pick is always sent.
 !!! warning "Backups use indexer grabs"
     With unlimited backups, every backup costs at least one NZB download from
     your indexer. Backups found by the same-content search (other release
-    groups or codecs, after the same-release results and NZBHydra2's hidden
+    groups or codecs, after the same-release results and retained NZBHydra2
     uploads) cost two: that search downloads each candidate once to check it,
     and the add-on downloads it again to send it. Those downloads count against
     your indexer's API and grab limits. If your indexer has a tight daily grab
