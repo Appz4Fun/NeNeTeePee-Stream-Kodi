@@ -13,7 +13,11 @@ from resources.lib.nzbget_fleet_dedup import (
     call_abortable,
     prefetched_clusters,
 )
-from resources.lib.nzbget_fleet_identity import member_filename, record_members
+from resources.lib.nzbget_fleet_identity import (
+    member_filename,
+    record_members,
+    release_name,
+)
 
 
 def submit_bulk(ctx, nzb_url, title, dupe_key):
@@ -257,13 +261,7 @@ def _send(ctx, kept, state, candidates):
             return None, None
         return nzbget_api.append_fleet(members, key, getter)
 
-    reply, error = call_abortable(
-        send,
-        (ctx.cancel_event,),
-        progress.canceled,
-        default=(None, "Fleet submission interrupted"),
-        on_late=lambda result: _late(result, getter, progress, kept, key),
-    )
+    reply, error = _send_with_retries(send, (ctx, getter, progress, kept, key))
     mapped = record_members(reply, kept, key) if reply and reply.get("Chosen") else []
     if progress.canceled():
         # The RPC may finish in the same slice that observes cancellation;
@@ -286,9 +284,7 @@ def _send(ctx, kept, state, candidates):
     if not chosen:
         if reply.get("Reason") == "ALREADY_DOWNLOADED":
             completed = call_abortable(
-                lambda: nzbget_api.history_success_by_dupekey(
-                    key, settings_getter=getter
-                ),
+                lambda: _already_completed(reply, key, getter),
                 (ctx.cancel_event,),
                 progress.canceled,
                 default={"present": False},
@@ -302,21 +298,98 @@ def _send(ctx, kept, state, candidates):
                     "but its completed file could not be found"
                 ),
             )
-        return None, (
-            "NZBGet found no working copy"
-            if reply.get("Reason") == "ALL_DEAD"
-            else "NZBGet queued no working copy"
-        )
+        messages = {
+            "ALL_DEAD": "NZBGet found no working copy",
+            "NO_USABLE_MEMBERS": "NZBGet could not read any NZB copy",
+            "NO_MEMBERS": "NZBGet received no NZB copies",
+            "KEY_BUSY": "NZBGet is still checking this release; try again shortly",
+            "SHUTDOWN": "NZBGet is stopping; try again after it restarts",
+            "NOT_QUEUED": "NZBGet could not queue a working copy",
+        }
+        return None, messages.get(reply.get("Reason"), "NZBGet queued no working copy")
     live_ids = _live_ids(reply)
     ctx.submitted_nzbids.extend(live_ids)
     # A server omitting echoed member identity cannot safely leave anonymous
     # parked backups for replay. Cancel deletes those fresh IDs in full.
     ctx.bulk_unrecorded_nzbids = [nzbid for nzbid in live_ids if nzbid not in mapped]
-    ctx.fleet_pick_nzbid = chosen
+    existing = [
+        row.get("SameAs")
+        for row in reply.get("Members", [])
+        if row.get("Status") == "SAME_POSTING"
+    ]
+    if reply.get("Reason") == "ALREADY_QUEUED":
+        existing.append(chosen)
+    for job in existing:
+        if (
+            isinstance(job, int)
+            and not isinstance(job, bool)
+            and job > 0
+            and job not in ctx.adopted_nzbids
+        ):
+            ctx.adopted_nzbids.append(job)
+    ctx.fleet_pick_nzbid = None if reply.get("Reason") == "ALREADY_QUEUED" else chosen
     _health_message(progress, reply)
     # Rows are returned in health rank, not request order. Do not assign IDs
     # positionally to input titles or the submission ledger.
     return chosen, None
+
+
+def _already_completed(reply, key, getter):
+    """Resolve the exact success named by NZBGet, including another client's key."""
+    completed = nzbget_api.history_success_by_dupekey(key, settings_getter=getter)
+    if completed.get("present"):
+        return completed
+    prefix = "downloaded as "
+    names = {
+        release_name(row.get("Reason", "")[len(prefix) :])
+        for row in reply.get("Members", [])
+        if row.get("Status") == "SKIPPED"
+        and str(row.get("Reason") or "").startswith(prefix)
+    }
+    if names:
+        for row in nzbget_api.history_rows(getter) or []:
+            entry = nzbget_api._completed_job_entry(row)
+            if entry and entry["name"] in names:
+                return dict(entry, present=True, job_name=entry["name"])
+    return {"present": False}
+
+
+def _send_with_retries(send, state):
+    """Retry only explicit no-download KEY_BUSY/SHUTDOWN replies, at most twice."""
+    ctx, getter, progress, kept, key = state
+    for attempt in range(3):
+        reply, error = call_abortable(
+            send,
+            (ctx.cancel_event,),
+            progress.canceled,
+            default=(None, "Fleet submission interrupted"),
+            on_late=lambda result: _late(result, getter, progress, kept, key),
+        )
+        retry = (
+            not error
+            and reply
+            and reply.get("Chosen") == 0
+            and reply.get("Reason") in ("KEY_BUSY", "SHUTDOWN")
+        )
+        if not retry or attempt == 2 or not _wait_retry(progress):
+            return reply, error
+    return None, "Fleet submission interrupted"
+
+
+def _wait_retry(progress):
+    """Three seconds, with Kodi shutdown and dialog cancellation checked each slice."""
+    from resources.lib import nzbget_resolver as core
+
+    until = time.monotonic() + 3
+    monitor = core.xbmc.Monitor()
+    while time.monotonic() < until:
+        if progress.canceled():
+            return False
+        if monitor.waitForAbort(min(0.1, max(0, until - time.monotonic()))):
+            progress.aborted = True
+            progress.cancel_event.set()
+            return False
+    return not progress.canceled()
 
 
 def _live_ids(reply):
@@ -328,12 +401,18 @@ def _live_ids(reply):
         for row in reply.get("Members", [])
         if row.get("Status") in ("QUEUED", "BACKUP")
     ]
-    ids.append(reply.get("Chosen"))
+    if reply.get("Reason") != "ALREADY_QUEUED":
+        ids.append(reply.get("Chosen"))
     return list(
         dict.fromkeys(
             value
             for value in ids
-            if isinstance(value, int) and not isinstance(value, bool) and value > 0
+            if isinstance(value, int)
+            and not isinstance(value, bool)
+            and value > 0
+            and not (
+                reply.get("Reason") == "ALREADY_QUEUED" and value == reply["Chosen"]
+            )
         )
     )
 

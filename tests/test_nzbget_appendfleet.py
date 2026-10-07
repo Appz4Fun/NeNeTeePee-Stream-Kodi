@@ -35,15 +35,14 @@ def test_appendfleet_uses_authenticated_long_rpc_without_scores():
     args, kwargs = post.call_args
     assert args[0] == "http://server/jsonrpc"
     assert args[1]["params"] == [
-        {
-            "DupeKey": "key",
-            "Category": "movies",
-            "Priority": 0,
-            "Timeout": 45,
-            "Members": members,
-        }
+        "key",
+        "movies",
+        0,
+        45,
+        "movie.nzb",
+        members[0]["Content"],
     ]
-    assert kwargs["timeout"] == 300
+    assert kwargs["timeout"] == 75
     assert kwargs["basic_auth"] == ("u", "p")
 
 
@@ -321,7 +320,7 @@ def test_spooled_fleet_is_encoded_and_posted_as_stream(tmp_path):
     def post(_url, payload, **kwargs):
         assert hasattr(payload, "read")
         captured.update(json.loads(payload.read()))
-        assert kwargs["timeout"] == 300
+        assert kwargs["timeout"] == 75
         return json.dumps({"result": {"Chosen": 42, "Members": []}})
 
     with patch.object(nzbget_api, "_http_post_json", side_effect=post):
@@ -333,9 +332,8 @@ def test_spooled_fleet_is_encoded_and_posted_as_stream(tmp_path):
             )[1]
             is None
         )
-    member = captured["params"][0]["Members"][0]
-    assert set(member) == {"NZBFilename", "Content"}
-    assert base64.b64decode(member["Content"]) == path.read_bytes()
+    assert captured["params"][:5] == ["k", "", 0, 45, "x.nzb"]
+    assert base64.b64decode(captured["params"][5]) == path.read_bytes()
 
 
 @pytest.mark.parametrize("shutdown", [False, True])
@@ -948,3 +946,98 @@ def test_zero_chosen_never_claims_existing_backup_ids():
             }
         )
     )
+
+
+@pytest.mark.parametrize("reason", ["KEY_BUSY", "SHUTDOWN"])
+def test_only_safe_zero_chosen_reasons_are_retried(bulk_env, reason):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    fleet.side_effect = [
+        ({"Chosen": 0, "Reason": reason, "Members": []}, None),
+        ({"Chosen": 42, "Members": [], "Complete": False}, None),
+    ]
+    with patch("resources.lib.nzbget_bulk._wait_retry", return_value=True, create=True):
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert fleet.call_count == 2
+    append.assert_not_called()
+
+
+def test_already_queued_chosen_is_adopted_not_owned(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, _append, _fetch = bulk_env
+    fleet.return_value = (
+        {
+            "Chosen": 77,
+            "Reason": "ALREADY_QUEUED",
+            "Members": [
+                {"NZBID": 43, "Status": "BACKUP"},
+                {"NZBID": 0, "Status": "SAME_POSTING", "SameAs": 78},
+            ],
+        },
+        None,
+    )
+    assert submit_fleet(ctx, "pick", "T", "k") == (77, None)
+    assert ctx.submitted_nzbids == [43]
+    assert set(ctx.adopted_nzbids) == {77, 78}
+    assert ctx.fleet_pick_nzbid is None
+
+
+def test_busy_key_retries_are_bounded(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    fleet.return_value = ({"Chosen": 0, "Reason": "KEY_BUSY", "Members": []}, None)
+    with patch("resources.lib.nzbget_bulk._wait_retry", return_value=True):
+        chosen, error = submit_fleet(ctx, "pick", "T", "k")
+    assert chosen is None and error
+    assert fleet.call_count == 3
+    append.assert_not_called()
+
+
+def test_url_members_use_positional_content_slot():
+    members = [{"NZBFilename": "copy.nzb", "URL": "https://indexer/nzb"}]
+    with patch.object(
+        nzbget_api, "_rpc_call", return_value=({"Chosen": 1, "Members": []}, None)
+    ) as rpc:
+        assert (
+            nzbget_api.append_fleet(members, "k", lambda _key, default="": default)[1]
+            is None
+        )
+    assert rpc.call_args.args[1] == ["k", "", 0, 45, "copy.nzb", "https://indexer/nzb"]
+
+
+def test_already_downloaded_follows_server_named_success_under_other_key(bulk_env):
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    fleet.return_value = (
+        {
+            "Chosen": 0,
+            "Reason": "ALREADY_DOWNLOADED",
+            "Members": [
+                {
+                    "Name": "T",
+                    "Status": "SKIPPED",
+                    "Reason": "downloaded as Existing.Release",
+                }
+            ],
+        },
+        None,
+    )
+    history = [
+        {
+            "NZBID": 77,
+            "DupeKey": "other-key",
+            "Name": "Existing.Release",
+            "Status": "SUCCESS/ALL",
+            "DestDir": "/done",
+        }
+    ]
+    with patch.object(
+        nzbget_api, "history_success_by_dupekey", return_value={"present": False}
+    ), patch.object(nzbget_api, "history_rows", return_value=history):
+        assert submit_fleet(ctx, "pick", "T", "k") == (None, None)
+    assert ctx.bulk_completed["nzbid"] == 77
+    append.assert_not_called()

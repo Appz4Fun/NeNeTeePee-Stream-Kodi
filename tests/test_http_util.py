@@ -501,3 +501,11 @@ def test_http_post_json_stream_sets_length_and_auth(tmp_path):
             )
             == '{"result":42}'
         )
+
+
+def test_notify_balances_both_parenthesis_characters():
+    with patch("xbmc.executebuiltin") as execute:
+        notify("NZBGet", "Invalid parameter (Priority)", 5000)
+    command = execute.call_args.args[0]
+    assert "Invalid parameter ❨Priority❩" in command
+    assert command.count("(") == command.count(")") == 1

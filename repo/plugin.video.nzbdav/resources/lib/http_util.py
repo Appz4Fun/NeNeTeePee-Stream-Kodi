@@ -565,6 +565,7 @@ def _escape_builtin_arg(text):
     return (
         str(text)
         .replace(",", "،")  # Arabic comma U+060C—visually similar, parser-inert
+        .replace("(", "❨")
         .replace(")", "❩")  # medium right parenthesis ornament U+2769
         .replace("\n", " ")
         .replace("\r", " ")

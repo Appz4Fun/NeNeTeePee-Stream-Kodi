@@ -130,25 +130,20 @@ def append_fleet(members, dupe_key, settings_getter=None):
     if not 1 <= len(members) <= 50:
         return None, "appendfleet requires 1 to 50 members"
     category = _get_settings(settings_getter)[3]
-    params = [
-        {
-            "DupeKey": dupe_key,
-            "Category": category,
-            "Priority": 0,
-            "Timeout": 45,
-            "Members": members,
-        }
-    ]
+    header = [dupe_key, category, 0, 45]
+    params = list(header)
+    for member in members:
+        params.extend([member["NZBFilename"], member.get("Content", member.get("URL"))])
     from resources.lib.nzbget_fleet_payload import fleet_payload
 
     try:
-        with fleet_payload(params) as payload:
+        with fleet_payload(header, members) as payload:
             _log_fleet_size(params, payload)
             result, error = _rpc_call(
                 "appendfleet",
                 params,
                 settings_getter=settings_getter,
-                timeout=300,
+                timeout=75,
                 encoded_payload=payload,
             )
     except (OSError, TypeError, ValueError) as exc:
@@ -188,7 +183,7 @@ def _log_fleet_size(params, payload):
         )
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: NZBGet appendfleet request bytes={} members={}".format(
-            size, len(params[0]["Members"])
+            size, (len(params) - 4) // 2
         ),
         xbmc.LOGINFO,
     )
