@@ -16,7 +16,6 @@ from resources.lib.nzbget_fleet_dedup import (
 from resources.lib.nzbget_fleet_identity import (
     member_filename,
     record_members,
-    release_name,
 )
 
 
@@ -336,21 +335,21 @@ def _send(ctx, kept, state, candidates):
 
 def _already_completed(reply, key, getter):
     """Resolve the exact success named by NZBGet, including another client's key."""
-    completed = nzbget_api.history_success_by_dupekey(key, settings_getter=getter)
-    if completed.get("present"):
-        return completed
     prefix = "downloaded as "
     names = {
-        release_name(row.get("Reason", "")[len(prefix) :])
+        row["Reason"][len(prefix) :]
         for row in reply.get("Members", [])
         if row.get("Status") == "SKIPPED"
         and str(row.get("Reason") or "").startswith(prefix)
     }
-    if names:
-        for row in nzbget_api.history_rows(getter) or []:
-            entry = nzbget_api._completed_job_entry(row)
-            if entry and entry["name"] in names:
-                return dict(entry, present=True, job_name=entry["name"])
+    if not names:
+        return nzbget_api.history_success_by_dupekey(key, settings_getter=getter)
+    for row in nzbget_api.history_rows(getter) or []:
+        if not isinstance(row, dict) or row.get("Name") not in names:
+            continue
+        entry = nzbget_api._completed_job_entry(row)
+        if entry:
+            return dict(entry, present=True, job_name=entry["name"])
     return {"present": False}
 
 
@@ -432,7 +431,14 @@ def _late(result, getter, progress, kept, key):
 def _health_message(progress, reply):
     """Show server health only when it is known, never present -1 as a percent."""
     rows = reply.get("Members", [])
-    good = sum(row.get("Status") in ("QUEUED", "BACKUP") for row in rows)
+    good_ids = {
+        row.get("NZBID")
+        for row in rows
+        if row.get("Status") in ("QUEUED", "BACKUP")
+        and isinstance(row.get("NZBID"), int)
+        and not isinstance(row.get("NZBID"), bool)
+        and row["NZBID"] > 0
+    }
     chosen = next(
         (
             row
@@ -442,6 +448,9 @@ def _health_message(progress, reply):
         ),
         {},
     )
+    if chosen.get("Status") == "SAME_POSTING":
+        good_ids.add(reply["Chosen"])
+    good = len(good_ids)
     alive = chosen.get("Alive", -1)
     from resources.lib import nzbget_resolver as core
 
@@ -454,4 +463,8 @@ def _health_message(progress, reply):
     progress._update(0, message)
     # Polling immediately replaces progress text; the toast keeps the API's
     # primary-copy health visible for eight seconds without blocking playback.
-    core._notify(core._addon_name(), message, 8000)
+    try:
+        core._notify(core._addon_name(), message, 8000)
+    except Exception:  # pylint: disable=broad-except
+        # Kodi tearing down its GUI must not interrupt an accepted download.
+        pass
