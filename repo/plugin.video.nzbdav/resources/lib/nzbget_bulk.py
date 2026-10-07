@@ -434,8 +434,13 @@ def _health_message(progress, reply):
     rows = reply.get("Members", [])
     good = sum(row.get("Status") in ("QUEUED", "BACKUP") for row in rows)
     chosen = next(
-        (row for row in rows if row.get("NZBID") == reply["Chosen"]
-         or row.get("SameAs") == reply["Chosen"]), {}
+        (
+            row
+            for row in rows
+            if row.get("NZBID") == reply["Chosen"]
+            or row.get("SameAs") == reply["Chosen"]
+        ),
+        {},
     )
     alive = chosen.get("Alive", -1)
     from resources.lib import nzbget_resolver as core
