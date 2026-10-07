@@ -2151,7 +2151,7 @@ msgid "Sending {} NZBs to NZBGet..."
 msgstr "Sending {} NZBs to NZBGet..."
 
 msgctxt "#30618"
-msgid "NZBGet found {} good candidates; downloading the best copy{}"
+msgid "NZBGet found {} good candidates; downloading the primary copy{}"
 msgstr ""
 
 msgctxt "#30619"
