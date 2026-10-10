@@ -31,6 +31,23 @@ def _get_cache_dir():
     return cache_dir
 
 
+def _cache_path(search_type, title, kwargs):
+    """The cache file for a search, or None when the cache folder is unusable.
+
+    A read-only profile, or a ``cache`` file where the folder should be, makes
+    the cache a miss instead of stopping the search that called it.
+    """
+    try:
+        cache_dir = _get_cache_dir()
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Search cache unavailable: {}".format(exc),
+            xbmc.LOGWARNING,
+        )
+        return None
+    return os.path.join(cache_dir, _cache_key(search_type, title, **kwargs) + ".json")
+
+
 def _cache_key(
     search_type, title, year="", imdb="", season="", episode="", tvdb="", tmdb_id=""
 ):
@@ -135,10 +152,8 @@ def get_cached(search_type, title, settings_getter=None, **kwargs):
     if cache_ttl <= 0:
         return None
 
-    key = _cache_key(search_type, title, **kwargs)
-    path = os.path.join(_get_cache_dir(), key + ".json")
-
-    if not os.path.exists(path):
+    path = _cache_path(search_type, title, kwargs)
+    if path is None or not os.path.exists(path):
         return None
 
     try:
@@ -156,8 +171,9 @@ def set_cached(search_type, title, results, settings_getter=None, **kwargs):
     if cache_ttl <= 0:
         return
 
-    key = _cache_key(search_type, title, **kwargs)
-    path = os.path.join(_get_cache_dir(), key + ".json")
+    path = _cache_path(search_type, title, kwargs)
+    if path is None:
+        return
 
     try:
         from resources.lib.hydra import split_search_uploads
@@ -249,8 +265,8 @@ def _evict_entries(entries, total):
 
 def _evict_oldest():
     """Delete oldest cache files until size and entry-count limits are met."""
-    cache_dir = _get_cache_dir()
     try:
+        cache_dir = _get_cache_dir()
         total, entries = _scan_cache_entries(cache_dir)
 
         if not _over_limit(total, len(entries)):

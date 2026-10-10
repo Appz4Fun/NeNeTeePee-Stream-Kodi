@@ -512,3 +512,24 @@ def test_cache_dir_resolves_profile_without_addon_info(mock_addon_mod, mock_vfs)
         mock_vfs.translatePath.assert_called_once_with(
             "special://profile/addon_data/plugin.video.nzbdav/"
         )
+
+
+@patch("resources.lib.cache.xbmcaddon")
+def test_unusable_cache_folder_is_a_miss_not_an_error(mock_addon_mod):
+    """A read-only profile, or a ``cache`` file in the folder's place, must not
+    stop the search that consults the cache."""
+    addon = MagicMock()
+    addon.getSetting.return_value = "30"
+    mock_addon_mod.Addon.return_value = addon
+    with patch.object(
+        cache_module, "_get_cache_dir", side_effect=FileExistsError("cache is a file")
+    ):
+        assert get_cached("movie", "Test") is None
+        set_cached("movie", "Test", [{"title": "Test"}])  # must not raise
+
+
+def test_unusable_cache_folder_skips_eviction():
+    with patch.object(
+        cache_module, "_get_cache_dir", side_effect=PermissionError("read-only")
+    ):
+        _evict_oldest()  # must not raise

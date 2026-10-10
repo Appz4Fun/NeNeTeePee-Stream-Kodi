@@ -3485,6 +3485,46 @@ def test_handle_script_play_caches_search_on_miss(
 @patch("resources.lib.results_dialog.show_results_dialog")
 @patch("resources.lib.filter.filter_results")
 @patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._tag_available")
+@patch(
+    "resources.lib.cache._get_cache_dir",
+    side_effect=PermissionError("read-only profile"),
+)
+def test_handle_script_play_searches_when_cache_folder_is_unusable(
+    mock_cache_dir,
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_dialog,
+    mock_resolve_and_play,
+    mock_set_resolved,
+    mock_end,
+    mock_addon,
+):
+    """Cache trouble is a miss: the handle-less TMDBHelper play still searches
+    and resolves instead of dying silently before the provider search."""
+    from resources.lib.router import _handle_script_play
+
+    mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
+    chosen = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
+    mock_search.return_value = ([chosen], None)
+    mock_filter.return_value = ([chosen], [chosen])
+    mock_dialog.return_value = chosen
+
+    _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
+
+    assert mock_cache_dir.called
+    mock_search.assert_called_once()
+    mock_resolve_and_play.assert_called_once()
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmcplugin.endOfDirectory")
+@patch("xbmcplugin.setResolvedUrl")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
 @patch("resources.lib.router._show_error_dialog")
 @patch("resources.lib.cache.set_cached")
 @patch("resources.lib.cache.get_cached", return_value=None)
