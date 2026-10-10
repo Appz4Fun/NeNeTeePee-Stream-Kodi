@@ -371,8 +371,8 @@ def test_old_preferred_group_setting_cannot_override_tiers():
     )
 
 
-def test_settings_remove_legacy_preferred_control_and_use_sixty_second_cache():
-    from resources.lib.cache import DEFAULT_CACHE_TTL_SECONDS
+def test_settings_remove_legacy_preferred_control_and_use_thirty_minute_cache():
+    from resources.lib.cache import DEFAULT_CACHE_TTL_MINUTES
 
     root = ET.parse(
         Path(__file__).resolve().parents[1]
@@ -381,8 +381,9 @@ def test_settings_remove_legacy_preferred_control_and_use_sixty_second_cache():
     assert root.find(".//setting[@id='action_configure_preferred_groups']") is None
     assert root.find(".//setting[@id='filter_release_group']") is None
     assert root.find(".//setting[@id='action_configure_excluded_groups']") is not None
-    assert root.findtext(".//setting[@id='cache_ttl']/default") == "60"
-    assert DEFAULT_CACHE_TTL_SECONDS == 60
+    assert root.find(".//setting[@id='cache_ttl']") is None
+    assert root.findtext(".//setting[@id='cache_ttl_minutes']/default") == "30"
+    assert DEFAULT_CACHE_TTL_MINUTES == 30
 
 
 def test_explicit_size_sort_does_not_apply_remux_priority():

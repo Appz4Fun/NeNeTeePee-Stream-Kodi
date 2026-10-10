@@ -27,7 +27,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
-| Cache duration (seconds, 0=disabled)[^source-cache_ttl]<br>`cache_ttl` | 60 | Cache raw search results for this many seconds. 0 turns caching off; runtime values are clamped to 0–86400. Filter and sorting changes still apply to cached results. TMDBHelper playback requests a fresh search. |
+| Cache duration (minutes, 0=off)[^source-cache_ttl]<br>`cache_ttl_minutes` | 30 | Cache raw search results for this many minutes. 0 turns caching off; runtime values are clamped to 0–1440 (24 hours). Filter and sorting changes still apply to cached results. TMDBHelper playback and the plugin routes share the cache, so replaying a title within the window skips the indexer search. |
 
 ### Stream resilience
 

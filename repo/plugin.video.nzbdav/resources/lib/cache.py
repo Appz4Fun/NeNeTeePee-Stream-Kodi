@@ -13,13 +13,16 @@ import xbmcvfs
 
 MAX_CACHE_SIZE_BYTES = 52428800  # 50 MB
 MAX_CACHE_ENTRY_COUNT = 1000
-DEFAULT_CACHE_TTL_SECONDS = 60
-MAX_CACHE_TTL_SECONDS = 86400
+CACHE_TTL_SETTING = "cache_ttl_minutes"
+DEFAULT_CACHE_TTL_MINUTES = 30
+MAX_CACHE_TTL_MINUTES = 1440
+_PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
 
 
 def _get_cache_dir():
-    addon = xbmcaddon.Addon("plugin.video.nzbdav")
-    profile = xbmcvfs.translatePath(addon.getAddonInfo("profile"))
+    # The add-on profile path, resolved without the Kodi add-on info API: that
+    # lookup can crash CoreELEC inside the TMDBHelper RunScript context.
+    profile = xbmcvfs.translatePath(_PROFILE_PATH)
     cache_dir = os.path.join(profile, "cache")
     # `exist_ok=True` rather than the exists-then-makedirs pattern, which
     # races a concurrent first-call: two callers can both observe "not
@@ -53,25 +56,33 @@ def _cache_key(
     return "{}_{}_{}".format(search_type, legible or "untitled", digest)
 
 
-def _get_cache_ttl_seconds():
-    """Return the configured cache TTL, falling back if Kodi settings fail."""
+def _get_cache_ttl_seconds(settings_getter=None):
+    """Return the configured cache TTL in seconds (the setting is in minutes).
+
+    ``settings_getter`` (``(key, default) -> str``) lets the RunScript player
+    read the pure-XML settings snapshot instead of Kodi's settings API.
+    """
+    default_ttl = DEFAULT_CACHE_TTL_MINUTES * 60
     try:
-        addon = xbmcaddon.Addon("plugin.video.nzbdav")
-        raw_ttl = addon.getSetting("cache_ttl") or str(DEFAULT_CACHE_TTL_SECONDS)
+        if settings_getter is None:
+            addon = xbmcaddon.Addon("plugin.video.nzbdav")
+            raw_ttl = addon.getSetting(CACHE_TTL_SETTING)
+        else:
+            raw_ttl = settings_getter(CACHE_TTL_SETTING, "")
     except RuntimeError as exc:
         xbmc.log(
             (
-                "NeNeTeePee-Stream-Kodi: cache_ttl setting unavailable; "
-                "using default: {}"
-            ).format(exc),
+                "NeNeTeePee-Stream-Kodi: {} setting unavailable; " "using default: {}"
+            ).format(CACHE_TTL_SETTING, exc),
             xbmc.LOGWARNING,
         )
-        return DEFAULT_CACHE_TTL_SECONDS
+        return default_ttl
 
     try:
-        return max(0, min(int(raw_ttl), MAX_CACHE_TTL_SECONDS))
+        minutes = int(raw_ttl or DEFAULT_CACHE_TTL_MINUTES)
     except (TypeError, ValueError):
-        return DEFAULT_CACHE_TTL_SECONDS
+        return default_ttl
+    return max(0, min(minutes, MAX_CACHE_TTL_MINUTES)) * 60
 
 
 def _try_remove(path):
@@ -118,9 +129,9 @@ def _read_fresh_cache(path, cache_ttl, title):
     return results
 
 
-def get_cached(search_type, title, **kwargs):
+def get_cached(search_type, title, settings_getter=None, **kwargs):
     """Get cached results if fresh enough. Returns list or None."""
-    cache_ttl = _get_cache_ttl_seconds()
+    cache_ttl = _get_cache_ttl_seconds(settings_getter)
     if cache_ttl <= 0:
         return None
 
@@ -139,9 +150,9 @@ def get_cached(search_type, title, **kwargs):
         return None
 
 
-def set_cached(search_type, title, results, **kwargs):
+def set_cached(search_type, title, results, settings_getter=None, **kwargs):
     """Cache search results."""
-    cache_ttl = _get_cache_ttl_seconds()
+    cache_ttl = _get_cache_ttl_seconds(settings_getter)
     if cache_ttl <= 0:
         return
 

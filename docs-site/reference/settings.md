@@ -240,7 +240,7 @@ These settings tune polling, caching, stream resilience, fallback streams, and t
 
 | Setting | ID | Default | Description |
 |---------|----|---------|-------------|
-| Cache duration (seconds, 0=disabled) | `cache_ttl` | `60` | How long to cache search results. `0` turns off the cache. Clamped to 0–86400. Stores raw pre-filter results, so filter/sort changes take effect immediately. The TMDBHelper player always runs a fresh search. |
+| Cache duration (minutes, 0=off) | `cache_ttl_minutes` | `30` | How long to cache search results, in minutes. `0` turns off the cache. Clamped to 0–1440. Stores raw pre-filter results, so filter/sort changes take effect immediately. The TMDBHelper player and the plugin routes share the cache. |
 
 ### Stream resilience
 

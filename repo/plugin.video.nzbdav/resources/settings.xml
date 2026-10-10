@@ -1382,9 +1382,9 @@
 				</setting>
 			</group>
 			<group id="2" label="30071">
-				<setting id="cache_ttl" type="integer" label="30072" help="30339">
+				<setting id="cache_ttl_minutes" type="integer" label="30072" help="30339">
 					<level>0</level>
-					<default>60</default>
+					<default>30</default>
 					<control type="edit" format="integer">
 						<heading>30072</heading>
 					</control>

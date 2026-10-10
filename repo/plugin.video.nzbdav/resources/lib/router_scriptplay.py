@@ -135,15 +135,29 @@ def _script_play_search_results(
     ``None`` so the caller stops, exactly as the prior inline block did.
     """
     import resources.lib.router as _router
+    from resources.lib.cache import get_cached, set_cached
     from resources.lib.search_planner import SearchQuery
 
-    query = SearchQuery(search_type=search_type, title=title, **search_kwargs)
-    results, search_error = _router._search_all_providers(
-        query, settings_getter=_router._get_script_setting
-    )
-    _router._script_play_stage(
-        "provider search done count={}".format(len(results or []))
-    )
+    getter = _router._get_script_setting
+    results = get_cached(search_type, title, settings_getter=getter, **search_kwargs)
+    if results is not None:
+        _router._script_play_stage(
+            "loaded {} results from cache for '{}'".format(len(results), title)
+        )
+        search_error = None
+    else:
+        _router._script_play_stage("provider search start for '{}'".format(title))
+        query = SearchQuery(search_type=search_type, title=title, **search_kwargs)
+        results, search_error = _router._search_all_providers(
+            query, settings_getter=getter
+        )
+        _router._script_play_stage(
+            "provider search done count={}".format(len(results or []))
+        )
+        if results and not search_error:
+            set_cached(
+                search_type, title, results, settings_getter=getter, **search_kwargs
+            )
     if search_error:
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Search stage: provider error - {}").format(

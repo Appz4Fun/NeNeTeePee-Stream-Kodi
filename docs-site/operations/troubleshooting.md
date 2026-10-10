@@ -112,7 +112,7 @@ Check the search backend first:
 3. For Prowlarr, fill in **Prowlarr Indexer IDs (comma-separated)**. NeNeTeePee-Stream-Kodi
    skips the Prowlarr search when it's empty.
 4. Search results are cached for **Cache duration** (Advanced → Search Cache,
-   default 60 s). After you fix a provider, open the NeNeTeePee-Stream-Kodi add-on, choose
+   default 30 minutes). After you fix a provider, open the NeNeTeePee-Stream-Kodi add-on, choose
    **Clear Cache**, and search again.
 5. Try a popular movie or episode that you know has a Usenet release.
 

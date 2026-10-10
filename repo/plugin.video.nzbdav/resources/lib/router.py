@@ -807,15 +807,6 @@ def _handle_script_play(params):
         params.get("_episode_context"), settings_getter=_get_script_setting
     )
 
-    _script_play_stage(
-        "skipping cache for '{}' ({})".format(
-            title,
-            search_type,
-        )
-    )
-    _script_play_stage(
-        "provider search start for '{}'".format(title),
-    )
     search_kwargs = dict(
         year=year, imdb=imdb, season=season, episode=episode, tvdb=tvdb, tmdb_id=tmdb_id
     )

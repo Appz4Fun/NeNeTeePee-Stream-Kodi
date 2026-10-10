@@ -135,14 +135,15 @@ flowchart LR
 ## Search caching
 
 Searches are cached so that re-opening the same title is instant. The cache
-duration is the **Cache duration** setting on the **Advanced** tab (default 60
-seconds; set to `0` to turn it off). Only successful, non-empty searches are
+duration is the **Cache duration** setting on the **Advanced** tab, in minutes
+(default 30; set to `0` to turn it off). Only successful, non-empty searches are
 cached. The cache stores the raw, pre-filter results, so changing your filter
 or sort settings takes effect immediately without a new search. Clear it any
 time from the add-on's main menu (**Clear Cache**).
 
-The cache applies to NeNeTeePee-Stream-Kodi's own plugin search and play routes. The
-TMDBHelper player always runs a fresh search.
+The cache applies to the TMDBHelper player and to NeNeTeePee-Stream-Kodi's own
+plugin search and play routes, so replaying a title within the window reuses the
+earlier search instead of querying the indexers again.
 
 For the internal mechanics, including the query planner, caps handling, and the exact
 result fields, see [How it works → Search pipeline](../how-it-works/search-pipeline.md).

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Backend settings section, EBML-aware MKV/WebM gap concealment, complete media filters with Other / Unknown switches, resolution-then-HDR-then-REMUX ranking with three editable group tiers, picker show-all toggle with filter reasons, movie IMDb lookup, 60 s search cache, NZBGet local-path season-pack reuse, `.m2ts` playback, `/resolve-v2` source manifests |
+| **[Unreleased](#unreleased--main)** | on `main` | Backend settings section, EBML-aware MKV/WebM gap concealment, complete media filters with Other / Unknown switches, resolution-then-HDR-then-REMUX ranking with three editable group tiers, picker show-all toggle with filter reasons, movie IMDb lookup, 30-minute search cache shared with TMDBHelper playback, NZBGet local-path season-pack reuse, `.m2ts` playback, `/resolve-v2` source manifests |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
 | **[1.2.3](#123--2026-05-08)** | 2026-05-08 | Proxy fallback hardening, repo install checksum fix, RunScript path reliability |
@@ -69,6 +69,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 > changes ship in the next beta build.
 
 ### Fixed
+
+- **TMDBHelper playback uses the search cache.** Replaying a title within the
+  cache window reuses the earlier search instead of querying NZBHydra2 and the
+  other providers again. The cache folder is now resolved from
+  `special://profile/addon_data/` instead of Kodi's add-on info API, which could
+  crash CoreELEC in the TMDBHelper RunScript context.
 
 - **Reuse NZBHydra2 results after selection.** Backup discovery now reads a
   snapshot of the initial response instead of running another title search.
@@ -164,6 +170,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Search cache duration is set in minutes, default 30.** The setting is now
+  **Cache duration (minutes, 0=off)** (`cache_ttl_minutes`, clamped to
+  0–1440). The old seconds-based `cache_ttl` value isn't carried over.
 - **Search cache default lowered from 300 to 60 seconds.** (#502)
 - **NZBGet completed folder relabelled.** **SMB Completed Folder** is now
   **Completed Folder (SMB or Local Path)** and **Test SMB Share** is **Test

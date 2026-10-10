@@ -3399,8 +3399,8 @@ def test_handle_script_play_attaches_completed_job_for_selected_result(
 @patch("resources.lib.router._search_all_providers")
 @patch("resources.lib.router._tag_available")
 @patch("resources.lib.cache.set_cached")
-@patch("resources.lib.cache.get_cached", side_effect=RuntimeError("cache unsafe"))
-def test_handle_script_play_skips_search_cache_in_runscript_context(
+@patch("resources.lib.cache.get_cached")
+def test_handle_script_play_reuses_fresh_search_cache(
     mock_cache,
     mock_set_cache,
     mock_tag,
@@ -3412,27 +3412,105 @@ def test_handle_script_play_skips_search_cache_in_runscript_context(
     mock_end,
     mock_addon,
 ):
-    """The file-path RunScript context can crash CoreELEC inside cache profile
-    lookup, so script playback searches providers directly."""
-    from resources.lib.router import _handle_script_play
+    """A replay within the cache window reuses the search, read via the
+    RunScript-safe XML settings getter rather than Kodi's settings API."""
+    from resources.lib.router import _get_script_setting, _handle_script_play
 
     mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
     chosen = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
-    alternate = {
-        "title": "The.Odyssey.2026.1080p.mkv",
-        "link": "http://hydra/nzb/odyssey-alt",
-    }
-    mock_search.return_value = ([chosen], None)
-    mock_filter.return_value = ([chosen, alternate], [chosen, alternate])
+    mock_cache.return_value = [chosen]
+    mock_filter.return_value = ([chosen], [chosen])
     mock_dialog.return_value = chosen
 
     _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
 
-    mock_cache.assert_not_called()
+    mock_cache.assert_called_once()
+    args, kwargs = mock_cache.call_args
+    assert args == ("movie", "The Odyssey")
+    assert kwargs["settings_getter"] is _get_script_setting
+    assert kwargs["year"] == "2026"
+    mock_search.assert_not_called()
     mock_set_cache.assert_not_called()
+    assert mock_filter.call_args.args[0] == [chosen]
     mock_resolve_and_play.assert_called_once()
     mock_end.assert_not_called()
     mock_set_resolved.assert_not_called()
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmcplugin.endOfDirectory")
+@patch("xbmcplugin.setResolvedUrl")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._tag_available")
+@patch("resources.lib.cache.set_cached")
+@patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_caches_search_on_miss(
+    mock_cache,
+    mock_set_cache,
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_dialog,
+    mock_resolve_and_play,
+    mock_set_resolved,
+    mock_end,
+    mock_addon,
+):
+    from resources.lib.router import _get_script_setting, _handle_script_play
+
+    mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
+    chosen = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
+    mock_search.return_value = ([chosen], None)
+    mock_filter.return_value = ([chosen], [chosen])
+    mock_dialog.return_value = chosen
+
+    _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
+
+    mock_search.assert_called_once()
+    mock_set_cache.assert_called_once()
+    args, kwargs = mock_set_cache.call_args
+    assert args == ("movie", "The Odyssey", [chosen])
+    assert kwargs["settings_getter"] is _get_script_setting
+    assert kwargs["year"] == "2026"
+    mock_resolve_and_play.assert_called_once()
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmcplugin.endOfDirectory")
+@patch("xbmcplugin.setResolvedUrl")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._show_error_dialog")
+@patch("resources.lib.cache.set_cached")
+@patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_does_not_cache_provider_error(
+    mock_cache,
+    mock_set_cache,
+    mock_error_dialog,
+    mock_search,
+    mock_filter,
+    mock_dialog,
+    mock_resolve_and_play,
+    mock_set_resolved,
+    mock_end,
+    mock_addon,
+):
+    from resources.lib.router import _handle_script_play
+
+    mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
+    partial = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
+    mock_search.return_value = ([partial], "Hydra timed out")
+
+    _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
+
+    mock_set_cache.assert_not_called()
+    mock_error_dialog.assert_called_once_with("Hydra timed out")
+    mock_resolve_and_play.assert_not_called()
 
 
 @patch(
@@ -3450,7 +3528,7 @@ def test_handle_script_play_skips_search_cache_in_runscript_context(
 @patch("resources.lib.router._search_all_providers")
 @patch("resources.lib.router._tag_available", side_effect=RuntimeError("slow history"))
 @patch("resources.lib.cache.set_cached")
-@patch("resources.lib.cache.get_cached", side_effect=RuntimeError("cache unsafe"))
+@patch("resources.lib.cache.get_cached", return_value=None)
 def test_handle_script_play_auto_select_marks_completed_lookup_done(
     mock_cache,
     mock_set_cache,
@@ -3476,8 +3554,8 @@ def test_handle_script_play_auto_select_marks_completed_lookup_done(
 
     _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
 
-    mock_cache.assert_not_called()
-    mock_set_cache.assert_not_called()
+    mock_cache.assert_called_once()
+    mock_set_cache.assert_called_once()
     mock_tag.assert_not_called()
     mock_dialog.assert_not_called()
     # Loading dialog touches i18n (Addon patched to raise -> graceful fallback).

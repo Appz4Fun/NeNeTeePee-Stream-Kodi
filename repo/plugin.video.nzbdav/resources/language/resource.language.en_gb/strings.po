@@ -295,8 +295,8 @@ msgid "Search Cache"
 msgstr "Search Cache"
 
 msgctxt "#30072"
-msgid "Cache duration (seconds, 0=disabled)"
-msgstr "Cache duration (seconds, 0=disabled)"
+msgid "Cache duration (minutes, 0=off)"
+msgstr "Cache duration (minutes, 0=off)"
 
 msgctxt "#30073"
 msgid "Stream Resilience"
@@ -1319,8 +1319,8 @@ msgid "Whether to clear other in-progress downloads before starting a new one. N
 msgstr "Whether to clear other in-progress downloads before starting a new one. Never clears this title's own in-flight job or a completed copy you're about to reuse."
 
 msgctxt "#30339"
-msgid "How long search results are cached, in seconds. Default: 60 seconds. 0 disables caching. Clamped to 0-86400."
-msgstr "How long search results are cached, in seconds. Default: 60 seconds. 0 disables caching. Clamped to 0-86400."
+msgid "How long search results are cached, in minutes. Default: 30 minutes. 0 disables caching. Clamped to 0-1440 (24 hours)."
+msgstr "How long search results are cached, in minutes. Default: 30 minutes. 0 disables caching. Clamped to 0-1440 (24 hours)."
 
 msgctxt "#30340"
 msgid "Automatically retry a stream that fails during playback."
