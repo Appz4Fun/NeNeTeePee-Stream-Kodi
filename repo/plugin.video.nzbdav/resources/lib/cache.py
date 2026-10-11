@@ -129,8 +129,8 @@ def _try_remove(path):
 
 
 def _well_formed(data):
-    """Whether ``results`` (and any ``hydra_uploads``) are lists of objects."""
-    results = data.get("results", [])
+    """Whether ``results`` (required) and any ``hydra_uploads`` are lists of objects."""
+    results = data.get("results")
     uploads = data.get("hydra_uploads")
     return all(
         isinstance(rows, list) and all(isinstance(row, dict) for row in rows)

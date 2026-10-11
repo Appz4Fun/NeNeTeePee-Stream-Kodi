@@ -79,8 +79,9 @@ def _query_and_cache_providers(  # pylint: disable=too-many-arguments
 ):
     """Query all enabled providers on a cache miss and cache any results.
 
-    Returns ``(results, search_error)``; caches results only on a clean
-    (non-error) non-empty query, under the ``providers`` set it searched.
+    Returns ``(results, search_error)``; caches results only when the query
+    is non-empty and every provider succeeded, under the ``providers`` set it
+    searched.
     """
     import resources.lib.router as _router
     from resources.lib.search_planner import SearchQuery
@@ -93,7 +94,10 @@ def _query_and_cache_providers(  # pylint: disable=too-many-arguments
         xbmc.LOGDEBUG,
     )
     query = SearchQuery(search_type=search_type, title=title, **cache_kwargs)
-    results, search_error = _router._search_all_providers(query, settings_getter=getter)
+    outcome = {}
+    results, search_error = _router._search_all_providers(
+        query, settings_getter=getter, outcome=outcome
+    )
     if search_error:
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Search stage: provider error — {}").format(
@@ -102,7 +106,7 @@ def _query_and_cache_providers(  # pylint: disable=too-many-arguments
             xbmc.LOGWARNING,
         )
         return results, search_error
-    if results:
+    if results and outcome.get("complete", True):
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Search stage: caching {} results for '{}'".format(
                 len(results), title

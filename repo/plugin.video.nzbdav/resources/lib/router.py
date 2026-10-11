@@ -446,8 +446,9 @@ def _provider_cache_tag(settings_getter):
     """The provider set searched under ``settings_getter``, for the search cache key.
 
     ``/play`` forces NZBHydra2 on while the RunScript player follows the
-    settings, and the Prowlarr indexer IDs and enabled direct indexers can
-    change at any time, so each cache entry names exactly what it searched.
+    settings, and the Prowlarr indexer IDs, enabled direct indexers, and
+    ``max_results`` can change at any time, so each cache entry names exactly
+    what it searched.
     """
 
     def _on(name):
@@ -472,6 +473,12 @@ def _provider_cache_tag(settings_getter):
         )
     if _on("direct_indexers_enabled"):
         parts.append("direct={}".format(_direct_indexer_fingerprint()))
+    if parts:
+        from resources.lib.direct_indexers import _coerce_max_results
+
+        # Every provider requests at most max_results rows.
+        limit = _coerce_max_results(settings_getter("max_results", "25"))
+        parts.append("max={}".format(limit))
     return ";".join(parts)
 
 
@@ -493,7 +500,7 @@ def _direct_indexer_fingerprint():
     )
 
 
-def _search_all_providers(query, settings_getter=None):
+def _search_all_providers(query, settings_getter=None, outcome=None):
     """
     Search enabled indexer providers and return combined, deduplicated results.
 
@@ -510,6 +517,10 @@ def _search_all_providers(query, settings_getter=None):
             error_message (str or None): Error text when every enabled
                 provider failed or when no providers are enabled; otherwise
                 `None`.
+
+    ``outcome`` (optional dict) gets ``"complete"``: False when any enabled
+    provider failed, even if others returned rows. Callers cache only
+    complete searches.
     """
     _script_play_stage("providers entry")
     search_type = query.search_type
@@ -566,6 +577,10 @@ def _search_all_providers(query, settings_getter=None):
     )
 
     provider_outcomes = _run_provider_jobs(provider_jobs)
+    if outcome is not None:
+        outcome["complete"] = not any(
+            error for _label, (_rows, error) in provider_outcomes
+        )
     return _collect_provider_outcomes(provider_outcomes)
 
 

@@ -5433,9 +5433,9 @@ def test_provider_cache_tag_names_enabled_providers():
     def getter(key, default=""):
         return settings.get(key, default)
 
-    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1,2"
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1,2;max=25"
     settings["prowlarr_indexer_ids"] = "1"
-    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1"
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1;max=25"
 
 
 @patch("resources.lib.direct_indexers.get_configured_indexers")
@@ -5456,7 +5456,7 @@ def test_provider_cache_tag_changes_with_enabled_direct_indexers(mock_indexers):
     mock_indexers.return_value = [{"id": "geek", "api_url": "https://geek/api"}]
     assert _provider_cache_tag(getter) != both
     mock_indexers.side_effect = RuntimeError("settings unavailable")
-    assert _provider_cache_tag(getter) == "direct=?"
+    assert _provider_cache_tag(getter) == "direct=?;max=25"
 
 
 def test_provider_cache_tag_uses_schema_url_defaults():
@@ -5516,3 +5516,67 @@ def test_play_and_script_paths_do_not_share_cache_across_provider_sets(
             prowlarr_row
         ]
         assert mock_search.call_count == 2
+
+
+def test_provider_cache_tag_includes_max_results():
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {"nzbhydra_enabled": "true", "max_results": "25"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    small = _provider_cache_tag(getter)
+    settings["max_results"] = "100"
+    assert _provider_cache_tag(getter) != small
+
+
+def test_search_all_providers_reports_partial_outcome():
+    from resources.lib.router import _search_all_providers
+
+    row = {"title": "Movie.2026.mkv", "link": "http://hydra/1"}
+    settings = {"nzbhydra_enabled": "true", "prowlarr_enabled": "true"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    outcomes = [("NZBHydra2", ([row], None)), ("Prowlarr", ([], "Prowlarr down"))]
+    outcome = {}
+    with patch("resources.lib.router._run_provider_jobs", return_value=outcomes), patch(
+        "resources.lib.router._build_provider_jobs", return_value=[]
+    ):
+        results, error = _search_all_providers(
+            SearchQuery("movie", "Movie", year="2026"),
+            settings_getter=getter,
+            outcome=outcome,
+        )
+    assert results == [row] and error is None
+    assert outcome == {"complete": False}
+
+
+@patch("resources.lib.router_play._play_search_getter")
+@patch("resources.lib.router._search_all_providers")
+def test_partial_provider_results_are_not_cached(mock_search, mock_play_getter):
+    """A provider that failed while another answered must be retried next time."""
+    from resources.lib.router_play import _search_with_cache
+    from resources.lib.router_scriptplay import _script_play_search_results
+
+    settings = {"prowlarr_enabled": "true"}
+    mock_play_getter.return_value = lambda key, default="": settings.get(key, default)
+    row = {"title": "Task.S01E03.mkv", "link": "http://prowlarr/1"}
+
+    def partial(query, settings_getter=None, outcome=None):
+        outcome["complete"] = False
+        return [row], None
+
+    mock_search.side_effect = partial
+    kwargs = dict(year="2025", imdb="tt1", season="1", episode="3", tvdb="", tmdb_id="")
+    with patch(
+        "resources.lib.router._get_script_setting",
+        side_effect=lambda key, default="": settings.get(key, default),
+    ), patch("resources.lib.cache._get_cache_ttl_seconds", return_value=1800):
+        _search_with_cache("episode", "Task", kwargs)
+        _search_with_cache("episode", "Task", kwargs)
+        _script_play_search_results("episode", "Task", kwargs, MagicMock())
+        _script_play_search_results("episode", "Task", kwargs, MagicMock())
+    assert mock_search.call_count == 4

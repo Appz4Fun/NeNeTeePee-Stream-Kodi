@@ -149,13 +149,16 @@ def _script_play_search_results(
     else:
         _router._script_play_stage("provider search start for '{}'".format(title))
         query = SearchQuery(search_type=search_type, title=title, **search_kwargs)
+        outcome = {}
         results, search_error = _router._search_all_providers(
-            query, settings_getter=getter
+            query, settings_getter=getter, outcome=outcome
         )
         _router._script_play_stage(
             "provider search done count={}".format(len(results or []))
         )
-        if results and not search_error:
+        # A provider that failed while others answered would be missing from
+        # the cached rows for the whole window: cache complete searches only.
+        if results and not search_error and outcome.get("complete", True):
             set_cached(
                 search_type, title, results, settings_getter=getter, **cache_kwargs
             )
