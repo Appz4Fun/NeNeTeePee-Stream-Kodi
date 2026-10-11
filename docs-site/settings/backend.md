@@ -6,16 +6,25 @@ These options appear in the same tab, after the selected backend's connection fi
 
 ## Kodi screenshots
 
-!!! note
-    The screenshots predate moving the submit, resilience, fallback, proxy, and pass-through options from **Advanced** to this tab. Current builds show those options after the connection fields.
+With **nzbdav / InfiniDysk** selected, the list scrolls through the connection fields and every playback option:
 
-![Playback backend, view 1](../images/kodi/backend-nzbdav.png)
+![Playback backend with nzbdav / InfiniDysk, view 1](../images/kodi/backend-nzbdav.png)
 
-![Playback backend, view 2](../images/kodi/backend-nzbget.png)
+![Playback backend with nzbdav / InfiniDysk, view 2](../images/kodi/backend-nzbdav-02.png)
 
-![Playback backend, view 3](../images/kodi/backend-streamnzb.png)
+![Playback backend with nzbdav / InfiniDysk, view 3](../images/kodi/backend-nzbdav-03.png)
 
-Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, and credentials use example values. [Capture details](index.md#capture-details).
+With **NZBGet** selected, the stream resilience options follow the NZBGet connection fields:
+
+![Playback backend with NZBGet, view 1](../images/kodi/backend-nzbget.png)
+
+![Playback backend with NZBGet, view 2](../images/kodi/backend-nzbget-02.png)
+
+With **StreamNZB** selected, only the server URL and stream token appear:
+
+![Playback backend with StreamNZB](../images/kodi/backend-streamnzb.png)
+
+Captured on the OrbStack Kodi VM from commit `5a50676`. Debug overlays are off, and credentials use example values. [Capture details](index.md#capture-details).
 
 ## Every option
 

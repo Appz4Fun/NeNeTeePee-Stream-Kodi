@@ -7,16 +7,9 @@ These options tune how the add-on polls for downloads and caches search results.
 
 ## Kodi screenshots
 
-!!! note
-    The screenshots predate moving options to **Playback backend**. Current builds show only polling and search cache options on this tab.
+![Advanced tab](../images/kodi/advanced-01.png)
 
-![Advanced, view 1](../images/kodi/advanced-01.png)
-
-![Advanced, view 2](../images/kodi/advanced-02.png)
-
-![Advanced, view 3](../images/kodi/advanced-03.png)
-
-Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, and credentials use example values. [Capture details](index.md#capture-details).
+Captured on the OrbStack Kodi VM from commit `5a50676`. Debug overlays are off, and credentials use example values. [Capture details](index.md#capture-details).
 
 ## Every option
 

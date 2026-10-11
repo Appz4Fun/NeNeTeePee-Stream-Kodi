@@ -7,12 +7,13 @@
 
 Use [nzbdav](https://github.com/nzbdav-dev/nzbdav) or [InfiniDysk](https://www.infinidysk.com/) for server installation and configuration instructions. Start with a running server that Kodi can reach.
 
-![Example add-on settings for nzbdav](../images/kodi/backend-nzbdav.png)
+![Example add-on settings for nzbdav, view 1](../images/kodi/backend-nzbdav.png)
 
-!!! note
-    This screenshot predates moving the submit, retry, fallback, proxy, and pass-through options from **Advanced** to **Playback backend**. Current builds list those options after the connection fields.
+![Example add-on settings for nzbdav, view 2](../images/kodi/backend-nzbdav-02.png)
 
-This is a real Kodi screenshot from the captured `origin/main` build, using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
+![Example add-on settings for nzbdav, view 3](../images/kodi/backend-nzbdav-03.png)
+
+These are real Kodi screenshots from the [captured add-on build](../settings/index.md#capture-details), using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
 
 ## Configure the add-on
 

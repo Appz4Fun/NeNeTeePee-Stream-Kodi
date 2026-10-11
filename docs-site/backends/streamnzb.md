@@ -9,7 +9,7 @@ Use [StreamNZB](https://github.com/Gaisberg/streamnzb) for server installation a
 
 ![Example add-on settings for streamnzb](../images/kodi/backend-streamnzb.png)
 
-This is a real Kodi screenshot from the captured `origin/main` build, using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
+This is a real Kodi screenshot from the [captured add-on build](../settings/index.md#capture-details), using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
 
 ## Configure the add-on
 

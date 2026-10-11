@@ -19,7 +19,9 @@ The tab guides explain every option. This includes buttons and hidden state fiel
 
 ## Capture details
 
-These are real 1280 × 720 screenshots from the `kodi-ebml` OrbStack VM using Kodi's Estuary skin. The add-on files came from `origin/main` at commit [`db07f61d4090a0c89ec8461ee9b3ca34f9607aa6`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/commit/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6), fetched on October 3, 2026. The remote has no `master` branch.
+These are real 1280 × 720 screenshots from Kodi 21.3 using the Estuary skin. Most tabs came from the `kodi-ebml` OrbStack VM. Their add-on files came from `origin/main` at commit [`db07f61d4090a0c89ec8461ee9b3ca34f9607aa6`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/commit/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6), fetched on October 3, 2026. The remote has no `master` branch.
+
+The **Playback backend** and **Advanced** screenshots were recaptured on October 11, 2026, after options moved between those tabs. They came from a fresh `kodi-shots` OrbStack VM, with the add-on installed from commit [`5a50676c56f2b4c2fa19a2f52df6157a1a939e18`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/commit/5a50676c56f2b4c2fa19a2f52df6157a1a939e18).
 
 Debug overlays were turned off before capture. Connection examples use `192.0.2.10` and dummy credentials. They do not show working servers or account secrets. Scrolled views overlap to keep the surrounding controls visible. The [capture manifest](../images/kodi/capture-manifest.json) records the context and checksum for each screenshot. The **Standard** setting level shows this add-on's visible options; hidden migration fields do not appear in screenshots.
 
