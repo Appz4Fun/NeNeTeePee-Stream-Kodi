@@ -78,7 +78,7 @@ These options appear only when **Playback backend** is nzbdav / InfiniDysk, the 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
 | Convert MP4 subtitles to SRT[^source-proxy_convert_subs]<br>`proxy_convert_subs` | On | Convert MP4 mov_text subtitles to SRT during remux so embedded subtitles survive. |
-| Force ffmpeg remux above (MB, 0=off)[^source-force_remux_threshold_mb]<br>`force_remux_threshold_mb` | 15000 | For non-MP4 streams, apply the selected remux mode at least this size in MB; an unknown length also triggers the selected remux mode when the threshold is positive. MP4/M4V uses a separate playback path and ignores this threshold. 0 turns off this size-triggered remux rule. |
+| Remux size threshold (MB, 0=off)[^source-force_remux_threshold_mb]<br>`force_remux_threshold_mb` | 15000 | For non-MP4 streams, apply the selected remux mode at least this size in MB; an unknown length also triggers the selected remux mode when the threshold is positive. MP4/M4V uses a separate playback path and ignores this threshold. 0 turns off this size-triggered remux rule. |
 | Large non-MP4 stream mode[^source-force_remux_mode]<br>`force_remux_mode` | Direct pass-through (default) | How to handle large non-MP4 streams: pass through directly, remux to fMP4/HLS, or remux to Matroska for compatibility. Choices: 0 = Direct pass-through (default), 1 = fMP4 HLS (compatibility, experimental), 2 = Matroska remux (compatibility). |
 | force_remux_mode_v2_migrated[^source-force_remux_mode_v2_migrated]<br>`force_remux_mode_v2_migrated` | Off | Hidden one-time migration flag for remux-mode settings. The add-on manages it; do not change it manually. Hidden from the settings dialog. |
 

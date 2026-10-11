@@ -80,6 +80,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   **Maximum duplicate backups** alone (`0` sends none). If you used NZBGet
   with Enable fallback streams off, a one-time migration sets Maximum
   duplicate backups to `0`, so nothing changes for you.
+- The force-remux size setting (`force_remux_threshold_mb`) is now labeled
+  **Remux size threshold (MB, 0=off)**. Your saved value is unchanged.
 
 ## [2.0.0-beta.3][] — 2026-10-11
 

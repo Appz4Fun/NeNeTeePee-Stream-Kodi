@@ -495,8 +495,8 @@ msgid "NZB submit timeout (seconds)"
 msgstr "NZB submit timeout (seconds)"
 
 msgctxt "#30123"
-msgid "Force ffmpeg remux above (MB, 0=off)"
-msgstr "Force ffmpeg remux above (MB, 0=off)"
+msgid "Remux size threshold (MB, 0=off)"
+msgstr "Remux size threshold (MB, 0=off)"
 
 msgctxt "#30124"
 msgid "nzbdav rejected the submission (HTTP {0}). Server message: {1}. Check nzbdav's logs for details."

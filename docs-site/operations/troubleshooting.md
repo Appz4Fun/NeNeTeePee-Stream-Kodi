@@ -228,7 +228,7 @@ check the share or mount first (see [NZBGet backend problems](#nzbget-backend-pr
 3. If you set **Large non-MP4 stream mode** to **Matroska remux** or **fMP4
    HLS** (Playback backend tab, nzbdav / InfiniDysk), confirm ffmpeg is installed on the Kodi device. If
    it isn't, you'll see **Failed to start ffmpeg**. The default, **Direct
-   pass-through**, doesn't use ffmpeg. **Force ffmpeg remux above (MB, 0=off)**
+   pass-through**, doesn't use ffmpeg. **Remux size threshold (MB, 0=off)**
    only sets the size at which the chosen remux mode starts.
 4. On CoreELEC, or with large files, start with the default pass-through
    settings before you try the remux modes.
