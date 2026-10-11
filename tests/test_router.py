@@ -421,7 +421,7 @@ def test_search_all_providers_uses_default_for_one_snapshot_setting_failure():
     assert len(results) == 1
     provider_settings = hydra_search.call_args.kwargs["settings_getter"]
     assert provider_settings("hydra_url") == "http://hydra:5076"
-    assert provider_settings("prowlarr_host") == ""
+    assert provider_settings("prowlarr_host") == "http://localhost:9696"
 
 
 @patch("xbmcaddon.Addon", side_effect=RuntimeError("no addon context"))
@@ -5612,3 +5612,11 @@ def test_provider_cache_tag_changes_when_api_keys_rotate(mock_indexers):
         {"id": "geek", "api_url": "https://geek/api", "api_key": "geek-new"}
     ]
     assert _provider_cache_tag(getter) != before
+
+
+def test_provider_snapshot_seeds_the_prowlarr_schema_default():
+    """An unsaved Prowlarr host searches the schema default, as the cache tag
+    assumes, on the raw-XML RunScript path."""
+    from resources.lib.router_search import _PROVIDER_SEARCH_SETTING_DEFAULTS
+
+    assert _PROVIDER_SEARCH_SETTING_DEFAULTS["prowlarr_host"] == "http://localhost:9696"

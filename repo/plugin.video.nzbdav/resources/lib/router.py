@@ -438,10 +438,6 @@ def _script_completed_job_for_selection(selected):
         return None
 
 
-# settings.xml's prowlarr_host default (the plugin path's getter returns it).
-_DEFAULT_PROWLARR_HOST = "http://localhost:9696"
-
-
 def _provider_cache_tag(settings_getter):
     """The provider set searched under ``settings_getter``, for the search cache key.
 
@@ -457,6 +453,7 @@ def _provider_cache_tag(settings_getter):
         return str(settings_getter(name, "false") or "").lower() == "true"
 
     from resources.lib.hydra import _DEFAULT_HYDRA_URL
+    from resources.lib.prowlarr import _DEFAULT_PROWLARR_HOST
 
     def _url(name, default):
         # The schema default, as the search itself reads it: a URL left at its

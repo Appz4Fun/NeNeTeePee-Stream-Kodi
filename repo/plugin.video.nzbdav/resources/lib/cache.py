@@ -180,8 +180,14 @@ def get_cached(search_type, title, settings_getter=None, **kwargs):
 
     try:
         return _read_fresh_cache(path, cache_ttl, title)
-    except ValueError:
-        # Corrupt JSON or bytes that aren't UTF-8 (both ValueErrors): a miss.
+    except (ValueError, TypeError, AttributeError, KeyError) as exc:
+        # Corrupt JSON, bytes that aren't UTF-8, or fields of the wrong type
+        # while restoring the rows: the entry is unusable, so it is a miss.
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Discarded unreadable search cache "
+            "entry for '{}': {}".format(title, exc),
+            xbmc.LOGWARNING,
+        )
         _try_remove(path)
         return None
     except OSError:

@@ -556,6 +556,7 @@ def test_cache_key_separates_provider_sets():
         b'{"timestamp": 1e18, "results": [], "hydra_uploads": ["x"]}',
         b'{"timestamp": 1e18, "results": [], "hydra_uploads": {}}',
         b'{"timestamp": 1e18}',
+        b'{"timestamp": 1e18, "results": [{"title": []}], "hydra_uploads": []}',
         b"\xff\xfe not utf-8",
     ],
     ids=[
@@ -565,6 +566,7 @@ def test_cache_key_separates_provider_sets():
         "scalar upload row",
         "non-list uploads",
         "missing results",
+        "list-valued title",
         "non-utf8 bytes",
     ],
 )

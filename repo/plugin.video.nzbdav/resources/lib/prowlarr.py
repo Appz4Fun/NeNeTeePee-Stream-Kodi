@@ -42,6 +42,11 @@ from resources.lib.xml_safety import ParseError as _XmlParseError
 from resources.lib.xml_safety import UnsafeXmlError as _UnsafeXmlError
 from resources.lib.xml_safety import safe_fromstring as _safe_fromstring
 
+# settings.xml's prowlarr_host default. The provider snapshot and the search
+# cache tag both seed it, so an unsaved host searches (and keys) the same way
+# on the plugin and RunScript paths.
+_DEFAULT_PROWLARR_HOST = "http://localhost:9696"
+
 NEWZNAB_NS = "http://www.newznab.com/DTD/2010/feeds/attributes/"
 
 

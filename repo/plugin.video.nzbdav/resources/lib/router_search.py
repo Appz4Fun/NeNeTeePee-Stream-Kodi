@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from resources.lib.http_util import pubdate_to_epoch
 from resources.lib.hydra import _DEFAULT_HYDRA_URL, _SEARCH_UPLOADS_KEY
 from resources.lib.nzbdav_api import completed_jobs_lookup_done
+from resources.lib.prowlarr import _DEFAULT_PROWLARR_HOST
 
 # Pre-read defaults for the provider-search settings snapshot
 # (router._search_all_providers wraps every getter in _snapshot_settings_getter
@@ -25,11 +26,12 @@ from resources.lib.nzbdav_api import completed_jobs_lookup_done
 # ``hydra_url`` seeds the schema default: the snapshot pre-reads every key, so
 # a URL left at its displayed default (absent from the profile XML) would
 # otherwise snapshot to "" and bypass the ``hydra._DEFAULT_HYDRA_URL`` mirror
-# for the whole provider-search path.
+# for the whole provider-search path. ``prowlarr_host`` seeds its schema
+# default for the same reason.
 _PROVIDER_SEARCH_SETTING_DEFAULTS = {
     "hydra_url": _DEFAULT_HYDRA_URL,
     "hydra_api_key": "",
-    "prowlarr_host": "",
+    "prowlarr_host": _DEFAULT_PROWLARR_HOST,
     "prowlarr_api_key": "",
     "prowlarr_indexer_ids": "",
     "max_results": "25",
