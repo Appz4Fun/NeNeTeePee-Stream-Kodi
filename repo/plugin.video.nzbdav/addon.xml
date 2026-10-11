@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="plugin.video.nzbdav"
        name="NeNeTeePee-Stream-Kodi"
-       version="2.0.0-beta.2"
+       version="2.0.0-beta.3"
        provider-name="nzbdav">
     <requires>
         <import addon="xbmc.python" version="3.0.0"/>
@@ -22,7 +22,7 @@
         <license>GPL-3.0-or-later</license>
         <source>https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi</source>
         <website>https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/</website>
-        <news>v2.0.0-beta.2: Exact season-pack episode reuse, SMB readability gate, polish.</news>
+        <news>v2.0.0-beta.3: renamed add-on, StreamNZB, NZBGet fleet, filters, scrobbling.</news>
         <assets>
             <icon>resources/icon.png</icon>
             <fanart>resources/fanart.jpg</fanart>

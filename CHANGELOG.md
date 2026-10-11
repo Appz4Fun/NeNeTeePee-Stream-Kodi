@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Backend settings section, EBML-aware MKV/WebM gap concealment, complete media filters with Other / Unknown switches, resolution-then-HDR-then-REMUX ranking with three editable group tiers, picker show-all toggle with filter reasons, movie IMDb lookup, 30-minute search cache shared with TMDBHelper playback, NZBGet local-path season-pack reuse, `.m2ts` playback, `/resolve-v2` source manifests |
+| **[Unreleased](#unreleased--main)** | on `main` | Nothing yet |
+| **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
 | **[1.2.3](#123--2026-05-08)** | 2026-05-08 | Proxy fallback hardening, repo install checksum fix, RunScript path reliability |
@@ -65,157 +66,123 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
-> Merged on `main` after 2.0.0-beta.2 and not in any release yet. These
-> changes ship in the next beta build.
+Nothing yet.
 
-### Fixed
+## [2.0.0-beta.3][] — 2026-10-11
 
-- **TMDBHelper playback uses the search cache.** Replaying a title within the
-  cache window reuses the earlier search instead of querying NZBHydra2 and the
-  other providers again. The cache folder is now resolved from
-  `special://profile/addon_data/` instead of Kodi's add-on info API, which could
-  crash CoreELEC in the TMDBHelper RunScript context.
+> Third beta on the road to 2.0.0. The add-on is now **NeNeTeePee-Stream-Kodi**,
+> with a new **StreamNZB** backend and one **Playback backend** settings section.
+> NZBGet gets duplicate backups for every same-release NZB, sent in one request.
+> Media filters and release ranking are much broader, and TMDbHelper scrobbling
+> works again on every backend.
+>
+> **Before you upgrade,** read the upgrade notes: the display name, several
+> settings, and the TMDBHelper player file changed.
 
-- **Reuse NZBHydra2 results after selection.** Backup discovery now reads a
-  snapshot of the initial response instead of running another title search.
-  Repeated lookups and missing snapshots never trigger a new search. Backups
-  are limited to uploads Hydra returned; NZB downloading and deduplication
-  still run after selection.
+### Upgrade notes
 
-- **NZBHydra2 duplicate-uploads lookup.** NZBHydra2 refuses internal API
-  requests without its XSRF token (HTTP 403), even with its authentication
-  turned off, so the NZBGet backup search never saw Hydra's hidden duplicate
-  uploads. The add-on now retries once with the token Hydra hands back.
+- **New name.** Kodi shows **NeNeTeePee-Stream-Kodi**. The add-on ID is still
+  `plugin.video.nzbdav`, so updates, settings, and history carry over. Log lines
+  now start with `NeNeTeePee-Stream-Kodi:` instead of `NZB-DAV:`. (#510)
+- **Settings moved.** Backend choice and every backend's connection fields live
+  in one **Playback backend** section; the separate Connection and NZBGet tabs
+  are gone. NZBHydra2, Prowlarr, and TMDB are now under **Indexers**, and
+  languages have their own **Languages** category. Values are kept, and an
+  earlier "use NZBGet" choice is migrated once to the new backend selector.
+  (#507)
+- **TMDBHelper player file** updates itself to schema 10 on the next service
+  start or add-on run. The old file is backed up first, and a custom name,
+  priority, and other fields are preserved. Running **Install TMDBHelper
+  Player** again isn't needed. (#515)
+- **Search cache duration is now in minutes.** The setting is **Cache duration
+  (minutes, 0=off)** (`cache_ttl_minutes`, default 30, maximum 1440). The old
+  seconds-based `cache_ttl` value isn't carried over. (#520)
+- **Preferred groups** become three editable tiers. The old single list and its
+  **Configure Preferred Groups** button are removed, and a list you set there
+  isn't carried over. (#502)
+- **NZBGet duplicate backups** go to NZBGet in one `appendfleet` request. An
+  NZBGet server without that method falls back automatically to one-by-one
+  submissions. (#518, #519)
 
 ### Added
 
-- **NZBGet submits every same-release NZB as a duplicate backup.** The new
-  **Maximum duplicate backups** setting (`nzbget_max_backups`, default `-1`)
-  sends every same-release NZB to NZBGet as a Smart Duplicates backup; `0`
-  sends none and a positive number caps the count. Same release now means the
-  same name, or a different name with the same title, year or episode, part,
-  edition, PROPER/REPACK, group, and resolution, and backups include
-  same-title uploads retained from the initial NZBHydra2 response. NeNeTeePee-Stream-Kodi skips listings
-  of the same Usenet posting (same size posted within 120 seconds, or more than
-  1% shared article IDs), keeps re-uploads with different article IDs,
-  and shows the whole process in the progress dialog: it downloads every NZB
-  (your pick included, "Downloading NZBs 1 of 25"), saves the unique ones to
-  Kodi's temp folder, uploads them all to NZBGet at once with your pick first
-  ("Sending..."), deletes the temp folder, and then shows NZBGet's download
-  progress. Each backup costs
-  one indexer download. **Maximum standby fallback streams** no longer applies
-  to NZBGet. A replay within 24 hours skips the backups NZBGet still holds from
-  the earlier play (no second indexer download or append), and only the NZBGet
-  backend ever builds a duplicate fleet. Canceling a play removes the pick (and
-  anything queued) but keeps its parked backups, so a quick replay reuses them,
-  and keeps the pick's NZB file on the box for a day so the replay re-sends it
-  without another indexer download.
-- **Backend settings section.** Move backend selection and connection settings
-  to the **Playback backend** section in the settings view. Choose nzbdav /
-  InfiniDysk, NZBGet, or StreamNZB to show the fields for that backend.
-  NZBHydra2 is now first under **Indexers**.
-- StreamNZB returns its ranked movie and episode releases and hands its playback
-  URL directly to Kodi. Configure its server URL and masked stream token;
-  StreamNZB owns indexer search, NZB handling, and server-side failover.
-- Preserve existing NZBGet selections through a one-time migration. Support
-  plugin resolution and TMDBHelper RunScript playback, including episode show
-  identity and season/episode numbers. Kodi reconnect recovery remains unverified.
-
-- **EBML-aware gap concealment for MKV/WebM.** Missing Usenet data no longer
-  always produces a span of plain zeros in these containers. When the proxy
-  can confirm safe element boundaries, it replaces the damaged span with
-  correctly sized EBML `Void` elements. This preserves the container structure
-  so the demuxer can skip the missing data and continue with intact media.
-  Gaps contained within a media payload still use zero padding. Concealment
-  preserves byte offsets and response length, and repeated or overlapping
-  range requests receive the same replacement bytes. Verified fallback cutover
-  runs first, and concealed spans count against the zero-fill budgets.
-  If the proxy can't confirm the structure, it uses plain zeros and logs
-  why. This applies to Matroska and WebM pass-through streams; it does not
-  reconstruct missing frames or guarantee recovery for every format. It
-  needs no separate setting. The approach adapts StreamNZB's
-  EBML hole filling (GPL-3.0).
-- **Complete media filters.** Many more options in each filter group:
-  resolutions from 240p to 4320p, HDR / HDR10+ / Dolby Vision / HLG / SDR,
-  18 audio formats, 14 video codecs, and 48 languages. Languages moved to
-  their own **Languages** settings category. Every group has its own
-  **Other / Unknown** switch, on by default, so releases the parser can't
-  classify are no longer silently dropped. Audio aliases and false language
-  matches were corrected. (#502)
-- **Release ranking and preferred-group tiers.** Relevance now ranks by
-  resolution, then HDR, then Hybrid REMUX / REMUX, then three editable
-  **Preferred groups: Tier 1/2/3** lists seeded from the TRaSH remux tiers.
-  These replace the single preferred-groups list and its **Configure
-  Preferred Groups...** button. Explicitly cleared tiers stay cleared. (#502)
+- **StreamNZB playback backend.** Choose StreamNZB under **Playback backend**,
+  set its server URL and stream token, and pick a release from the full NZB
+  picker with your local filters and sorting. StreamNZB handles indexer search,
+  NZB handling, and server-side failover, and hands Kodi its playback URL.
+  Kodi reconnect recovery for StreamNZB isn't verified yet. (#507, #508)
+- **Duplicate backups for every same-release NZB on NZBGet.** The new **Maximum
+  duplicate backups** setting (`nzbget_max_backups`, default `-1` for all, `0`
+  for none) sends each same-release NZB as a Smart Duplicates backup. Listings
+  of the same Usenet posting (same size within 120 seconds, or more than 1%
+  shared articles) are sent once. NZBGet checks the copies, starts the
+  healthiest, and keeps the rest for failover. A replay within 24 hours reuses
+  the backups NZBGet still holds, and **Maximum standby fallback streams** no
+  longer applies to NZBGet. (#514, #518, #519)
+- **Complete media filters.** Each filter group covers far more options:
+  resolutions from 240p to 4320p, HDR, HDR10+, Dolby Vision, HLG, and SDR, 18
+  audio formats, 14 video codecs, and 48 languages. Every group has an **Other /
+  Unknown** switch, on by default, so releases the parser can't classify aren't
+  silently dropped. (#502)
+- **Release ranking and preferred-group tiers.** Relevance ranks by resolution,
+  then HDR, then Hybrid REMUX or REMUX, then three editable **Preferred groups:
+  Tier 1/2/3** lists seeded from the TRaSH remux tiers. (#502)
 - **Show filtered-out results in the picker.** Press **C** (the context-menu
   key) to switch between filtered and all results. Hidden rows carry a
-  **FILTERED:** chip naming the first filter that rejected them. On Linux
-  devices such as CoreELEC, holding OK for five seconds also shows all
-  results. A search where nothing passes your filters now opens the picker on
-  the full list instead of asking a yes/no question. DL tags, completed-job
-  reuse, and backup selection work for revealed rows too. (#449, #502)
+  **FILTERED:** chip naming the first filter that rejected them, and a search
+  where nothing passes now opens the picker on the full list. (#449, #502)
 - **Movie IMDb lookup.** With a TMDB API key set, movie searches resolve the
-  IMDb id from the TMDB id for more accurate indexer results. The TMDBHelper
-  player file moves to schema 7 and passes `tvdb={tvdb}` for episodes; re-run
-  **Install TMDBHelper Player** to pick it up. (#502)
-
-- **`/resolve-v2` source-manifest route.** External callers (btad) can hand
-  NeNeTeePee-Stream-Kodi a JSON manifest URL (`manifest_url`) listing a release's `title`,
-  `primary_url`, and ordered `source_urls`. The manifest is fetched and
-  validated (http/https only, primary must be one of the sources, 128 KiB
-  cap); an invalid manifest is logged and ignored. The primary URL plays
-  through the normal resolver. In NZBGet mode the other sources are submitted
-  as the Smart Duplicates backup set under a hashed `btad:` DupeKey, so
-  credentials in the URLs never reach NZBGet's DupeKey. (#504)
+  IMDb ID from the TMDB ID for more accurate indexer results. (#502)
+- **EBML-aware gap concealment for MKV and WebM.** When Usenet data is missing
+  and the proxy can confirm safe element boundaries, it fills the gap with
+  correctly sized EBML `Void` elements instead of zeros, so the demuxer skips
+  the gap and keeps playing. Otherwise it falls back to zero fill. Byte offsets
+  and response length are unchanged. (#506)
+- **`/resolve-v2` source manifests.** External callers can pass a JSON manifest
+  listing a release's primary and alternate sources. The primary plays through
+  the normal resolver; on NZBGet the others become duplicate backups. (#504)
 
 ### Changed
 
-- **Search cache duration is set in minutes, default 30.** The setting is now
-  **Cache duration (minutes, 0=off)** (`cache_ttl_minutes`, clamped to
-  0–1440). It replaces the seconds-based `cache_ttl`, whose default had been
-  lowered from 300 to 60 seconds in #502; the old value isn't carried over.
-  Cache entries are also keyed by the enabled provider set.
-- **NZBGet completed folder relabelled.** **SMB Completed Folder** is now
-  **Completed Folder (SMB or Local Path)** and **Test SMB Share** is **Test
-  Completed Folder**. Local and mounted paths already worked for playback;
-  season-pack reuse now accepts them too (beta.2 required an `smb://` root
-  there). (#463)
+- **The search cache now covers TMDBHelper plays.** Replaying a title within
+  the cache window reuses the earlier search instead of querying the indexers
+  again. Entries are keyed by the providers, indexers, and result limit that
+  produced them, and only complete searches are cached. (#520)
+- **NZBGet completed folder can be a local or mounted path.** **SMB Completed
+  Folder** is now **Completed Folder (SMB or Local Path)**, and season-pack
+  reuse accepts local paths too. (#463)
+- **Selecting an NZB no longer runs a second NZBHydra2 search.** Backup
+  discovery reuses the initial search response, so backups are limited to
+  uploads that response returned. (#517)
 
 ### Fixed
 
-- **Zero fill now gets past dead spans of 4 to 16 MB.** Each skip probe the
-  backend answered but couldn't fill (missing articles) was retried with
-  2/4/6/8 s backoff, which spent the 30 s recovery budget before the 16 MB
-  probe ran. The stream then closed even though readable data was close
-  ahead. Missing data now moves straight to the next probe size; only an
-  unreachable backend or a non-2xx status still backs off. Recovery from an
-  8 MB dead span went from a closed stream after about 45 s to under 1 s
-  in live testing.
-- **A concealed span is charged to the zero-fill budget even if Kodi
-  disconnects mid-write.** The proxy stores the plan for replay when it commits
-  it, so it now charges and logs the span at that point, not after the write.
-- **Read-ahead buffer now actually prefetches on Kodi.** The prefetch loop
-  polled for shutdown with `waitForAbort(0)`, which real Kodi treats as wait
-  forever, so the read-ahead daemon parked on its first pass and never
-  filled. It now checks `abortRequested()`, and the test Kodi mocks reject
-  non-positive `waitForAbort` timeouts so this can't slip back in.
-- **Blu-ray `.m2ts` files are recognized as playable video.** Raw BD-rip main
-  titles (for example `00000.m2ts`) were not recognized in NZBGet reuse or
-  WebDAV discovery, so an already-downloaded release was submitted again.
-  `.ts` / `.m2ts` streams now get a `video/mp2t` MIME hint. (#440)
-- Added a regression test that guards NZBGet SMB playback paths against
-  double percent-encoding (no behavior change). (#446)
+- **TMDbHelper scrobbling and monitoring.** TMDbHelper's RunScript path skipped
+  its usual player-info update, so final playback items lacked canonical IDs
+  and Trakt scrobbling could be skipped. The add-on now sets the video info and
+  TMDbHelper player info right before playback on every backend, including
+  completed-download reuse, direct play, resume, and reconnect. (#515)
+- **NZBHydra2 duplicate-uploads lookup.** Hydra refused internal API requests
+  without its XSRF token (HTTP 403), so backup searches never saw Hydra's
+  hidden duplicate uploads. The add-on now retries once with the token Hydra
+  returns. (#516)
+- **Zero fill gets past dead spans of 4 to 16 MB.** Missing data moves straight
+  to the next probe size instead of spending the recovery budget on retries.
+  Recovery from an 8 MB dead span dropped from a closed stream after about 45
+  seconds to under 1 second in live testing. (#506)
+- **The read-ahead buffer prefetches on real Kodi.** It had stopped on its
+  first pass. (#506)
+- **Blu-ray `.m2ts` files play.** Raw BD-rip titles such as `00000.m2ts` are
+  recognized in NZBGet reuse and WebDAV discovery instead of being downloaded
+  again. (#440)
 
 ### Documentation
 
-- Documentation site re-verified against the code: new **Beta channel and
-  beta features** page, rewritten install guide for the Appz4Fun Stable/Beta
-  repositories, and corrected settings, playback, fallback, NZBGet, and
-  internals pages.
-- New **Choose a backend** comparison (nzbdav/InfiniDysk vs NZBGet).
-  InfiniDysk, the maintained nzbdav fork, is now the recommended streaming
-  backend, and NZBHydra2 the recommended search provider. The NZBGet page
-  recommends an NFS hard mount for the completed folder.
+- Settings guides for every tab, with real Kodi screenshots, and refreshed
+  backend guides. (#510, #512)
+- Documentation re-verified against the code, with a new **Beta channel**
+  page, a backend comparison, and an NFS recommendation for the NZBGet
+  completed folder. (#505)
 
 ## [2.0.0-beta.2][] — 2026-07-18
 
@@ -1501,7 +1468,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.2...main
+[Unreleased]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.3...main
+[2.0.0-beta.3]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.2...v2.0.0-beta.3
 [2.0.0-beta.2]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.1...v2.0.0-beta.2
 [2.0.0-beta.1]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v1.2.3...v2.0.0-beta.1
 [1.2.3]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v1.2.2...v1.2.3
