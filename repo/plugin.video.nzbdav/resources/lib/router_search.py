@@ -18,7 +18,11 @@ from concurrent.futures import ThreadPoolExecutor
 from resources.lib.http_util import pubdate_to_epoch
 from resources.lib.hydra import _DEFAULT_HYDRA_URL, _SEARCH_UPLOADS_KEY
 from resources.lib.nzbdav_api import completed_jobs_lookup_done
-from resources.lib.prowlarr import _DEFAULT_PROWLARR_HOST
+
+# settings.xml's prowlarr_host default. The provider snapshot and the search
+# cache tag both seed it, so an unsaved host searches (and keys) the same way
+# on the plugin and RunScript paths.
+_DEFAULT_PROWLARR_HOST = "http://localhost:9696"
 
 # Pre-read defaults for the provider-search settings snapshot
 # (router._search_all_providers wraps every getter in _snapshot_settings_getter

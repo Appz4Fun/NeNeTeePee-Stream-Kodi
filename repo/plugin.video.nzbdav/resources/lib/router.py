@@ -453,7 +453,7 @@ def _provider_cache_tag(settings_getter):
         return str(settings_getter(name, "false") or "").lower() == "true"
 
     from resources.lib.hydra import _DEFAULT_HYDRA_URL
-    from resources.lib.prowlarr import _DEFAULT_PROWLARR_HOST
+    from resources.lib.router_search import _DEFAULT_PROWLARR_HOST
 
     def _url(name, default):
         # The schema default, as the search itself reads it: a URL left at its
@@ -488,13 +488,20 @@ def _provider_cache_tag(settings_getter):
 
 
 def _secret_fingerprint(secret):
-    """A short, non-reversible fingerprint of a credential (``""`` when unset)."""
+    """A short, non-reversible fingerprint of a credential (``""`` when unset).
+
+    Derived with PBKDF2 rather than a bare digest: it only has to change when
+    the key changes, but it must never make the key cheap to brute-force.
+    """
     import hashlib
 
     secret = str(secret or "")
     if not secret:
         return ""
-    return hashlib.sha256(secret.encode("utf-8")).hexdigest()[:12]
+    derived = hashlib.pbkdf2_hmac(
+        "sha256", secret.encode("utf-8"), b"nzbdav-search-cache", 10000
+    )
+    return derived.hex()[:12]
 
 
 def _direct_indexer_fingerprint():
