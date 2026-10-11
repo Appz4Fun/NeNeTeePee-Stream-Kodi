@@ -1,15 +1,9 @@
 # Connect NZBGet
 
-!!! note "Current source and next release"
-    The unified **Playback backend** section and StreamNZB support are not in
-    Stable 1.2.3 or Beta 2.0.0-beta.2. These instructions and screenshots
-    describe current source builds and the next release.
-
-    In released builds, configure nzbdav and WebDAV under **Connection**.
-    Beta 2.0.0-beta.2 has a separate **NZBGet** section with an
-    **Use NZBGet instead of nzbdav for playback** toggle. Stable 1.2.3 supports nzbdav only.
-    StreamNZB requires a current source build until a release includes it.
-
+!!! note "Availability"
+    The unified **Playback backend** section and StreamNZB support ship in
+    Beta 2.0.0-beta.3. Stable 1.2.3 doesn't include them. It configures
+    nzbdav and WebDAV under **Connection** and supports nzbdav only.
 
 Use [NZBGet](https://github.com/nzbgetcom/nzbget) for server installation and configuration instructions. Start with a running server that Kodi can reach.
 

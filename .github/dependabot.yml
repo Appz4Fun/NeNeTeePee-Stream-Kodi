@@ -4,3 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+  # Dev tooling (requirements-dev.txt) and the docs toolchain
+  # (requirements-docs.txt). Neither ships in the add-on zip.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      python-tooling:
+        patterns:
+          - "*"

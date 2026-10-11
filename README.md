@@ -1,6 +1,6 @@
 # NeNeTeePee-Stream-Kodi add-on
 
-Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+Beta 2.0.0-beta.3 and later use the Kodi menu name **NeNeTeePee-Stream-Kodi**. Stable 1.2.3 still uses **NZB-DAV**. In Stable, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**.
 
 [![CI](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/ci.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/codeql.yml/badge.svg)](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/actions/workflows/codeql.yml)
@@ -23,7 +23,7 @@ required. An optional download-first NZBGet backend is also available.
 > (NZBHydra2, Prowlarr, or direct Newznab), your own nzbdav, InfiniDysk, or
 > NZBGet server, and your own Usenet provider.
 
-StreamNZB is also available in the **Playback backend** dropdown. Enter its
+In Beta 2.0.0-beta.3 and later, StreamNZB is also available in the **Playback backend** dropdown. Enter its
 reachable server URL and stream token, and use the existing TMDBHelper player.
 StreamNZB supplies the release list and playback URL, with no NeNeTeePee-Stream-Kodi indexer,
 WebDAV, or proxy configuration required. See the
@@ -93,7 +93,7 @@ delivers automatic updates on one of two channels:
 | Channel | Repository add-on | NeNeTeePee-Stream-Kodi today |
 |---------|-------------------|---------------|
 | **Stable** | `repository.appz4fun.stable` | 1.2.3 |
-| **Beta** | `repository.appz4fun.beta` | 2.0.0-beta.2 (pre-releases included) |
+| **Beta** | `repository.appz4fun.beta` | 2.0.0-beta.3 (pre-releases included) |
 
 1. Open [appz4fun.github.io/Appz4Fun-Kodi-Repo](https://appz4fun.github.io/Appz4Fun-Kodi-Repo/)
    and download the channel zip (for example `repository.appz4fun.stable-1.0.1.zip`).

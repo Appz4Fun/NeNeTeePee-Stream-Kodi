@@ -1,0 +1,25 @@
+# Categories for the PR list GitHub appends to each release body
+# (softprops/action-gh-release generate_release_notes). The curated
+# CHANGELOG.md section comes first; see scripts/release_notes.py.
+# Labels come from the path-based labeler (.github/labeler.yml).
+changelog:
+  exclude:
+    labels:
+      - dependencies
+    authors:
+      - dependabot[bot]
+  categories:
+    - title: Add-on changes
+      labels:
+        - addon
+    - title: Documentation
+      labels:
+        - docs
+    - title: CI, scripts, and tests
+      labels:
+        - ci
+        - scripts
+        - tests
+    - title: Other changes
+      labels:
+        - "*"

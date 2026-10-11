@@ -1,13 +1,9 @@
 # NZBGet backend
 
-!!! note "Current source and next release"
-    The unified **Playback backend** section and StreamNZB support are not in
-    Stable 1.2.3 or Beta 2.0.0-beta.2. The settings layout described here applies
-    to current source builds and the next release. Released builds configure
-    nzbdav and WebDAV under **Connection**. Beta 2.0.0-beta.2 uses a separate
-    **NZBGet** section and the **Use NZBGet instead of nzbdav for playback**
-    toggle. StreamNZB requires a current source build until a release includes it.
-
+!!! note "Availability"
+    The unified **Playback backend** section and StreamNZB support ship in
+    Beta 2.0.0-beta.3. Stable 1.2.3 doesn't include them. It configures
+    nzbdav and WebDAV under **Connection** and supports nzbdav only.
 
 By default, NeNeTeePee-Stream-Kodi downloads and streams through nzbdav. It can use
 **NZBGet** as the backend instead. In that mode it submits the NZB to NZBGet

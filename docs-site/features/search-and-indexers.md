@@ -154,6 +154,6 @@ result fields, see [How it works → Search pipeline](../how-it-works/search-pip
 
 ![Direct and custom indexers and the optional TMDB API key](../images/kodi/indexers-09.png)
 
-These are current-source Kodi screens with example credentials. The [Indexers tab guide](../settings/indexers.md) includes the intervening scrolled screens and explains every provider switch, endpoint, key, indexer ID list, and action. For long values, use [phone copy and paste](../getting-started/phone-remote.md). Follow [TMDB API setup](../getting-started/tmdb-api.md) for the optional identity-lookup key.
+These are Kodi screens from the 2.0.0-beta.3 settings layout, with example credentials. The [Indexers tab guide](../settings/indexers.md) includes the intervening scrolled screens and explains every provider switch, endpoint, key, indexer ID list, and action. For long values, use [phone copy and paste](../getting-started/phone-remote.md). Follow [TMDB API setup](../getting-started/tmdb-api.md) for the optional identity-lookup key.
 
 StreamNZB manages its indexers on the server. If it uses NZBHydra2 as its only Newznab endpoint, follow the [duplicate age threshold recommendation](streamnzb-backend.md#nzbhydra2-as-the-only-streamnzb-indexer) so Hydra does not hide same-release copies before StreamNZB receives them.

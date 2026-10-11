@@ -8,5 +8,5 @@
 # to users, so tracking compatible minor releases is safer than pinning to a
 # single version that may be yanked.
 mkdocs-material>=9.5.0,<10.0.0
-pymdown-extensions>=10.7,<11.0.0
+pymdown-extensions>=11.0.1,<13.0.0
 mkdocs>=1.6.0,<2.0.0

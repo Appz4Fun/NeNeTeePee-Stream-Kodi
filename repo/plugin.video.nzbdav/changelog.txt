@@ -1,1 +1,2 @@
+v2.0.0-beta.3: renamed add-on, StreamNZB, NZBGet fleet, filters, scrobbling.
 v2.0.0-beta.2: Exact season-pack episode reuse, SMB readability gate, polish.

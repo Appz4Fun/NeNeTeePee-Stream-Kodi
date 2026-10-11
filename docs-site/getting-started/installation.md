@@ -23,7 +23,7 @@ Which build each channel serves right now:
 | Channel | NeNeTeePee-Stream-Kodi version | Notes |
 |---------|-----------------|-------|
 | Stable | **1.2.3** | Last non-pre-release build (May 2026). |
-| Beta | **2.0.0-beta.2** | The 2.0.0 line: NZBGet backend, exact season-pack reuse, the rewritten settings, and more. See [Beta channel and beta features](beta-channel.md). |
+| Beta | **2.0.0-beta.3** | The 2.0.0 line, with NZBGet and StreamNZB backends, the unified **Playback backend** settings, exact season-pack reuse, and more. See [Beta channel and beta features](beta-channel.md). |
 
 !!! note "This site documents the newest code"
     These pages follow the `main` branch, which can be ahead of both
@@ -37,10 +37,9 @@ the 2.0.0 features now and are happy to report problems. You can switch later
 (see [Switching channels](beta-channel.md#switching-channels)).
 
 !!! note "Display name in released builds"
-    Stable 1.2.3 and Beta 2.0.0-beta.2 still appear in Kodi as **NZB-DAV**.
-    The source build uses **NeNeTeePee-Stream-Kodi**. The renamed display name
-    appears in released packages after the next release. Both use the add-on
-    ID `plugin.video.nzbdav`.
+    Beta 2.0.0-beta.3 appears in Kodi as **NeNeTeePee-Stream-Kodi**. Stable
+    1.2.3 still appears as **NZB-DAV**. Both use the add-on ID
+    `plugin.video.nzbdav`.
 
 ## Install from the Appz4Fun Kodi repository (recommended)
 
@@ -56,8 +55,8 @@ the 2.0.0 features now and are happy to report problems. You can switch later
    repository zip you downloaded.
 4. Go to **Settings → Add-ons → Install from repository**. Open **Appz4Fun
    Repository** (Stable) or **Appz4Fun Repository (Beta)**, then
-   **Video add-ons → NZB-DAV → Install** for the current released packages.
-   For a renamed source build, select **NeNeTeePee-Stream-Kodi**.
+   **Video add-ons → NeNeTeePee-Stream-Kodi → Install**. On the Stable channel,
+   which serves 1.2.3, the entry is named **NZB-DAV**.
 5. From now on, Kodi updates NeNeTeePee-Stream-Kodi automatically on that channel.
 
 !!! warning "Install one channel only"
@@ -91,7 +90,8 @@ Because Kodi only updates an add-on from the repository it came from,
 installing the new repository alone isn't enough. To move over:
 
 1. Install the Appz4Fun repository zip for your channel (preceding steps 1–3).
-2. Open **Settings → Add-ons → My add-ons → Video add-ons → NZB-DAV** and
+2. Open **Settings → Add-ons → My add-ons → Video add-ons →
+   NZB-DAV** (or **NeNeTeePee-Stream-Kodi** on a renamed build) and
    choose **Versions** (called **Update** on some skins). Pick the newest
    version listed under **Appz4Fun Repository** (or **Appz4Fun Repository
    (Beta)**). NeNeTeePee-Stream-Kodi now updates from the new repository. Your settings are
@@ -106,7 +106,7 @@ Use this if you'd rather not add a repository, or you want a specific version.
 1. Download the add-on zip from the
    [NeNeTeePee-Stream-Kodi releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases).
    Each release has one asset named `plugin.video.nzbdav-<version>.zip`, for
-   example `plugin.video.nzbdav-2.0.0-beta.2.zip`. Releases marked
+   example `plugin.video.nzbdav-2.0.0-beta.3.zip`. Releases marked
    **Pre-release** on GitHub are beta builds.
 2. In Kodi, turn on **Unknown sources** (see the preceding step 2).
 3. Go to **Settings → Add-ons → Install from zip file** and select the file.
@@ -117,9 +117,8 @@ in [Upgrading from the old repository](#upgrading-from-the-legacy-kodi-repositor
 
 ## Verify the install
 
-After installing a current released package, open **Settings → Add-ons → My
-add-ons → Video add-ons → NZB-DAV**. A renamed source build appears as
-**NeNeTeePee-Stream-Kodi** instead. The add-on info page shows the installed version,
+After installing, open **Settings → Add-ons → My add-ons → Video add-ons →
+NeNeTeePee-Stream-Kodi**. Stable 1.2.3 appears as **NZB-DAV** instead. The add-on info page shows the installed version,
 and it shows the repository it came from on skins that display that. A
 background service also starts automatically and runs the local stream proxy
 whenever Kodi is running.

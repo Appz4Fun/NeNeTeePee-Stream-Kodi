@@ -1,6 +1,6 @@
 # Beta channel and beta features
 
-Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+Beta 2.0.0-beta.3 and later use the Kodi menu name **NeNeTeePee-Stream-Kodi**. Stable 1.2.3 still uses **NZB-DAV**. In Stable, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**.
 
 NeNeTeePee-Stream-Kodi ships through two channels of the
 [Appz4Fun Kodi repository](installation.md#choose-a-channel). **Stable** gets
@@ -13,24 +13,32 @@ to report problems.
 | Channel | Version | Released |
 |---------|---------|----------|
 | Stable | 1.2.3 | 2026-05-08 |
-| Beta | 2.0.0-beta.2 | 2026-07-18 |
+| Beta | 2.0.0-beta.3 | 2026-10-11 |
+
+Beta releases so far:
+
+| Version | Released |
+|---------|----------|
+| 2.0.0-beta.3 | 2026-10-11 |
+| 2.0.0-beta.2 | 2026-07-18 |
+| 2.0.0-beta.1 | 2026-07-09 |
 
 The full release list is on the
 [GitHub releases page](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/releases). Any
 release marked **Pre-release** there goes only to the Beta channel. The release
 workflow sets that flag automatically for any version tag with a hyphen, such
-as `v2.0.0-beta.2`.
+as `v2.0.0-beta.3`.
 
 !!! warning "Beta means beta"
-    The 2.0.0 line changes a lot at once: a new download backend, a rewritten
-    settings screen, and reworked fallback and recovery. It gets daily use, but
+    The 2.0.0 line changes a lot at once: new download and streaming backends,
+    a rewritten settings screen, and reworked fallback and recovery. It gets daily use, but
     expect rough edges. If something breaks,
     [report it](#reporting-beta-problems).
 
 ## What's in the beta
 
-These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
-1.2.3. The full notes are in the
+These features are in 2.0.0-beta.1, 2.0.0-beta.2, or 2.0.0-beta.3 and are
+**not** in Stable 1.2.3. The full notes are in the
 [changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md).
 
 ### New features
@@ -38,7 +46,13 @@ These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
 | Feature | What it does | Details |
 |---------|--------------|---------|
 | **NZBGet backend** | Use NZBGet instead of nzbdav. NeNeTeePee-Stream-Kodi submits the NZB, shows download and post-processing progress, then plays the finished file from your completed-downloads folder. | [NZBGet backend](../features/nzbget-backend.md) |
-| **Smart Duplicates failover** (NZBGet) | Other same-name results are queued as backups. If your pick can't be repaired, NZBGet switches to a backup and playback follows it. | [Smart Duplicates](../features/nzbget-backend.md#smart-duplicates-failover) |
+| **Smart Duplicates failover** (NZBGet) | Other same-name results are queued as backups. If your pick can't be repaired, NZBGet switches to a backup and playback follows it. In beta.3, the backups go to NZBGet in one `appendfleet` request. The add-on falls back to one-by-one submissions on servers that don't support it. | [Smart Duplicates](../features/nzbget-backend.md#smart-duplicates-failover) |
+| **StreamNZB backend** (beta.3) | Play through a StreamNZB server with the full NZB picker and the add-on's local filters. | [StreamNZB backend](../features/streamnzb-backend.md) |
+| **One Playback backend section** (beta.3) | A single **Playback backend** section replaces the old **Connection** and **NZBGet** tabs. Your old "use NZBGet" choice is migrated once. NZBHydra2, Prowlarr, and the TMDB key moved to **Indexers**, and languages have their own category. | [Settings guide](../settings/index.md) |
+| **Complete media filters and ranking** (beta.3) | Filters cover resolution, HDR, audio, codec, and language. Results rank by resolution, then HDR, then REMUX, with three editable release-group tiers. The old preferred-groups list is gone. | [Settings reference](../reference/settings.md) |
+| **Show-all picker toggle** (beta.3) | Show filtered-out results in the picker, with the reason each row was filtered. | [Settings reference](../reference/settings.md) |
+| **TMDbHelper scrobbling restored** (beta.3) | TMDbHelper scrobbling works again on every backend. The add-on migrates the TMDbHelper player file to schema 10 automatically and keeps a backup. | [TMDBHelper setup](tmdbhelper.md) |
+| **Shared search cache** (beta.3) | The cache duration is now in minutes (`cache_ttl_minutes`, default 30). TMDBHelper plays use the same cache as the picker. | [Settings reference](../reference/settings.md) |
 | **Exact season-pack episode reuse** (beta.2) | A finished season pack plays the episode you asked for, not the largest file. Later episodes from the same pack play from it without downloading again. | [Reuse a completed season pack](first-playback.md#reuse-a-completed-season-pack) |
 | **Indexer manager** | Add, edit, and remove direct Newznab indexers from a preset list of known indexers, with searches that respect each indexer's capabilities. | [Search and indexers](../features/search-and-indexers.md) |
 | **TVDB-aware TV search** | With an optional TMDB API key, NeNeTeePee-Stream-Kodi looks up the show's TVDB id and searches indexers by id instead of by title. | [Search and indexers](../features/search-and-indexers.md) |
@@ -57,6 +71,13 @@ These features are in 2.0.0-beta.1 or 2.0.0-beta.2 and are **not** in Stable
   readable, you get a "restart Kodi" hint instead of a failed player.
 - **The results dialog** scrolls long labels on the focused row, has
   zebra-striped rows, and keeps remote focus inside the list.
+- **MKV and WebM gaps are concealed with EBML awareness** (beta.3). When a
+  stream has a dead span, the proxy conceals it without breaking the container.
+- **The NZBGet completed folder can be a local or mounted path** (beta.3), not
+  only an SMB share.
+- **`.m2ts` files play** (beta.3).
+- **`/resolve-v2` accepts a source manifest** (beta.3) from external callers:
+  a primary source plus alternates, which become NZBGet duplicate backups.
 - **Large MKVs start faster.** The proxy pre-reads the end of the file, where
   Matroska keeps its seek index, before playback starts.
 - **Prowlarr results** come from Prowlarr's native search API.
@@ -84,8 +105,9 @@ its own.
 3. Optionally uninstall the Stable repository add-on (**Appz4Fun
    Repository**). It no longer affects NeNeTeePee-Stream-Kodi.
 
-Your settings stay in place. The 2.0.0 settings screen adds an **NZBGet**
-category, and every new setting starts at its default.
+Your settings stay in place. Beta 2.0.0-beta.3 replaces the **Connection** and
+**NZBGet** tabs with one **Playback backend** section, and every new setting
+starts at its default.
 
 ## Switching channels
 
@@ -99,9 +121,9 @@ After you switch either way, check that **Auto-update** is still on in the
 add-on info page.
 
 !!! warning "When 2.0.0 final is released"
-    Kodi reads a version like `2.0.0-beta.2` as the base version `2.0.0` plus
+    Kodi reads a version like `2.0.0-beta.3` as the base version `2.0.0` plus
     an extra suffix, and it ranks a version with a suffix **higher than** the same
-    version without one. So Kodi treats `2.0.0-beta.2` as newer than a final
+    version without one. So Kodi treats `2.0.0-beta.3` as newer than a final
     `2.0.0`, and won't offer that update on its own. If a final release has the
     same base number as the beta you're running, install it from
     **Versions**. Any later version, such as `2.0.1`, updates normally.
