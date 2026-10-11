@@ -136,8 +136,10 @@ def _read_fresh_cache(path, cache_ttl, title):
     """
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    timestamp = data.get("timestamp")
-    if not isinstance(timestamp, (int, float)):
+    timestamp = data.get("timestamp") if isinstance(data, dict) else None
+    if not isinstance(timestamp, (int, float)) or not isinstance(
+        data.get("results", []), list
+    ):
         _try_remove(path)
         return None
     if time.time() - timestamp > cache_ttl:
@@ -170,7 +172,8 @@ def get_cached(search_type, title, settings_getter=None, **kwargs):
 
     try:
         return _read_fresh_cache(path, cache_ttl, title)
-    except json.JSONDecodeError:
+    except ValueError:
+        # Corrupt JSON or bytes that aren't UTF-8 (both ValueErrors): a miss.
         _try_remove(path)
         return None
     except OSError:

@@ -5423,9 +5423,40 @@ def test_attach_nzbget_dupe_builds_nothing_off_the_nzbget_backend():
 def test_provider_cache_tag_names_enabled_providers():
     from resources.lib.router import _provider_cache_tag
 
-    settings = {"nzbhydra_enabled": "false", "prowlarr_enabled": "true"}
-    tag = _provider_cache_tag(lambda key, default="": settings.get(key, default))
-    assert tag == "prowlarr_enabled"
+    settings = {
+        "nzbhydra_enabled": "false",
+        "prowlarr_enabled": "true",
+        "prowlarr_host": "http://prowlarr:9696",
+        "prowlarr_indexer_ids": "1,2",
+    }
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1,2"
+    settings["prowlarr_indexer_ids"] = "1"
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1"
+
+
+@patch("resources.lib.direct_indexers.get_configured_indexers")
+def test_provider_cache_tag_changes_with_enabled_direct_indexers(mock_indexers):
+    """Toggling one direct indexer must change the key, not keep stale rows."""
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {"direct_indexers_enabled": "true"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    mock_indexers.return_value = [
+        {"id": "geek", "api_url": "https://geek/api"},
+        {"id": "slug", "api_url": "https://slug/api"},
+    ]
+    both = _provider_cache_tag(getter)
+    mock_indexers.return_value = [{"id": "geek", "api_url": "https://geek/api"}]
+    assert _provider_cache_tag(getter) != both
+    mock_indexers.side_effect = RuntimeError("settings unavailable")
+    assert _provider_cache_tag(getter) == "direct=?"
 
 
 @patch("resources.lib.router_play._play_search_getter")

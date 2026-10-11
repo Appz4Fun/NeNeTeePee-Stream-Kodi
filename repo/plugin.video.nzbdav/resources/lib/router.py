@@ -439,16 +439,46 @@ def _script_completed_job_for_selection(selected):
 
 
 def _provider_cache_tag(settings_getter):
-    """The enabled provider set under ``settings_getter``, for the search cache key.
+    """The provider set searched under ``settings_getter``, for the search cache key.
 
     ``/play`` forces NZBHydra2 on while the RunScript player follows the
-    settings, so each path's cache entry names the providers it searched.
+    settings, and the Prowlarr indexer IDs and enabled direct indexers can
+    change at any time, so each cache entry names exactly what it searched.
     """
-    names = ("nzbhydra_enabled", "prowlarr_enabled", "direct_indexers_enabled")
+
+    def _on(name):
+        return str(settings_getter(name, "false") or "").lower() == "true"
+
+    parts = []
+    if _on("nzbhydra_enabled"):
+        parts.append("nzbhydra={}".format(settings_getter("hydra_url", "") or ""))
+    if _on("prowlarr_enabled"):
+        parts.append(
+            "prowlarr={}|{}".format(
+                settings_getter("prowlarr_host", "") or "",
+                settings_getter("prowlarr_indexer_ids", "") or "",
+            )
+        )
+    if _on("direct_indexers_enabled"):
+        parts.append("direct={}".format(_direct_indexer_fingerprint()))
+    return ";".join(parts)
+
+
+def _direct_indexer_fingerprint():
+    """The enabled direct indexers (ID and API URL), sorted; ``?`` if unreadable."""
+    try:
+        from resources.lib.direct_indexers import get_configured_indexers
+
+        indexers = get_configured_indexers()
+    except Exception:  # pylint: disable=broad-except
+        # An unreadable indexer list only costs this entry its cache sharing.
+        return "?"
     return ",".join(
-        name
-        for name in names
-        if str(settings_getter(name, "false") or "").lower() == "true"
+        sorted(
+            "{}@{}".format(item.get("id"), item.get("api_url"))
+            for item in indexers or []
+            if isinstance(item, dict)
+        )
     )
 
 

@@ -8,6 +8,7 @@ import time
 from collections import namedtuple
 from unittest.mock import MagicMock, patch
 
+import pytest
 import resources.lib.cache as cache_module
 from resources.lib.cache import (
     _cache_key,
@@ -544,3 +545,26 @@ def test_cache_key_separates_provider_sets():
     assert with_hydra == _cache_key(
         "episode", "Task", providers="nzbhydra_enabled", **base
     )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [b"[]", b'{"timestamp": 1e18, "results": "x"}', b"\xff\xfe not utf-8"],
+    ids=["non-object root", "non-list results", "non-utf8 bytes"],
+)
+@patch("resources.lib.cache._get_cache_dir")
+@patch("resources.lib.cache.xbmcaddon")
+def test_malformed_cache_entry_is_a_miss_and_removed(
+    mock_addon_mod, mock_cache_dir, raw
+):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mock_cache_dir.return_value = tmpdir
+        addon = MagicMock()
+        addon.getSetting.return_value = "30"
+        mock_addon_mod.Addon.return_value = addon
+        path = os.path.join(tmpdir, _cache_key("movie", "Bad") + ".json")
+        with open(path, "wb") as f:
+            f.write(raw)
+
+        assert get_cached("movie", "Bad") is None
+        assert not os.path.exists(path)
