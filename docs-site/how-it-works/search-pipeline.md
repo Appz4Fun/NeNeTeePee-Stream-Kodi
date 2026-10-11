@@ -141,10 +141,11 @@ over the full row set, so rows revealed by show-all keep them.
 ## Caching
 
 NeNeTeePee-Stream-Kodi caches the merged, **pre-filter** results on disk, keyed by a SHA-256 of
-the search type, title, year, season/episode, and IDs. That means:
+the search type, title, year, season/episode, IDs, and the enabled provider set. That means:
 
-- Re-opening the same title is instant within the cache duration (default 60 s,
-  capped at 86400 s).
+- Re-opening the same title is instant within the cache duration (default 30
+  minutes, capped at 1440 minutes).
+- A search made with different providers enabled never reuses another's entry.
 - Changing filter or sort settings takes effect immediately. No new search
   needed, because filtering runs fresh on every read.
 - The cache self-limits to 50 MB and 1000 entries, evicting the oldest first,

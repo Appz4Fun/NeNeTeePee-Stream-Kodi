@@ -48,8 +48,17 @@ def _cache_path(search_type, title, kwargs):
     return os.path.join(cache_dir, _cache_key(search_type, title, **kwargs) + ".json")
 
 
-def _cache_key(
-    search_type, title, year="", imdb="", season="", episode="", tvdb="", tmdb_id=""
+def _cache_key(  # pylint: disable=too-many-arguments
+    search_type,
+    title,
+    year="",
+    imdb="",
+    season="",
+    episode="",
+    tvdb="",
+    tmdb_id="",
+    *,
+    providers="",
 ):
     """Generate a filesystem-safe, collision-resistant cache key.
 
@@ -63,10 +72,13 @@ def _cache_key(
     filename, no collisions in practice. Prefix the ``search_type`` so
     a glance at the cache dir still shows which bucket a file belongs
     to; the readable ``_make_legible_slug`` tail is cosmetic.
+
+    ``providers`` names the enabled provider set: searches made with
+    different providers never share an entry.
     """
     import hashlib
 
-    parts = [search_type, title, year, imdb, season, episode, tvdb, tmdb_id]
+    parts = [search_type, title, year, imdb, season, episode, tvdb, tmdb_id, providers]
     joined = "\x1f".join(str(p) for p in parts)  # unit-separator—can't appear in inputs
     digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
     legible = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:40]

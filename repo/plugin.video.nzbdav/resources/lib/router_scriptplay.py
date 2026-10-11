@@ -139,7 +139,8 @@ def _script_play_search_results(
     from resources.lib.search_planner import SearchQuery
 
     getter = _router._get_script_setting
-    results = get_cached(search_type, title, settings_getter=getter, **search_kwargs)
+    cache_kwargs = dict(search_kwargs, providers=_router._provider_cache_tag(getter))
+    results = get_cached(search_type, title, settings_getter=getter, **cache_kwargs)
     if results is not None:
         _router._script_play_stage(
             "loaded {} results from cache for '{}'".format(len(results), title)
@@ -156,7 +157,7 @@ def _script_play_search_results(
         )
         if results and not search_error:
             set_cached(
-                search_type, title, results, settings_getter=getter, **search_kwargs
+                search_type, title, results, settings_getter=getter, **cache_kwargs
             )
     if search_error:
         xbmc.log(

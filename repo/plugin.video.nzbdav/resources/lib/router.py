@@ -438,6 +438,20 @@ def _script_completed_job_for_selection(selected):
         return None
 
 
+def _provider_cache_tag(settings_getter):
+    """The enabled provider set under ``settings_getter``, for the search cache key.
+
+    ``/play`` forces NZBHydra2 on while the RunScript player follows the
+    settings, so each path's cache entry names the providers it searched.
+    """
+    names = ("nzbhydra_enabled", "prowlarr_enabled", "direct_indexers_enabled")
+    return ",".join(
+        name
+        for name in names
+        if str(settings_getter(name, "false") or "").lower() == "true"
+    )
+
+
 def _search_all_providers(query, settings_getter=None):
     """
     Search enabled indexer providers and return combined, deduplicated results.

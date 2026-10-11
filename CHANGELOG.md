@@ -172,8 +172,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Search cache duration is set in minutes, default 30.** The setting is now
   **Cache duration (minutes, 0=off)** (`cache_ttl_minutes`, clamped to
-  0–1440). The old seconds-based `cache_ttl` value isn't carried over.
-- **Search cache default lowered from 300 to 60 seconds.** (#502)
+  0–1440). It replaces the seconds-based `cache_ttl`, whose default had been
+  lowered from 300 to 60 seconds in #502; the old value isn't carried over.
+  Cache entries are also keyed by the enabled provider set.
 - **NZBGet completed folder relabelled.** **SMB Completed Folder** is now
   **Completed Folder (SMB or Local Path)** and **Test SMB Share** is **Test
   Completed Folder**. Local and mounted paths already worked for playback;

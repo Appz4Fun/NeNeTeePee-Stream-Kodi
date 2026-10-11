@@ -5418,3 +5418,50 @@ def test_attach_nzbget_dupe_builds_nothing_off_the_nzbget_backend():
     assert "_fallback_stop" not in selected
     loader.assert_not_called()
     hydra.assert_not_called()
+
+
+def test_provider_cache_tag_names_enabled_providers():
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {"nzbhydra_enabled": "false", "prowlarr_enabled": "true"}
+    tag = _provider_cache_tag(lambda key, default="": settings.get(key, default))
+    assert tag == "prowlarr_enabled"
+
+
+@patch("resources.lib.router_play._play_search_getter")
+@patch("resources.lib.router._search_all_providers")
+def test_play_and_script_paths_do_not_share_cache_across_provider_sets(
+    mock_search, mock_play_getter
+):
+    """``/play`` forces NZBHydra2 on; a Prowlarr-only TMDBHelper play must not
+    reuse its cached results (nor the reverse)."""
+    from resources.lib.router_play import _search_with_cache
+    from resources.lib.router_scriptplay import _script_play_search_results
+
+    settings = {"nzbhydra_enabled": "false", "prowlarr_enabled": "true"}
+    mock_play_getter.return_value = lambda key, default="": (
+        "true" if key == "nzbhydra_enabled" else settings.get(key, default)
+    )
+    hydra_row = {"title": "Task.S01E03.Hydra.mkv", "link": "http://hydra/1"}
+    prowlarr_row = {"title": "Task.S01E03.Prowlarr.mkv", "link": "http://prowlarr/1"}
+    kwargs = dict(year="2025", imdb="tt1", season="1", episode="3", tvdb="", tmdb_id="")
+
+    with patch(
+        "resources.lib.router._get_script_setting",
+        side_effect=lambda key, default="": settings.get(key, default),
+    ), patch("resources.lib.cache._get_cache_ttl_seconds", return_value=1800):
+        mock_search.return_value = ([hydra_row], None)
+        assert _search_with_cache("episode", "Task", kwargs) == ([hydra_row], None)
+
+        mock_search.return_value = ([prowlarr_row], None)
+        assert _script_play_search_results("episode", "Task", kwargs, MagicMock()) == [
+            prowlarr_row
+        ]
+        assert mock_search.call_count == 2
+
+        # Each path now hits its own entry.
+        assert _search_with_cache("episode", "Task", kwargs) == ([hydra_row], None)
+        assert _script_play_search_results("episode", "Task", kwargs, MagicMock()) == [
+            prowlarr_row
+        ]
+        assert mock_search.call_count == 2

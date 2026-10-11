@@ -533,3 +533,14 @@ def test_unusable_cache_folder_skips_eviction():
         cache_module, "_get_cache_dir", side_effect=PermissionError("read-only")
     ):
         _evict_oldest()  # must not raise
+
+
+def test_cache_key_separates_provider_sets():
+    """A search made with Hydra on must never answer one made with it off."""
+    base = dict(year="2026", imdb="tt1", season="1", episode="3")
+    with_hydra = _cache_key("episode", "Task", providers="nzbhydra_enabled", **base)
+    without = _cache_key("episode", "Task", providers="prowlarr_enabled", **base)
+    assert with_hydra != without
+    assert with_hydra == _cache_key(
+        "episode", "Task", providers="nzbhydra_enabled", **base
+    )

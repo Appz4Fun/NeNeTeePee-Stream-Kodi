@@ -35,15 +35,18 @@ def _search_with_cache(search_type, title, cache_kwargs):
     ``_handle_search`` stages. ``search_error`` is non-empty only on a provider
     failure; a clean empty result returns ``([], None)``.
     """
+    import resources.lib.router as _router
     from resources.lib.cache import get_cached, set_cached
 
+    getter = _play_search_getter()
+    providers = _router._provider_cache_tag(getter)
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: Search stage: checking cache for '{}' ({})".format(
             title, search_type
         ),
         xbmc.LOGDEBUG,
     )
-    results = get_cached(search_type, title, **cache_kwargs)
+    results = get_cached(search_type, title, providers=providers, **cache_kwargs)
     if results is not None:
         xbmc.log(
             (
@@ -54,19 +57,35 @@ def _search_with_cache(search_type, title, cache_kwargs):
         )
         return results, None
 
-    return _query_and_cache_providers(search_type, title, cache_kwargs, set_cached)
+    return _query_and_cache_providers(
+        search_type, title, cache_kwargs, set_cached, getter, providers
+    )
 
 
-def _query_and_cache_providers(search_type, title, cache_kwargs, set_cached):
+def _play_search_getter():
+    """The ``/play`` and ``/search`` provider settings: NZBHydra2 always on."""
+    import resources.lib.router as _router
+
+    addon = xbmcaddon.Addon("plugin.video.nzbdav")
+    return lambda key, default="": (
+        "true"
+        if key == "nzbhydra_enabled"
+        else _router._get_addon_setting(addon, key, default)
+    )
+
+
+def _query_and_cache_providers(  # pylint: disable=too-many-arguments
+    search_type, title, cache_kwargs, set_cached, getter=None, providers=""
+):
     """Query all enabled providers on a cache miss and cache any results.
 
     Returns ``(results, search_error)``; caches results only on a clean
-    (non-error) non-empty query. Extracted verbatim from ``_search_with_cache``.
+    (non-error) non-empty query, under the ``providers`` set it searched.
     """
     import resources.lib.router as _router
     from resources.lib.search_planner import SearchQuery
 
-    addon = xbmcaddon.Addon("plugin.video.nzbdav")
+    getter = getter or _play_search_getter()
     xbmc.log(
         ("NeNeTeePee-Stream-Kodi: Search stage: querying providers for '{}'").format(
             title
@@ -74,14 +93,7 @@ def _query_and_cache_providers(search_type, title, cache_kwargs, set_cached):
         xbmc.LOGDEBUG,
     )
     query = SearchQuery(search_type=search_type, title=title, **cache_kwargs)
-    results, search_error = _router._search_all_providers(
-        query,
-        settings_getter=lambda key, default="": (
-            "true"
-            if key == "nzbhydra_enabled"
-            else _router._get_addon_setting(addon, key, default)
-        ),
-    )
+    results, search_error = _router._search_all_providers(query, settings_getter=getter)
     if search_error:
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Search stage: provider error — {}").format(
@@ -97,7 +109,7 @@ def _query_and_cache_providers(search_type, title, cache_kwargs, set_cached):
             ),
             xbmc.LOGDEBUG,
         )
-        set_cached(search_type, title, results, **cache_kwargs)
+        set_cached(search_type, title, results, providers=providers, **cache_kwargs)
     return results, None
 
 
