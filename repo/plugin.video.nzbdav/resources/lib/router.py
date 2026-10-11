@@ -586,6 +586,7 @@ def _search_all_providers(query, settings_getter=None, outcome=None):
         "episode": episode,
         "tvdb": tvdb,
     }
+    direct_outcome = {}
     provider_jobs = _build_provider_jobs(
         nzbhydra_enabled,
         prowlarr_enabled,
@@ -593,13 +594,16 @@ def _search_all_providers(query, settings_getter=None, outcome=None):
         search_args,
         common_kwargs,
         provider_settings_getter,
+        direct_outcome=direct_outcome,
     )
 
     provider_outcomes = _run_provider_jobs(provider_jobs)
     if outcome is not None:
+        # The direct-indexer fan-out returns surviving rows without an error
+        # when only some indexers failed; it reports that partial state here.
         outcome["complete"] = not any(
             error for _label, (_rows, error) in provider_outcomes
-        )
+        ) and direct_outcome.get("complete", True)
     return _collect_provider_outcomes(provider_outcomes)
 
 

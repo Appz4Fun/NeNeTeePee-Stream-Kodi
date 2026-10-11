@@ -306,6 +306,7 @@ def test_search_all_providers_calls_direct_indexers_when_enabled(mock_addon):
         ),
         indexers=ANY,
         max_results=ANY,
+        outcome=ANY,
     )
 
 
@@ -5620,3 +5621,30 @@ def test_provider_snapshot_seeds_the_prowlarr_schema_default():
     from resources.lib.router_search import _PROVIDER_SEARCH_SETTING_DEFAULTS
 
     assert _PROVIDER_SEARCH_SETTING_DEFAULTS["prowlarr_host"] == "http://localhost:9696"
+
+
+def test_search_all_providers_marks_partial_direct_fanout_incomplete():
+    from resources.lib.router import _search_all_providers
+
+    row = {"title": "Movie.2026.mkv", "link": "https://geek/1"}
+    settings = {"direct_indexers_enabled": "true"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    def build_jobs(*_args, direct_outcome=None, **_kwargs):
+        direct_outcome["complete"] = False  # one direct indexer failed
+        return []
+
+    outcome = {}
+    with patch(
+        "resources.lib.router._build_provider_jobs", side_effect=build_jobs
+    ), patch(
+        "resources.lib.router._run_provider_jobs",
+        return_value=[("Direct indexer", ([row], None))],
+    ):
+        results, error = _search_all_providers(
+            SearchQuery("movie", "Movie"), settings_getter=getter, outcome=outcome
+        )
+    assert results == [row] and error is None
+    assert outcome == {"complete": False}

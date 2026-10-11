@@ -45,8 +45,13 @@ def _build_provider_jobs(
     search_args,
     common_kwargs,
     provider_settings_getter,
+    direct_outcome=None,
 ):
-    """Assemble the (key, label, func, args, kwargs) tuples for enabled providers."""
+    """Assemble the (key, label, func, args, kwargs) tuples for enabled providers.
+
+    ``direct_outcome`` (optional dict) receives the direct-indexer fan-out's
+    ``"complete"`` flag (see ``search_direct_indexers``).
+    """
     provider_jobs = []
 
     if nzbhydra_enabled:
@@ -85,6 +90,8 @@ def _build_provider_jobs(
             indexers=get_configured_indexers(),
             max_results=_read_max_results(provider_settings_getter),
         )
+        if direct_outcome is not None:
+            kwargs["outcome"] = direct_outcome
         provider_jobs.append(
             (
                 "direct indexers",

@@ -898,3 +898,37 @@ def test_test_configured_indexers_counts_caps_success(mock_http, mock_configured
     assert ok_count == 1
     assert total_count == 2
     assert errors == ["Direct indexer Two unavailable: down"]
+
+
+@patch("resources.lib.direct_indexers._search_one_indexer")
+def test_search_direct_indexers_reports_partial_failure(mock_one):
+    """One indexer failing while another answers keeps the rows but reports
+    the search incomplete, so it is never cached."""
+    from resources.lib.direct_indexers import search_direct_indexers
+
+    row = {"title": "The.Matrix.1999.mkv", "link": "https://geek/1"}
+    mock_one.side_effect = lambda indexer, query, max_results: (
+        ([row], None) if indexer["id"] == "geek" else ([], "slug: HTTP 503")
+    )
+    indexers = [
+        {"id": "geek", "api_url": "https://geek/api", "api_key": "k"},
+        {"id": "slug", "api_url": "https://slug/api", "api_key": "k"},
+    ]
+    outcome = {}
+    results, error = search_direct_indexers(
+        SearchQuery("movie", "The Matrix"),
+        indexers=indexers,
+        max_results=25,
+        outcome=outcome,
+    )
+    assert results == [row] and error is None
+    assert outcome == {"complete": False}
+
+    mock_one.side_effect = lambda indexer, query, max_results: ([row], None)
+    search_direct_indexers(
+        SearchQuery("movie", "The Matrix"),
+        indexers=indexers,
+        max_results=25,
+        outcome=outcome,
+    )
+    assert outcome == {"complete": True}
