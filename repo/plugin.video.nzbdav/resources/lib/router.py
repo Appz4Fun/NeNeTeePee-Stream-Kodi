@@ -438,6 +438,10 @@ def _script_completed_job_for_selection(selected):
         return None
 
 
+# settings.xml's prowlarr_host default (the plugin path's getter returns it).
+_DEFAULT_PROWLARR_HOST = "http://localhost:9696"
+
+
 def _provider_cache_tag(settings_getter):
     """The provider set searched under ``settings_getter``, for the search cache key.
 
@@ -449,13 +453,20 @@ def _provider_cache_tag(settings_getter):
     def _on(name):
         return str(settings_getter(name, "false") or "").lower() == "true"
 
+    from resources.lib.hydra import _DEFAULT_HYDRA_URL
+
+    def _url(name, default):
+        # The schema default, as the search itself reads it: a URL left at its
+        # default keys the same entry on both the plugin and RunScript paths.
+        return str(settings_getter(name, default) or "").rstrip("/")
+
     parts = []
     if _on("nzbhydra_enabled"):
-        parts.append("nzbhydra={}".format(settings_getter("hydra_url", "") or ""))
+        parts.append("nzbhydra={}".format(_url("hydra_url", _DEFAULT_HYDRA_URL)))
     if _on("prowlarr_enabled"):
         parts.append(
             "prowlarr={}|{}".format(
-                settings_getter("prowlarr_host", "") or "",
+                _url("prowlarr_host", _DEFAULT_PROWLARR_HOST),
                 settings_getter("prowlarr_indexer_ids", "") or "",
             )
         )

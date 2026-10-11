@@ -128,6 +128,16 @@ def _try_remove(path):
         pass
 
 
+def _well_formed(data):
+    """Whether ``results`` (and any ``hydra_uploads``) are lists of objects."""
+    results = data.get("results", [])
+    uploads = data.get("hydra_uploads")
+    return all(
+        isinstance(rows, list) and all(isinstance(row, dict) for row in rows)
+        for rows in (results, [] if uploads is None else uploads)
+    )
+
+
 def _read_fresh_cache(path, cache_ttl, title):
     """Return cached results if present and fresh, else None.
 
@@ -137,9 +147,7 @@ def _read_fresh_cache(path, cache_ttl, title):
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     timestamp = data.get("timestamp") if isinstance(data, dict) else None
-    if not isinstance(timestamp, (int, float)) or not isinstance(
-        data.get("results", []), list
-    ):
+    if not isinstance(timestamp, (int, float)) or not _well_formed(data):
         _try_remove(path)
         return None
     if time.time() - timestamp > cache_ttl:

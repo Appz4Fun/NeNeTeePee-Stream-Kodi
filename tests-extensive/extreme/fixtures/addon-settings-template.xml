@@ -61,7 +61,7 @@
     <setting id="poll_interval">1</setting>
     <setting id="download_timeout">3600</setting>
     <setting id="submit_timeout">120</setting>
-    <setting id="cache_ttl">300</setting>
+    <setting id="cache_ttl_minutes">5</setting>
     <setting id="stream_auto_retry">true</setting>
     <setting id="stream_max_retries">3</setting>
     <setting id="stream_retry_delay">5</setting>

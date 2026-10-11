@@ -5459,6 +5459,26 @@ def test_provider_cache_tag_changes_with_enabled_direct_indexers(mock_indexers):
     assert _provider_cache_tag(getter) == "direct=?"
 
 
+def test_provider_cache_tag_uses_schema_url_defaults():
+    """An unsaved Hydra/Prowlarr URL keys like the schema default the plugin
+    path's Kodi getter returns, so both paths share one entry."""
+    from resources.lib.router import _provider_cache_tag
+
+    flags = {"nzbhydra_enabled": "true", "prowlarr_enabled": "true"}
+
+    def raw_xml(key, default=""):  # RunScript reader: missing key -> default
+        return flags.get(key, default)
+
+    def kodi(key, default=""):  # plugin path: Kodi fills the schema default
+        schema = {
+            "hydra_url": "http://localhost:5076/",
+            "prowlarr_host": "http://localhost:9696",
+        }
+        return flags.get(key, schema.get(key, default))
+
+    assert _provider_cache_tag(raw_xml) == _provider_cache_tag(kodi)
+
+
 @patch("resources.lib.router_play._play_search_getter")
 @patch("resources.lib.router._search_all_providers")
 def test_play_and_script_paths_do_not_share_cache_across_provider_sets(
