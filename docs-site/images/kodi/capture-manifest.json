@@ -1,7 +1,7 @@
 {
-  "captured_on": "2026-10-03",
-  "environment": "OrbStack kodi-ebml, Ubuntu ARM64, Kodi 21.3, Estuary, 1280x720",
-  "addon_source_commit": "db07f61d4090a0c89ec8461ee9b3ca34f9607aa6",
+  "captured_on": "2026-10-11",
+  "environment": "OrbStack kodi-shots, Ubuntu 24.04 ARM64, Kodi 21.3 (flatpak), Estuary, 1280x720; tabs other than Playback backend and Advanced: OrbStack kodi-ebml, 2026-10-03, commit db07f61d4090a0c89ec8461ee9b3ca34f9607aa6",
+  "addon_source_commit": "5a50676c56f2b4c2fa19a2f52df6157a1a939e18",
   "beta_catalog_addon": "NZB-DAV 2.0.0-beta.2",
   "debug_overlay": false,
   "credential_values": "synthetic example values for add-on screens; Kodi remote password masked",
@@ -18,32 +18,37 @@
     },
     {
       "file": "advanced-01.png",
-      "sha256": "8e904ffbb3685a6fac95d4a34a54effc175e02b7df6f1568ec2cde17992ccd66",
+      "sha256": "a60e8bbf3f5b76762d07ed13ccc7232578a22e347b1da095bdc69f2d6cdb2e37",
       "context": "addon-source"
     },
     {
-      "file": "advanced-02.png",
-      "sha256": "9cd8512636fbedc66984bc17fce129ce4df525a19c2b6b8c58a1bd9a4c236bcb",
+      "file": "backend-nzbdav-02.png",
+      "sha256": "a893c2730be7491fd024cfbd76061c5b66db4d74bc06fc5b73d8ccfd7433900a",
       "context": "addon-source"
     },
     {
-      "file": "advanced-03.png",
-      "sha256": "9de91fbab752fc457e02f6c98f0a51a25e17d129dd28e78e8beda5d0def131c9",
+      "file": "backend-nzbdav-03.png",
+      "sha256": "22719ef9e0c4ec8395c4be320c341c44d45310fdfc55ba42f63a50c00c168fb8",
       "context": "addon-source"
     },
     {
       "file": "backend-nzbdav.png",
-      "sha256": "9f2340b2d8b1b3e7ad4425300974d42c669822f60c284a91ad9d19e1b69a9bd6",
+      "sha256": "eee678d1c561bf701123012ced2f6e5de001c8d8558b68629116d01341bdad14",
+      "context": "addon-source"
+    },
+    {
+      "file": "backend-nzbget-02.png",
+      "sha256": "7729081097ec4e850a4fc6278783102fbcf5a449faca437639ed99e484f9790e",
       "context": "addon-source"
     },
     {
       "file": "backend-nzbget.png",
-      "sha256": "202cc3548ac5e7e5f56d7d1f59d81fd5c30bf6c5f0498a6a4cbe86da19de02a2",
+      "sha256": "45dd0ae42fa72761bde0039ee08db80563017eae361e3ec620534bfea3cc3e04",
       "context": "addon-source"
     },
     {
       "file": "backend-streamnzb.png",
-      "sha256": "80becf432abddb54419dc346b9f36ce4b1b3cd5dabb551d97edb766514b314e3",
+      "sha256": "c330ccf56adb85396c860b03b52e01a9a8a2bcba9598a4258fbc47604816fb4f",
       "context": "addon-source"
     },
     {

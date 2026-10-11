@@ -4977,11 +4977,21 @@ def test_nzbget_dupe_submission_none_when_backend_or_setting_off():
         assert (
             _nzbget_dupe_submission_for_selection(selected, filtered, identity) is None
         )
+    # The nzbdav fallback switch no longer gates NZBGet backups.
     with patch(
         "resources.lib.router._get_addon_setting",
         _dupe_setting_getter(
             {"nzbget_enabled": "true", "fallback_streams_enabled": "false"}
         ),
+    ):
+        assert (
+            _nzbget_dupe_submission_for_selection(selected, filtered, identity)
+            is not None
+        )
+    # Only Maximum duplicate backups = 0 turns them off.
+    with patch(
+        "resources.lib.router._get_addon_setting",
+        _dupe_setting_getter({"nzbget_enabled": "true", "nzbget_max_backups": "0"}),
     ):
         assert (
             _nzbget_dupe_submission_for_selection(selected, filtered, identity) is None

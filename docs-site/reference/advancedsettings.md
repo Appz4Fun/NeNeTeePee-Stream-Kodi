@@ -18,8 +18,8 @@ There are two ways around this:
 - **Set Kodi's cache memory size to `0`** with
   `<cache><memorysize>0</memorysize></cache>`. Per NeNeTeePee-Stream-Kodi's design notes,
   pass-through then plays these files with **full seeking**.
-- **Leave the cache as it is** and set **Large non-MP4 stream mode** (Advanced
-  tab) to a remux tier. NeNeTeePee-Stream-Kodi then serves large files through ffmpeg as an
+- **Leave the cache as it is** and set **Large non-MP4 stream mode** (Playback backend
+  tab, with nzbdav / InfiniDysk selected) to a remux tier. NeNeTeePee-Stream-Kodi then serves large files through ffmpeg as an
   unsized stream, which hides the true file size from Kodi:
     - **Matroska remux** works, but seeking is **bounded** to what Kodi has
       already buffered. The pipe has no byte ranges, and the proxy doesn't

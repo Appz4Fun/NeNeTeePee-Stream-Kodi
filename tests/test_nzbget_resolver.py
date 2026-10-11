@@ -3499,15 +3499,23 @@ def test_manifest_fleet_honors_nzbget_max_backups(cap, expected):
         assert dupe["max_backups"] == expected
 
 
-def test_manifest_fleet_honors_the_fallback_switch():
-    # Codex r15: fallback_streams_enabled=false turns manifest backups off too.
+def test_manifest_fleet_ignores_the_nzbdav_fallback_switch():
+    # fallback_streams_enabled is nzbdav-only; only nzbget_max_backups=0
+    # turns manifest backups off.
     sources = ["https://indexer/{}.nzb".format(i) for i in range(3)]
+    fleet = _manifest_dupe_submission(
+        sources[0],
+        "Movie",
+        {"_source_urls": sources},
+        _settings({"fallback_streams_enabled": "false"}),
+    )
+    assert fleet is not None and len(fleet["backups"]) == 2
     assert (
         _manifest_dupe_submission(
             sources[0],
             "Movie",
             {"_source_urls": sources},
-            _settings({"fallback_streams_enabled": "false"}),
+            _settings({"nzbget_max_backups": "0"}),
         )
         is None
     )

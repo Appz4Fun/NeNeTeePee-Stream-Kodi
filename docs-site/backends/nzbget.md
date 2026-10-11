@@ -7,9 +7,11 @@
 
 Use [NZBGet](https://github.com/nzbgetcom/nzbget) for server installation and configuration instructions. Start with a running server that Kodi can reach.
 
-![Example add-on settings for nzbget](../images/kodi/backend-nzbget.png)
+![Example add-on settings for nzbget, view 1](../images/kodi/backend-nzbget.png)
 
-This is a real Kodi screenshot from the captured `origin/main` build, using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
+![Example add-on settings for nzbget, view 2](../images/kodi/backend-nzbget-02.png)
+
+These are real Kodi screenshots from the [captured add-on build](../settings/index.md#capture-details), using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
 
 ## Configure the add-on
 

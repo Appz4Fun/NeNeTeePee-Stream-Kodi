@@ -115,6 +115,15 @@
 						<dependency type="visible" setting="playback_backend">0</dependency>
 					</dependencies>
 				</setting>
+				<setting id="webdav_content_root" type="string">
+					<level>0</level>
+					<default></default>
+					<constraints>
+						<allowempty>true</allowempty>
+					</constraints>
+					<visible>false</visible>
+					<control type="edit" format="string"/>
+				</setting>
 				<setting id="nzbget_url" type="string" label="30211" help="30250">
 					<level>0</level>
 					<default>http://localhost:6789</default>
@@ -209,6 +218,199 @@
 					</control>
 					<dependencies>
 						<dependency type="visible" setting="playback_backend">1</dependency>
+					</dependencies>
+				</setting>
+				<setting id="nzbget_backup_switch_migrated" type="boolean">
+					<level>0</level>
+					<default>false</default>
+					<visible>false</visible>
+					<control type="toggle"/>
+				</setting>
+				<setting id="submit_timeout" type="integer" label="30122" help="30337">
+					<level>0</level>
+					<default>300</default>
+					<control type="edit" format="integer">
+						<heading>30122</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="clear_queue_on_submit" type="integer" label="30197" help="30338">
+					<level>0</level>
+					<default>0</default>
+					<constraints>
+						<options>
+							<option label="30198">0</option>
+							<option label="30199">1</option>
+							<option label="30200">2</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="stream_auto_retry" type="boolean" label="30074" help="30340">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend" operator="!is">2</dependency>
+					</dependencies>
+				</setting>
+				<setting id="stream_max_retries" type="integer" label="30075" help="30341">
+					<level>0</level>
+					<default>3</default>
+					<control type="edit" format="integer">
+						<heading>30075</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend" operator="!is">2</dependency>
+					</dependencies>
+				</setting>
+				<setting id="stream_retry_delay" type="integer" label="30076" help="30342">
+					<level>0</level>
+					<default>5</default>
+					<control type="edit" format="integer">
+						<heading>30076</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend" operator="!is">2</dependency>
+					</dependencies>
+				</setting>
+				<setting id="fallback_streams_enabled" type="boolean" label="30184" help="30343">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="fallback_streams_max" type="integer" label="30185" help="30344">
+					<level>0</level>
+					<default>5</default>
+					<control type="edit" format="integer">
+						<heading>30185</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="fallback_submit_delay" type="integer" label="30205" help="30345">
+					<level>0</level>
+					<default>120</default>
+					<control type="edit" format="integer">
+						<heading>30205</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="proxy_convert_subs" type="boolean" label="30119" help="30346">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="force_remux_threshold_mb" type="integer" label="30123" help="30347">
+					<level>0</level>
+					<default>15000</default>
+					<control type="edit" format="integer">
+						<heading>30123</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="force_remux_mode" type="integer" label="30140" help="30348">
+					<level>0</level>
+					<default>0</default>
+					<constraints>
+						<options>
+							<option label="30152">0</option>
+							<option label="30142">1</option>
+							<option label="30141">2</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="force_remux_mode_v2_migrated" type="boolean">
+					<level>0</level>
+					<default>false</default>
+					<visible>false</visible>
+					<control type="toggle"/>
+				</setting>
+				<setting id="strict_contract_mode" type="integer" label="30144" help="30349">
+					<level>0</level>
+					<default>1</default>
+					<constraints>
+						<options>
+							<option label="30145">0</option>
+							<option label="30146">1</option>
+							<option label="30147">2</option>
+						</options>
+					</constraints>
+					<control type="spinner" format="string"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="density_breaker_enabled" type="boolean" label="30148" help="30350">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="zero_fill_budget_enabled" type="boolean" label="30149" help="30351">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="retry_ladder_enabled" type="boolean" label="30150" help="30352">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="passthrough_stall_wait" type="integer" label="30206" help="30353">
+					<level>0</level>
+					<default>120</default>
+					<control type="edit" format="integer">
+						<heading>30206</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="readahead_buffer_mb" type="integer" label="30207" help="30354">
+					<level>0</level>
+					<default>256</default>
+					<control type="edit" format="integer">
+						<heading>30207</heading>
+					</control>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
+					</dependencies>
+				</setting>
+				<setting id="send_200_no_range" type="boolean" label="30151" help="30355">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+					<dependencies>
+						<dependency type="visible" setting="playback_backend">0</dependency>
 					</dependencies>
 				</setting>
 			</group>
@@ -1361,25 +1563,6 @@
 						<heading>30070</heading>
 					</control>
 				</setting>
-				<setting id="submit_timeout" type="integer" label="30122" help="30337">
-					<level>0</level>
-					<default>300</default>
-					<control type="edit" format="integer">
-						<heading>30122</heading>
-					</control>
-				</setting>
-				<setting id="clear_queue_on_submit" type="integer" label="30197" help="30338">
-					<level>0</level>
-					<default>0</default>
-					<constraints>
-						<options>
-							<option label="30198">0</option>
-							<option label="30199">1</option>
-							<option label="30200">2</option>
-						</options>
-					</constraints>
-					<control type="spinner" format="string"/>
-				</setting>
 			</group>
 			<group id="2" label="30071">
 				<setting id="cache_ttl_minutes" type="integer" label="30072" help="30339">
@@ -1388,128 +1571,6 @@
 					<control type="edit" format="integer">
 						<heading>30072</heading>
 					</control>
-				</setting>
-			</group>
-			<group id="3" label="30073">
-				<setting id="stream_auto_retry" type="boolean" label="30074" help="30340">
-					<level>0</level>
-					<default>true</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="stream_max_retries" type="integer" label="30075" help="30341">
-					<level>0</level>
-					<default>3</default>
-					<control type="edit" format="integer">
-						<heading>30075</heading>
-					</control>
-				</setting>
-				<setting id="stream_retry_delay" type="integer" label="30076" help="30342">
-					<level>0</level>
-					<default>5</default>
-					<control type="edit" format="integer">
-						<heading>30076</heading>
-					</control>
-				</setting>
-			</group>
-			<group id="4" label="30183">
-				<setting id="fallback_streams_enabled" type="boolean" label="30184" help="30343">
-					<level>0</level>
-					<default>true</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="fallback_streams_max" type="integer" label="30185" help="30344">
-					<level>0</level>
-					<default>5</default>
-					<control type="edit" format="integer">
-						<heading>30185</heading>
-					</control>
-				</setting>
-				<setting id="fallback_submit_delay" type="integer" label="30205" help="30345">
-					<level>0</level>
-					<default>120</default>
-					<control type="edit" format="integer">
-						<heading>30205</heading>
-					</control>
-				</setting>
-			</group>
-			<group id="5" label="30118">
-				<setting id="proxy_convert_subs" type="boolean" label="30119" help="30346">
-					<level>0</level>
-					<default>true</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="force_remux_threshold_mb" type="integer" label="30123" help="30347">
-					<level>0</level>
-					<default>15000</default>
-					<control type="edit" format="integer">
-						<heading>30123</heading>
-					</control>
-				</setting>
-				<setting id="force_remux_mode" type="integer" label="30140" help="30348">
-					<level>0</level>
-					<default>0</default>
-					<constraints>
-						<options>
-							<option label="30152">0</option>
-							<option label="30142">1</option>
-							<option label="30141">2</option>
-						</options>
-					</constraints>
-					<control type="spinner" format="string"/>
-				</setting>
-				<setting id="force_remux_mode_v2_migrated" type="boolean">
-					<level>0</level>
-					<default>false</default>
-					<visible>false</visible>
-					<control type="toggle"/>
-				</setting>
-			</group>
-			<group id="6" label="30143">
-				<setting id="strict_contract_mode" type="integer" label="30144" help="30349">
-					<level>0</level>
-					<default>1</default>
-					<constraints>
-						<options>
-							<option label="30145">0</option>
-							<option label="30146">1</option>
-							<option label="30147">2</option>
-						</options>
-					</constraints>
-					<control type="spinner" format="string"/>
-				</setting>
-				<setting id="density_breaker_enabled" type="boolean" label="30148" help="30350">
-					<level>0</level>
-					<default>false</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="zero_fill_budget_enabled" type="boolean" label="30149" help="30351">
-					<level>0</level>
-					<default>true</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="retry_ladder_enabled" type="boolean" label="30150" help="30352">
-					<level>0</level>
-					<default>true</default>
-					<control type="toggle"/>
-				</setting>
-				<setting id="passthrough_stall_wait" type="integer" label="30206" help="30353">
-					<level>0</level>
-					<default>120</default>
-					<control type="edit" format="integer">
-						<heading>30206</heading>
-					</control>
-				</setting>
-				<setting id="readahead_buffer_mb" type="integer" label="30207" help="30354">
-					<level>0</level>
-					<default>256</default>
-					<control type="edit" format="integer">
-						<heading>30207</heading>
-					</control>
-				</setting>
-				<setting id="send_200_no_range" type="boolean" label="30151" help="30355">
-					<level>0</level>
-					<default>false</default>
-					<control type="toggle"/>
 				</setting>
 				<setting id="cache_warning_shown" type="boolean">
 					<level>0</level>
@@ -1522,15 +1583,6 @@
 					<default>false</default>
 					<visible>false</visible>
 					<control type="toggle"/>
-				</setting>
-				<setting id="webdav_content_root" type="string">
-					<level>0</level>
-					<default></default>
-					<constraints>
-						<allowempty>true</allowempty>
-					</constraints>
-					<visible>false</visible>
-					<control type="edit" format="string"/>
 				</setting>
 			</group>
 		</category>
