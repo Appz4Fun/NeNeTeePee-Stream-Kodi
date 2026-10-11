@@ -9,6 +9,9 @@ Use [NZBGet](https://github.com/nzbgetcom/nzbget) for server installation and co
 
 ![Example add-on settings for nzbget](../images/kodi/backend-nzbget.png)
 
+!!! note
+    This screenshot predates moving the stream resilience options from **Advanced** to **Playback backend**. Current builds list those options after the connection fields. The other moved options apply only to nzbdav / InfiniDysk.
+
 This is a real Kodi screenshot from the captured `origin/main` build, using example values. See the [complete Playback backend settings](../settings/backend.md) for every option and commit-pinned source footnotes.
 
 ## Configure the add-on

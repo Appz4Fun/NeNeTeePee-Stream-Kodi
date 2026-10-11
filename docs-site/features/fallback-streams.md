@@ -8,10 +8,10 @@ length check and SHA-256 fingerprints of sampled byte ranges must match first.
 Playback then continues from the same byte position, without stopping or
 rewinding.
 
-Fallback streams are on by default. They apply to the nzbdav backend. The
-[NZBGet backend](nzbget-backend.md) uses the **Enable fallback streams** toggle
-to drive NZBGet's Smart Duplicates failover instead. It has its own
-**Maximum duplicate backups** setting.
+Fallback streams are on by default. They apply only to the nzbdav backend. The
+[NZBGet backend](nzbget-backend.md) uses NZBGet's Smart Duplicates failover
+instead, which **Maximum duplicate backups** controls alone. **Enable fallback
+streams** doesn't affect it.
 
 ## How it behaves
 
@@ -33,7 +33,8 @@ to drive NZBGet's Smart Duplicates failover instead. It has its own
 
 ## Settings
 
-These settings are in the **Fallback Streams** group on the **Advanced** tab:
+These settings are on the **Playback backend** tab. Kodi shows them only when
+nzbdav / InfiniDysk is the selected backend:
 
 | Setting | Default | What it does |
 |---------|---------|--------------|

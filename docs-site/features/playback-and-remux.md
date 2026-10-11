@@ -53,8 +53,9 @@ flowchart TD
 
 ## Settings that control playback
 
-These settings are in the **Proxy** group on the **Advanced** tab. The defaults are safe,
-so only change them if you have a specific reason.
+These settings are on the **Playback backend** tab. Kodi shows them only when
+nzbdav / InfiniDysk is the selected backend. The defaults are safe, so only change
+them if you have a specific reason.
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
@@ -115,8 +116,8 @@ serve Dolby Vision sources unchanged.
 
 ## Resilience knobs
 
-The **Pass-through validation** group on the **Advanced** tab controls how the
-pass-through path recovers:
+The pass-through validation options on the **Playback backend** tab (visible for
+nzbdav / InfiniDysk) control how the pass-through path recovers:
 
 | Setting | Default |
 |---------|---------|

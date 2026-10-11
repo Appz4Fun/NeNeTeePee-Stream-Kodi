@@ -144,8 +144,8 @@ errors fail soft and preserve the record for a later attempt.
 ## Queue clearing
 
 Before submitting, NeNeTeePee-Stream-Kodi can clear nzbdav's download queue, controlled by
-**Clear download queue when starting a new download** (**Advanced › Polling**;
-Ask / Always clear / Never, default Ask). It excludes this title's own
+**Clear download queue when starting a new download** (**Playback backend** tab, with nzbdav / InfiniDysk
+selected; Ask / Always clear / Never, default Ask). It excludes this title's own
 in-flight job, skips clearing when a completed copy you could reuse already
 exists, and (in Ask mode) shows a Keep/Clear prompt *before* the progress
 dialog so it's never hidden behind the modal. Any probe or dialog

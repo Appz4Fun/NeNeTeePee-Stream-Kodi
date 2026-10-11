@@ -143,7 +143,7 @@ Check nzbdav before you change any NeNeTeePee-Stream-Kodi settings.
 
 A slow submit isn't always a failure. nzbdav fetches and parses the NZB before
 it replies, which can take a while on a large remux. NeNeTeePee-Stream-Kodi waits up to **NZB
-submit timeout (seconds)** (Advanced → Polling, default 300) and takes over a
+submit timeout (seconds)** (Playback backend tab, nzbdav / InfiniDysk, default 300) and takes over a
 job that nzbdav accepted slowly.
 
 Messages you may see:
@@ -226,7 +226,7 @@ check the share or mount first (see [NZBGet backend problems](#nzbget-backend-pr
 1. Try another release for the same title.
 2. Confirm the source is still available on your backend.
 3. If you set **Large non-MP4 stream mode** to **Matroska remux** or **fMP4
-   HLS** (Advanced → Proxy), confirm ffmpeg is installed on the Kodi device. If
+   HLS** (Playback backend tab, nzbdav / InfiniDysk), confirm ffmpeg is installed on the Kodi device. If
    it isn't, you'll see **Failed to start ffmpeg**. The default, **Direct
    pass-through**, doesn't use ffmpeg. **Force ffmpeg remux above (MB, 0=off)**
    only sets the size at which the chosen remux mode starts.

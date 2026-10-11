@@ -43,7 +43,7 @@ Folder** to check that Kodi can reach the completed folder. Playback fails with
 "NZBGet not configured" if the URL or the completed folder is empty.
 
 NZBGet mode also uses two settings from the **Polling** group on the
-**Advanced** tab. **Poll interval (seconds)** sets how often NeNeTeePee-Stream-Kodi checks
+**Advanced** tab (shared with nzbdav / InfiniDysk). **Poll interval (seconds)** sets how often NeNeTeePee-Stream-Kodi checks
 NZBGet. **Download timeout (seconds)** defaults to 3600 and is clamped to
 60–86400. If the timeout runs out, NeNeTeePee-Stream-Kodi reports "Download timed out" and
 leaves the job running in NZBGet, so it can finish for a later play.
@@ -136,9 +136,8 @@ flowchart LR
 The NZBGet backend downloads the whole release before playback, so it can't
 switch streams live. It relies on NZBGet's own
 [Smart Duplicates](https://nzbget.com/documentation/rss/#duplicates) instead.
-When you pick a release with **Enable fallback streams** on and
-**Maximum duplicate backups** set to anything other than `0`,
-NeNeTeePee-Stream-Kodi gathers NZBs of the **same release**, removes duplicate
+When you pick a release with **Maximum duplicate backups** set to anything
+other than `0`, NeNeTeePee-Stream-Kodi gathers NZBs of the **same release**, removes duplicate
 listings and Usenet postings, and submits up to **50 unique members** in one
 `appendfleet` JSON-RPC call. The default backup setting (`-1`) fills this fleet;
 a positive value limits the number of backups, with 49 backups plus your pick
@@ -275,16 +274,18 @@ Your pick is always sent.
     in parallel.
 
 The backups are best-effort. A backup that fails to submit never affects your
-pick's download or playback. Two settings control them:
+pick's download or playback. Only the **Maximum duplicate backups** setting
+(`nzbget_max_backups`, on the **Playback backend** tab) controls them. It caps how many
+NeNeTeePee-Stream-Kodi submits. `-1`, the default, sends every same-release NZB
+it finds. `0` sends none, so the add-on submits only your pick. A positive
+number sends at most that many.
 
-- **Enable fallback streams** turns the backups on or off.
-- **Maximum duplicate backups** (`nzbget_max_backups`, in the NZBGet backend
-  settings) caps how many NeNeTeePee-Stream-Kodi submits. `-1`, the default,
-  sends every same-release NZB it finds. `0` sends none, so the add-on submits
-  only your pick. A positive number sends at most that many.
-
-**Maximum standby fallback streams** doesn't apply to NZBGet. It only affects
-the nzbdav / InfiniDysk backend.
+**Enable fallback streams** and **Maximum standby fallback streams** apply only
+to the nzbdav / InfiniDysk backend, and Kodi hides them when NZBGet is
+selected. Earlier builds also let **Enable fallback streams** turn NZBGet
+duplicate backups off. A one-time migration sets **Maximum duplicate backups**
+to `0` if you used NZBGet with **Enable fallback streams** off, so your
+behavior doesn't change.
 
 ## Reusing already-downloaded files
 

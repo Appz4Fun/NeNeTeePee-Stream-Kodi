@@ -74,9 +74,66 @@ The URL, username, password, category, and completed-folder fields appear on
 | NZBGet Password | `nzbget_password` | *(empty)* | NZBGet control password. Stored hidden. |
 | NZBGet Category | `nzbget_category` | *(empty)* | Category to submit under; also used to locate the completed file. |
 | Completed Folder (SMB or Local Path) | `nzbget_smb_root` | *(empty)* | `smb://` URL or local/mounted path of NZBGet's completed-downloads base. An [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs) is recommended. |
-| Maximum duplicate backups | `nzbget_max_backups` | `-1` | Same-release NZBs to send to NZBGet as duplicate backups. `-1` fills the fleet (up to 50 total members with `appendfleet`), `0` sends no backups, and a positive number limits backups. Each backup costs one indexer download. |
+| Maximum duplicate backups | `nzbget_max_backups` | `-1` | Same-release NZBs to send to NZBGet as duplicate backups. This is the only NZBGet backup control; **Enable fallback streams** does not affect it. `-1` fills the fleet (up to 50 total members with `appendfleet`), `0` sends no backups, and a positive number limits backups. Each backup costs one indexer download. |
 
 **Actions:** *Test NZBGet Connection*, *Test Completed Folder*.
+
+### Playback backend options
+
+The following groups appear on **Playback backend**, after the selected backend's connection fields. Kodi shows them as one list without group headings. Stream resilience is visible for nzbdav / InfiniDysk and NZBGet. Every other group in this section is visible only for nzbdav / InfiniDysk, the only backend that plays through the add-on's stream proxy.
+
+#### Submit and queue
+
+Visible only with nzbdav / InfiniDysk selected.
+
+| Setting | ID | Default | Description |
+|---------|----|---------|-------------|
+| NZB submit timeout (seconds) | `submit_timeout` | `300` | Max wait for nzbdav to accept the NZB (it fetches and parses the NZB before replying). Clamped to 5–600. |
+| Clear download queue when starting a new download | `clear_queue_on_submit` | `0` (Ask) | `0` Ask, `1` Always clear, `2` Never. Excludes this title's own in-flight job, and never clears a completed copy you're about to reuse. |
+
+#### Stream resilience
+
+These drive the background playback monitor. They are visible for nzbdav / InfiniDysk and NZBGet, and hidden for StreamNZB, which the monitor does not watch.
+
+| Setting | ID | Default | Description |
+|---------|----|---------|-------------|
+| Auto-retry on stream failure | `stream_auto_retry` | `true` | Retry a failed stream automatically. |
+| Max retry attempts | `stream_max_retries` | `3` | How many times to retry. Clamped to 0–10. |
+| Retry delay (seconds) | `stream_retry_delay` | `5` | Wait between retries. Clamped to 1–300. |
+
+#### Fallback streams
+
+See [Fallback streams](../features/fallback-streams.md).
+
+| Setting | ID | Default | Description |
+|---------|----|---------|-------------|
+| Enable fallback streams | `fallback_streams_enabled` | `true` | Enable nzbdav / InfiniDysk proxy fallback. Does not control NZBGet duplicate backups; use `nzbget_max_backups`. |
+| Maximum standby fallback streams | `fallback_streams_max` | `5` | Clamps the standby limit to 0–5. |
+| Seconds into playback before submitting fallback backups | `fallback_submit_delay` | `120` | Delay before backups are submitted. `0` submits immediately. |
+
+#### Proxy
+
+See [Playback and remux](../features/playback-and-remux.md) and
+[How it works → Stream proxy](../how-it-works/stream-proxy.md).
+
+| Setting | ID | Default | Description |
+|---------|----|---------|-------------|
+| Convert MP4 subtitles to SRT | `proxy_convert_subs` | `true` | During a Matroska remux, convert MP4 `mov_text` subtitles to SRT so embedded subtitles survive. The remux copies MKV subtitle tracks unchanged. |
+| Force ffmpeg remux above (MB, 0=off) | `force_remux_threshold_mb` | `15000` | Size at which the chosen remux mode applies to non-MP4 files. `0` turns size-based remux off, so those files always stream pass-through. No effect while the mode is Direct pass-through. |
+| Large non-MP4 stream mode | `force_remux_mode` | `0` (Direct pass-through) | `0` Direct pass-through (default, no ffmpeg), `1` fMP4 HLS (compatibility, experimental), `2` Matroska remux (compatibility). |
+
+#### Pass-through validation
+
+| Setting | ID | Default | Description |
+|---------|----|---------|-------------|
+| Strict upstream contract mode | `strict_contract_mode` | `1` (Warn only) | How to react when the upstream violates the strict Range/Content-Length contract: `0` Off, `1` Warn only, `2` Enforce. Off also disables the density breaker. |
+| Enable density breaker | `density_breaker_enabled` | `false` | Stop a stream when a rolling 16 MB window becomes more than 50% zero-fill (catches dead releases early). Only active when contract mode isn't Off. |
+| Enable zero-fill budget | `zero_fill_budget_enabled` | `true` | Cap total per-stream zero-fill; the stream ends with a clean error when the budget is hit. Zero fill skips data that can't be fetched from any source. For MKV/WebM the gap becomes EBML Void elements the player skips, resuming at the next intact cluster; other files, or MKV whose structure can't be confirmed, get plain zeros. |
+| Enable retry ladder before skip probe | `retry_ladder_enabled` | `true` | Re-issue the original range request with backoff on transient upstream errors before skip-filling. |
+| Max seconds to wait for a slow/stalled backend before giving up (0=off) | `passthrough_stall_wait` | `120` | For an established stream that stalls on a recoverable backend condition, hold the connection open up to this budget. `0` closes immediately. Clamped to 0–600. |
+| Read-ahead buffer size in MB (keeps filling while paused; 0=off) | `readahead_buffer_mb` | `256` | Per-session forward read-ahead prefetch. Keeps filling while paused. `0` turns it off. Clamped to 0–4096. |
+| Send 200 for no-range pass-through | `send_200_no_range` | `false` | Send `200 OK` instead of `206 Partial Content` when Kodi requests the whole file without a Range header. Leave off unless you've validated it on your build. |
+
 
 ## Indexers
 
@@ -212,7 +269,7 @@ known release groups. An empty list means no exclusions.
 
 ## Advanced
 
-These settings tune polling, caching, stream resilience, fallback streams, and the proxy.
+These settings tune polling and caching. Options that used to be on this tab moved to the [Playback backend options](#playback-backend-options).
 
 !!! info "Beta settings"
     **Clear download queue when starting a new download**, **Seconds into
@@ -227,57 +284,12 @@ These settings tune polling, caching, stream resilience, fallback streams, and t
 |---------|----|---------|-------------|
 | Poll interval (seconds) | `poll_interval` | `1` | Seconds between download-status checks. Clamped to 1–60. |
 | Download timeout (seconds) | `download_timeout` | `3600` | Give up if the download isn't ready within this time. Clamped to 60–86400. |
-| NZB submit timeout (seconds) | `submit_timeout` | `300` | Max wait for nzbdav to accept the NZB (it fetches and parses the NZB before replying). Clamped to 5–600. |
-| Clear download queue when starting a new download | `clear_queue_on_submit` | `0` (Ask) | For nzbdav / InfiniDysk only: `0` Ask, `1` Always clear, `2` Never. NZBGet ignores this option. Excludes this title's own in-flight job, and never clears a completed copy you're about to reuse. |
 
 ### Search cache
 
 | Setting | ID | Default | Description |
 |---------|----|---------|-------------|
 | Cache duration (minutes, 0=off) | `cache_ttl_minutes` | `30` | How long to cache search results, in minutes. `0` turns off the cache. Clamped to 0–1440. Stores raw pre-filter results, so filter/sort changes take effect immediately. The TMDBHelper player and the plugin routes share the cache. |
-
-### Stream resilience
-
-These drive the background playback monitor.
-
-| Setting | ID | Default | Description |
-|---------|----|---------|-------------|
-| Auto-retry on stream failure | `stream_auto_retry` | `true` | Retry a failed stream automatically. |
-| Max retry attempts | `stream_max_retries` | `3` | How many times to retry. Clamped to 0–10. |
-| Retry delay (seconds) | `stream_retry_delay` | `5` | Wait between retries. Clamped to 1–300. |
-
-### Fallback streams
-
-See [Fallback streams](../features/fallback-streams.md).
-
-| Setting | ID | Default | Description |
-|---------|----|---------|-------------|
-| Enable fallback streams | `fallback_streams_enabled` | `true` | Enable nzbdav / InfiniDysk proxy fallback or NZBGet duplicate-backup submission. StreamNZB ignores it. |
-| Maximum standby fallback streams | `fallback_streams_max` | `5` | nzbdav / InfiniDysk clamps the standby limit to 0–5. NZBGet and StreamNZB ignore it; NZBGet uses `nzbget_max_backups`. |
-| Seconds into playback before submitting fallback backups | `fallback_submit_delay` | `120` | Delay before backups are submitted. `0` submits immediately. |
-
-### Proxy
-
-See [Playback and remux](../features/playback-and-remux.md) and
-[How it works → Stream proxy](../how-it-works/stream-proxy.md).
-
-| Setting | ID | Default | Description |
-|---------|----|---------|-------------|
-| Convert MP4 subtitles to SRT | `proxy_convert_subs` | `true` | During a Matroska remux, convert MP4 `mov_text` subtitles to SRT so embedded subtitles survive. The remux copies MKV subtitle tracks unchanged. |
-| Force ffmpeg remux above (MB, 0=off) | `force_remux_threshold_mb` | `15000` | Size at which the chosen remux mode applies to non-MP4 files. `0` turns size-based remux off, so those files always stream pass-through. No effect while the mode is Direct pass-through. |
-| Large non-MP4 stream mode | `force_remux_mode` | `0` (Direct pass-through) | `0` Direct pass-through (default, no ffmpeg), `1` fMP4 HLS (compatibility, experimental), `2` Matroska remux (compatibility). |
-
-### Pass-through validation
-
-| Setting | ID | Default | Description |
-|---------|----|---------|-------------|
-| Strict upstream contract mode | `strict_contract_mode` | `1` (Warn only) | How to react when the upstream violates the strict Range/Content-Length contract: `0` Off, `1` Warn only, `2` Enforce. Off also disables the density breaker. |
-| Enable density breaker | `density_breaker_enabled` | `false` | Stop a stream when a rolling 16 MB window becomes more than 50% zero-fill (catches dead releases early). Only active when contract mode isn't Off. |
-| Enable zero-fill budget | `zero_fill_budget_enabled` | `true` | Cap total per-stream zero-fill; the stream ends with a clean error when the budget is hit. Zero fill skips data that can't be fetched from any source. For MKV/WebM the gap becomes EBML Void elements the player skips, resuming at the next intact cluster; other files, or MKV whose structure can't be confirmed, get plain zeros. |
-| Enable retry ladder before skip probe | `retry_ladder_enabled` | `true` | Re-issue the original range request with backoff on transient upstream errors before skip-filling. |
-| Max seconds to wait for a slow/stalled backend before giving up (0=off) | `passthrough_stall_wait` | `120` | For an established stream that stalls on a recoverable backend condition, hold the connection open up to this budget. `0` closes immediately. Clamped to 0–600. |
-| Read-ahead buffer size in MB (keeps filling while paused; 0=off) | `readahead_buffer_mb` | `256` | Per-session forward read-ahead prefetch. Keeps filling while paused. `0` turns it off. Clamped to 0–4096. |
-| Send 200 for no-range pass-through | `send_200_no_range` | `false` | Send `200 OK` instead of `206 Partial Content` when Kodi requests the whole file without a Range header. Leave off unless you've validated it on your build. |
 
 ### Hidden settings
 
@@ -286,4 +298,4 @@ These aren't shown in the UI but exist in `settings.xml`:
 | Setting | ID | Default | Description |
 |---------|----|---------|-------------|
 | Content-root override | `webdav_content_root` | *(empty → `content`)* | Power-user override for the nzbdav content-root path segment. Change only for a non-standard reverse-proxy mount. |
-| (migration/UI-state flags) | `force_remux_mode_v2_migrated`, `cache_warning_shown`, `cache_dialog_dismissed` | `false` | Internal state, not user-editable. |
+| (migration/UI-state flags) | `force_remux_mode_v2_migrated`, `nzbget_backup_switch_migrated`, `cache_warning_shown`, `cache_dialog_dismissed` | `false` | Internal state, not user-editable. |

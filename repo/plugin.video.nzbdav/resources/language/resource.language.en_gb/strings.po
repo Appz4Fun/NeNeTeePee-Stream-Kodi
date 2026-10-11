@@ -1415,8 +1415,8 @@ msgid "How to rank the filtered results and whether to auto-select the top match
 msgstr "How to rank the filtered results and whether to auto-select the top match."
 
 msgctxt "#30363"
-msgid "Tuning for polling, caching, stream resilience, fallback streams, and the proxy. Change only for a specific reason."
-msgstr "Tuning for polling, caching, stream resilience, fallback streams, and the proxy. Change only for a specific reason."
+msgid "Polling and the search cache. Playback options for nzbdav and NZBGet are in Playback backend. Change only for a specific reason."
+msgstr "Polling and the search cache. Playback options for nzbdav and NZBGet are in Playback backend. Change only for a specific reason."
 
 msgctxt "#30364"
 msgid "Already downloaded season pack - Episodes {}"
@@ -2127,8 +2127,8 @@ msgid "Copy the existing stream token from StreamNZB stream settings or its Stre
 msgstr "Copy the existing stream token from StreamNZB stream settings or its Stremio manifest URL. Do not use dashboard admin credentials."
 
 msgctxt "#30612"
-msgid "Select nzbdav / InfiniDysk, NZBGet or StreamNZB, then configure the selected backend below."
-msgstr "Select nzbdav / InfiniDysk, NZBGet or StreamNZB, then configure the selected backend below."
+msgid "Select nzbdav / InfiniDysk, NZBGet or StreamNZB, then configure the selected backend and its playback options below."
+msgstr "Select nzbdav / InfiniDysk, NZBGet or StreamNZB, then configure the selected backend and its playback options below."
 
 msgctxt "#30613"
 msgid "Maximum duplicate backups"

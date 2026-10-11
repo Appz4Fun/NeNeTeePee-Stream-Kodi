@@ -6,14 +6,14 @@ Beta 2.0.0-beta.3 uses the name **NeNeTeePee-Stream-Kodi**. Stable 1.2.3 still u
 
 | Kodi tab | What you configure |
 | --- | --- |
-| [Playback backend](backend.md) | nzbdav / InfiniDysk, NZBGet, or StreamNZB and its connection fields |
+| [Playback backend](backend.md) | nzbdav / InfiniDysk, NZBGet, or StreamNZB, its connection fields, and the submit, retry, fallback, proxy, and pass-through options for the selected backend |
 | [Indexers](indexers.md) | NZBHydra2, Prowlarr, direct providers, and the optional TMDB API key |
 | [Player Installation](player-installation.md) | TMDBHelper and other compatible player definitions |
 | [Quality Filters](quality-filters.md) | Allowed resolutions, HDR formats, audio formats, and video codecs |
 | [Languages](language-filters.md) | Allowed language tags |
 | [Keyword Filters](keyword-filters.md) | Preferred tiers, excluded groups, size limits, and title keywords |
 | [Sorting](sorting.md) | Relevance, size or age ranking, result limits, and auto-select |
-| [Advanced](advanced.md) | Polling, cache, retry, fallback, remux, and proxy validation |
+| [Advanced](advanced.md) | Polling and search cache |
 
 The tab guides explain every option. This includes buttons and hidden state fields. Each source footnote links to the captured commit. [Copy and paste from your phone](../getting-started/phone-remote.md) instead of entering long keys and passwords with a television remote.
 

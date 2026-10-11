@@ -100,6 +100,63 @@ def test_migrate_legacy_once(legacy, expected):
 
 
 @pytest.mark.parametrize(
+    "saved,writes",
+    [
+        # NZBGet user who had fallback off: backups stay off via the cap.
+        (
+            {"playback_backend": "1", "fallback_streams_enabled": "false"},
+            [("nzbget_max_backups", "0"), ("nzbget_backup_switch_migrated", "true")],
+        ),
+        # Fallback on, or not NZBGet: nothing to carry over, only the flag.
+        (
+            {"playback_backend": "1", "fallback_streams_enabled": "true"},
+            [("nzbget_backup_switch_migrated", "true")],
+        ),
+        (
+            {"playback_backend": "0", "fallback_streams_enabled": "false"},
+            [("nzbget_backup_switch_migrated", "true")],
+        ),
+        # Legacy NZBGet toggle (no dropdown saved yet) counts as NZBGet.
+        (
+            {"nzbget_enabled": "true", "fallback_streams_enabled": "false"},
+            [("nzbget_max_backups", "0"), ("nzbget_backup_switch_migrated", "true")],
+        ),
+        # Already migrated: no writes at all.
+        (
+            {
+                "playback_backend": "1",
+                "fallback_streams_enabled": "false",
+                "nzbget_backup_switch_migrated": "true",
+            },
+            [],
+        ),
+    ],
+)
+def test_migrate_nzbget_backup_switch(saved, writes):
+    with patch.object(
+        router,
+        "_get_script_setting",
+        side_effect=lambda key, default="": saved.get(key, default),
+    ), patch.object(playback_backend.xbmcaddon, "Addon") as addon:
+        playback_backend.migrate_nzbget_backup_switch()
+    assert [c.args for c in addon.return_value.setSetting.call_args_list] == writes
+
+
+def test_migrate_nzbget_backup_switch_retries_after_refused_write():
+    saved = {"playback_backend": "1", "fallback_streams_enabled": "false"}
+    with patch.object(
+        router,
+        "_get_script_setting",
+        side_effect=lambda key, default="": saved.get(key, default),
+    ), patch.object(playback_backend.xbmcaddon, "Addon") as addon:
+        addon.return_value.setSetting.side_effect = RuntimeError("busy")
+        playback_backend.migrate_nzbget_backup_switch()  # must not raise
+    assert ("nzbget_backup_switch_migrated", "true") not in [
+        c.args for c in addon.return_value.setSetting.call_args_list
+    ]
+
+
+@pytest.mark.parametrize(
     "values,expected",
     [
         ({"playback_backend": "1"}, -1),
@@ -107,7 +164,7 @@ def test_migrate_legacy_once(legacy, expected):
         ({"playback_backend": "0", "nzbget_enabled": "true"}, None),
         ({"playback_backend": "2", "nzbget_enabled": "true"}, None),
         ({"nzbget_enabled": "true"}, -1),
-        ({"playback_backend": "1", "fallback_streams_enabled": "false"}, None),
+        ({"playback_backend": "1", "fallback_streams_enabled": "false"}, -1),
     ],
 )
 def test_nzbget_backup_gate_uses_dropdown(values, expected):

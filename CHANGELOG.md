@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Nothing yet |
+| **[Unreleased](#unreleased--main)** | on `main` | Backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
@@ -66,7 +66,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
-Nothing yet.
+### Changed
+
+- **Backend-specific playback options moved to Playback backend.** Only
+  nzbdav / InfiniDysk playback goes through the add-on's stream proxy, so the
+  Fallback Streams, Proxy, and Pass-through validation options, plus Submit
+  timeout and Clear queue on submit, now appear under **Playback backend**
+  when nzbdav is selected. Stream Resilience moved there too and shows for
+  nzbdav and NZBGet, the two backends the reconnect monitor watches.
+  **Advanced** keeps polling and the search cache. Saved values carry over.
+- **Enable fallback streams no longer turns off NZBGet duplicate backups.**
+  It's the nzbdav standby-stream switch only. NZBGet backups follow
+  **Maximum duplicate backups** alone (`0` sends none). If you used NZBGet
+  with Enable fallback streams off, a one-time migration sets Maximum
+  duplicate backups to `0`, so nothing changes for you.
 
 ## [2.0.0-beta.3][] — 2026-10-11
 
