@@ -5433,9 +5433,9 @@ def test_provider_cache_tag_names_enabled_providers():
     def getter(key, default=""):
         return settings.get(key, default)
 
-    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1,2;max=25"
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1,2|;max=25"
     settings["prowlarr_indexer_ids"] = "1"
-    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1;max=25"
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1|;max=25"
 
 
 @patch("resources.lib.direct_indexers.get_configured_indexers")
@@ -5580,3 +5580,35 @@ def test_partial_provider_results_are_not_cached(mock_search, mock_play_getter):
         _script_play_search_results("episode", "Task", kwargs, MagicMock())
         _script_play_search_results("episode", "Task", kwargs, MagicMock())
     assert mock_search.call_count == 4
+
+
+@patch("resources.lib.direct_indexers.get_configured_indexers")
+def test_provider_cache_tag_changes_when_api_keys_rotate(mock_indexers):
+    """Cached download links embed API keys: a rotated key must miss, and the
+    tag must never carry the raw key."""
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {
+        "nzbhydra_enabled": "true",
+        "prowlarr_enabled": "true",
+        "direct_indexers_enabled": "true",
+        "hydra_api_key": "hydra-old",
+        "prowlarr_api_key": "prowlarr-old",
+    }
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    mock_indexers.return_value = [
+        {"id": "geek", "api_url": "https://geek/api", "api_key": "geek-old"}
+    ]
+    before = _provider_cache_tag(getter)
+    assert "old" not in before
+    for key in ("hydra_api_key", "prowlarr_api_key"):
+        settings[key] = key + "-new"
+        assert _provider_cache_tag(getter) != before
+        before = _provider_cache_tag(getter)
+    mock_indexers.return_value = [
+        {"id": "geek", "api_url": "https://geek/api", "api_key": "geek-new"}
+    ]
+    assert _provider_cache_tag(getter) != before

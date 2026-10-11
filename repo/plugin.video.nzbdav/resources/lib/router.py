@@ -448,7 +448,9 @@ def _provider_cache_tag(settings_getter):
     ``/play`` forces NZBHydra2 on while the RunScript player follows the
     settings, and the Prowlarr indexer IDs, enabled direct indexers, and
     ``max_results`` can change at any time, so each cache entry names exactly
-    what it searched.
+    what it searched. Cached download links embed the provider API keys, so
+    a key fingerprint is part of the tag too: a rotated key starts a fresh
+    entry.
     """
 
     def _on(name):
@@ -463,12 +465,18 @@ def _provider_cache_tag(settings_getter):
 
     parts = []
     if _on("nzbhydra_enabled"):
-        parts.append("nzbhydra={}".format(_url("hydra_url", _DEFAULT_HYDRA_URL)))
+        parts.append(
+            "nzbhydra={}|{}".format(
+                _url("hydra_url", _DEFAULT_HYDRA_URL),
+                _secret_fingerprint(settings_getter("hydra_api_key", "")),
+            )
+        )
     if _on("prowlarr_enabled"):
         parts.append(
-            "prowlarr={}|{}".format(
+            "prowlarr={}|{}|{}".format(
                 _url("prowlarr_host", _DEFAULT_PROWLARR_HOST),
                 settings_getter("prowlarr_indexer_ids", "") or "",
+                _secret_fingerprint(settings_getter("prowlarr_api_key", "")),
             )
         )
     if _on("direct_indexers_enabled"):
@@ -482,8 +490,18 @@ def _provider_cache_tag(settings_getter):
     return ";".join(parts)
 
 
+def _secret_fingerprint(secret):
+    """A short, non-reversible fingerprint of a credential (``""`` when unset)."""
+    import hashlib
+
+    secret = str(secret or "")
+    if not secret:
+        return ""
+    return hashlib.sha256(secret.encode("utf-8")).hexdigest()[:12]
+
+
 def _direct_indexer_fingerprint():
-    """The enabled direct indexers (ID and API URL), sorted; ``?`` if unreadable."""
+    """Enabled direct indexers (ID, API URL, key fingerprint); ``?`` if unreadable."""
     try:
         from resources.lib.direct_indexers import get_configured_indexers
 
@@ -493,7 +511,11 @@ def _direct_indexer_fingerprint():
         return "?"
     return ",".join(
         sorted(
-            "{}@{}".format(item.get("id"), item.get("api_url"))
+            "{}@{}#{}".format(
+                item.get("id"),
+                item.get("api_url"),
+                _secret_fingerprint(item.get("api_key")),
+            )
             for item in indexers or []
             if isinstance(item, dict)
         )
