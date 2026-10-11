@@ -228,12 +228,16 @@ Before cutting a new versioned release:
 1. Update `README.md` with user-visible changes.
 2. Update repo-level `CHANGELOG.md` with full version notes.
 3. Update `repo/plugin.video.nzbdav/changelog.txt` with only a short Kodi-visible summary under 80 characters.
-4. Bump the addon version in `repo/plugin.video.nzbdav/addon.xml`.
-5. Run `just lint` and `just test`.
+4. Bump the addon version in `repo/plugin.video.nzbdav/addon.xml` and its `<news>` line.
+5. Run `just lint` and `just test`, and check `python3 scripts/release_notes.py X.Y.Z` prints the new section.
 6. Commit and push to `main`.
-7. Tag with the new semver and push the tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+7. Confirm the Kodi repository's build workflow is active: `gh workflow list --repo Appz4Fun/Appz4Fun-Kodi-Repo`. GitHub turns it off after 60 days without activity, and a turned-off workflow silently ignores the release dispatch. Re-enable it with `gh workflow enable sync.yml --repo Appz4Fun/Appz4Fun-Kodi-Repo`.
+8. Tag with the new semver and push the tag: `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+9. After the Release run, confirm a `repository_dispatch` run in `Appz4Fun/Appz4Fun-Kodi-Repo` succeeded and that `https://appz4fun.github.io/Appz4Fun-Kodi-Repo/beta/addons.xml` (or `stable/` for a final release) lists the new version.
 
-The Release workflow builds the zip and creates the GitHub Release; the external
+The Release workflow builds the zip and creates the GitHub Release. The release
+body is the version's `CHANGELOG.md` section, extracted by `scripts/release_notes.py`;
+a tag whose section is missing or empty fails before any release exists. The external
 Appz4Fun Kodi repository then rebuilds and republishes NeNeTeePee-Stream-Kodi to its users.
 Tags containing a hyphen (for example `v2.0.0-beta.3`) are marked pre-release and
 go to the Beta channel only.

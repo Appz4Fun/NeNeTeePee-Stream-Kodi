@@ -2,10 +2,10 @@
 
 The [Appz4Fun Kodi Repository project](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo) publishes Stable and Beta channels. Install the repository add-on ZIP first, then install the video add-on from that repository. These are two different ZIPs: the repository ZIP supplies the catalog and updates; the video add-on ZIP supplies the player.
 
-!!! note "Upcoming name and feature changes"
-    The repository captured on October 3, 2026 serves **NZB-DAV 2.0.0-beta.2** in the Beta channel. The next release changes the displayed name to **NeNeTeePee-Stream-Kodi** after a release includes the rename. The ID remains `plugin.video.nzbdav`.
+!!! note "Name and feature changes"
+    The Beta channel serves **NeNeTeePee-Stream-Kodi 2.0.0-beta.3**, which includes the unified **Playback backend** section and StreamNZB support. The add-on ID remains `plugin.video.nzbdav`. The Stable channel still serves **NZB-DAV 1.2.3**.
 
-    The [settings screenshots](../settings/index.md) show current `main`, not this released beta. The unified backend tab and StreamNZB support are not included in 2.0.0-beta.2. Use a current source build for those features until a release includes them.
+    The screenshots on this page were captured on October 3, 2026, when the Beta channel served 2.0.0-beta.2 under the name **NZB-DAV**. Beta 2.0.0-beta.3 shows the new name in the same places.
 
 ## Download the repository ZIP
 
@@ -41,22 +41,22 @@ The screenshot uses `special://profile/Downloads/Kodi-Repositories/`, Kodi's ali
 1. Open **Install from repository** in the add-on browser.
 2. Select **Appz4Fun Repository (Beta)**.
 3. Select **Video add-ons**.
-4. Select **NZB-DAV**, then **Install**. Accept the dependency installation prompt if Kodi shows one. If replacing a manual installation, Kodi can ask whether to replace it; keep your add-on data when prompted.
+4. Select **NeNeTeePee-Stream-Kodi**, then **Install**. The Stable channel lists **NZB-DAV** instead. Accept the dependency installation prompt if Kodi shows one. If replacing a manual installation, Kodi can ask whether to replace it; keep your add-on data when prompted.
 5. Wait for installation to finish. Kodi now tracks updates from that repository.
 
 ![The installed Beta repository in the repository list](../images/kodi/repository-list.png)
 
 ![Choose Video add-ons in the Beta repository](../images/kodi/repository-beta-categories.png)
 
-![The released NZB-DAV package in the Beta repository](../images/kodi/repository-beta-video.png)
+![The NZB-DAV package in the Beta repository, as captured with 2.0.0-beta.2](../images/kodi/repository-beta-video.png)
 
-![Select Install on the NZB-DAV information page](../images/kodi/repository-addon-install.png)
+![Select Install on the add-on information page, as captured with 2.0.0-beta.2](../images/kodi/repository-addon-install.png)
 
-The VM walkthrough installed both the Beta repository ZIP and the released video add-on. The current source build was restored afterward to capture the newer settings. This verifies the installation steps separately from the unreleased settings layout.
+The VM walkthrough installed both the Beta repository ZIP and the video add-on that the Beta channel served at the time. The installation steps are unchanged in beta.3.
 
 ## Open the add-on settings
 
-Open **Settings → Add-ons → My add-ons → Video add-ons → NZB-DAV → Configure**. After the renamed release, select **NeNeTeePee-Stream-Kodi** in the same location.
+Open **Settings → Add-ons → My add-ons → Video add-ons → NeNeTeePee-Stream-Kodi → Configure**. On Stable 1.2.3, select **NZB-DAV** in the same location.
 
 ![Configure becomes available after the video add-on is installed](../images/kodi/addon-configure.png)
 

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+Beta 2.0.0-beta.3 and later use the Kodi menu name **NeNeTeePee-Stream-Kodi**. Stable 1.2.3 still uses **NZB-DAV**. In Stable, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**.
 
 Start with the section that matches what you see. Work through the steps in
 order.
@@ -11,9 +11,9 @@ order.
     but other add-ons and Kodi itself may not.
 
 !!! tip "Finding NeNeTeePee-Stream-Kodi in kodi.log"
-    Renamed source builds use the log prefix `NeNeTeePee-Stream-Kodi:`.
-    Stable 1.2.3 and Beta 2.0.0-beta.2 use `NZB-DAV:`. Search for the prefix
-    used by your installed build. Kodi writes `kodi.log` to its
+    Beta 2.0.0-beta.3 and later use the log prefix `NeNeTeePee-Stream-Kodi:`.
+    Stable 1.2.3 and Beta 2.0.0-beta.2 and earlier use `NZB-DAV:`. Search for
+    the prefix used by your installed build. Kodi writes `kodi.log` to its
     temp folder (`/storage/.kodi/temp/kodi.log` on CoreELEC and LibreELEC). Some
     detail, such as the filter summary, is logged only when Kodi's debug
     logging is on (**Settings → System → Logging**).

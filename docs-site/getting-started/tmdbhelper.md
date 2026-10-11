@@ -1,6 +1,6 @@
 # Set up TMDBHelper
 
-Current released packages (Stable 1.2.3 and Beta 2.0.0-beta.2) use the Kodi menu name **NZB-DAV**. In those builds, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**. Renamed source builds use the new name.
+Beta 2.0.0-beta.3 and later use the Kodi menu name **NeNeTeePee-Stream-Kodi**. Stable 1.2.3 still uses **NZB-DAV**. In Stable, choose that name wherever these instructions show **NeNeTeePee-Stream-Kodi**.
 
 [TMDBHelper](https://github.com/jurialmunkey/plugin.video.themoviedb.helper) is required for this title-browsing workflow. NeNeTeePee-Stream-Kodi plays titles you choose in TMDBHelper. To connect the two, you
 install a NeNeTeePee-Stream-Kodi *player file* into TMDBHelper and set it as your default
