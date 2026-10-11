@@ -79,7 +79,7 @@ jobs:
       # mutable regardless of that policy, so the asset upload always lands
       # before the "Publish release" step below flips it to published.
       - name: Create GitHub Release (draft)
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v2
         with:
           files: plugin.video.nzbdav-${{ steps.version.outputs.version }}.zip
           # Curated CHANGELOG section first; GitHub appends the categorized
