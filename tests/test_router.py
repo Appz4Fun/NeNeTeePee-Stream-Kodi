@@ -306,6 +306,7 @@ def test_search_all_providers_calls_direct_indexers_when_enabled(mock_addon):
         ),
         indexers=ANY,
         max_results=ANY,
+        outcome=ANY,
     )
 
 
@@ -421,7 +422,7 @@ def test_search_all_providers_uses_default_for_one_snapshot_setting_failure():
     assert len(results) == 1
     provider_settings = hydra_search.call_args.kwargs["settings_getter"]
     assert provider_settings("hydra_url") == "http://hydra:5076"
-    assert provider_settings("prowlarr_host") == ""
+    assert provider_settings("prowlarr_host") == "http://localhost:9696"
 
 
 @patch("xbmcaddon.Addon", side_effect=RuntimeError("no addon context"))
@@ -3399,8 +3400,8 @@ def test_handle_script_play_attaches_completed_job_for_selected_result(
 @patch("resources.lib.router._search_all_providers")
 @patch("resources.lib.router._tag_available")
 @patch("resources.lib.cache.set_cached")
-@patch("resources.lib.cache.get_cached", side_effect=RuntimeError("cache unsafe"))
-def test_handle_script_play_skips_search_cache_in_runscript_context(
+@patch("resources.lib.cache.get_cached")
+def test_handle_script_play_reuses_fresh_search_cache(
     mock_cache,
     mock_set_cache,
     mock_tag,
@@ -3412,27 +3413,145 @@ def test_handle_script_play_skips_search_cache_in_runscript_context(
     mock_end,
     mock_addon,
 ):
-    """The file-path RunScript context can crash CoreELEC inside cache profile
-    lookup, so script playback searches providers directly."""
-    from resources.lib.router import _handle_script_play
+    """A replay within the cache window reuses the search, read via the
+    RunScript-safe XML settings getter rather than Kodi's settings API."""
+    from resources.lib.router import _get_script_setting, _handle_script_play
 
     mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
     chosen = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
-    alternate = {
-        "title": "The.Odyssey.2026.1080p.mkv",
-        "link": "http://hydra/nzb/odyssey-alt",
-    }
-    mock_search.return_value = ([chosen], None)
-    mock_filter.return_value = ([chosen, alternate], [chosen, alternate])
+    mock_cache.return_value = [chosen]
+    mock_filter.return_value = ([chosen], [chosen])
     mock_dialog.return_value = chosen
 
     _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
 
-    mock_cache.assert_not_called()
+    mock_cache.assert_called_once()
+    args, kwargs = mock_cache.call_args
+    assert args == ("movie", "The Odyssey")
+    assert kwargs["settings_getter"] is _get_script_setting
+    assert kwargs["year"] == "2026"
+    mock_search.assert_not_called()
     mock_set_cache.assert_not_called()
+    assert mock_filter.call_args.args[0] == [chosen]
     mock_resolve_and_play.assert_called_once()
     mock_end.assert_not_called()
     mock_set_resolved.assert_not_called()
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmcplugin.endOfDirectory")
+@patch("xbmcplugin.setResolvedUrl")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._tag_available")
+@patch("resources.lib.cache.set_cached")
+@patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_caches_search_on_miss(
+    mock_cache,
+    mock_set_cache,
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_dialog,
+    mock_resolve_and_play,
+    mock_set_resolved,
+    mock_end,
+    mock_addon,
+):
+    from resources.lib.router import _get_script_setting, _handle_script_play
+
+    mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
+    chosen = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
+    mock_search.return_value = ([chosen], None)
+    mock_filter.return_value = ([chosen], [chosen])
+    mock_dialog.return_value = chosen
+
+    _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
+
+    mock_search.assert_called_once()
+    mock_set_cache.assert_called_once()
+    args, kwargs = mock_set_cache.call_args
+    assert args == ("movie", "The Odyssey", [chosen])
+    assert kwargs["settings_getter"] is _get_script_setting
+    assert kwargs["year"] == "2026"
+    mock_resolve_and_play.assert_called_once()
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmcplugin.endOfDirectory")
+@patch("xbmcplugin.setResolvedUrl")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._tag_available")
+@patch(
+    "resources.lib.cache._get_cache_dir",
+    side_effect=PermissionError("read-only profile"),
+)
+def test_handle_script_play_searches_when_cache_folder_is_unusable(
+    mock_cache_dir,
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_dialog,
+    mock_resolve_and_play,
+    mock_set_resolved,
+    mock_end,
+    mock_addon,
+):
+    """Cache trouble is a miss: the handle-less TMDBHelper play still searches
+    and resolves instead of dying silently before the provider search."""
+    from resources.lib.router import _handle_script_play
+
+    mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
+    chosen = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
+    mock_search.return_value = ([chosen], None)
+    mock_filter.return_value = ([chosen], [chosen])
+    mock_dialog.return_value = chosen
+
+    _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
+
+    assert mock_cache_dir.called
+    mock_search.assert_called_once()
+    mock_resolve_and_play.assert_called_once()
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmcplugin.endOfDirectory")
+@patch("xbmcplugin.setResolvedUrl")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._show_error_dialog")
+@patch("resources.lib.cache.set_cached")
+@patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_does_not_cache_provider_error(
+    mock_cache,
+    mock_set_cache,
+    mock_error_dialog,
+    mock_search,
+    mock_filter,
+    mock_dialog,
+    mock_resolve_and_play,
+    mock_set_resolved,
+    mock_end,
+    mock_addon,
+):
+    from resources.lib.router import _handle_script_play
+
+    mock_addon.return_value.getSetting.side_effect = _stub_setting("false")
+    partial = {"title": "The.Odyssey.2026.mkv", "link": "http://hydra/nzb/odyssey"}
+    mock_search.return_value = ([partial], "Hydra timed out")
+
+    _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
+
+    mock_set_cache.assert_not_called()
+    mock_error_dialog.assert_called_once_with("Hydra timed out")
+    mock_resolve_and_play.assert_not_called()
 
 
 @patch(
@@ -3450,7 +3569,7 @@ def test_handle_script_play_skips_search_cache_in_runscript_context(
 @patch("resources.lib.router._search_all_providers")
 @patch("resources.lib.router._tag_available", side_effect=RuntimeError("slow history"))
 @patch("resources.lib.cache.set_cached")
-@patch("resources.lib.cache.get_cached", side_effect=RuntimeError("cache unsafe"))
+@patch("resources.lib.cache.get_cached", return_value=None)
 def test_handle_script_play_auto_select_marks_completed_lookup_done(
     mock_cache,
     mock_set_cache,
@@ -3476,8 +3595,8 @@ def test_handle_script_play_auto_select_marks_completed_lookup_done(
 
     _handle_script_play({"type": "movie", "title": "The Odyssey", "year": "2026"})
 
-    mock_cache.assert_not_called()
-    mock_set_cache.assert_not_called()
+    mock_cache.assert_called_once()
+    mock_set_cache.assert_called_once()
     mock_tag.assert_not_called()
     mock_dialog.assert_not_called()
     # Loading dialog touches i18n (Addon patched to raise -> graceful fallback).
@@ -5300,3 +5419,232 @@ def test_attach_nzbget_dupe_builds_nothing_off_the_nzbget_backend():
     assert "_fallback_stop" not in selected
     loader.assert_not_called()
     hydra.assert_not_called()
+
+
+def test_provider_cache_tag_names_enabled_providers():
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {
+        "nzbhydra_enabled": "false",
+        "prowlarr_enabled": "true",
+        "prowlarr_host": "http://prowlarr:9696",
+        "prowlarr_indexer_ids": "1,2",
+    }
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1,2|;max=25"
+    settings["prowlarr_indexer_ids"] = "1"
+    assert _provider_cache_tag(getter) == "prowlarr=http://prowlarr:9696|1|;max=25"
+
+
+@patch("resources.lib.direct_indexers.get_configured_indexers")
+def test_provider_cache_tag_changes_with_enabled_direct_indexers(mock_indexers):
+    """Toggling one direct indexer must change the key, not keep stale rows."""
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {"direct_indexers_enabled": "true"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    mock_indexers.return_value = [
+        {"id": "geek", "api_url": "https://geek/api"},
+        {"id": "slug", "api_url": "https://slug/api"},
+    ]
+    both = _provider_cache_tag(getter)
+    mock_indexers.return_value = [{"id": "geek", "api_url": "https://geek/api"}]
+    assert _provider_cache_tag(getter) != both
+    mock_indexers.side_effect = RuntimeError("settings unavailable")
+    assert _provider_cache_tag(getter) == "direct=?;max=25"
+
+
+def test_provider_cache_tag_uses_schema_url_defaults():
+    """An unsaved Hydra/Prowlarr URL keys like the schema default the plugin
+    path's Kodi getter returns, so both paths share one entry."""
+    from resources.lib.router import _provider_cache_tag
+
+    flags = {"nzbhydra_enabled": "true", "prowlarr_enabled": "true"}
+
+    def raw_xml(key, default=""):  # RunScript reader: missing key -> default
+        return flags.get(key, default)
+
+    def kodi(key, default=""):  # plugin path: Kodi fills the schema default
+        schema = {
+            "hydra_url": "http://localhost:5076/",
+            "prowlarr_host": "http://localhost:9696",
+        }
+        return flags.get(key, schema.get(key, default))
+
+    assert _provider_cache_tag(raw_xml) == _provider_cache_tag(kodi)
+
+
+@patch("resources.lib.router_play._play_search_getter")
+@patch("resources.lib.router._search_all_providers")
+def test_play_and_script_paths_do_not_share_cache_across_provider_sets(
+    mock_search, mock_play_getter
+):
+    """``/play`` forces NZBHydra2 on; a Prowlarr-only TMDBHelper play must not
+    reuse its cached results (nor the reverse)."""
+    from resources.lib.router_play import _search_with_cache
+    from resources.lib.router_scriptplay import _script_play_search_results
+
+    settings = {"nzbhydra_enabled": "false", "prowlarr_enabled": "true"}
+    mock_play_getter.return_value = lambda key, default="": (
+        "true" if key == "nzbhydra_enabled" else settings.get(key, default)
+    )
+    hydra_row = {"title": "Task.S01E03.Hydra.mkv", "link": "http://hydra/1"}
+    prowlarr_row = {"title": "Task.S01E03.Prowlarr.mkv", "link": "http://prowlarr/1"}
+    kwargs = dict(year="2025", imdb="tt1", season="1", episode="3", tvdb="", tmdb_id="")
+
+    with patch(
+        "resources.lib.router._get_script_setting",
+        side_effect=lambda key, default="": settings.get(key, default),
+    ), patch("resources.lib.cache._get_cache_ttl_seconds", return_value=1800):
+        mock_search.return_value = ([hydra_row], None)
+        assert _search_with_cache("episode", "Task", kwargs) == ([hydra_row], None)
+
+        mock_search.return_value = ([prowlarr_row], None)
+        assert _script_play_search_results("episode", "Task", kwargs, MagicMock()) == [
+            prowlarr_row
+        ]
+        assert mock_search.call_count == 2
+
+        # Each path now hits its own entry.
+        assert _search_with_cache("episode", "Task", kwargs) == ([hydra_row], None)
+        assert _script_play_search_results("episode", "Task", kwargs, MagicMock()) == [
+            prowlarr_row
+        ]
+        assert mock_search.call_count == 2
+
+
+def test_provider_cache_tag_includes_max_results():
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {"nzbhydra_enabled": "true", "max_results": "25"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    small = _provider_cache_tag(getter)
+    settings["max_results"] = "100"
+    assert _provider_cache_tag(getter) != small
+
+
+def test_search_all_providers_reports_partial_outcome():
+    from resources.lib.router import _search_all_providers
+
+    row = {"title": "Movie.2026.mkv", "link": "http://hydra/1"}
+    settings = {"nzbhydra_enabled": "true", "prowlarr_enabled": "true"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    outcomes = [("NZBHydra2", ([row], None)), ("Prowlarr", ([], "Prowlarr down"))]
+    outcome = {}
+    with patch("resources.lib.router._run_provider_jobs", return_value=outcomes), patch(
+        "resources.lib.router._build_provider_jobs", return_value=[]
+    ):
+        results, error = _search_all_providers(
+            SearchQuery("movie", "Movie", year="2026"),
+            settings_getter=getter,
+            outcome=outcome,
+        )
+    assert results == [row] and error is None
+    assert outcome == {"complete": False}
+
+
+@patch("resources.lib.router_play._play_search_getter")
+@patch("resources.lib.router._search_all_providers")
+def test_partial_provider_results_are_not_cached(mock_search, mock_play_getter):
+    """A provider that failed while another answered must be retried next time."""
+    from resources.lib.router_play import _search_with_cache
+    from resources.lib.router_scriptplay import _script_play_search_results
+
+    settings = {"prowlarr_enabled": "true"}
+    mock_play_getter.return_value = lambda key, default="": settings.get(key, default)
+    row = {"title": "Task.S01E03.mkv", "link": "http://prowlarr/1"}
+
+    def partial(query, settings_getter=None, outcome=None):
+        outcome["complete"] = False
+        return [row], None
+
+    mock_search.side_effect = partial
+    kwargs = dict(year="2025", imdb="tt1", season="1", episode="3", tvdb="", tmdb_id="")
+    with patch(
+        "resources.lib.router._get_script_setting",
+        side_effect=lambda key, default="": settings.get(key, default),
+    ), patch("resources.lib.cache._get_cache_ttl_seconds", return_value=1800):
+        _search_with_cache("episode", "Task", kwargs)
+        _search_with_cache("episode", "Task", kwargs)
+        _script_play_search_results("episode", "Task", kwargs, MagicMock())
+        _script_play_search_results("episode", "Task", kwargs, MagicMock())
+    assert mock_search.call_count == 4
+
+
+@patch("resources.lib.direct_indexers.get_configured_indexers")
+def test_provider_cache_tag_changes_when_api_keys_rotate(mock_indexers):
+    """Cached download links embed API keys: a rotated key must miss, and the
+    tag must never carry the raw key."""
+    from resources.lib.router import _provider_cache_tag
+
+    settings = {
+        "nzbhydra_enabled": "true",
+        "prowlarr_enabled": "true",
+        "direct_indexers_enabled": "true",
+        "hydra_api_key": "hydra-old",
+        "prowlarr_api_key": "prowlarr-old",
+    }
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    mock_indexers.return_value = [
+        {"id": "geek", "api_url": "https://geek/api", "api_key": "geek-old"}
+    ]
+    before = _provider_cache_tag(getter)
+    assert "old" not in before
+    for key in ("hydra_api_key", "prowlarr_api_key"):
+        settings[key] = key + "-new"
+        assert _provider_cache_tag(getter) != before
+        before = _provider_cache_tag(getter)
+    mock_indexers.return_value = [
+        {"id": "geek", "api_url": "https://geek/api", "api_key": "geek-new"}
+    ]
+    assert _provider_cache_tag(getter) != before
+
+
+def test_provider_snapshot_seeds_the_prowlarr_schema_default():
+    """An unsaved Prowlarr host searches the schema default, as the cache tag
+    assumes, on the raw-XML RunScript path."""
+    from resources.lib.router_search import _PROVIDER_SEARCH_SETTING_DEFAULTS
+
+    assert _PROVIDER_SEARCH_SETTING_DEFAULTS["prowlarr_host"] == "http://localhost:9696"
+
+
+def test_search_all_providers_marks_partial_direct_fanout_incomplete():
+    from resources.lib.router import _search_all_providers
+
+    row = {"title": "Movie.2026.mkv", "link": "https://geek/1"}
+    settings = {"direct_indexers_enabled": "true"}
+
+    def getter(key, default=""):
+        return settings.get(key, default)
+
+    def build_jobs(*_args, direct_outcome=None, **_kwargs):
+        direct_outcome["complete"] = False  # one direct indexer failed
+        return []
+
+    outcome = {}
+    with patch(
+        "resources.lib.router._build_provider_jobs", side_effect=build_jobs
+    ), patch(
+        "resources.lib.router._run_provider_jobs",
+        return_value=[("Direct indexer", ([row], None))],
+    ):
+        results, error = _search_all_providers(
+            SearchQuery("movie", "Movie"), settings_getter=getter, outcome=outcome
+        )
+    assert results == [row] and error is None
+    assert outcome == {"complete": False}

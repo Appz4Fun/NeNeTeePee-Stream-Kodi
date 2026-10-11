@@ -141,19 +141,23 @@ over the full row set, so rows revealed by show-all keep them.
 ## Caching
 
 NeNeTeePee-Stream-Kodi caches the merged, **pre-filter** results on disk, keyed by a SHA-256 of
-the search type, title, year, season/episode, and IDs. That means:
+the search type, title, year, season/episode, IDs, and the enabled provider set. That means:
 
-- Re-opening the same title is instant within the cache duration (default 60 s,
-  capped at 86400 s).
+- Re-opening the same title is instant within the cache duration (default 30
+  minutes, capped at 1440 minutes).
+- A search made with different providers enabled never reuses another's entry.
 - Changing filter or sort settings takes effect immediately. No new search
   needed, because filtering runs fresh on every read.
 - The cache self-limits to 50 MB and 1000 entries, evicting the oldest first,
   and writes atomically.
 
-The `plugin://` play and search routes use the cache. The TMDBHelper
-RunScript path always queries providers fresh.
+The `plugin://` play and search routes and the TMDBHelper RunScript path all
+use the cache. The RunScript path reads the cache duration through its XML
+settings snapshot and resolves the cache folder from
+`special://profile/addon_data/`, never through Kodi's add-on info API, which
+can crash CoreELEC in that context.
 
-Set **Cache duration (seconds, 0=disabled)** (**Advanced › Search Cache**) to
+Set **Cache duration (minutes, 0=off)** (**Advanced › Search Cache**) to
 `0` to turn off caching, or clear it any time from the add-on's main menu.
 
 Next: the [Playback pipeline](playback-pipeline.md).

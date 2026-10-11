@@ -447,8 +447,13 @@ def search_direct_indexers(
     query,
     indexers=None,
     max_results=None,
+    outcome=None,
 ):
-    """Search all configured direct Newznab indexers."""
+    """Search all configured direct Newznab indexers.
+
+    ``outcome`` (optional dict) gets ``"complete"``: False when any indexer
+    failed, even though the rows from the others are still returned.
+    """
     indexers = get_configured_indexers() if indexers is None else indexers
     if not indexers:
         return [], None
@@ -469,6 +474,8 @@ def search_direct_indexers(
             continue
         all_results.extend(results)
 
+    if outcome is not None:
+        outcome["complete"] = not errors
     if not all_results and errors:
         return [], errors[0]
     return all_results, None

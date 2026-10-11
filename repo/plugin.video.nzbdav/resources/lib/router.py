@@ -438,7 +438,95 @@ def _script_completed_job_for_selection(selected):
         return None
 
 
-def _search_all_providers(query, settings_getter=None):
+def _provider_cache_tag(settings_getter):
+    """The provider set searched under ``settings_getter``, for the search cache key.
+
+    ``/play`` forces NZBHydra2 on while the RunScript player follows the
+    settings, and the Prowlarr indexer IDs, enabled direct indexers, and
+    ``max_results`` can change at any time, so each cache entry names exactly
+    what it searched. Cached download links embed the provider API keys, so
+    a key fingerprint is part of the tag too: a rotated key starts a fresh
+    entry.
+    """
+
+    def _on(name):
+        return str(settings_getter(name, "false") or "").lower() == "true"
+
+    from resources.lib.hydra import _DEFAULT_HYDRA_URL
+    from resources.lib.router_search import _DEFAULT_PROWLARR_HOST
+
+    def _url(name, default):
+        # The schema default, as the search itself reads it: a URL left at its
+        # default keys the same entry on both the plugin and RunScript paths.
+        return str(settings_getter(name, default) or "").rstrip("/")
+
+    parts = []
+    if _on("nzbhydra_enabled"):
+        parts.append(
+            "nzbhydra={}|{}".format(
+                _url("hydra_url", _DEFAULT_HYDRA_URL),
+                _secret_fingerprint(settings_getter("hydra_api_key", "")),
+            )
+        )
+    if _on("prowlarr_enabled"):
+        parts.append(
+            "prowlarr={}|{}|{}".format(
+                _url("prowlarr_host", _DEFAULT_PROWLARR_HOST),
+                settings_getter("prowlarr_indexer_ids", "") or "",
+                _secret_fingerprint(settings_getter("prowlarr_api_key", "")),
+            )
+        )
+    if _on("direct_indexers_enabled"):
+        parts.append("direct={}".format(_direct_indexer_fingerprint()))
+    if parts:
+        from resources.lib.direct_indexers import _coerce_max_results
+
+        # Every provider requests at most max_results rows.
+        limit = _coerce_max_results(settings_getter("max_results", "25"))
+        parts.append("max={}".format(limit))
+    return ";".join(parts)
+
+
+def _secret_fingerprint(secret):
+    """A short, non-reversible fingerprint of a credential (``""`` when unset).
+
+    Derived with PBKDF2 rather than a bare digest: it only has to change when
+    the key changes, but it must never make the key cheap to brute-force.
+    """
+    import hashlib
+
+    secret = str(secret or "")
+    if not secret:
+        return ""
+    derived = hashlib.pbkdf2_hmac(
+        "sha256", secret.encode("utf-8"), b"nzbdav-search-cache", 10000
+    )
+    return derived.hex()[:12]
+
+
+def _direct_indexer_fingerprint():
+    """Enabled direct indexers (ID, API URL, key fingerprint); ``?`` if unreadable."""
+    try:
+        from resources.lib.direct_indexers import get_configured_indexers
+
+        indexers = get_configured_indexers()
+    except Exception:  # pylint: disable=broad-except
+        # An unreadable indexer list only costs this entry its cache sharing.
+        return "?"
+    return ",".join(
+        sorted(
+            "{}@{}#{}".format(
+                item.get("id"),
+                item.get("api_url"),
+                _secret_fingerprint(item.get("api_key")),
+            )
+            for item in indexers or []
+            if isinstance(item, dict)
+        )
+    )
+
+
+def _search_all_providers(query, settings_getter=None, outcome=None):
     """
     Search enabled indexer providers and return combined, deduplicated results.
 
@@ -455,6 +543,10 @@ def _search_all_providers(query, settings_getter=None):
             error_message (str or None): Error text when every enabled
                 provider failed or when no providers are enabled; otherwise
                 `None`.
+
+    ``outcome`` (optional dict) gets ``"complete"``: False when any enabled
+    provider failed, even if others returned rows. Callers cache only
+    complete searches.
     """
     _script_play_stage("providers entry")
     search_type = query.search_type
@@ -501,6 +593,7 @@ def _search_all_providers(query, settings_getter=None):
         "episode": episode,
         "tvdb": tvdb,
     }
+    direct_outcome = {}
     provider_jobs = _build_provider_jobs(
         nzbhydra_enabled,
         prowlarr_enabled,
@@ -508,9 +601,16 @@ def _search_all_providers(query, settings_getter=None):
         search_args,
         common_kwargs,
         provider_settings_getter,
+        direct_outcome=direct_outcome,
     )
 
     provider_outcomes = _run_provider_jobs(provider_jobs)
+    if outcome is not None:
+        # The direct-indexer fan-out returns surviving rows without an error
+        # when only some indexers failed; it reports that partial state here.
+        outcome["complete"] = not any(
+            error for _label, (_rows, error) in provider_outcomes
+        ) and direct_outcome.get("complete", True)
     return _collect_provider_outcomes(provider_outcomes)
 
 
@@ -807,15 +907,6 @@ def _handle_script_play(params):
         params.get("_episode_context"), settings_getter=_get_script_setting
     )
 
-    _script_play_stage(
-        "skipping cache for '{}' ({})".format(
-            title,
-            search_type,
-        )
-    )
-    _script_play_stage(
-        "provider search start for '{}'".format(title),
-    )
     search_kwargs = dict(
         year=year, imdb=imdb, season=season, episode=episode, tvdb=tvdb, tmdb_id=tmdb_id
     )

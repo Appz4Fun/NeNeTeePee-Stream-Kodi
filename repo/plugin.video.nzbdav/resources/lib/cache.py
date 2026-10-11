@@ -13,13 +13,16 @@ import xbmcvfs
 
 MAX_CACHE_SIZE_BYTES = 52428800  # 50 MB
 MAX_CACHE_ENTRY_COUNT = 1000
-DEFAULT_CACHE_TTL_SECONDS = 60
-MAX_CACHE_TTL_SECONDS = 86400
+CACHE_TTL_SETTING = "cache_ttl_minutes"
+DEFAULT_CACHE_TTL_MINUTES = 30
+MAX_CACHE_TTL_MINUTES = 1440
+_PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
 
 
 def _get_cache_dir():
-    addon = xbmcaddon.Addon("plugin.video.nzbdav")
-    profile = xbmcvfs.translatePath(addon.getAddonInfo("profile"))
+    # The add-on profile path, resolved without the Kodi add-on info API: that
+    # lookup can crash CoreELEC inside the TMDBHelper RunScript context.
+    profile = xbmcvfs.translatePath(_PROFILE_PATH)
     cache_dir = os.path.join(profile, "cache")
     # `exist_ok=True` rather than the exists-then-makedirs pattern, which
     # races a concurrent first-call: two callers can both observe "not
@@ -28,8 +31,34 @@ def _get_cache_dir():
     return cache_dir
 
 
-def _cache_key(
-    search_type, title, year="", imdb="", season="", episode="", tvdb="", tmdb_id=""
+def _cache_path(search_type, title, kwargs):
+    """The cache file for a search, or None when the cache folder is unusable.
+
+    A read-only profile, or a ``cache`` file where the folder should be, makes
+    the cache a miss instead of stopping the search that called it.
+    """
+    try:
+        cache_dir = _get_cache_dir()
+    except (OSError, RuntimeError, TypeError, ValueError) as exc:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Search cache unavailable: {}".format(exc),
+            xbmc.LOGWARNING,
+        )
+        return None
+    return os.path.join(cache_dir, _cache_key(search_type, title, **kwargs) + ".json")
+
+
+def _cache_key(  # pylint: disable=too-many-arguments
+    search_type,
+    title,
+    year="",
+    imdb="",
+    season="",
+    episode="",
+    tvdb="",
+    tmdb_id="",
+    *,
+    providers="",
 ):
     """Generate a filesystem-safe, collision-resistant cache key.
 
@@ -43,35 +72,46 @@ def _cache_key(
     filename, no collisions in practice. Prefix the ``search_type`` so
     a glance at the cache dir still shows which bucket a file belongs
     to; the readable ``_make_legible_slug`` tail is cosmetic.
+
+    ``providers`` names the enabled provider set: searches made with
+    different providers never share an entry.
     """
     import hashlib
 
-    parts = [search_type, title, year, imdb, season, episode, tvdb, tmdb_id]
+    parts = [search_type, title, year, imdb, season, episode, tvdb, tmdb_id, providers]
     joined = "\x1f".join(str(p) for p in parts)  # unit-separator—can't appear in inputs
     digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()
     legible = "".join(c if c.isalnum() or c in "-_" else "_" for c in title)[:40]
     return "{}_{}_{}".format(search_type, legible or "untitled", digest)
 
 
-def _get_cache_ttl_seconds():
-    """Return the configured cache TTL, falling back if Kodi settings fail."""
+def _get_cache_ttl_seconds(settings_getter=None):
+    """Return the configured cache TTL in seconds (the setting is in minutes).
+
+    ``settings_getter`` (``(key, default) -> str``) lets the RunScript player
+    read the pure-XML settings snapshot instead of Kodi's settings API.
+    """
+    default_ttl = DEFAULT_CACHE_TTL_MINUTES * 60
     try:
-        addon = xbmcaddon.Addon("plugin.video.nzbdav")
-        raw_ttl = addon.getSetting("cache_ttl") or str(DEFAULT_CACHE_TTL_SECONDS)
+        if settings_getter is None:
+            addon = xbmcaddon.Addon("plugin.video.nzbdav")
+            raw_ttl = addon.getSetting(CACHE_TTL_SETTING)
+        else:
+            raw_ttl = settings_getter(CACHE_TTL_SETTING, "")
     except RuntimeError as exc:
         xbmc.log(
             (
-                "NeNeTeePee-Stream-Kodi: cache_ttl setting unavailable; "
-                "using default: {}"
-            ).format(exc),
+                "NeNeTeePee-Stream-Kodi: {} setting unavailable; " "using default: {}"
+            ).format(CACHE_TTL_SETTING, exc),
             xbmc.LOGWARNING,
         )
-        return DEFAULT_CACHE_TTL_SECONDS
+        return default_ttl
 
     try:
-        return max(0, min(int(raw_ttl), MAX_CACHE_TTL_SECONDS))
+        minutes = int(raw_ttl or DEFAULT_CACHE_TTL_MINUTES)
     except (TypeError, ValueError):
-        return DEFAULT_CACHE_TTL_SECONDS
+        return default_ttl
+    return max(0, min(minutes, MAX_CACHE_TTL_MINUTES)) * 60
 
 
 def _try_remove(path):
@@ -88,6 +128,16 @@ def _try_remove(path):
         pass
 
 
+def _well_formed(data):
+    """Whether ``results`` (required) and any ``hydra_uploads`` are lists of objects."""
+    results = data.get("results")
+    uploads = data.get("hydra_uploads")
+    return all(
+        isinstance(rows, list) and all(isinstance(row, dict) for row in rows)
+        for rows in (results, [] if uploads is None else uploads)
+    )
+
+
 def _read_fresh_cache(path, cache_ttl, title):
     """Return cached results if present and fresh, else None.
 
@@ -96,8 +146,8 @@ def _read_fresh_cache(path, cache_ttl, title):
     """
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    timestamp = data.get("timestamp")
-    if not isinstance(timestamp, (int, float)):
+    timestamp = data.get("timestamp") if isinstance(data, dict) else None
+    if not isinstance(timestamp, (int, float)) or not _well_formed(data):
         _try_remove(path)
         return None
     if time.time() - timestamp > cache_ttl:
@@ -118,35 +168,41 @@ def _read_fresh_cache(path, cache_ttl, title):
     return results
 
 
-def get_cached(search_type, title, **kwargs):
+def get_cached(search_type, title, settings_getter=None, **kwargs):
     """Get cached results if fresh enough. Returns list or None."""
-    cache_ttl = _get_cache_ttl_seconds()
+    cache_ttl = _get_cache_ttl_seconds(settings_getter)
     if cache_ttl <= 0:
         return None
 
-    key = _cache_key(search_type, title, **kwargs)
-    path = os.path.join(_get_cache_dir(), key + ".json")
-
-    if not os.path.exists(path):
+    path = _cache_path(search_type, title, kwargs)
+    if path is None or not os.path.exists(path):
         return None
 
     try:
         return _read_fresh_cache(path, cache_ttl, title)
-    except json.JSONDecodeError:
+    except (ValueError, TypeError, AttributeError, KeyError) as exc:
+        # Corrupt JSON, bytes that aren't UTF-8, or fields of the wrong type
+        # while restoring the rows: the entry is unusable, so it is a miss.
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Discarded unreadable search cache "
+            "entry for '{}': {}".format(title, exc),
+            xbmc.LOGWARNING,
+        )
         _try_remove(path)
         return None
     except OSError:
         return None
 
 
-def set_cached(search_type, title, results, **kwargs):
+def set_cached(search_type, title, results, settings_getter=None, **kwargs):
     """Cache search results."""
-    cache_ttl = _get_cache_ttl_seconds()
+    cache_ttl = _get_cache_ttl_seconds(settings_getter)
     if cache_ttl <= 0:
         return
 
-    key = _cache_key(search_type, title, **kwargs)
-    path = os.path.join(_get_cache_dir(), key + ".json")
+    path = _cache_path(search_type, title, kwargs)
+    if path is None:
+        return
 
     try:
         from resources.lib.hydra import split_search_uploads
@@ -238,8 +294,8 @@ def _evict_entries(entries, total):
 
 def _evict_oldest():
     """Delete oldest cache files until size and entry-count limits are met."""
-    cache_dir = _get_cache_dir()
     try:
+        cache_dir = _get_cache_dir()
         total, entries = _scan_cache_entries(cache_dir)
 
         if not _over_limit(total, len(entries)):

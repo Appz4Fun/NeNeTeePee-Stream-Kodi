@@ -8,10 +8,12 @@ import time
 from collections import namedtuple
 from unittest.mock import MagicMock, patch
 
+import pytest
 import resources.lib.cache as cache_module
 from resources.lib.cache import (
     _cache_key,
     _evict_oldest,
+    _get_cache_dir,
     clear_cache,
     get_cached,
     set_cached,
@@ -83,14 +85,15 @@ def test_cache_expired(mock_addon_mod, mock_cache_dir):
     with tempfile.TemporaryDirectory() as tmpdir:
         mock_cache_dir.return_value = tmpdir
         addon = MagicMock()
-        addon.getSetting.return_value = "1"  # 1 second TTL
+        addon.getSetting.return_value = "1"  # 1 minute TTL
         mock_addon_mod.Addon.return_value = addon
 
-        results = [{"title": "Test"}]
-        set_cached("movie", "Test", results)
-        time.sleep(1.1)
-        cached = get_cached("movie", "Test")
-        assert cached is None
+        cache_path = os.path.join(tmpdir, _cache_key("movie", "Test") + ".json")
+        with open(cache_path, "w") as f:
+            json.dump(
+                {"timestamp": time.time() - 61, "results": [{"title": "Test"}]}, f
+            )
+        assert get_cached("movie", "Test") is None
 
 
 @patch("resources.lib.cache._get_cache_dir")
@@ -214,7 +217,7 @@ def test_get_cached_respects_current_lower_ttl_for_existing_entry(
     with tempfile.TemporaryDirectory() as tmpdir:
         mock_cache_dir.return_value = tmpdir
         addon = MagicMock()
-        addon.getSetting.return_value = "300"
+        addon.getSetting.return_value = "5"  # minutes
         mock_addon_mod.Addon.return_value = addon
 
         cache_path = os.path.join(tmpdir, _cache_key("movie", "Old") + ".json")
@@ -348,11 +351,11 @@ def test_cache_eviction_continues_when_file_disappears_before_sort(mock_cache_di
 
 @patch("resources.lib.cache._get_cache_dir")
 @patch("resources.lib.cache.xbmcaddon")
-def test_get_cached_falls_back_to_60s_when_ttl_setting_unparseable(
+def test_get_cached_falls_back_to_default_when_ttl_setting_unparseable(
     mock_addon_mod, mock_cache_dir
 ):
-    """When cache_ttl is a non-numeric string (user typo, corrupt
-    settings file), get_cached must fall back to the 60 s default
+    """When cache_ttl_minutes is a non-numeric string (user typo, corrupt
+    settings file), get_cached must fall back to the 30-minute default
     rather than raising ValueError."""
     with tempfile.TemporaryDirectory() as tmpdir:
         mock_cache_dir.return_value = tmpdir
@@ -363,9 +366,9 @@ def test_get_cached_falls_back_to_60s_when_ttl_setting_unparseable(
         mock_addon_mod.Addon.return_value = addon
 
         # Write a fresh cache entry by hand to observe whether
-        # the fallback TTL (60 s) treats it as live.
+        # the fallback TTL (30 min) treats it as live.
         fresh = {
-            "timestamp": time.time() - 30,  # 30 seconds old
+            "timestamp": time.time() - 29 * 60,  # 29 minutes old
             "results": [{"title": "Fresh"}],
         }
         os.makedirs(tmpdir, exist_ok=True)
@@ -376,13 +379,13 @@ def test_get_cached_falls_back_to_60s_when_ttl_setting_unparseable(
         cached = get_cached("movie", "Fresh")
         assert (
             cached is not None
-        ), "Fallback TTL of 60 s must still accept a 30-second-old entry"
+        ), "Fallback TTL of 30 min must still accept a 29-minute-old entry"
         assert cached[0]["title"] == "Fresh"
 
 
 @patch("resources.lib.cache._get_cache_dir")
 @patch("resources.lib.cache.xbmcaddon")
-def test_get_cached_falls_back_to_60s_when_ttl_setting_raises_runtime(
+def test_get_cached_falls_back_to_default_when_ttl_setting_raises_runtime(
     mock_addon_mod, mock_cache_dir
 ):
     """Kodi can raise RuntimeError from getSetting during early /play routing."""
@@ -410,7 +413,7 @@ def test_get_cached_falls_back_to_60s_when_ttl_setting_raises_runtime(
 
 @patch("resources.lib.cache._get_cache_dir")
 @patch("resources.lib.cache.xbmcaddon")
-def test_set_cached_falls_back_to_60s_when_ttl_setting_raises_runtime(
+def test_set_cached_falls_back_to_default_when_ttl_setting_raises_runtime(
     mock_addon_mod, mock_cache_dir
 ):
     """A transient Kodi getSetting RuntimeError must not break cache writes."""
@@ -457,3 +460,129 @@ def test_clear_cache_swallows_per_file_oserror(mock_cache_dir):
         remaining = sorted(os.listdir(tmpdir))
         # Exactly one of the two files survives the partial failure.
         assert len(remaining) == 1
+
+
+@patch("resources.lib.cache.xbmcaddon")
+def test_cache_ttl_setting_is_minutes_and_clamped(mock_addon_mod):
+    from resources.lib.cache import _get_cache_ttl_seconds
+
+    addon = MagicMock()
+    mock_addon_mod.Addon.return_value = addon
+    addon.getSetting.return_value = "2"
+    assert _get_cache_ttl_seconds() == 120
+    addon.getSetting.assert_called_with("cache_ttl_minutes")
+    addon.getSetting.return_value = "99999"
+    assert _get_cache_ttl_seconds() == 1440 * 60
+    addon.getSetting.return_value = "-5"
+    assert _get_cache_ttl_seconds() == 0
+    addon.getSetting.return_value = ""
+    assert _get_cache_ttl_seconds() == 30 * 60
+
+
+@patch("resources.lib.cache._get_cache_dir")
+@patch("resources.lib.cache.xbmcaddon")
+def test_settings_getter_replaces_kodi_settings_api(mock_addon_mod, mock_cache_dir):
+    """The RunScript player passes its pure-XML getter; Kodi's API stays unused."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mock_cache_dir.return_value = tmpdir
+        mock_addon_mod.Addon.side_effect = AssertionError("Kodi settings API used")
+        seen = []
+
+        def getter(key, default=""):
+            seen.append(key)
+            return "10"
+
+        set_cached("movie", "Test", [{"title": "Test"}], settings_getter=getter)
+        assert get_cached("movie", "Test", settings_getter=getter) == [
+            {"title": "Test"}
+        ]
+        assert set(seen) == {"cache_ttl_minutes"}
+
+
+@patch("resources.lib.cache.xbmcvfs")
+@patch("resources.lib.cache.xbmcaddon")
+def test_cache_dir_resolves_profile_without_addon_info(mock_addon_mod, mock_vfs):
+    """getAddonInfo("profile") can crash CoreELEC in the RunScript context."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mock_addon_mod.Addon.side_effect = AssertionError("add-on info used")
+        mock_vfs.translatePath.return_value = tmpdir
+
+        # The module-level import is the real function (conftest patches the
+        # attribute per test).
+        assert _get_cache_dir() == os.path.join(tmpdir, "cache")
+        mock_vfs.translatePath.assert_called_once_with(
+            "special://profile/addon_data/plugin.video.nzbdav/"
+        )
+
+
+@patch("resources.lib.cache.xbmcaddon")
+def test_unusable_cache_folder_is_a_miss_not_an_error(mock_addon_mod):
+    """A read-only profile, or a ``cache`` file in the folder's place, must not
+    stop the search that consults the cache."""
+    addon = MagicMock()
+    addon.getSetting.return_value = "30"
+    mock_addon_mod.Addon.return_value = addon
+    with patch.object(
+        cache_module, "_get_cache_dir", side_effect=FileExistsError("cache is a file")
+    ):
+        assert get_cached("movie", "Test") is None
+        set_cached("movie", "Test", [{"title": "Test"}])  # must not raise
+
+
+def test_unusable_cache_folder_skips_eviction():
+    with patch.object(
+        cache_module, "_get_cache_dir", side_effect=PermissionError("read-only")
+    ):
+        _evict_oldest()  # must not raise
+
+
+def test_cache_key_separates_provider_sets():
+    """A search made with Hydra on must never answer one made with it off."""
+    base = dict(year="2026", imdb="tt1", season="1", episode="3")
+    with_hydra = _cache_key("episode", "Task", providers="nzbhydra_enabled", **base)
+    without = _cache_key("episode", "Task", providers="prowlarr_enabled", **base)
+    assert with_hydra != without
+    assert with_hydra == _cache_key(
+        "episode", "Task", providers="nzbhydra_enabled", **base
+    )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"[]",
+        b'{"timestamp": 1e18, "results": "x"}',
+        b'{"timestamp": 1e18, "results": [1], "hydra_uploads": []}',
+        b'{"timestamp": 1e18, "results": [], "hydra_uploads": ["x"]}',
+        b'{"timestamp": 1e18, "results": [], "hydra_uploads": {}}',
+        b'{"timestamp": 1e18}',
+        b'{"timestamp": 1e18, "results": [{"title": []}], "hydra_uploads": []}',
+        b"\xff\xfe not utf-8",
+    ],
+    ids=[
+        "non-object root",
+        "non-list results",
+        "scalar result row",
+        "scalar upload row",
+        "non-list uploads",
+        "missing results",
+        "list-valued title",
+        "non-utf8 bytes",
+    ],
+)
+@patch("resources.lib.cache._get_cache_dir")
+@patch("resources.lib.cache.xbmcaddon")
+def test_malformed_cache_entry_is_a_miss_and_removed(
+    mock_addon_mod, mock_cache_dir, raw
+):
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mock_cache_dir.return_value = tmpdir
+        addon = MagicMock()
+        addon.getSetting.return_value = "30"
+        mock_addon_mod.Addon.return_value = addon
+        path = os.path.join(tmpdir, _cache_key("movie", "Bad") + ".json")
+        with open(path, "wb") as f:
+            f.write(raw)
+
+        assert get_cached("movie", "Bad") is None
+        assert not os.path.exists(path)

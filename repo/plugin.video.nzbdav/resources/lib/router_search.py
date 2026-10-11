@@ -19,17 +19,23 @@ from resources.lib.http_util import pubdate_to_epoch
 from resources.lib.hydra import _DEFAULT_HYDRA_URL, _SEARCH_UPLOADS_KEY
 from resources.lib.nzbdav_api import completed_jobs_lookup_done
 
+# settings.xml's prowlarr_host default. The provider snapshot and the search
+# cache tag both seed it, so an unsaved host searches (and keys) the same way
+# on the plugin and RunScript paths.
+_DEFAULT_PROWLARR_HOST = "http://localhost:9696"
+
 # Pre-read defaults for the provider-search settings snapshot
 # (router._search_all_providers wraps every getter in _snapshot_settings_getter
 # seeded from this map, so worker threads never access Kodi settings).
 # ``hydra_url`` seeds the schema default: the snapshot pre-reads every key, so
 # a URL left at its displayed default (absent from the profile XML) would
 # otherwise snapshot to "" and bypass the ``hydra._DEFAULT_HYDRA_URL`` mirror
-# for the whole provider-search path.
+# for the whole provider-search path. ``prowlarr_host`` seeds its schema
+# default for the same reason.
 _PROVIDER_SEARCH_SETTING_DEFAULTS = {
     "hydra_url": _DEFAULT_HYDRA_URL,
     "hydra_api_key": "",
-    "prowlarr_host": "",
+    "prowlarr_host": _DEFAULT_PROWLARR_HOST,
     "prowlarr_api_key": "",
     "prowlarr_indexer_ids": "",
     "max_results": "25",
@@ -43,8 +49,13 @@ def _build_provider_jobs(
     search_args,
     common_kwargs,
     provider_settings_getter,
+    direct_outcome=None,
 ):
-    """Assemble the (key, label, func, args, kwargs) tuples for enabled providers."""
+    """Assemble the (key, label, func, args, kwargs) tuples for enabled providers.
+
+    ``direct_outcome`` (optional dict) receives the direct-indexer fan-out's
+    ``"complete"`` flag (see ``search_direct_indexers``).
+    """
     provider_jobs = []
 
     if nzbhydra_enabled:
@@ -83,6 +94,8 @@ def _build_provider_jobs(
             indexers=get_configured_indexers(),
             max_results=_read_max_results(provider_settings_getter),
         )
+        if direct_outcome is not None:
+            kwargs["outcome"] = direct_outcome
         provider_jobs.append(
             (
                 "direct indexers",

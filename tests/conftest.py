@@ -96,11 +96,13 @@ def _suppress_readahead_daemon(request):
 
 @pytest.fixture(autouse=True)
 def _isolated_nzbget_submit_ledger():
-    """Give every test its own NZBGet resubmit ledger file and NZB cache.
+    """Give every test its own NZBGet resubmit ledger, NZB cache, and search cache.
 
     The mocked ``translatePath`` returns one shared path for the whole run, so
-    without this a fleet test's sends would make a later test skip backups.
+    without this a fleet test's sends would make a later test skip backups,
+    and one test's cached search would answer a later test's search.
     """
+    from resources.lib import cache as search_cache
     from resources.lib import nzb_cache, nzbget_submit_ledger
 
     # Outside tmp_path: some tests assert their tmp_path stays empty.
@@ -108,10 +110,14 @@ def _isolated_nzbget_submit_ledger():
     path = os.path.join(state, "nzbget_submitted.json")
     cache_dir = os.path.join(state, "nzb_cache")
     os.makedirs(cache_dir)
+    search_dir = os.path.join(state, "search_cache")
+    os.makedirs(search_dir)
     try:
         with patch.object(
             nzbget_submit_ledger, "_path", return_value=path
-        ), patch.object(nzb_cache, "_cache_dir", return_value=cache_dir):
+        ), patch.object(nzb_cache, "_cache_dir", return_value=cache_dir), patch.object(
+            search_cache, "_get_cache_dir", return_value=search_dir
+        ):
             yield
     finally:
         shutil.rmtree(state, ignore_errors=True)
