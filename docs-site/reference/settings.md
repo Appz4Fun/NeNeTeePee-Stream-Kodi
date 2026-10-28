@@ -152,6 +152,7 @@ stored hidden). All default to off/empty.
 | Setting | id | Default | Description |
 |---------|----|---------|-------------|
 | TMDB API key (optional, movies and TV) | `tmdb_api_key` | *(empty)* | A TMDB key (not a TVDB key). For episodes, it resolves the show's TVDB id when TMDBHelper didn't supply one. For movies, it converts a TMDB movie id into an IMDb id when no IMDb id was supplied. The add-on uses IDs supplied by TMDBHelper directly. Without the key, or on lookup failure, the search uses whatever ids and title it already has. Stored hidden. |
+| Correct season-premiere misfires after an episode ends | `next_episode_premiere_guard` | On | When a TMDBHelper play fires for episode 1 of a season straight after you watched a later episode of that season to the end, the add-on searches for the next episode instead and shows which one. It rolls over to the next season after a finale (S02E10 becomes S03E01) using TMDB when a key is set, otherwise TVmaze. One-shot: playing the premiere again goes through. Turn it off if you often replay a premiere right after finishing an episode. |
 
 !!! info "Beta feature"
     Added in 2.0.0-beta.1 (TV lookup), available on the

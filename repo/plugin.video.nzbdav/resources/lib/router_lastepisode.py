@@ -101,8 +101,25 @@ def mark_last_episode_completed():
     _home_window().setProperty(_PROP_COMPLETED, "1")
 
 
+def _episode_after(params, season, episode):
+    """Return ``(season, episode)`` strings for the episode after this one.
+
+    Rolls over into the next season at a season finale (S02E10 -> S03E01)
+    when ``episode_order`` can find the show's per-season episode counts, and
+    falls back to ``episode + 1`` otherwise.
+    """
+    from resources.lib import episode_order
+
+    try:
+        counts = episode_order.season_episode_counts(params)
+    except Exception:  # pylint: disable=broad-except
+        counts = {}
+    next_season, next_episode = episode_order.next_episode(season, episode, counts)
+    return str(next_season), str(next_episode)
+
+
 def recall_next_episode(params):
-    """Return ``(season, episode)`` one past the last pick for this show.
+    """Return ``(season, episode)`` for the episode after this show's last pick.
 
     Returns ``("", "")`` when nothing is remembered, the remembered show
     doesn't match ``params``, or the stored numbers aren't usable.
@@ -110,8 +127,7 @@ def recall_next_episode(params):
     pick = _remembered_pick(params)
     if pick is None:
         return "", ""
-    season, episode = pick
-    return str(season), str(episode + 1)
+    return _episode_after(params, *pick)
 
 
 def recall_stale_premiere(params, season, episode):
@@ -146,4 +162,4 @@ def recall_stale_premiere(params, season, episode):
     if last_season != int(season) or last_episode < 2:
         return "", ""
     home.clearProperty(_PROP_COMPLETED)
-    return season, str(last_episode + 1)
+    return _episode_after(params, last_season, last_episode)
