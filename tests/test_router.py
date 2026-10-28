@@ -5941,3 +5941,28 @@ def test_search_all_providers_marks_partial_direct_fanout_incomplete():
         )
     assert results == [row] and error is None
     assert outcome == {"complete": False}
+
+
+def test_retargeting_an_episode_drops_the_requested_episodes_metadata():
+    """A premiere request redirected to E08 must not keep E01's title/TMDB id."""
+    from resources.lib.playback_context import metadata_from_params
+    from resources.lib.router_scriptplay import _retarget_episode_params
+
+    params = {
+        "type": "episode",
+        "title": "Rick and Morty",
+        "tvshow_tmdb_id": "60625",
+        "episode_tmdb_id": "11759791",
+        "episode_title": "Premiere",
+        "ep_season": "2",
+        "ep_episode": "1",
+        "season": "2",
+        "episode": "1",
+    }
+    _retarget_episode_params(params, "2", "8")
+
+    metadata = metadata_from_params(params)
+    assert (metadata["season"], metadata["episode"]) == (2, 8)
+    assert "episode_tmdb_id" not in metadata
+    assert metadata["title"] != "Premiere"
+    assert metadata["tmdb_id"] == 60625 or metadata["tmdb_id"] == "60625"

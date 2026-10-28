@@ -432,6 +432,7 @@ class NzbdavPlayer(xbmc.Player):
             xbmc.LOGINFO,
         )
         self._save_stable_resume(resume_key, position, av_started)
+        self._disarm_episode_completion()
         self._cleanup_proxy_session()
         self._clear_stream_properties()
 
@@ -447,8 +448,29 @@ class NzbdavPlayer(xbmc.Player):
             from resources.lib.router_lastepisode import mark_last_episode_completed
 
             mark_last_episode_completed()
-        except (ImportError,) + _PLAYER_RUNTIME_ERRORS:
-            pass
+        except (ImportError,) + _PLAYER_RUNTIME_ERRORS as exc:
+            # Best effort: losing the flag only disables the one-shot
+            # premiere guard, never playback cleanup.
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Could not flag episode completed: "
+                "{}".format(type(exc).__name__),
+                xbmc.LOGDEBUG,
+            )
+
+    @staticmethod
+    def _disarm_episode_completion():
+        """Stop a stopped episode from being flagged completed later."""
+        try:
+            from resources.lib.router_lastepisode import disarm_last_episode
+
+            disarm_last_episode()
+        except (ImportError,) + _PLAYER_RUNTIME_ERRORS as exc:
+            # Best effort, like _mark_episode_completed.
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Could not disarm episode completion: "
+                "{}".format(type(exc).__name__),
+                xbmc.LOGDEBUG,
+            )
 
     def onPlayBackEnded(self):
         """Mark stream inactive when playback finishes naturally."""

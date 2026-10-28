@@ -12,7 +12,8 @@ episodes each season has so the step can roll over into the next season.
 Sources, in order:
 
 * TMDB ``/tv/{id}`` season list, when the user configured a TMDB API key
-  (the numbering TMDBHelper itself uses);
+  (the numbering TMDBHelper itself uses), keyed by the player's
+  ``tvshow_tmdb_id`` or found from the series TVDB/IMDb id;
 * TVmaze, which needs no key, looked up by the series TVDB or IMDb id.
 
 Everything is *fail-soft*: no ids, no network, or an odd payload yields an
@@ -39,21 +40,32 @@ def _get_json(http_get, url):
 
 
 def _series_ids(params):
-    """Return ``(tvdb, imdb)`` series-level ids from player params."""
+    """Return ``(tvdb, imdb, tmdb)`` series-level ids from player params.
+
+    ``tmdb`` is the schema-8 ``tvshow_tmdb_id`` token, never ``tmdb_id``,
+    which is the EPISODE's id on an episode play.
+    """
     params = params if isinstance(params, dict) else {}
     tvdb = str(params.get("tvdb") or "").strip()
     imdb = str(params.get("imdb") or "").strip()
-    return (tvdb if tvdb.isdigit() else ""), (imdb if imdb.startswith("tt") else "")
+    tmdb = str(params.get("tvshow_tmdb_id") or "").strip()
+    return (
+        tvdb if tvdb.isdigit() else "",
+        imdb if imdb.startswith("tt") else "",
+        tmdb if tmdb.isdigit() else "",
+    )
 
 
-def _tmdb_season_counts(http_get, key, tvdb, imdb):
+def _tmdb_season_counts(http_get, key, tvdb, imdb, tmdb):
     """Episode count per season from TMDB, or ``{}``.
 
-    The ``{tmdb_id}`` player token is the EPISODE's id on an episode play, so
-    the series is found through ``/find`` with the series TVDB/IMDb id instead.
+    Uses the explicit series id when the player supplied one; otherwise finds
+    the series through ``/find`` with its TVDB/IMDb id.
     """
-    series_id = None
+    series_id = tmdb or None
     for value, source in ((tvdb, "tvdb_id"), (imdb, "imdb_id")):
+        if series_id is not None:
+            break
         if not value:
             continue
         found = _get_json(
@@ -78,27 +90,27 @@ def _tmdb_season_counts(http_get, key, tvdb, imdb):
     return counts
 
 
+def _tvmaze_show_id(http_get, field, value):
+    """TVmaze show id for one external id, or None when TVmaze doesn't know it."""
+    try:
+        show = _get_json(
+            http_get, "{}/lookup/shows?{}={}".format(_TVMAZE_BASE, field, value)
+        )
+    except Exception:  # pylint: disable=broad-except
+        # TVmaze answers an unknown id with a 404.
+        return None
+    return show.get("id") if isinstance(show, dict) else None
+
+
 def _tvmaze_season_counts(http_get, tvdb, imdb):
     """Highest regular episode number per season from TVmaze, or ``{}``."""
-    show = None
+    show_id = None
     for value, field in ((tvdb, "thetvdb"), (imdb, "imdb")):
-        if not value:
-            continue
-        try:
-            show = _get_json(
-                http_get, "{}/lookup/shows?{}={}".format(_TVMAZE_BASE, field, value)
-            )
-        except Exception:  # pylint: disable=broad-except
-            # TVmaze answers an unknown id with a 404; try the other id.
-            continue
-        if show and show.get("id"):
-            break
-        show = None
-    if show is None:
+        if value and show_id is None:
+            show_id = _tvmaze_show_id(http_get, field, value)
+    if show_id is None:
         return {}
-    episodes = _get_json(
-        http_get, "{}/shows/{}/episodes".format(_TVMAZE_BASE, show["id"])
-    )
+    episodes = _get_json(http_get, "{}/shows/{}/episodes".format(_TVMAZE_BASE, show_id))
     counts = {}
     for item in episodes if isinstance(episodes, list) else []:
         number = item.get("season")
@@ -109,8 +121,8 @@ def _tvmaze_season_counts(http_get, tvdb, imdb):
     return counts
 
 
-def _cache_key(tvdb, imdb):
-    return _PROP_PREFIX + (tvdb or imdb)
+def _cache_key(tvdb, imdb, tmdb):
+    return _PROP_PREFIX + (tvdb or imdb or ("tmdb:" + tmdb))
 
 
 def _cached_counts(home, cache_key):
@@ -141,11 +153,11 @@ def season_episode_counts(params, settings_getter=None, http_get=None):
     ``settings_getter`` and ``http_get`` are injectable for tests. Returns
     ``{}`` when the show can't be identified or every source fails.
     """
-    tvdb, imdb = _series_ids(params)
-    if not (tvdb or imdb):
+    tvdb, imdb, tmdb = _series_ids(params)
+    if not (tvdb or imdb or tmdb):
         return {}
     home = xbmcgui.Window(_HOME_WINDOW_ID)
-    cache_key = _cache_key(tvdb, imdb)
+    cache_key = _cache_key(tvdb, imdb, tmdb)
     counts = _cached_counts(home, cache_key)
     if counts:
         return counts
@@ -158,8 +170,9 @@ def season_episode_counts(params, settings_getter=None, http_get=None):
         key = ""
     sources = []
     if key:
-        sources.append(lambda: _tmdb_season_counts(http_get, key, tvdb, imdb))
-    sources.append(lambda: _tvmaze_season_counts(http_get, tvdb, imdb))
+        sources.append(lambda: _tmdb_season_counts(http_get, key, tvdb, imdb, tmdb))
+    if tvdb or imdb:
+        sources.append(lambda: _tvmaze_season_counts(http_get, tvdb, imdb))
     for source in sources:
         try:
             counts = source()

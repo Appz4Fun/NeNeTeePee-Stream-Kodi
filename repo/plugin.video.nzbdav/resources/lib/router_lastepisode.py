@@ -28,16 +28,20 @@ _PROP_SHOW_ID = "nzbdav.last_ep_show_id"
 _PROP_SEASON = "nzbdav.last_ep_season"
 _PROP_EPISODE = "nzbdav.last_ep_episode"
 _PROP_COMPLETED = "nzbdav.last_ep_completed"
+# Set by an episode pick, consumed by the playback that follows it: only that
+# playback ending naturally may flag the pick completed.
+_PROP_ARMED = "nzbdav.last_ep_armed"
 
 # Preference order for building a per-show identity key. Season/episode are
 # deliberately excluded -- this identifies the *show*, not the episode.
 #
 # ``tvdb``/``imdb`` come first because TMDBHelper substitutes series-level ids
-# for both. ``tmdb_id`` is last because on an *episode* play it carries the
-# EPISODE's TMDB id, not the show's (Rick and Morty S09E07 -> 11759797,
-# S09E01 -> 11759791): keying on it first would file every episode of a show
-# under a different identity and no recall could ever match.
-_ID_FIELDS = ("tvdb", "imdb", "tmdb_id")
+# for both, then the schema-8 ``tvshow_tmdb_id`` series id. ``tmdb_id`` is
+# last because on an *episode* play it carries the EPISODE's TMDB id, not
+# the show's (Rick and Morty S09E07 -> 11759797, S09E01 -> 11759791): keying
+# on it first would file every episode of a show under a different identity
+# and no recall could ever match.
+_ID_FIELDS = ("tvdb", "imdb", "tvshow_tmdb_id", "tmdb_id")
 
 
 def _show_identity_key(params):
@@ -73,10 +77,11 @@ def _remembered_pick(params):
 def remember_last_episode(params, season, episode):
     """Record ``season``/``episode`` as the last pick for this show.
 
-    Always clears the "watched to the end" flag first: any new play supersedes
-    the previous one, including a movie play that records nothing else here.
-    Beyond that this is a no-op when the show identity or season/episode can't
-    be determined (movies never carry a numeric season/episode).
+    Any new play supersedes the previous one, so the "watched to the end" flag
+    is always cleared. A play without a show identity and numeric
+    season/episode (a movie, say) also forgets the previous pick, so a movie
+    that later ends can never mark an older episode as completed. An episode
+    pick arms completion for the playback that follows it.
     """
     home = _home_window()
     home.clearProperty(_PROP_COMPLETED)
@@ -84,10 +89,13 @@ def remember_last_episode(params, season, episode):
     season = str(season or "")
     episode = str(episode or "")
     if not (show_id and season.isdigit() and episode.isdigit()):
+        for prop in (_PROP_SHOW_ID, _PROP_SEASON, _PROP_EPISODE, _PROP_ARMED):
+            home.clearProperty(prop)
         return
     home.setProperty(_PROP_SHOW_ID, show_id)
     home.setProperty(_PROP_SEASON, season)
     home.setProperty(_PROP_EPISODE, episode)
+    home.setProperty(_PROP_ARMED, "1")
 
 
 def mark_last_episode_completed():
@@ -97,8 +105,24 @@ def mark_last_episode_completed():
     ``onPlayBackStopped`` -- a user-initiated stop must leave this clear so
     that deliberately replaying the premiere after bailing out of a later
     episode is left alone by ``recall_stale_premiere``.
+
+    Only the playback armed by the latest episode pick counts, and only once:
+    a later playback ending can't flag a pick it didn't play.
     """
-    _home_window().setProperty(_PROP_COMPLETED, "1")
+    home = _home_window()
+    if (home.getProperty(_PROP_ARMED) or "") != "1":
+        return
+    home.clearProperty(_PROP_ARMED)
+    home.setProperty(_PROP_COMPLETED, "1")
+
+
+def disarm_last_episode():
+    """Forget that the latest pick's playback may still complete.
+
+    Called from the service's ``onPlayBackStopped``: once the picked episode
+    was stopped, no later playback ending can flag it as watched.
+    """
+    _home_window().clearProperty(_PROP_ARMED)
 
 
 def _episode_after(params, season, episode):

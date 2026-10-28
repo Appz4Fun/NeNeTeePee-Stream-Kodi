@@ -73,6 +73,24 @@ def _write_back_episode_params(params, season, episode):
         params["episode"] = episode
 
 
+# Player tokens that describe the episode TMDBHelper asked for. Once a play is
+# retargeted at another episode they would label it with the wrong title and
+# episode TMDB id (playback_context.metadata_from_params), so they are dropped.
+_EPISODE_SPECIFIC_PARAMS = (
+    "episode_tmdb_id",
+    "episode_title",
+    "ep_season",
+    "ep_episode",
+)
+
+
+def _retarget_episode_params(params, season, episode):
+    """Point ``params`` at another episode and drop the old episode's metadata."""
+    for key in _EPISODE_SPECIFIC_PARAMS:
+        params.pop(key, None)
+    _write_back_episode_params(params, season, episode)
+
+
 def _notify_next_episode(season, episode):
     """Show which episode a remembered-pick retarget is about to search."""
     from resources.lib.http_util import notify
@@ -121,7 +139,7 @@ def _script_play_guard_stale_premiere(params, title, season, episode):
     # Tell the user we overrode what they clicked -- backing out and playing
     # the premiere again goes through, since the guard is one-shot.
     _notify_next_episode(guard_season, guard_episode)
-    _write_back_episode_params(params, guard_season, guard_episode)
+    _retarget_episode_params(params, guard_season, guard_episode)
     return title, guard_season, guard_episode
 
 
@@ -161,7 +179,7 @@ def _script_play_resolve_episode_args(
                 xbmc.LOGINFO,
             )
             _notify_next_episode(season, episode)
-            _write_back_episode_params(params, season, episode)
+            _retarget_episode_params(params, season, episode)
             return title, season, episode
 
     # The other broken shape: season/episode arrive fully populated but point

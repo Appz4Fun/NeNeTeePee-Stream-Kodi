@@ -191,3 +191,37 @@ def test_counts_are_empty_without_series_ids_or_network():
             )
             == {}
         )
+
+
+def test_tmdb_uses_the_explicit_series_id_without_find():
+    http_get = _http(
+        {
+            "tv/60625?": {
+                "seasons": [
+                    {"season_number": 2, "episode_count": 10},
+                    {"season_number": 3, "episode_count": 8},
+                ]
+            },
+        }
+    )
+    with _patched_window():
+        counts = season_episode_counts(
+            {"tvshow_tmdb_id": "60625", "tmdb_id": "11759797"},
+            settings_getter=lambda key, default="": "secret",
+            http_get=http_get,
+        )
+    assert counts == {2: 10, 3: 8}
+    assert not any("/find/" in url for url in http_get.calls)
+    assert not any("tvmaze" in url for url in http_get.calls)
+
+
+def test_series_tmdb_id_alone_needs_a_tmdb_key():
+    http_get = _http({})
+    with _patched_window():
+        assert (
+            season_episode_counts(
+                {"tvshow_tmdb_id": "60625"}, settings_getter=_no_key, http_get=http_get
+            )
+            == {}
+        )
+    assert not http_get.calls

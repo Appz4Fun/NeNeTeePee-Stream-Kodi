@@ -208,3 +208,37 @@ def test_recall_falls_back_to_plus_one_when_the_lookup_raises():
         params = {"tvdb": "124364"}
         remember_last_episode(params, "2", "10")
         assert recall_next_episode(params) == ("2", "11")
+
+
+# --- completion only for the playback the pick started ----------------------
+
+
+def test_movie_ending_after_a_stopped_episode_does_not_arm_the_guard():
+    from resources.lib.router_lastepisode import disarm_last_episode
+
+    with _patched_window():
+        remember_last_episode(_rick_and_morty("11759797"), "2", "7")
+        disarm_last_episode()  # S02E07 was stopped, not finished
+        remember_last_episode({"imdb": "tt0133093", "title": "The Matrix"}, "", "")
+        mark_last_episode_completed()  # the movie ends naturally
+        assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
+        assert recall_next_episode(_rick_and_morty("")) == ("", "")
+
+
+def test_stopped_episode_cannot_be_completed_by_a_later_ending():
+    from resources.lib.router_lastepisode import disarm_last_episode
+
+    with _patched_window():
+        remember_last_episode(_rick_and_morty("11759797"), "2", "7")
+        disarm_last_episode()
+        mark_last_episode_completed()
+        assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
+
+
+def test_series_tmdb_id_identifies_the_show_when_tvdb_and_imdb_are_missing():
+    with _patched_window():
+        remember_last_episode({"tvshow_tmdb_id": "60625", "tmdb_id": "1"}, "2", "4")
+        assert recall_next_episode({"tvshow_tmdb_id": "60625", "tmdb_id": "2"}) == (
+            "2",
+            "5",
+        )
