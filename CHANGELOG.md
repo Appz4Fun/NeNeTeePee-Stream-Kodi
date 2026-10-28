@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Nothing yet |
+| **[Unreleased](#unreleased--main)** | on `main` | Next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
@@ -66,7 +66,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
-Nothing yet.
+### Fixed
+
+- **Next episode after one ends.** The add-on remembers the last episode you
+  picked for each show during a Kodi session. When TMDBHelper fires a Next-Up
+  play without a season or episode, or wrongly fires the season premiere right
+  after you watched a later episode to the end, the add-on searches for the
+  next episode instead and shows a notification naming it.
+- **Season rollover.** After a season finale the next episode is episode 1 of
+  the following season (S02E10 becomes S03E01 when season 2 has 10 episodes).
+  Episode counts come from TMDB when a TMDB API key is set, otherwise from
+  TVmaze, which needs no key. If neither answers, the add-on falls back to the
+  next episode number in the same season.
+- New setting: **Correct season-premiere misfires after an episode ends**
+  (on by default).
 
 ## [2.0.0-beta.3][] — 2026-10-11
 

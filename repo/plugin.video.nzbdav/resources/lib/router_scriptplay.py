@@ -73,6 +73,14 @@ def _write_back_episode_params(params, season, episode):
         params["episode"] = episode
 
 
+def _notify_next_episode(season, episode):
+    """Show which episode a remembered-pick retarget is about to search."""
+    from resources.lib.http_util import notify
+    from resources.lib.i18n import addon_name, fmt
+
+    notify(addon_name(), fmt(30372, int(season), int(episode)), 4000)
+
+
 def _stale_premiere_guard_enabled():
     """Whether the season-premiere misfire guard is switched on (default on)."""
     import resources.lib.router as _router
@@ -100,8 +108,8 @@ def _script_play_guard_stale_premiere(params, title, season, episode):
         return title, season, episode
 
     xbmc.log(
-        "NZB-DAV: Season-premiere misfire for {!r}; targeting S{:02d}E{:02d} "
-        "instead of S{:02d}E{:02d}".format(
+        "NeNeTeePee-Stream-Kodi: Season-premiere misfire for {!r}; "
+        "targeting S{:02d}E{:02d} instead of S{:02d}E{:02d}".format(
             title,
             int(guard_season),
             int(guard_episode),
@@ -112,14 +120,7 @@ def _script_play_guard_stale_premiere(params, title, season, episode):
     )
     # Tell the user we overrode what they clicked -- backing out and playing
     # the premiere again goes through, since the guard is one-shot.
-    from resources.lib.http_util import notify
-    from resources.lib.i18n import addon_name, fmt
-
-    notify(
-        addon_name(),
-        fmt(30372, int(guard_season), int(guard_episode)),
-        4000,
-    )
+    _notify_next_episode(guard_season, guard_episode)
     _write_back_episode_params(params, guard_season, guard_episode)
     return title, guard_season, guard_episode
 
@@ -153,6 +154,13 @@ def _script_play_resolve_episode_args(
         recalled_season, recalled_episode = recall_next_episode(params)
         if recalled_season and recalled_episode:
             season, episode = recalled_season, recalled_episode
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Next-Up play for {!r} without "
+                "season/episode; targeting S{:02d}E{:02d} after the last "
+                "pick".format(title, int(season), int(episode)),
+                xbmc.LOGINFO,
+            )
+            _notify_next_episode(season, episode)
             _write_back_episode_params(params, season, episode)
             return title, season, episode
 

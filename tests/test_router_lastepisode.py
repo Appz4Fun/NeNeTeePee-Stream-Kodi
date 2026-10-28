@@ -165,3 +165,46 @@ def test_a_new_pick_clears_the_completed_flag():
         movie = {"tmdb_id": "1290159", "title": "A House of Dynamite"}
         remember_last_episode(movie, "", "")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == ("", "")
+
+
+# --- season rollover --------------------------------------------------------
+
+
+def _with_counts(counts):
+    return patch(
+        "resources.lib.episode_order.season_episode_counts", return_value=counts
+    )
+
+
+def test_recall_rolls_over_to_the_next_season_after_a_finale():
+    with _patched_window(), _with_counts({2: 10, 3: 8}):
+        params = {"tvdb": "124364"}
+        remember_last_episode(params, "2", "10")
+        assert recall_next_episode(params) == ("3", "1")
+
+
+def test_recall_stays_in_season_when_more_episodes_remain():
+    with _patched_window(), _with_counts({2: 11, 3: 8}):
+        params = {"tvdb": "124364"}
+        remember_last_episode(params, "2", "10")
+        assert recall_next_episode(params) == ("2", "11")
+
+
+def test_stale_premiere_after_a_finale_targets_the_next_season():
+    with _patched_window(), _with_counts({9: 7, 10: 10}):
+        remember_last_episode(_rick_and_morty("11759797"), "9", "7")
+        mark_last_episode_completed()
+        assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == (
+            "10",
+            "1",
+        )
+
+
+def test_recall_falls_back_to_plus_one_when_the_lookup_raises():
+    with _patched_window(), patch(
+        "resources.lib.episode_order.season_episode_counts",
+        side_effect=RuntimeError("boom"),
+    ):
+        params = {"tvdb": "124364"}
+        remember_last_episode(params, "2", "10")
+        assert recall_next_episode(params) == ("2", "11")
