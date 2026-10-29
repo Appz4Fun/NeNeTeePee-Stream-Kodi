@@ -165,6 +165,9 @@ class NzbdavPlayer(xbmc.Player):
         self._retry_count = 0
         self._av_started = False
         self._play_time = 0.0
+        # Wall-clock start of the session, matched against kodi.log timestamps
+        # when a failure dialog shows the errors Kodi logged.
+        self._play_wall = 0.0
         self._monitor = xbmc.Monitor()
         self._proxy = proxy
 
@@ -282,6 +285,7 @@ class NzbdavPlayer(xbmc.Player):
                 # against ``time.monotonic()`` in tick() below.
                 # TODO.md §H.2-M35.
                 self._play_time = time.monotonic()
+                self._play_wall = time.time()
                 title = self._title
             # Clear all three properties—not just ACTIVE—so a future
             # second resolver call that fails before re-writing them
@@ -707,14 +711,34 @@ class NzbdavPlayer(xbmc.Player):
             ).format(title, elapsed),
             xbmc.LOGERROR,
         )
-        from resources.lib.i18n import addon_name as _addon_name
-        from resources.lib.i18n import string as _s
-
-        _notify(_addon_name(), _s(30121), 8000)
+        self._report_failure(30121)
         xbmc.PlayList(xbmc.PLAYLIST_VIDEO).clear()
         self._cleanup_proxy_session()
         self._enter_idle_and_clear()
         return True
+
+    def _report_failure(self, msg_id, *args):
+        """Explain a terminal playback failure in a dialog, off the tick thread.
+
+        The dialog is modal, so it runs on its own daemon thread: the ~1 Hz
+        tick must never block on it. If the thread can't start, fall back to
+        the old toast.
+        """
+        from resources.lib.i18n import addon_name as _addon_name
+        from resources.lib.i18n import fmt as _f
+
+        headline = _f(msg_id, *args)
+        with self._state_lock:
+            failure = (self._title, self._stream_url, self._play_wall)
+        try:
+            threading.Thread(
+                target=_show_player_failure,
+                args=(headline,) + failure,
+                name="nzbdav-playback-failure",
+                daemon=True,
+            ).start()
+        except RuntimeError:
+            _notify(_addon_name(), headline, 8000)
 
     def _handle_error_retry(self, retry_count, title):
         """Drive the ERROR-state retry decision (retry, give up, or relaunch)."""
@@ -726,10 +750,7 @@ class NzbdavPlayer(xbmc.Player):
             generation = self._session_generation
         enabled, max_retries, retry_delay = self._read_settings()
         if not enabled:
-            from resources.lib.i18n import addon_name as _addon_name
-            from resources.lib.i18n import string as _s
-
-            _notify(_addon_name(), _s(30115), 8000)
+            self._report_failure(30115)
             self._enter_idle_and_clear(generation=generation)
             return
 
@@ -740,15 +761,51 @@ class NzbdavPlayer(xbmc.Player):
                 ),
                 xbmc.LOGERROR,
             )
-            from resources.lib.i18n import addon_name as _addon_name
-            from resources.lib.i18n import fmt as _f
-
-            _notify(_addon_name(), _f(30116, max_retries), 8000)
+            self._report_failure(30116, max_retries)
             self._enter_idle_and_clear(generation=generation)
             return
 
         if not self._retry_playback(max_retries, retry_delay):
             self._enter_idle_and_clear(generation=generation)
+
+
+def _show_player_failure(headline, title, stream_url, since):
+    """Show why playback failed: Kodi's logged errors plus a file check.
+
+    For a local/mounted file (the NZBGet backend) it also checks the file
+    and its mount directly and offers to remount a share that is down.
+    """
+    from resources.lib import playback_diagnostics as diag
+    from resources.lib.i18n import addon_name as _addon_name
+    from resources.lib.i18n import fmt as _f
+
+    try:
+        errors = diag.recent_kodi_errors(since) if since else []
+        diagnosis = diag.diagnose_file(stream_url)
+        text = "[CR]".join(
+            part for part in (headline, diag.failure_text(diagnosis, errors)) if part
+        )
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: playback failed for '{}': {}".format(
+                title, text.replace("[CR]", " | ")
+            ),
+            xbmc.LOGERROR,
+        )
+        offer = diagnosis is not None and diagnosis.can_remount
+        if diag.show_failure_dialog(_addon_name(), text, remountable=offer):
+            ok, detail = diag.remount(diagnosis.mount)
+            message = (
+                _f(30622, diagnosis.mount.mountpoint)
+                if ok
+                else _f(30633, diagnosis.mount.mountpoint, detail)
+            )
+            xbmcgui.Dialog().ok(_addon_name(), message)
+    except Exception as error:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: failure dialog error: {}".format(error),
+            xbmc.LOGWARNING,
+        )
+        _notify(_addon_name(), headline, 8000)
 
 
 def check_cache_warning(state):
