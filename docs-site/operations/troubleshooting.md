@@ -204,6 +204,16 @@ NeNeTeePee-Stream-Kodi needs both the nzbdav API credentials and the WebDAV cred
   [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs)
   instead of using `smb://`. `kodi.log` shows
   `NeNeTeePee-Stream-Kodi: video is listable but not readable through Kodi's VFS: …`.
+- **Playback failure dialog**: when NZBGet finished the download but Kodi
+  can't play it, NeNeTeePee-Stream-Kodi checks the completed folder itself and
+  shows what it found: the network share isn't mounted, the folder or
+  release folder is missing or empty, there is no video, or the video can't
+  be read. If the share is down and is mounted by a systemd unit or
+  `/etc/fstab`, choose **Remount share**: the add-on remounts it and starts
+  playback when the video shows up. If a stream starts but fails, the dialog
+  lists the player errors Kodi logged. `kodi.log` always gets the same
+  diagnosis on a line starting `NeNeTeePee-Stream-Kodi: playback failure
+  diagnosis`.
 - **No video file found in completed folder**: check **NZBGet Category**.
   NZBGet puts completed downloads in a subfolder named after the category.
   Also check that the completed folder points at NZBGet's completed-downloads

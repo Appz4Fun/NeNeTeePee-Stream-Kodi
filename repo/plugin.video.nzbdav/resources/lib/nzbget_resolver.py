@@ -508,7 +508,7 @@ def _reuse_completed_job(completed_job, ctx, requested_episode=None, on_inventor
             completed_job.get("dest_dir"),
             ctx.episode_context,
         )
-    return resolve_smb_video(
+    result = resolve_smb_video(
         reuse_folder,
         dialog=ctx.dialog,
         interval=ctx.interval,
@@ -516,6 +516,10 @@ def _reuse_completed_job(completed_job, ctx, requested_episode=None, on_inventor
         requested_episode=requested_episode,
         on_inventory=on_inventory,
     )
+    from resources.lib.nzbget_resolver_diag import note_probe
+
+    note_probe(ctx, reuse_folder, result)
+    return result
 
 
 def _handle_poll_failure(
@@ -599,13 +603,17 @@ def _resolve_completed_smb(
             catalog_job.get("folder"),
             ctx.episode_context,
         )
-    return resolve_smb_video(
+    result = resolve_smb_video(
         smb_folder,
         dialog=ctx.dialog,
         interval=ctx.interval,
         requested_episode=requested_episode,
         on_inventory=on_inventory,
     )
+    from resources.lib.nzbget_resolver_diag import note_probe
+
+    note_probe(ctx, smb_folder, result)
+    return result
 
 
 class _SubmitCtx:  # pylint: disable=too-few-public-methods
@@ -655,6 +663,21 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # only when no temp folder could take it.
         self.pick_nzb_path = None
         self.pick_nzb_bytes = None
+        # ``(folder, "miss"|"unreadable")`` from the last completed-folder
+        # lookup that found nothing playable; feeds the failure dialog
+        # (nzbget_resolver_diag).
+        self.smb_probe = None
+
+
+def _completed_share_down(completed_job, ctx):
+    """True when a completed match exists but its share is not mounted."""
+    if not (isinstance(completed_job, dict) and completed_job.get("dest_dir")):
+        return False
+    if ctx.smb_probe is None:
+        return False
+    from resources.lib.nzbget_resolver_diag import share_down
+
+    return share_down(ctx)
 
 
 def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
@@ -711,6 +734,12 @@ def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
         # get dupe-deleted and bury the restart-Kodi hint that already
         # toasted, so fail closed without a second notification.
         ctx.on_failure(None)
+        return False
+    if _completed_share_down(completed_job, ctx):
+        # The completed copy exists but its share isn't mounted. A re-submit
+        # would only be dupe-deleted against that SUCCESS row, so fail here
+        # and let the failure dialog offer the remount.
+        ctx.on_failure(_string(30223))
         return False
     if not nzb_url:
         ctx.on_failure(_string(30223))
@@ -1119,6 +1148,10 @@ def _run_nzbget_backend(  # pylint: disable=too-many-arguments
     """
     dialog = None
     leave_job = False
+    from resources.lib.nzbget_resolver_diag import diagnosed_failure
+
+    holder = {}
+    on_failure = diagnosed_failure(holder, on_failure)
     try:
         url, smb_root, timeout = _read_settings(settings_getter)
         if not all((url, smb_root)):
@@ -1136,6 +1169,7 @@ def _run_nzbget_backend(  # pylint: disable=too-many-arguments
             on_failure,
             dupe=dupe,
         )
+        holder["ctx"] = ctx
         ctx.episode_context = (
             dict(episode_context) if isinstance(episode_context, dict) else None
         )

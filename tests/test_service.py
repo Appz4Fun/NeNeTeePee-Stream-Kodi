@@ -7,6 +7,7 @@ import time
 from unittest.mock import MagicMock, patch
 
 import pytest
+import service as svc
 from service import NzbdavPlayer, PlaybackState, check_cache_warning
 
 
@@ -310,20 +311,21 @@ def test_tick_skips_retry_when_disabled(mock_window):
     assert player._state == PlaybackState.IDLE
 
 
+@patch("service.threading.Thread")
 @patch("service._notify")
 @patch("service.xbmc")
 @patch("service._HOME_WINDOW")
-def test_tick_notifies_when_playback_never_started(mock_window, mock_xbmc, mock_notify):
-    """tick() emits a non-blocking notification when AV never starts.
+def test_tick_notifies_when_playback_never_started(
+    mock_window, mock_xbmc, mock_notify, mock_thread
+):
+    """tick() reports a never-started stream without blocking the tick.
 
     Threshold is 30 s (raised from 5 s) to give the fmp4 HLS path
     enough headroom for HlsProducer spawn + ffmpeg analyzeduration +
     Kodi demuxer init.
 
-    This used to call ``xbmcgui.Dialog().ok()`` which is modal and
-    blocks the 1 Hz service tick until the user dismisses it. Now uses
-    ``_notify`` (a fire-and-forget toast) so the monitor loop keeps
-    running. TODO.md §H.2-H8."""
+    The failure dialog is modal, so it runs on its own daemon thread;
+    the 1 Hz service tick never waits for the user. TODO.md §H.2-H8."""
     mock_window.getProperty.return_value = ""
 
     player = NzbdavPlayer()
@@ -339,7 +341,12 @@ def test_tick_notifies_when_playback_never_started(mock_window, mock_xbmc, mock_
     player.tick()
 
     assert player._state == PlaybackState.IDLE
-    mock_notify.assert_called_once()
+    mock_notify.assert_not_called()
+    kwargs = mock_thread.call_args.kwargs
+    assert kwargs["target"] is svc._show_player_failure
+    assert kwargs["daemon"] is True
+    assert kwargs["args"][1] == "Shutter.Island.mkv"
+    mock_thread.return_value.start.assert_called_once()
     mock_xbmc.PlayList.return_value.clear.assert_called_once()
 
 
@@ -739,3 +746,39 @@ def test_read_settings_clamp_logs_warning(mock_addon_cls, mock_log):
     assert not any(
         "stream_retry_delay" in line and "out of range" in line for line in log_lines
     )
+
+
+@patch("service._notify")
+@patch("service.xbmcgui")
+def test_show_player_failure_offers_remount_for_down_share(mock_xbmcgui, mock_notify):
+    from resources.lib import playback_diagnostics as diag
+
+    mount = diag.MountConfig("/storage/nas", "systemd", "storage-nas")
+    down = diag.Diagnosis(diag.MOUNT_DOWN, "share down", mount)
+    with patch.object(
+        diag, "recent_kodi_errors", return_value=["open failed"]
+    ), patch.object(diag, "diagnose_file", return_value=down), patch.object(
+        diag, "_remount_supported", return_value=True
+    ), patch.object(
+        diag, "show_failure_dialog", return_value=True
+    ) as show, patch.object(
+        diag, "remount", return_value=(True, "")
+    ) as remount:
+        svc._show_player_failure("Failed", "Movie", "/storage/nas/m.mkv", 1.0)
+
+    text = show.call_args.args[1]
+    assert "Failed" in text and "share down" in text and "open failed" in text
+    assert show.call_args.kwargs["remountable"] is True
+    remount.assert_called_once_with(mount)
+    mock_xbmcgui.Dialog.return_value.ok.assert_called_once()
+    mock_notify.assert_not_called()
+
+
+@patch("service._notify")
+def test_show_player_failure_falls_back_to_toast_on_error(mock_notify):
+    from resources.lib import playback_diagnostics as diag
+
+    with patch.object(diag, "recent_kodi_errors", side_effect=RuntimeError("boom")):
+        svc._show_player_failure("Failed", "Movie", "http://127.0.0.1/x", 1.0)
+
+    mock_notify.assert_called_once()

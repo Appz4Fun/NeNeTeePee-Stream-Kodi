@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Nothing yet |
+| **[Unreleased](#unreleased--main)** | on `main` | Playback failure dialog with file and mount diagnosis, one-tap share remount |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
@@ -66,7 +66,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
-Nothing yet.
+### Added
+
+- **Playback failure dialog (NZBGet backend).** When NZBGet finishes a
+  download but Kodi can't find or read the file, a dialog now says why,
+  instead of a short toast. The add-on checks the completed folder directly
+  on the file system: whether its network share is mounted, whether the
+  folder or release folder exists, whether it holds a video, and whether that
+  video can be read. The diagnosis is also written to `kodi.log`.
+- **Remount share.** When the completed folder sits on a mount point backed
+  by a systemd unit (CoreELEC/LibreELEC) or an `/etc/fstab` entry and that
+  share isn't mounted, the dialog offers **Remount share**. A successful
+  remount looks for the video again and starts playback.
+- **Kodi's own errors on player failures.** When a stream never starts or
+  runs out of retries, the dialog lists the player and file errors Kodi
+  logged for that play, plus the same file and mount check for local files.
+  It runs off the service loop so playback monitoring never waits on it.
+
+### Changed
+
+- A completed NZBGet match whose share is down no longer gets re-submitted
+  (NZBGet would only reject the duplicate). It fails with the dialog above.
 
 ## [2.0.0-beta.3][] — 2026-10-11
 

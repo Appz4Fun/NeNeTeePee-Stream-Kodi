@@ -2161,3 +2161,55 @@ msgstr ""
 msgctxt "#30620"
 msgid "NZBGet already downloaded this release, but its completed file is unavailable. Check the completed folder or share. No new download was submitted."
 msgstr ""
+
+msgctxt "#30621"
+msgid "The share came back, but the video still isn't there: {}"
+msgstr ""
+
+msgctxt "#30622"
+msgid "{} is mounted again. Play the title again."
+msgstr ""
+
+msgctxt "#30623"
+msgid "The network share at {} isn't mounted. NZBGet finished the download, but Kodi can't see it."
+msgstr ""
+
+msgctxt "#30624"
+msgid "The completed folder {} doesn't exist on this device."
+msgstr ""
+
+msgctxt "#30625"
+msgid "The completed folder {} is empty. If it's a network mount, the share may not be mounted."
+msgstr ""
+
+msgctxt "#30626"
+msgid "This isn't in the completed folder: {}"
+msgstr ""
+
+msgctxt "#30627"
+msgid "The release folder has no playable video: {}"
+msgstr ""
+
+msgctxt "#30628"
+msgid "The video can't be read: {} ({})"
+msgstr ""
+
+msgctxt "#30629"
+msgid "The file looks fine from this device. Check kodi.log for details."
+msgstr ""
+
+msgctxt "#30630"
+msgid "Kodi reported:"
+msgstr ""
+
+msgctxt "#30631"
+msgid "Close"
+msgstr ""
+
+msgctxt "#30632"
+msgid "Remount share"
+msgstr ""
+
+msgctxt "#30633"
+msgid "Couldn't remount {}: {}"
+msgstr ""
