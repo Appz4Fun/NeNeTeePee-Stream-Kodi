@@ -3361,6 +3361,7 @@ def test_handle_script_play_retargets_a_stale_season_premiere_after_an_episode_e
     blank-season/episode recovery never engages -- and the picker opens on the
     season premiere. Note the incoming tmdb_id is the episode's, not the
     show's, which is why show identity has to key off tvdb/imdb."""
+    from resources.lib.playback_context import metadata_from_params
     from resources.lib.router import _handle_script_play
     from resources.lib.router_lastepisode import mark_last_episode_completed
     from resources.lib.router_scriptplay import _script_play_resolve_selected
@@ -3386,7 +3387,7 @@ def test_handle_script_play_retargets_a_stale_season_premiere_after_an_episode_e
         mock_resolve_and_play.assert_called_once()
 
         # S09E07 plays through to its natural end.
-        mark_last_episode_completed()
+        mark_last_episode_completed(metadata_from_params(picked_params))
 
         # The misfire: an explicit S09E01 play for the same show.
         _handle_script_play(
@@ -3430,6 +3431,7 @@ def test_stale_season_premiere_guard_can_be_switched_off(
     mock_setting,
 ):
     """With the setting off, an explicit premiere play is taken at face value."""
+    from resources.lib.playback_context import metadata_from_params
     from resources.lib.router import _handle_script_play
     from resources.lib.router_lastepisode import mark_last_episode_completed
     from resources.lib.router_scriptplay import _script_play_resolve_selected
@@ -3453,7 +3455,17 @@ def test_stale_season_premiere_guard_can_be_switched_off(
             [{"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"}],
             None,
         )
-        mark_last_episode_completed()
+        mark_last_episode_completed(
+            metadata_from_params(
+                {
+                    "type": "episode",
+                    "tvdb": "275274",
+                    "title": "Rick and Morty",
+                    "season": "9",
+                    "episode": "7",
+                }
+            )
+        )
         _handle_script_play(
             {
                 "type": "episode",

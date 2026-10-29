@@ -5,6 +5,7 @@
 
 from unittest.mock import patch
 
+from resources.lib.playback_context import metadata_from_params
 from resources.lib.router_lastepisode import (
     _show_identity_key,
     mark_last_episode_completed,
@@ -27,6 +28,12 @@ class _FakeWindow:
 
     def clearProperty(self, key):
         self._store.pop(key, None)
+
+
+def _finished(params, season, episode):
+    """Simulate the service's onPlayBackEnded for this episode's playback."""
+    played = dict(params, type="episode", season=season, episode=episode)
+    mark_last_episode_completed(metadata_from_params(played))
 
 
 def _patched_window():
@@ -98,7 +105,7 @@ def test_stale_premiere_retargets_the_episode_after_the_one_that_finished():
     # The reported failure: S09E07 finishes, a play auto-fires for S09E01.
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == (
             "9",
             "8",
@@ -108,7 +115,7 @@ def test_stale_premiere_retargets_the_episode_after_the_one_that_finished():
 def test_stale_premiere_is_one_shot():
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1")[1] == "8"
         # Immediately asking for the premiere again is taken at face value.
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == ("", "")
@@ -124,35 +131,35 @@ def test_stale_premiere_ignores_a_stopped_episode():
 def test_stale_premiere_ignores_a_replay_of_the_premiere():
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759791"), "9", "1")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759791"), "9", "1")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == ("", "")
 
 
 def test_stale_premiere_ignores_a_different_season():
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "10", "1") == ("", "")
 
 
 def test_stale_premiere_ignores_a_different_show():
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere({"tvdb": "999"}, "9", "1") == ("", "")
 
 
 def test_stale_premiere_ignores_episodes_other_than_one():
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere(_rick_and_morty("11759798"), "9", "8") == ("", "")
 
 
 def test_stale_premiere_ignores_blank_or_non_numeric_args():
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere(_rick_and_morty("1"), "", "") == ("", "")
         assert recall_stale_premiere(_rick_and_morty("1"), "9", "one") == ("", "")
 
@@ -161,7 +168,7 @@ def test_a_new_pick_clears_the_completed_flag():
     # A movie play records nothing but must still invalidate the stale flag.
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         movie = {"tmdb_id": "1290159", "title": "A House of Dynamite"}
         remember_last_episode(movie, "", "")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == ("", "")
@@ -193,7 +200,7 @@ def test_recall_stays_in_season_when_more_episodes_remain():
 def test_stale_premiere_after_a_finale_targets_the_next_season():
     with _patched_window(), _with_counts({9: 7, 10: 10}):
         remember_last_episode(_rick_and_morty("11759797"), "9", "7")
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759797"), "9", "7")
         assert recall_stale_premiere(_rick_and_morty("11759791"), "9", "1") == (
             "10",
             "1",
@@ -214,24 +221,36 @@ def test_recall_falls_back_to_plus_one_when_the_lookup_raises():
 
 
 def test_movie_ending_after_a_stopped_episode_does_not_arm_the_guard():
-    from resources.lib.router_lastepisode import disarm_last_episode
-
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "2", "7")
-        disarm_last_episode()  # S02E07 was stopped, not finished
-        remember_last_episode({"imdb": "tt0133093", "title": "The Matrix"}, "", "")
-        mark_last_episode_completed()  # the movie ends naturally
+        # S02E07 is stopped (no completion), then a movie is picked and ends.
+        movie = {"type": "movie", "imdb": "tt0133093", "title": "The Matrix"}
+        remember_last_episode(movie, "", "")
+        mark_last_episode_completed(metadata_from_params(movie))
         assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
         assert recall_next_episode(_rick_and_morty("")) == ("", "")
 
 
-def test_stopped_episode_cannot_be_completed_by_a_later_ending():
-    from resources.lib.router_lastepisode import disarm_last_episode
-
+def test_older_episode_ending_while_a_new_pick_resolves_flags_nothing():
+    # S02E06 is still playing when S02E07 is picked; S02E06 then ends.
     with _patched_window():
         remember_last_episode(_rick_and_morty("11759797"), "2", "7")
-        disarm_last_episode()
-        mark_last_episode_completed()
+        _finished(_rick_and_morty("11759796"), "2", "6")
+        assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
+
+
+def test_completion_needs_the_same_show():
+    with _patched_window():
+        remember_last_episode(_rick_and_morty("11759797"), "2", "7")
+        _finished({"tvdb": "124364", "title": "From"}, "2", "7")
+        assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
+
+
+def test_completion_ignores_missing_metadata():
+    with _patched_window():
+        remember_last_episode(_rick_and_morty("11759797"), "2", "7")
+        mark_last_episode_completed({})
+        mark_last_episode_completed(None)
         assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
 
 

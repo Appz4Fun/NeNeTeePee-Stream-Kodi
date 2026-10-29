@@ -28,9 +28,6 @@ _PROP_SHOW_ID = "nzbdav.last_ep_show_id"
 _PROP_SEASON = "nzbdav.last_ep_season"
 _PROP_EPISODE = "nzbdav.last_ep_episode"
 _PROP_COMPLETED = "nzbdav.last_ep_completed"
-# Set by an episode pick, consumed by the playback that follows it: only that
-# playback ending naturally may flag the pick completed.
-_PROP_ARMED = "nzbdav.last_ep_armed"
 
 # Preference order for building a per-show identity key. Season/episode are
 # deliberately excluded -- this identifies the *show*, not the episode.
@@ -80,8 +77,7 @@ def remember_last_episode(params, season, episode):
     Any new play supersedes the previous one, so the "watched to the end" flag
     is always cleared. A play without a show identity and numeric
     season/episode (a movie, say) also forgets the previous pick, so a movie
-    that later ends can never mark an older episode as completed. An episode
-    pick arms completion for the playback that follows it.
+    that later ends can never mark an older episode as completed.
     """
     home = _home_window()
     home.clearProperty(_PROP_COMPLETED)
@@ -89,40 +85,63 @@ def remember_last_episode(params, season, episode):
     season = str(season or "")
     episode = str(episode or "")
     if not (show_id and season.isdigit() and episode.isdigit()):
-        for prop in (_PROP_SHOW_ID, _PROP_SEASON, _PROP_EPISODE, _PROP_ARMED):
+        for prop in (_PROP_SHOW_ID, _PROP_SEASON, _PROP_EPISODE):
             home.clearProperty(prop)
         return
     home.setProperty(_PROP_SHOW_ID, show_id)
     home.setProperty(_PROP_SEASON, season)
     home.setProperty(_PROP_EPISODE, episode)
-    home.setProperty(_PROP_ARMED, "1")
 
 
-def mark_last_episode_completed():
-    """Flag the remembered pick as having played through to its natural end.
+def _metadata_identity(metadata):
+    """Return ``(show_id, season, episode)`` for an ended playback, or None.
+
+    ``metadata`` is the service's ``playback_context`` snapshot of what was
+    actually playing; its ``tmdb_id`` is the series id (``tvshow_tmdb_id``)
+    and ``tvshowtitle`` the show title, so it maps onto the same identity key
+    the pick was remembered under.
+    """
+    if not isinstance(metadata, dict) or metadata.get("mediatype") != "episode":
+        return None
+    show_id = _show_identity_key(
+        {
+            "tvdb": metadata.get("tvdb"),
+            "imdb": metadata.get("imdb"),
+            "tvshow_tmdb_id": metadata.get("tmdb_id"),
+            "title": metadata.get("tvshowtitle"),
+        }
+    )
+    season = str(metadata.get("season", ""))
+    episode = str(metadata.get("episode", ""))
+    if not (show_id and season.isdigit() and episode.isdigit()):
+        return None
+    return show_id, season, episode
+
+
+def mark_last_episode_completed(metadata):
+    """Flag the remembered pick as played to its natural end by ``metadata``.
 
     Called from the service's ``onPlayBackEnded`` only, never from
     ``onPlayBackStopped`` -- a user-initiated stop must leave this clear so
     that deliberately replaying the premiere after bailing out of a later
     episode is left alone by ``recall_stale_premiere``.
 
-    Only the playback armed by the latest episode pick counts, and only once:
-    a later playback ending can't flag a pick it didn't play.
+    ``metadata`` describes the playback that just ended. It only counts when
+    it is the remembered pick itself (same show, season and episode): an
+    older episode ending while a newer pick is still resolving, or a movie
+    ending after an episode was stopped, flags nothing.
     """
-    home = _home_window()
-    if (home.getProperty(_PROP_ARMED) or "") != "1":
+    identity = _metadata_identity(metadata)
+    if identity is None:
         return
-    home.clearProperty(_PROP_ARMED)
-    home.setProperty(_PROP_COMPLETED, "1")
-
-
-def disarm_last_episode():
-    """Forget that the latest pick's playback may still complete.
-
-    Called from the service's ``onPlayBackStopped``: once the picked episode
-    was stopped, no later playback ending can flag it as watched.
-    """
-    _home_window().clearProperty(_PROP_ARMED)
+    home = _home_window()
+    remembered = (
+        home.getProperty(_PROP_SHOW_ID) or "",
+        home.getProperty(_PROP_SEASON) or "",
+        home.getProperty(_PROP_EPISODE) or "",
+    )
+    if identity == remembered:
+        home.setProperty(_PROP_COMPLETED, "1")
 
 
 def _episode_after(params, season, episode):

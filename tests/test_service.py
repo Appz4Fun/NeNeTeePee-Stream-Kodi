@@ -739,3 +739,33 @@ def test_read_settings_clamp_logs_warning(mock_addon_cls, mock_log):
     assert not any(
         "stream_retry_delay" in line and "out of range" in line for line in log_lines
     )
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_completed")
+def test_on_playback_ended_reports_the_ended_episodes_identity(mock_mark):
+    """Completion is checked against what actually played, not the latest pick."""
+    player = NzbdavPlayer()
+    player._state = PlaybackState.MONITORING
+    metadata = {
+        "mediatype": "episode",
+        "tvdb": "275274",
+        "tvshowtitle": "Rick and Morty",
+        "season": 2,
+        "episode": 6,
+    }
+    player._playback_metadata = dict(metadata)
+
+    player.onPlayBackEnded()
+
+    mock_mark.assert_called_once_with(metadata)
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_completed")
+def test_on_playback_stopped_never_reports_completion(mock_mark):
+    player = NzbdavPlayer()
+    player._state = PlaybackState.MONITORING
+    player._playback_metadata = {"mediatype": "episode", "season": 2, "episode": 6}
+
+    player.onPlayBackStopped()
+
+    mock_mark.assert_not_called()
