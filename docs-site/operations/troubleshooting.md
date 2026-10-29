@@ -208,6 +208,10 @@ NeNeTeePee-Stream-Kodi needs both the nzbdav API credentials and the WebDAV cred
   NZBGet puts completed downloads in a subfolder named after the category.
   Also check that the completed folder points at NZBGet's completed-downloads
   folder.
+  If NZBGet's history shows the job as `SUCCESS` but Kodi still can't find
+  it, check that the share is actually mounted on the Kodi device (`mount` on
+  CoreELEC). A mount that failed at boot leaves an empty folder behind. See
+  [Make the mount survive a slow network at boot](../features/nzbget-backend.md#make-the-mount-survive-a-slow-network-at-boot).
 - **NZBGet HealthCheck=Pause: set it to Delete, None, or Park …**: automatic
   duplicate failover can't work while NZBGet pauses broken downloads. Change
   `HealthCheck` in NZBGet.
