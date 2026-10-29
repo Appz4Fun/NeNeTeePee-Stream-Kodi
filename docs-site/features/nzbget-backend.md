@@ -89,6 +89,70 @@ Mount the completed-download folder using your operating system or storage provi
 
 The mount must expose NZBGet’s completed files to Kodi. For server setup, use the [NZBGet project documentation](https://github.com/nzbgetcom/nzbget).
 
+### Make the mount survive a slow network at boot
+
+A `hard` mount retries forever, but only once the share is mounted. If the
+network isn't up yet when the device boots, a plain systemd mount unit is tried
+once, fails, and stays unmounted until the next reboot. Kodi then sees an empty
+folder: NZBGet finishes the download, but playback fails, usually with **No video file
+found in completed folder**.
+
+On CoreELEC and LibreELEC, avoid this with an **automount** unit. systemd
+then mounts the share the first time Kodi opens the folder, and tries again on
+every later access until the NAS answers. This example mounts
+`192.168.1.10:/export/downloads` at `/storage/nas`. The unit file names must
+match the mount path, so `/storage/nas` becomes `storage-nas`.
+
+`/storage/.config/system.d/storage-nas.mount`:
+
+```ini
+[Unit]
+Description=NFS share for NZBGet downloads
+Wants=network-online.service
+After=network-online.service
+Before=kodi.service
+
+[Mount]
+What=192.168.1.10:/export/downloads
+Where=/storage/nas
+Type=nfs
+Options=ro,hard,timeo=30,retrans=2,noatime,nolock
+```
+
+`/storage/.config/system.d/storage-nas.automount`:
+
+```ini
+[Unit]
+Description=Automount /storage/nas
+Before=kodi.service
+
+[Automount]
+Where=/storage/nas
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable the automount, not the mount:
+
+```sh
+systemctl daemon-reload
+systemctl disable storage-nas.mount
+systemctl enable --now storage-nas.automount
+ls /storage/nas
+```
+
+Two details matter:
+
+- Use `Wants=network-online.service`, not `Requires=`. With `Requires=`, a
+  network wait that times out at boot cancels the mount outright.
+- Leave the `[Install]` section out of the `.mount` file. The `.automount`
+  unit is the one that starts at boot.
+
+Set **Completed Folder** to the path NZBGet's downloads appear under, for
+example `/storage/nas/nzbget/downloads`.
+
 ## How it works
 
 ```mermaid
