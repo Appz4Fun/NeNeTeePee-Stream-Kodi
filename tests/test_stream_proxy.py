@@ -714,6 +714,13 @@ def test_do_post_fallback_update_rejects_bad_token():
     handler.server.owner_proxy.merge_session_fallbacks.assert_not_called()
 
 
+def test_do_post_fallback_update_rejects_when_server_token_is_empty():
+    handler = _make_fallback_update_handler(prepare_token="", supplied_token="")
+    handler.do_POST()
+    handler.send_error.assert_called_with(403)
+    handler.server.owner_proxy.merge_session_fallbacks.assert_not_called()
+
+
 def test_do_post_fallback_update_unknown_session_returns_404():
     handler = _make_fallback_update_handler()
     handler.server.owner_proxy.merge_session_fallbacks.return_value = None
@@ -1979,6 +1986,19 @@ def test_do_post_rejects_bad_prepare_token():
 
     handler.send_error.assert_called_once_with(403)
     handler.server.owner_proxy.prepare_stream.assert_not_called()
+
+
+def test_do_post_rejects_when_server_token_is_empty():
+    body = json.dumps({"remote_url": "http://host/movie.mkv"}).encode()
+    for supplied_token in (None, ""):
+        handler = _make_prepare_post_handler(
+            body=body, prepare_token="", supplied_token=supplied_token
+        )
+
+        handler.do_POST()
+
+        handler.send_error.assert_called_once_with(403)
+        handler.server.owner_proxy.prepare_stream.assert_not_called()
 
 
 def test_do_post_rejects_auth_header_control_chars():
