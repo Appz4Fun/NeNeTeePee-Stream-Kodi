@@ -23,15 +23,13 @@ class _DispatchMixin:  # pylint: disable=too-few-public-methods
         A byte-by-byte != short-circuits on the first differing byte and leaks
         timing info about the secret that authorizes outbound HTTP from the
         loopback service. hmac.compare_digest rejects type mismatches, so coerce
-        both sides to str("") if None.
+        a missing header to str(""). Fails closed when the server has no token.
         """
         expected_token = getattr(self.server, "prepare_token", "")
-        supplied_token = self.headers.get(_sp._PREPARE_TOKEN_HEADER)
-        if expected_token and not _sp.hmac.compare_digest(
-            supplied_token or "", expected_token or ""
-        ):
+        if not expected_token:
             return False
-        return True
+        supplied_token = self.headers.get(_sp._PREPARE_TOKEN_HEADER)
+        return _sp.hmac.compare_digest(supplied_token or "", expected_token)
 
     def _read_json_post_body(self):
         """Read + JSON-parse a POST body, returning a dict or None.
