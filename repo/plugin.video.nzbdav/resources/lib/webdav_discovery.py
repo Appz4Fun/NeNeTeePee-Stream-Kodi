@@ -407,7 +407,7 @@ def _classify_propfind_response(response, base_host, request_path, subdirs):
 
     # Check if it's a video file
     lower_href = href_text.lower()
-    if not any(lower_href.endswith(ext) for ext in _VIDEO_EXTENSIONS):
+    if not lower_href.endswith(_VIDEO_EXTENSIONS):
         return None
 
     return href_path, _parse_content_length(response, href_path)
