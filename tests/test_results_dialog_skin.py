@@ -173,3 +173,15 @@ def test_results_dialog_footer_hints_are_window_property_driven():
     hints = _control(root, "label", "6")
     assert hints is not None, "footer hints label id=6 missing"
     assert hints.findtext("label") == "$INFO[Window.Property(footer_hints)]"
+
+
+def test_results_dialog_empty_state_is_localized_and_only_shown_when_empty():
+    root = ET.parse(_DIALOG_XML_PATH).getroot()
+    labels = [
+        control
+        for control in root.iter("control")
+        if control.get("type") == "label"
+        and control.findtext("visible") == "Integer.IsEqual(Container(50).NumItems,0)"
+    ]
+    assert len(labels) == 1
+    assert labels[0].findtext("label") == "$ADDON[plugin.video.nzbdav 30621]"
