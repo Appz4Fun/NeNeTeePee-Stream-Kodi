@@ -393,7 +393,7 @@ def _size_filter_passes(result, settings):
         size_mb = 0
     if settings["min_size"] > 0 and size_mb < settings["min_size"]:
         return False
-    if settings["max_size"] > 0 and size_mb > settings["max_size"]:
+    if 0 < settings["max_size"] < size_mb:
         return False
     return True
 

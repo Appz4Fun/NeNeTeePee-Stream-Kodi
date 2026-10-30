@@ -534,9 +534,7 @@ def _defer_decision(
     defers on the same terms. Both only defer when there is actually a subdir to
     descend into.
     """
-    best_is_stub = (
-        best_file is not None and min_video_size > 0 and 0 < best_size < min_video_size
-    )
+    best_is_stub = best_file is not None and 0 < best_size < min_video_size
     defer_to_subdirs = bool(subdirs) and (
         (bool(hint_episode_tags) and best_match_score < 1000) or best_is_stub
     )
