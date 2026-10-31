@@ -210,7 +210,11 @@ NeNeTeePee-Stream-Kodi needs both the nzbdav API credentials and the WebDAV cred
   release folder is missing or empty, there is no video, or the video can't
   be read. If the share is down and is mounted by a systemd unit or
   `/etc/fstab`, choose **Remount share**: the add-on remounts it and starts
-  playback when the video shows up. If a stream starts but fails, the dialog
+  playback when the video shows up. Kodi needs permission to run
+  `systemctl` or `mount`. It has that on CoreELEC and LibreELEC. On other Linux
+  systems the dialog shows the error if it doesn't, and a sandboxed Kodi such as
+  the Flatpak build can't see the mount setup, so it only reports the missing
+  folder. If a stream starts but fails, the dialog
   lists the player errors Kodi logged. `kodi.log` always gets the same
   diagnosis on a line starting `NeNeTeePee-Stream-Kodi: playback failure
   diagnosis`.

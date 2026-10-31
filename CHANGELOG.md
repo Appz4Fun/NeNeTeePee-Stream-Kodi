@@ -77,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Remount share.** When the completed folder sits on a mount point backed
   by a systemd unit (CoreELEC/LibreELEC) or an `/etc/fstab` entry and that
   share isn't mounted, the dialog offers **Remount share**. A successful
-  remount looks for the video again and starts playback.
+  remount looks for the video again and starts playback. A progress dialog
+  shows while it runs, and you can cancel it.
 - **Kodi's own errors on player failures.** When a stream never starts or
   runs out of retries, the dialog lists the player and file errors Kodi
   logged for that play, plus the same file and mount check for local files.
@@ -104,6 +105,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Kodi crash on repeated plays.** The add-on's crash logger was switched on
+  again every time it ran, which could segfault Kodi after a few plays. It's now
+  switched on once per Kodi session.
+
 - **Next episode after one ends.** The add-on remembers the last episode you
   picked for each show during a Kodi session. When TMDBHelper fires a Next-Up
   play without a season or episode, or wrongly fires the season premiere right
@@ -116,6 +121,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   next episode number in the same season.
 - New setting: **Correct season-premiere misfires after an episode ends**
   (on by default).
+
+### Documentation
+
+- The NZBGet backend page now shows how to keep an NFS share working after a
+  slow network at boot, using a systemd automount unit.
 
 ## [2.0.0-beta.3][] — 2026-10-11
 
