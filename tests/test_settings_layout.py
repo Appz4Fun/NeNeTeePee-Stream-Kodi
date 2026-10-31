@@ -258,3 +258,68 @@ def test_no_duplicate_setting_ids(settings_root):
             seen.append(sid)
     duplicates = {s for s in seen if seen.count(s) > 1}
     assert not duplicates, "duplicate setting ids: {}".format(sorted(duplicates))
+
+
+# --- Backend-scoped playback options ------------------------------------------
+
+# Only nzbdav playback goes through the stream proxy, so these show only when
+# nzbdav is the backend (playback_backend == 0).
+_NZBDAV_ONLY = (
+    "submit_timeout",
+    "clear_queue_on_submit",
+    "fallback_streams_enabled",
+    "fallback_streams_max",
+    "fallback_submit_delay",
+    "proxy_convert_subs",
+    "force_remux_threshold_mb",
+    "force_remux_mode",
+    "strict_contract_mode",
+    "density_breaker_enabled",
+    "zero_fill_budget_enabled",
+    "retry_ladder_enabled",
+    "passthrough_stall_wait",
+    "readahead_buffer_mb",
+    "send_200_no_range",
+)
+# The service reconnect also monitors NZBGet playback; StreamNZB is unmonitored.
+_NZBDAV_AND_NZBGET = ("stream_auto_retry", "stream_max_retries", "stream_retry_delay")
+
+
+def test_backend_scoped_options_live_in_the_backend_group(settings_root):
+    """Same group as the backend dropdown, so Kodi shows/hides them live.
+
+    A separate group whose settings are all hidden when the dialog opens gets
+    no controls built (see test_direct_indexer_options_depend_on_master_toggle),
+    so switching the backend in-dialog would never reveal it.
+    """
+    backend = _category_by_label(settings_root, "30600")
+    group = backend.find("group")
+    ids = {s.get("id") for s in group.iter("setting")}
+    assert "playback_backend" in ids
+    for setting_id in _NZBDAV_ONLY + _NZBDAV_AND_NZBGET:
+        assert setting_id in ids, setting_id
+
+    for setting_id in _NZBDAV_ONLY:
+        dependency = _dependency_for(
+            _setting_by_id(group, setting_id), "visible", "playback_backend"
+        )
+        assert dependency is not None, setting_id
+        assert dependency.text == "0" and dependency.get("operator") is None
+    for setting_id in _NZBDAV_AND_NZBGET:
+        dependency = _dependency_for(
+            _setting_by_id(group, setting_id), "visible", "playback_backend"
+        )
+        assert dependency is not None, setting_id
+        assert dependency.text == "2" and dependency.get("operator") == "!is"
+
+
+def test_advanced_keeps_only_backend_independent_options(settings_root):
+    advanced = _category_by_label(settings_root, "30067")
+    visible = [
+        s.get("id")
+        for s in advanced.iter("setting")
+        if (s.findtext("visible") or "true") != "false"
+    ]
+    assert visible == ["poll_interval", "download_timeout", "cache_ttl_minutes"]
+    for setting_id in _NZBDAV_ONLY + _NZBDAV_AND_NZBGET:
+        assert _setting_by_id(advanced, setting_id) is None, setting_id

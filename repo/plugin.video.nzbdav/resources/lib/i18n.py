@@ -125,6 +125,28 @@ _FALLBACK_STRINGS = {
     30227: "Completed folder not reachable",
     30364: "Already downloaded season pack - Episodes {}",
     30365: "The downloaded season pack is no longer available. Choose another result.",
+    30621: "The share came back, but the video still isn't there: {}",
+    30622: "{} is mounted again. Play the title again.",
+    30623: (
+        "The network share at {} isn't mounted. NZBGet finished the download, "
+        "but Kodi can't see it."
+    ),
+    30624: "The completed folder {} doesn't exist on this device.",
+    30625: (
+        "The completed folder {} is empty. If it's a network mount, the share "
+        "may not be mounted."
+    ),
+    30626: "This isn't in the completed folder: {}",
+    30627: "The release folder has no playable video: {}",
+    30628: "The video can't be read: {} ({})",
+    30629: "The file looks fine from this device. Check kodi.log for details.",
+    30630: "Kodi reported:",
+    30631: "Close",
+    30632: "Remount share",
+    30633: "Couldn't remount {}: {}",
+    30634: "Remounting {}. This can take up to a minute.",
+    30635: "Canceled.",
+    30636: "It still isn't mounted.",
 }
 
 

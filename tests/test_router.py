@@ -3176,6 +3176,314 @@ def test_handle_script_play_ignores_listitem_episode_for_different_show(
     assert query.episode == ""
 
 
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch(
+    "resources.lib.router_lastepisode.recall_next_episode",
+    return_value=("3", "6"),
+)
+@patch("resources.lib.router._lookup_episode_info", return_value={"title": "From"})
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_handle_script_play_prefers_last_played_next_episode_over_listitem(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_recall,
+    mock_infolabel,
+    mock_addon,
+):
+    """A blank-season/episode Next-Up play should trust "last picked + 1" for
+    this show over the focused-ListItem guess, which can be stale (e.g. Kodi
+    UI focus resetting to the top of the season folder after an episode
+    ends, which would otherwise misread as episode 1)."""
+    from resources.lib.router import _handle_script_play
+
+    # A conflicting/stale focused item (season 1 episode 1) that must be
+    # ignored in favor of the last-played+1 recall (season 3 episode 6).
+    info = {
+        "ListItem.TVShowTitle": "From",
+        "ListItem.Season": "1",
+        "ListItem.Episode": "1",
+    }
+    mock_infolabel.side_effect = lambda label: info.get(label, "")
+
+    _handle_script_play({"type": "episode", "imdb": "tt9813792", "tmdb_id": "124364"})
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert query.season == "3"
+    assert query.episode == "6"
+
+
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch(
+    "resources.lib.router_lastepisode.recall_next_episode",
+    return_value=("", ""),
+)
+@patch("resources.lib.router._lookup_episode_info", return_value={"title": "From"})
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_handle_script_play_falls_back_to_listitem_with_no_last_played_memory(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_recall,
+    mock_infolabel,
+    mock_addon,
+):
+    """With no last-played memory yet for this show, the existing
+    focused-ListItem recovery still applies unchanged."""
+    from resources.lib.router import _handle_script_play
+
+    info = {
+        "ListItem.TVShowTitle": "From",
+        "ListItem.Season": "3",
+        "ListItem.Episode": "5",
+    }
+    mock_infolabel.side_effect = lambda label: info.get(label, "")
+
+    _handle_script_play({"type": "episode", "imdb": "tt9813792", "tmdb_id": "124364"})
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert query.season == "3"
+    assert query.episode == "5"
+
+
+class _ScriptPlayFakeWindow:
+    """Shared dict-backed ``xbmcgui.Window(10000)`` stand-in for this test."""
+
+    _store = {}
+
+    def getProperty(self, key):
+        return self._store.get(key, "")
+
+    def setProperty(self, key, value):
+        self._store[key] = value
+
+    def clearProperty(self, key):
+        self._store.pop(key, None)
+
+
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch("resources.lib.router._lookup_episode_info", return_value={"title": "From"})
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_handle_script_play_remembers_pick_and_targets_next_episode_later(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_infolabel,
+    mock_addon,
+    mock_resolve_and_play,
+):
+    """End-to-end: picking S1E8 for a show, then a later blank-season/episode
+    Next-Up play for the same show, should target S1E9 -- reproduces the
+    reported "picker reopens targeting the season premiere" bug and confirms
+    the fix. No focused ListItem is available (all InfoLabels blank), so the
+    old fallback alone would have broadened the search to the whole show."""
+    from resources.lib.playback_context import metadata_from_params
+    from resources.lib.router import _handle_script_play
+    from resources.lib.router_lastepisode import mark_last_episode_started
+    from resources.lib.router_scriptplay import _script_play_resolve_selected
+
+    mock_infolabel.return_value = ""
+    _ScriptPlayFakeWindow._store = {}
+
+    with patch(
+        "resources.lib.router_lastepisode.xbmcgui.Window",
+        return_value=_ScriptPlayFakeWindow(),
+    ):
+        # Simulate the user picking a S1E8 release from the picker.
+        picked_params = {
+            "type": "episode",
+            "imdb": "tt9813792",
+            "tmdb_id": "124364",
+            "title": "From",
+            "season": "1",
+            "episode": "8",
+        }
+        selection = {"title": "From.S01E08.1080p", "link": "http://indexer/ep8.nzb"}
+        _script_play_resolve_selected(picked_params, selection, [selection], None)
+        mock_resolve_and_play.assert_called_once()
+        mark_last_episode_started(metadata_from_params(picked_params))
+
+        # A later Next-Up play for the same show arrives with blank
+        # season/episode -- this used to fall through to the stale focused
+        # ListItem (blank here) and broaden the search to the whole show.
+        _handle_script_play(
+            {"type": "episode", "imdb": "tt9813792", "tmdb_id": "124364"}
+        )
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert (query.season, query.episode) == ("1", "9")
+
+
+@patch("resources.lib.router._get_script_setting", return_value="true")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch(
+    "resources.lib.router._lookup_episode_info",
+    return_value={"title": "Rick and Morty"},
+)
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_handle_script_play_retargets_a_stale_season_premiere_after_an_episode_ends(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_infolabel,
+    mock_addon,
+    mock_resolve_and_play,
+    mock_setting,
+):
+    """The reported failure, end to end: after S09E07 plays through, a play
+    auto-fires for S09E01 with season/episode *explicitly* populated -- so the
+    blank-season/episode recovery never engages -- and the picker opens on the
+    season premiere. Note the incoming tmdb_id is the episode's, not the
+    show's, which is why show identity has to key off tvdb/imdb."""
+    from resources.lib.playback_context import metadata_from_params
+    from resources.lib.router import _handle_script_play
+    from resources.lib.router_lastepisode import mark_last_episode_completed
+    from resources.lib.router_scriptplay import _script_play_resolve_selected
+
+    mock_infolabel.return_value = ""
+    _ScriptPlayFakeWindow._store = {}
+
+    with patch(
+        "resources.lib.router_lastepisode.xbmcgui.Window",
+        return_value=_ScriptPlayFakeWindow(),
+    ):
+        picked_params = {
+            "type": "episode",
+            "imdb": "tt2861424",
+            "tvdb": "275274",
+            "tmdb_id": "11759797",  # S09E07's TMDB id, not the show's
+            "title": "Rick and Morty",
+            "season": "9",
+            "episode": "7",
+        }
+        selection = {"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"}
+        _script_play_resolve_selected(picked_params, selection, [selection], None)
+        mock_resolve_and_play.assert_called_once()
+
+        # S09E07 plays through to its natural end.
+        mark_last_episode_completed(metadata_from_params(picked_params))
+
+        # The misfire: an explicit S09E01 play for the same show.
+        _handle_script_play(
+            {
+                "type": "episode",
+                "imdb": "tt2861424",
+                "tvdb": "275274",
+                "tmdb_id": "11759791",  # S09E01's TMDB id
+                "title": "Rick and Morty",
+                "season": "9",
+                "episode": "1",
+            }
+        )
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert (query.season, query.episode) == ("9", "8")
+
+
+@patch("resources.lib.router._get_script_setting", return_value="false")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("xbmcaddon.Addon")
+@patch("xbmc.getInfoLabel")
+@patch(
+    "resources.lib.router._lookup_episode_info",
+    return_value={"title": "Rick and Morty"},
+)
+@patch("resources.lib.results_dialog.show_results_dialog", return_value=None)
+@patch("resources.lib.filter.filter_results", return_value=([], []))
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.router._tag_available")
+def test_stale_season_premiere_guard_can_be_switched_off(
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_lookup,
+    mock_infolabel,
+    mock_addon,
+    mock_resolve_and_play,
+    mock_setting,
+):
+    """With the setting off, an explicit premiere play is taken at face value."""
+    from resources.lib.playback_context import metadata_from_params
+    from resources.lib.router import _handle_script_play
+    from resources.lib.router_lastepisode import mark_last_episode_completed
+    from resources.lib.router_scriptplay import _script_play_resolve_selected
+
+    mock_infolabel.return_value = ""
+    _ScriptPlayFakeWindow._store = {}
+
+    with patch(
+        "resources.lib.router_lastepisode.xbmcgui.Window",
+        return_value=_ScriptPlayFakeWindow(),
+    ):
+        _script_play_resolve_selected(
+            {
+                "type": "episode",
+                "tvdb": "275274",
+                "title": "Rick and Morty",
+                "season": "9",
+                "episode": "7",
+            },
+            {"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"},
+            [{"title": "Rick.and.Morty.S09E07.1080p", "link": "http://ix/7.nzb"}],
+            None,
+        )
+        mark_last_episode_completed(
+            metadata_from_params(
+                {
+                    "type": "episode",
+                    "tvdb": "275274",
+                    "title": "Rick and Morty",
+                    "season": "9",
+                    "episode": "7",
+                }
+            )
+        )
+        _handle_script_play(
+            {
+                "type": "episode",
+                "tvdb": "275274",
+                "title": "Rick and Morty",
+                "season": "9",
+                "episode": "1",
+            }
+        )
+
+    mock_search.assert_called_once()
+    query = mock_search.call_args.args[0]
+    assert (query.season, query.episode) == ("9", "1")
+
+
 @patch(
     "resources.lib.router.fallback_candidate_prefetch_settings", return_value=(True, 2)
 )
@@ -4977,11 +5285,21 @@ def test_nzbget_dupe_submission_none_when_backend_or_setting_off():
         assert (
             _nzbget_dupe_submission_for_selection(selected, filtered, identity) is None
         )
+    # The nzbdav fallback switch no longer gates NZBGet backups.
     with patch(
         "resources.lib.router._get_addon_setting",
         _dupe_setting_getter(
             {"nzbget_enabled": "true", "fallback_streams_enabled": "false"}
         ),
+    ):
+        assert (
+            _nzbget_dupe_submission_for_selection(selected, filtered, identity)
+            is not None
+        )
+    # Only Maximum duplicate backups = 0 turns them off.
+    with patch(
+        "resources.lib.router._get_addon_setting",
+        _dupe_setting_getter({"nzbget_enabled": "true", "nzbget_max_backups": "0"}),
     ):
         assert (
             _nzbget_dupe_submission_for_selection(selected, filtered, identity) is None
@@ -5648,3 +5966,28 @@ def test_search_all_providers_marks_partial_direct_fanout_incomplete():
         )
     assert results == [row] and error is None
     assert outcome == {"complete": False}
+
+
+def test_retargeting_an_episode_drops_the_requested_episodes_metadata():
+    """A premiere request redirected to E08 must not keep E01's title/TMDB id."""
+    from resources.lib.playback_context import metadata_from_params
+    from resources.lib.router_scriptplay import _retarget_episode_params
+
+    params = {
+        "type": "episode",
+        "title": "Rick and Morty",
+        "tvshow_tmdb_id": "60625",
+        "episode_tmdb_id": "11759791",
+        "episode_title": "Premiere",
+        "ep_season": "2",
+        "ep_episode": "1",
+        "season": "2",
+        "episode": "1",
+    }
+    _retarget_episode_params(params, "2", "8")
+
+    metadata = metadata_from_params(params)
+    assert (metadata["season"], metadata["episode"]) == (2, 8)
+    assert "episode_tmdb_id" not in metadata
+    assert metadata["title"] != "Premiere"
+    assert metadata["tmdb_id"] == 60625 or metadata["tmdb_id"] == "60625"

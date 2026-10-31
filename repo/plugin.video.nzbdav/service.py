@@ -12,9 +12,20 @@ from enum import Enum
 
 # Same faulthandler hook as addon.py, but the service runs continuously so
 # this catches crashes during the long-lived stream-proxy thread too.
+# Kodi runs each add-on call in its own Python sub-interpreter, but this hook
+# is process-wide: enabling it again releases the previous call's log file
+# object after its interpreter is gone, which segfaults Kodi. So enable it only
+# once, on a plain descriptor that stays open for the life of the process.
 try:
-    _fh = open("/tmp/nzbdav-faulthandler-service.log", "a", buffering=1)  # nosec B108
-    faulthandler.enable(file=_fh, all_threads=True)
+    if not faulthandler.is_enabled():
+        faulthandler.enable(
+            file=os.open(
+                "/tmp/nzbdav-faulthandler-service.log",  # nosec B108
+                os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                0o644,
+            ),
+            all_threads=True,
+        )
 except OSError:
     pass
 
@@ -165,6 +176,9 @@ class NzbdavPlayer(xbmc.Player):
         self._retry_count = 0
         self._av_started = False
         self._play_time = 0.0
+        # Wall-clock start of the session, matched against kodi.log timestamps
+        # when a failure dialog shows the errors Kodi logged.
+        self._play_wall = 0.0
         self._monitor = xbmc.Monitor()
         self._proxy = proxy
 
@@ -282,6 +296,7 @@ class NzbdavPlayer(xbmc.Player):
                 # against ``time.monotonic()`` in tick() below.
                 # TODO.md §H.2-M35.
                 self._play_time = time.monotonic()
+                self._play_wall = time.time()
                 title = self._title
             # Clear all three properties—not just ACTIVE—so a future
             # second resolver call that fails before re-writing them
@@ -311,6 +326,23 @@ class NzbdavPlayer(xbmc.Player):
             "NeNeTeePee-Stream-Kodi: Service monitoring stream '{}'".format(title),
             xbmc.LOGINFO,
         )
+        self._note_early_av_start()
+
+    def _note_early_av_start(self):
+        """Count a play whose onAVStarted fired before this tick adopted it."""
+        with self._state_lock:
+            stream_url = self._stream_url
+            metadata = dict(self._playback_metadata)
+        try:
+            started = (
+                self.isPlayingVideo() is True and self.getPlayingFile() == stream_url
+            )
+        except _PLAYER_RUNTIME_ERRORS:
+            return
+        if started:
+            from resources.lib.router_lastepisode import mark_last_episode_started
+
+            mark_last_episode_started(metadata)
 
     def onAVStarted(self):
         """Reset retry state when playback begins successfully."""
@@ -321,10 +353,14 @@ class NzbdavPlayer(xbmc.Player):
             self._av_started = True
             self._state = PlaybackState.MONITORING
             title = self._title
+            metadata = dict(self._playback_metadata)
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Playback started for '{}'".format(title),
             xbmc.LOGINFO,
         )
+        from resources.lib.router_lastepisode import mark_last_episode_started
+
+        mark_last_episode_started(metadata)
 
     def _clear_stream_properties(self):
         """Erase the IPC window properties for this stream.
@@ -435,6 +471,27 @@ class NzbdavPlayer(xbmc.Player):
         self._cleanup_proxy_session()
         self._clear_stream_properties()
 
+    @staticmethod
+    def _mark_episode_completed(metadata):
+        """Flag the last picked episode as watched through to its end.
+
+        Feeds ``router_lastepisode.recall_stale_premiere``: a play that lands
+        on the season premiere right after this is the auto-fire misfire, not
+        a deliberate replay. Deliberately not called from onPlayBackStopped.
+        """
+        try:
+            from resources.lib.router_lastepisode import mark_last_episode_completed
+
+            mark_last_episode_completed(metadata)
+        except (ImportError,) + _PLAYER_RUNTIME_ERRORS as exc:
+            # Best effort: losing the flag only disables the one-shot
+            # premiere guard, never playback cleanup.
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Could not flag episode completed: "
+                "{}".format(type(exc).__name__),
+                xbmc.LOGDEBUG,
+            )
+
     def onPlayBackEnded(self):
         """Mark stream inactive when playback finishes naturally."""
         with self._state_lock:
@@ -443,10 +500,14 @@ class NzbdavPlayer(xbmc.Player):
             self._state = PlaybackState.IDLE
             title = self._title
             resume_key = self._resume_key
+            # Snapshot before _clear_stream_properties() empties it: this is
+            # the identity of the playback that actually ended.
+            metadata = dict(self._playback_metadata)
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Playback completed for '{}'".format(title),
             xbmc.LOGINFO,
         )
+        self._mark_episode_completed(metadata)
         self._clear_stable_resume(resume_key)
         self._cleanup_proxy_session()
         self._clear_stream_properties()
@@ -707,14 +768,34 @@ class NzbdavPlayer(xbmc.Player):
             ).format(title, elapsed),
             xbmc.LOGERROR,
         )
-        from resources.lib.i18n import addon_name as _addon_name
-        from resources.lib.i18n import string as _s
-
-        _notify(_addon_name(), _s(30121), 8000)
+        self._report_failure(30121)
         xbmc.PlayList(xbmc.PLAYLIST_VIDEO).clear()
         self._cleanup_proxy_session()
         self._enter_idle_and_clear()
         return True
+
+    def _report_failure(self, msg_id, *args):
+        """Explain a terminal playback failure in a dialog, off the tick thread.
+
+        The dialog is modal, so it runs on its own daemon thread: the ~1 Hz
+        tick must never block on it. If the thread can't start, fall back to
+        the old toast.
+        """
+        from resources.lib.i18n import addon_name as _addon_name
+        from resources.lib.i18n import fmt as _f
+
+        headline = _f(msg_id, *args)
+        with self._state_lock:
+            failure = (self._title, self._stream_url, self._play_wall)
+        try:
+            threading.Thread(
+                target=_show_player_failure,
+                args=(headline,) + failure,
+                name="nzbdav-playback-failure",
+                daemon=True,
+            ).start()
+        except RuntimeError:
+            _notify(_addon_name(), headline, 8000)
 
     def _handle_error_retry(self, retry_count, title):
         """Drive the ERROR-state retry decision (retry, give up, or relaunch)."""
@@ -726,10 +807,7 @@ class NzbdavPlayer(xbmc.Player):
             generation = self._session_generation
         enabled, max_retries, retry_delay = self._read_settings()
         if not enabled:
-            from resources.lib.i18n import addon_name as _addon_name
-            from resources.lib.i18n import string as _s
-
-            _notify(_addon_name(), _s(30115), 8000)
+            self._report_failure(30115)
             self._enter_idle_and_clear(generation=generation)
             return
 
@@ -740,15 +818,53 @@ class NzbdavPlayer(xbmc.Player):
                 ),
                 xbmc.LOGERROR,
             )
-            from resources.lib.i18n import addon_name as _addon_name
-            from resources.lib.i18n import fmt as _f
-
-            _notify(_addon_name(), _f(30116, max_retries), 8000)
+            self._report_failure(30116, max_retries)
             self._enter_idle_and_clear(generation=generation)
             return
 
         if not self._retry_playback(max_retries, retry_delay):
             self._enter_idle_and_clear(generation=generation)
+
+
+def _show_player_failure(headline, title, stream_url, since):
+    """Show why playback failed: Kodi's logged errors plus a file check.
+
+    For a local/mounted file (the NZBGet backend) it also checks the file
+    and its mount directly and offers to remount a share that is down.
+    """
+    from resources.lib import playback_diagnostics as diag
+    from resources.lib.i18n import addon_name as _addon_name
+    from resources.lib.i18n import fmt as _f
+
+    if xbmc.Monitor().abortRequested() is True:
+        return
+    try:
+        errors = diag.recent_kodi_errors(since) if since else []
+        diagnosis = diag.diagnose_file(stream_url)
+        text = "[CR]".join(
+            part for part in (headline, diag.failure_text(diagnosis, errors)) if part
+        )
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: playback failed for '{}': {}".format(
+                title, text.replace("[CR]", " | ")
+            ),
+            xbmc.LOGERROR,
+        )
+        offer = diagnosis is not None and diagnosis.can_remount
+        if diag.show_failure_dialog(_addon_name(), text, remountable=offer):
+            ok, detail = diag.remount(diagnosis.mount)
+            message = (
+                _f(30622, diagnosis.mount.mountpoint)
+                if ok
+                else _f(30633, diagnosis.mount.mountpoint, detail)
+            )
+            xbmcgui.Dialog().ok(_addon_name(), message)
+    except Exception as error:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: failure dialog error: {}".format(error),
+            xbmc.LOGWARNING,
+        )
+        _notify(_addon_name(), headline, 8000)
 
 
 def check_cache_warning(state):

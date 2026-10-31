@@ -267,8 +267,7 @@ def _attach_selection_candidates_streaming(
             selected_ready[0]
             and selected_can_match[0]
             and len(candidates) < max_candidates
-            and active_candidates[0] > 0
-            and active_candidates[0] < max_workers
+            and 0 < active_candidates[0] < max_workers
             and not candidate_exhausted[0]
         )
 

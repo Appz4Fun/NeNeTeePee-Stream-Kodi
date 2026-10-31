@@ -49,7 +49,7 @@ roomier device (more RAM, a multi-queue NIC, native SATA), most of it isn't
 needed.
 
 These NeNeTeePee-Stream-Kodi settings address playback smoothness at the app layer
-(Advanced → **Pass-through validation**):
+(**Playback backend** tab, with nzbdav / InfiniDysk selected):
 
 - **Read-ahead buffer size in MB** (default 256, 0 turns it off). Keeps
   filling while playback is paused.

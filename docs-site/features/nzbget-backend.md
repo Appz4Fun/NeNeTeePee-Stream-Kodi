@@ -43,7 +43,7 @@ Folder** to check that Kodi can reach the completed folder. Playback fails with
 "NZBGet not configured" if the URL or the completed folder is empty.
 
 NZBGet mode also uses two settings from the **Polling** group on the
-**Advanced** tab. **Poll interval (seconds)** sets how often NeNeTeePee-Stream-Kodi checks
+**Advanced** tab (shared with nzbdav / InfiniDysk). **Poll interval (seconds)** sets how often NeNeTeePee-Stream-Kodi checks
 NZBGet. **Download timeout (seconds)** defaults to 3600 and is clamped to
 60–86400. If the timeout runs out, NeNeTeePee-Stream-Kodi reports "Download timed out" and
 leaves the job running in NZBGet, so it can finish for a later play.
@@ -88,6 +88,73 @@ another machine.
 Mount the completed-download folder using your operating system or storage provider documentation. In the add-on, set **Completed Folder (SMB or Local Path)** to that mounted path, then select **Test Completed Folder**.
 
 The mount must expose NZBGet’s completed files to Kodi. For server setup, use the [NZBGet project documentation](https://github.com/nzbgetcom/nzbget).
+
+### Make the mount survive a slow network at boot
+
+A `hard` mount retries forever, but only once the share is mounted. If the
+network isn't up yet when the device boots, a plain systemd mount unit is tried
+once, fails, and stays unmounted until the next reboot. Kodi then sees an empty
+folder: NZBGet finishes the download, but playback fails, usually with **No video file
+found in completed folder**.
+
+On CoreELEC and LibreELEC, avoid this with an **automount** unit. systemd
+then mounts the share the first time Kodi opens the folder, and tries again on
+every later access until the NAS answers. This example mounts
+`192.0.2.10:/export/downloads` at `/storage/nas`. The unit file names must
+match the mount path, so `/storage/nas` becomes `storage-nas`.
+
+`/storage/.config/system.d/storage-nas.mount`:
+
+```ini
+[Unit]
+Description=NFS share for NZBGet downloads
+Wants=network-online.service
+After=network-online.service
+Before=kodi.service
+
+[Mount]
+What=192.0.2.10:/export/downloads
+Where=/storage/nas
+Type=nfs
+Options=ro,hard,timeo=30,retrans=2,noatime,nolock
+```
+
+`/storage/.config/system.d/storage-nas.automount`:
+
+```ini
+[Unit]
+Description=Automount /storage/nas
+Before=kodi.service
+
+[Automount]
+Where=/storage/nas
+TimeoutIdleSec=0
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable the automount, not the mount. If the share is mounted right now, stop
+anything using it first: the `stop` line unmounts it, because systemd refuses to
+start an automount on a path that is already mounted.
+
+```sh
+systemctl daemon-reload
+systemctl disable storage-nas.mount
+systemctl stop storage-nas.mount
+systemctl enable --now storage-nas.automount
+ls /storage/nas
+```
+
+Two details matter:
+
+- Use `Wants=network-online.service`, not `Requires=`. With `Requires=`, a
+  network wait that times out at boot cancels the mount outright.
+- Leave the `[Install]` section out of the `.mount` file. The `.automount`
+  unit is the one that starts at boot.
+
+Set **Completed Folder** to the path NZBGet's downloads appear under, for
+example `/storage/nas/nzbget/downloads`.
 
 ## How it works
 
@@ -136,9 +203,8 @@ flowchart LR
 The NZBGet backend downloads the whole release before playback, so it can't
 switch streams live. It relies on NZBGet's own
 [Smart Duplicates](https://nzbget.com/documentation/rss/#duplicates) instead.
-When you pick a release with **Enable fallback streams** on and
-**Maximum duplicate backups** set to anything other than `0`,
-NeNeTeePee-Stream-Kodi gathers NZBs of the **same release**, removes duplicate
+When you pick a release with **Maximum duplicate backups** set to anything
+other than `0`, NeNeTeePee-Stream-Kodi gathers NZBs of the **same release**, removes duplicate
 listings and Usenet postings, and submits up to **50 unique members** in one
 `appendfleet` JSON-RPC call. The default backup setting (`-1`) fills this fleet;
 a positive value limits the number of backups, with 49 backups plus your pick
@@ -275,16 +341,18 @@ Your pick is always sent.
     in parallel.
 
 The backups are best-effort. A backup that fails to submit never affects your
-pick's download or playback. Two settings control them:
+pick's download or playback. Only the **Maximum duplicate backups** setting
+(`nzbget_max_backups`, on the **Playback backend** tab) controls them. It caps how many
+NeNeTeePee-Stream-Kodi submits. `-1`, the default, sends every same-release NZB
+it finds. `0` sends none, so the add-on submits only your pick. A positive
+number sends at most that many.
 
-- **Enable fallback streams** turns the backups on or off.
-- **Maximum duplicate backups** (`nzbget_max_backups`, in the NZBGet backend
-  settings) caps how many NeNeTeePee-Stream-Kodi submits. `-1`, the default,
-  sends every same-release NZB it finds. `0` sends none, so the add-on submits
-  only your pick. A positive number sends at most that many.
-
-**Maximum standby fallback streams** doesn't apply to NZBGet. It only affects
-the nzbdav / InfiniDysk backend.
+**Enable fallback streams** and **Maximum standby fallback streams** apply only
+to the nzbdav / InfiniDysk backend, and Kodi hides them when NZBGet is
+selected. Earlier builds also let **Enable fallback streams** turn NZBGet
+duplicate backups off. A one-time migration sets **Maximum duplicate backups**
+to `0` if you used NZBGet with **Enable fallback streams** off, so your
+behavior doesn't change.
 
 ## Reusing already-downloaded files
 

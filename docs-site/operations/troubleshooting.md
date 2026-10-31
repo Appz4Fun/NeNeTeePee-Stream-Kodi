@@ -143,7 +143,7 @@ Check nzbdav before you change any NeNeTeePee-Stream-Kodi settings.
 
 A slow submit isn't always a failure. nzbdav fetches and parses the NZB before
 it replies, which can take a while on a large remux. NeNeTeePee-Stream-Kodi waits up to **NZB
-submit timeout (seconds)** (Advanced → Polling, default 300) and takes over a
+submit timeout (seconds)** (Playback backend tab, nzbdav / InfiniDysk, default 300) and takes over a
 job that nzbdav accepted slowly.
 
 Messages you may see:
@@ -204,10 +204,28 @@ NeNeTeePee-Stream-Kodi needs both the nzbdav API credentials and the WebDAV cred
   [NFS hard mount](../features/nzbget-backend.md#recommended-mount-the-completed-folder-over-nfs)
   instead of using `smb://`. `kodi.log` shows
   `NeNeTeePee-Stream-Kodi: video is listable but not readable through Kodi's VFS: …`.
+- **Playback failure dialog**: when NZBGet finished the download but Kodi
+  can't play it, NeNeTeePee-Stream-Kodi checks the completed folder itself and
+  shows what it found: the network share isn't mounted, the folder or
+  release folder is missing or empty, there is no video, or the video can't
+  be read. If the share is down and is mounted by a systemd unit or
+  `/etc/fstab`, choose **Remount share**: the add-on remounts it and starts
+  playback when the video shows up. Kodi needs permission to run
+  `systemctl` or `mount`. It has that on CoreELEC and LibreELEC. On other Linux
+  systems the dialog shows the error if it doesn't, and a sandboxed Kodi such as
+  the Flatpak build can't see the mount setup, so it only reports the missing
+  folder. If a stream starts but fails, the dialog
+  lists the player errors Kodi logged. `kodi.log` always gets the same
+  diagnosis on a line starting `NeNeTeePee-Stream-Kodi: playback failure
+  diagnosis`.
 - **No video file found in completed folder**: check **NZBGet Category**.
   NZBGet puts completed downloads in a subfolder named after the category.
   Also check that the completed folder points at NZBGet's completed-downloads
   folder.
+  If NZBGet's history shows the job as `SUCCESS` but Kodi still can't find
+  it, check that the share is actually mounted on the Kodi device (`mount` on
+  CoreELEC). A mount that failed at boot leaves an empty folder behind. See
+  [Make the mount survive a slow network at boot](../features/nzbget-backend.md#make-the-mount-survive-a-slow-network-at-boot).
 - **NZBGet HealthCheck=Pause: set it to Delete, None, or Park …**: automatic
   duplicate failover can't work while NZBGet pauses broken downloads. Change
   `HealthCheck` in NZBGet.
@@ -226,9 +244,9 @@ check the share or mount first (see [NZBGet backend problems](#nzbget-backend-pr
 1. Try another release for the same title.
 2. Confirm the source is still available on your backend.
 3. If you set **Large non-MP4 stream mode** to **Matroska remux** or **fMP4
-   HLS** (Advanced → Proxy), confirm ffmpeg is installed on the Kodi device. If
+   HLS** (Playback backend tab, nzbdav / InfiniDysk), confirm ffmpeg is installed on the Kodi device. If
    it isn't, you'll see **Failed to start ffmpeg**. The default, **Direct
-   pass-through**, doesn't use ffmpeg. **Force ffmpeg remux above (MB, 0=off)**
+   pass-through**, doesn't use ffmpeg. **Remux size threshold (MB, 0=off)**
    only sets the size at which the chosen remux mode starts.
 4. On CoreELEC, or with large files, start with the default pass-through
    settings before you try the remux modes.

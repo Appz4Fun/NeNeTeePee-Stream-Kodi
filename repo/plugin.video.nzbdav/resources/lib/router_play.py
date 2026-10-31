@@ -638,8 +638,8 @@ def _parse_max_backups(raw):
 def _dupe_max_backups(getter):
     """Settings gate for the duplicate fleet: the configured backup count, or ``None``.
 
-    ``None`` (plain single submit) when the NZBGet backend is off, fallback
-    streams are turned off, or ``nzbget_max_backups`` is 0. Otherwise the
+    ``None`` (plain single submit) when the NZBGet backend is off or
+    ``nzbget_max_backups`` is 0. Otherwise the
     parsed ``nzbget_max_backups``: -1 (the default) submits every
     same-release NZB found, a positive value caps the backups. ``getter``
     reads settings on the RunScript/script-play path; ``None`` reads the live
@@ -657,9 +657,9 @@ def _dupe_max_backups(getter):
 
     from resources.lib.playback_backend import get_backend
 
-    nzbget_on = get_backend(_read) == "nzbget"
-    fallback_on = _read("fallback_streams_enabled", "true").lower() != "false"
-    if not (nzbget_on and fallback_on):
+    # Only nzbget_max_backups gates the fleet: fallback_streams_enabled is the
+    # nzbdav proxy's standby-stream switch and doesn't apply to NZBGet.
+    if get_backend(_read) != "nzbget":
         return None
     max_backups = _parse_max_backups(_read("nzbget_max_backups", "-1"))
     return None if max_backups == 0 else max_backups
