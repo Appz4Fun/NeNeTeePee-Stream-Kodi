@@ -100,7 +100,7 @@ found in completed folder**.
 On CoreELEC and LibreELEC, avoid this with an **automount** unit. systemd
 then mounts the share the first time Kodi opens the folder, and tries again on
 every later access until the NAS answers. This example mounts
-`192.168.1.10:/export/downloads` at `/storage/nas`. The unit file names must
+`192.0.2.10:/export/downloads` at `/storage/nas`. The unit file names must
 match the mount path, so `/storage/nas` becomes `storage-nas`.
 
 `/storage/.config/system.d/storage-nas.mount`:
@@ -113,7 +113,7 @@ After=network-online.service
 Before=kodi.service
 
 [Mount]
-What=192.168.1.10:/export/downloads
+What=192.0.2.10:/export/downloads
 Where=/storage/nas
 Type=nfs
 Options=ro,hard,timeo=30,retrans=2,noatime,nolock
@@ -134,11 +134,14 @@ TimeoutIdleSec=0
 WantedBy=multi-user.target
 ```
 
-Enable the automount, not the mount:
+Enable the automount, not the mount. If the share is mounted right now, stop
+anything using it first: the `stop` line unmounts it, because systemd refuses to
+start an automount on a path that is already mounted.
 
 ```sh
 systemctl daemon-reload
 systemctl disable storage-nas.mount
+systemctl stop storage-nas.mount
 systemctl enable --now storage-nas.automount
 ls /storage/nas
 ```

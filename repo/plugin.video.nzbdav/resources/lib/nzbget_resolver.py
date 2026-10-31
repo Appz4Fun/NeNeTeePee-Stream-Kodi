@@ -518,7 +518,7 @@ def _reuse_completed_job(completed_job, ctx, requested_episode=None, on_inventor
     )
     from resources.lib.nzbget_resolver_diag import note_probe
 
-    note_probe(ctx, reuse_folder, result)
+    note_probe(ctx, reuse_folder, result, on_inventory)
     return result
 
 
@@ -612,7 +612,7 @@ def _resolve_completed_smb(
     )
     from resources.lib.nzbget_resolver_diag import note_probe
 
-    note_probe(ctx, smb_folder, result)
+    note_probe(ctx, smb_folder, result, on_inventory)
     return result
 
 
@@ -667,6 +667,7 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         # lookup that found nothing playable; feeds the failure dialog
         # (nzbget_resolver_diag).
         self.smb_probe = None
+        self.smb_probe_inventory = None
 
 
 def _completed_share_down(completed_job, ctx):

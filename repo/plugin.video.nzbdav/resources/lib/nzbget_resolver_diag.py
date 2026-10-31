@@ -29,10 +29,15 @@ PROBE_MISS = "miss"
 PROBE_UNREADABLE = "unreadable"
 
 
-def note_probe(ctx, folder, result):
-    """Record a completed-folder lookup on ``ctx`` for a later failure dialog."""
+def note_probe(ctx, folder, result, on_inventory=None):
+    """Record a completed-folder lookup on ``ctx`` for a later failure dialog.
+
+    ``on_inventory`` is kept so a retry after a remount still records a
+    season pack's episodes, as the original lookup would have.
+    """
     if ctx is None:
         return
+    ctx.smb_probe_inventory = on_inventory
     if result is _core.SMB_UNREADABLE:
         ctx.smb_probe = (folder, PROBE_UNREADABLE)
     elif not result:
@@ -67,6 +72,10 @@ def _canceled(ctx):
         return False
 
 
+def _shutting_down():
+    return xbmc.Monitor().abortRequested() is True
+
+
 def _retry_after_remount(ctx, folder):
     """Look for the video again; return its URL or None."""
     if not folder:
@@ -76,6 +85,7 @@ def _retry_after_remount(ctx, folder):
         interval=getattr(ctx, "interval", 1.0) or 1.0,
         budget=_REMOUNT_RETRY_BUDGET,
         requested_episode=_core._requested_episode(ctx.episode_context),
+        on_inventory=getattr(ctx, "smb_probe_inventory", None),
     )
 
 
@@ -87,7 +97,7 @@ def _diagnose_and_offer(ctx, folder):
     if not playback_diagnostics.offer_remount(heading, diagnosis):
         return None
     url = _retry_after_remount(ctx, folder)
-    if not url:
+    if not url and not _shutting_down():
         _core.xbmcgui.Dialog().ok(heading, _core._fmt(30621, folder or ctx.smb_root))
     return url or None
 
@@ -102,7 +112,7 @@ def diagnosed_failure(holder, on_failure):
     def _fail(message):
         ctx = holder.get("ctx")
         probe = getattr(ctx, "smb_probe", None) if ctx is not None else None
-        if not _post_download(message, probe) or _canceled(ctx):
+        if not _post_download(message, probe) or _canceled(ctx) or _shutting_down():
             on_failure(message)
             return
         try:

@@ -2213,3 +2213,15 @@ msgstr ""
 msgctxt "#30633"
 msgid "Couldn't remount {}: {}"
 msgstr ""
+
+msgctxt "#30634"
+msgid "Remounting {}. This can take up to a minute."
+msgstr ""
+
+msgctxt "#30635"
+msgid "Canceled."
+msgstr ""
+
+msgctxt "#30636"
+msgid "It still isn't mounted."
+msgstr ""

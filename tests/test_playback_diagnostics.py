@@ -3,7 +3,8 @@
 
 """Tests for the playback failure diagnosis and remount helpers."""
 
-import subprocess
+import ntpath
+import sys
 import time
 from unittest.mock import MagicMock, patch
 
@@ -44,7 +45,24 @@ def _mounted(fs, fstype="nfs4"):
 
 def test_unit_name_matches_systemd_escape():
     assert diag._unit_name("/storage/nas") == "storage-nas"
-    assert diag._unit_name("/mnt/my-nas/.x") == "mnt-my\\x2dnas-\\x2ex"
+    # Expected values are real ``systemd-escape --path`` output.
+    assert diag._unit_name("/mnt/my-nas/.x") == "mnt-my\\x2dnas-.x"
+    assert diag._unit_name("/.y/z") == "\\x2ey-z"
+    assert diag._unit_name("/mnt/m\u00e9dia") == "mnt-m\\xc3\\xa9dia"
+    assert diag._unit_name("/mnt/a b") == "mnt-a\\x20b"
+
+
+def test_ancestors_stop_at_windows_drive_root():
+    with patch.object(diag.os, "path", ntpath):
+        assert list(diag._ancestors("C:/Downloads/Completed")) == [
+            "C:\\Downloads\\Completed",
+            "C:\\Downloads",
+            "C:\\",
+        ]
+
+
+def test_ancestors_exclude_posix_root():
+    assert list(diag._ancestors("/mnt/nas/")) == ["/mnt/nas", "/mnt"]
 
 
 def test_find_mount_config_prefers_systemd_automount(fs):
@@ -160,25 +178,97 @@ def test_remount_commands_for_systemd_and_fstab():
     assert diag._remount_commands(fstab) == [["mount", "/mnt/nas"]]
 
 
-def test_remount_reports_command_error_when_still_down():
+@pytest.fixture(name="progress")
+def progress_fixture():
+    """A remount progress dialog nobody cancels, with Kodi staying up."""
+    dialog = MagicMock()
+    dialog.iscanceled.return_value = False
+    monitor = diag.xbmc.Monitor.return_value
+    with patch.object(
+        diag.xbmcgui, "DialogProgress", return_value=dialog
+    ), patch.object(monitor, "abortRequested", return_value=False):
+        yield dialog
+
+
+def _python(code):
+    return [sys.executable, "-c", code]
+
+
+def test_remount_reports_command_error_when_still_down(progress):
     mount = diag.MountConfig("/mnt/nas", "fstab")
-    failed = MagicMock(returncode=32, stdout=b"mount.nfs: Connection timed out")
-    with patch.object(diag.subprocess, "run", return_value=failed) as run, patch.object(
-        diag, "_mount_down", return_value=True
-    ):
+    fail = "import sys; print('mount.nfs: Connection refused'); sys.exit(32)"
+    with patch.object(
+        diag, "_remount_commands", return_value=[_python(fail)]
+    ), patch.object(diag, "_mount_down", return_value=True):
         ok, detail = diag.remount(mount)
 
-    assert ok is False
-    assert "timed out" in detail
-    assert run.call_args.kwargs["timeout"] == diag._REMOUNT_TIMEOUT
+    assert (ok, detail) == (False, "mount.nfs: Connection refused")
+    progress.create.assert_called_once()
+    progress.close.assert_called_once()
 
 
-def test_remount_survives_timeout_and_reports_success():
+def test_remount_says_still_down_when_commands_succeed(progress):
     mount = diag.MountConfig("/mnt/nas", "fstab")
     with patch.object(
-        diag.subprocess, "run", side_effect=subprocess.TimeoutExpired("mount", 60)
+        diag, "_remount_commands", return_value=[_python("pass")]
+    ), patch.object(diag, "_mount_down", return_value=True):
+        assert diag.remount(mount) == (False, diag._string(30636))
+    progress.close.assert_called_once()
+
+
+def test_remount_survives_missing_command_and_reports_success(progress):
+    mount = diag.MountConfig("/mnt/nas", "fstab")
+    with patch.object(
+        diag, "_remount_commands", return_value=[["/nonexistent/mount"]]
     ), patch.object(diag, "_mount_down", return_value=False):
         assert diag.remount(mount) == (True, "")
+    progress.close.assert_called_once()
+
+
+def test_remount_kills_a_command_that_times_out(progress):
+    mount = diag.MountConfig("/mnt/nas", "fstab")
+    hang = _python("import time; time.sleep(30)")
+    with patch.object(diag, "_remount_commands", return_value=[hang]), patch.object(
+        diag, "_mount_down", return_value=True
+    ), patch.object(diag, "_REMOUNT_TIMEOUT", 0.1), patch.object(
+        diag, "_REMOUNT_POLL", 0.02
+    ):
+        started = time.monotonic()
+        ok, detail = diag.remount(mount)
+    assert ok is False
+    assert "timed out after 0.1 seconds" in detail
+    assert time.monotonic() - started < 10
+    progress.close.assert_called_once()
+
+
+def test_remount_cancel_stops_the_running_command(progress):
+    mount = diag.MountConfig("/mnt/nas", "fstab")
+    progress.iscanceled.return_value = True
+    hang = _python("import time; time.sleep(30)")
+    second = _python("raise SystemExit('must not run')")
+    with patch.object(
+        diag, "_remount_commands", return_value=[hang, second]
+    ), patch.object(diag, "_mount_down", return_value=True), patch.object(
+        diag, "_REMOUNT_POLL", 0.02
+    ):
+        started = time.monotonic()
+        assert diag.remount(mount) == (False, diag._string(30635))
+    assert time.monotonic() - started < 10
+
+
+def test_remount_stops_waiting_when_kodi_shuts_down(progress):
+    mount = diag.MountConfig("/mnt/nas", "fstab")
+    assert progress.iscanceled.return_value is False
+    hang = _python("import time; time.sleep(30)")
+    with patch.object(diag, "_remount_commands", return_value=[hang]), patch.object(
+        diag, "_mount_down", return_value=True
+    ), patch.object(diag, "_REMOUNT_POLL", 0.02), patch.object(
+        diag.xbmc.Monitor.return_value, "abortRequested", return_value=True
+    ):
+        started = time.monotonic()
+        ok, _detail = diag.remount(mount)
+    assert ok is False
+    assert time.monotonic() - started < 10
 
 
 def test_recent_kodi_errors_filters_by_time_and_level(tmp_path):

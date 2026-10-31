@@ -144,6 +144,9 @@ _FALLBACK_STRINGS = {
     30631: "Close",
     30632: "Remount share",
     30633: "Couldn't remount {}: {}",
+    30634: "Remounting {}. This can take up to a minute.",
+    30635: "Canceled.",
+    30636: "It still isn't mounted.",
 }
 
 

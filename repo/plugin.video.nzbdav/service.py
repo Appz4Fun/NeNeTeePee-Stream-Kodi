@@ -779,6 +779,8 @@ def _show_player_failure(headline, title, stream_url, since):
     from resources.lib.i18n import addon_name as _addon_name
     from resources.lib.i18n import fmt as _f
 
+    if xbmc.Monitor().abortRequested() is True:
+        return
     try:
         errors = diag.recent_kodi_errors(since) if since else []
         diagnosis = diag.diagnose_file(stream_url)

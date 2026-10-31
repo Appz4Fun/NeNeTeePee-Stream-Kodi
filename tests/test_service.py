@@ -775,6 +775,16 @@ def test_show_player_failure_offers_remount_for_down_share(mock_xbmcgui, mock_no
 
 
 @patch("service._notify")
+@patch("service.xbmcgui")
+def test_show_player_failure_stays_quiet_during_shutdown(mock_xbmcgui, mock_notify):
+    monitor = svc.xbmc.Monitor.return_value
+    with patch.object(monitor, "abortRequested", return_value=True):
+        svc._show_player_failure("Failed", "Movie", "/storage/nas/m.mkv", 1.0)
+    mock_xbmcgui.Dialog.assert_not_called()
+    mock_notify.assert_not_called()
+
+
+@patch("service._notify")
 def test_show_player_failure_falls_back_to_toast_on_error(mock_notify):
     from resources.lib import playback_diagnostics as diag
 

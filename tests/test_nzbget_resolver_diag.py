@@ -69,6 +69,33 @@ def test_canceled_lookup_skips_dialog():
     on_failure.assert_called_once_with(_string(30223))
 
 
+def test_kodi_shutdown_skips_dialog():
+    on_failure = MagicMock()
+    ctx = _ctx(("/f", rdiag.PROBE_MISS))
+    with patch.object(rdiag, "_diagnose_and_offer") as offer, patch.object(
+        rdiag.xbmc.Monitor.return_value, "abortRequested", return_value=True
+    ):
+        rdiag.diagnosed_failure({"ctx": ctx}, on_failure)(_string(30223))
+    offer.assert_not_called()
+    on_failure.assert_called_once_with(_string(30223))
+
+
+def test_shutdown_during_remount_retry_skips_second_dialog():
+    ctx = _ctx(("/f", rdiag.PROBE_MISS))
+    dialog = MagicMock()
+    with patch.object(
+        rdiag.playback_diagnostics, "offer_remount", return_value=True
+    ), patch.object(rdiag.playback_diagnostics, "diagnose"), patch.object(
+        core, "resolve_smb_video", return_value=None
+    ), patch.object(
+        core.xbmcgui, "Dialog", return_value=dialog
+    ), patch.object(
+        rdiag.xbmc.Monitor.return_value, "abortRequested", return_value=True
+    ):
+        assert rdiag._diagnose_and_offer(ctx, "/f") is None
+    dialog.ok.assert_not_called()
+
+
 def test_unreadable_silent_failure_gets_dialog():
     on_failure = MagicMock()
     ctx = _ctx(("/f", rdiag.PROBE_UNREADABLE))
@@ -105,6 +132,29 @@ def test_diagnose_and_offer_retries_lookup_after_remount():
         assert rdiag._diagnose_and_offer(ctx, "/f") == "/f/video.mkv"
     assert lookup.call_args.kwargs["budget"] == rdiag._REMOUNT_RETRY_BUDGET
     ctx.dialog.close.assert_called_once()
+
+
+def test_remount_retry_keeps_the_inventory_callback():
+    ctx = _ctx()
+    recorder = MagicMock()
+    rdiag.note_probe(ctx, "/f", None, recorder)
+    with patch.object(
+        rdiag.playback_diagnostics, "offer_remount", return_value=True
+    ), patch.object(rdiag.playback_diagnostics, "diagnose"), patch.object(
+        core, "resolve_smb_video", return_value="/f/video.mkv"
+    ) as lookup:
+        assert rdiag._diagnose_and_offer(ctx, "/f") == "/f/video.mkv"
+    assert lookup.call_args.kwargs["on_inventory"] is recorder
+
+
+def test_completed_lookups_record_their_inventory_callback():
+    ctx = core._SubmitCtx("/storage/nas/dl", "", None, None, 1.0, 60)
+    recorder = MagicMock()
+    with patch.object(core, "resolve_smb_video", return_value=None):
+        core._resolve_completed_smb(
+            "/export/media/dl/Release", ctx, on_inventory=recorder
+        )
+    assert ctx.smb_probe_inventory is recorder
 
 
 def test_diagnose_and_offer_reports_when_retry_still_misses():

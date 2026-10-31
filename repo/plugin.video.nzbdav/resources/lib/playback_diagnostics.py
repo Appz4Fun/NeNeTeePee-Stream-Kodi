@@ -27,6 +27,7 @@ import xbmcgui
 import xbmcvfs
 
 from resources.lib.http_util import redact_text as _redact_text
+from resources.lib.i18n import addon_name as _addon_name
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
 
@@ -44,6 +45,7 @@ _UNIT_DIRS = (
 _PROC_MOUNTS = "/proc/mounts"
 _FSTAB = "/etc/fstab"
 _REMOUNT_TIMEOUT = 60
+_REMOUNT_POLL = 0.25
 _LOG_TAIL_BYTES = 512 * 1024
 _LOG_LINE = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d+\s+T:\d+\s+error <[^>]*>: (.*)$"
@@ -98,18 +100,27 @@ def is_local_path(path):
 
 
 def _unit_name(path):
-    """Return the systemd unit base name for a mount path (``systemd-escape``)."""
-    parts = [part for part in path.strip("/").split("/") if part]
-    escaped = []
-    for part in parts:
-        out = []
-        for index, char in enumerate(part):
-            if char.isalnum() or char in ":_" or (char == "." and index > 0):
-                out.append(char)
-            else:
-                out.append("\\x{:02x}".format(ord(char)))
-        escaped.append("".join(out))
-    return "-".join(escaped)
+    """Return the systemd unit base name for a mount path (``systemd-escape --path``).
+
+    Escapes the path's UTF-8 bytes, and a dot only at the very start of the
+    name, exactly as systemd does; a mismatch would miss the configured unit.
+    """
+    parts = [part for part in path.split("/") if part]
+    raw = "/".join(parts).encode("utf-8", "surrogateescape")
+    out = []
+    for index, byte in enumerate(raw):
+        char = chr(byte)
+        if char == "/":
+            out.append("-")
+        elif (
+            (byte < 128 and char.isalnum())
+            or char in ":_"
+            or (char == "." and index > 0)
+        ):
+            out.append(char)
+        else:
+            out.append("\\x{:02x}".format(byte))
+    return "".join(out)
 
 
 def _ancestors(path):
@@ -117,7 +128,11 @@ def _ancestors(path):
     current = os.path.normpath(path)
     while current not in ("/", ""):
         yield current
-        current = os.path.dirname(current)
+        parent = os.path.dirname(current)
+        # A Windows drive root is its own parent.
+        if parent == current:
+            return
+        current = parent
 
 
 def _decode_mount_field(field):
@@ -188,6 +203,7 @@ def _mount_down(mount):
     try:
         os.listdir(mount.mountpoint)
     except OSError:
+        # Only the side effect matters; the re-check below decides.
         pass
     return not is_mounted(mount.mountpoint)
 
@@ -319,30 +335,66 @@ def _remount_commands(mount):
     return [["mount", mount.mountpoint]]
 
 
+def _stop_waiting(monitor, dialog):
+    """True when Kodi is shutting down or the user canceled the remount."""
+    return monitor.abortRequested() is True or dialog.iscanceled() is True
+
+
+def _run_remount_command(command, monitor, dialog):
+    """Run one command to completion; return its error text, or "" on success.
+
+    Waits in short steps so Kodi shutdown and the progress dialog's Cancel
+    button aren't held up for the whole timeout.
+    """
+    try:
+        process = subprocess.Popen(  # nosec B603 pylint: disable=consider-using-with
+            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+        )
+    except OSError as error:
+        return str(error)
+    deadline = time.monotonic() + _REMOUNT_TIMEOUT
+    while True:
+        try:
+            output, _unused = process.communicate(timeout=_REMOUNT_POLL)
+            break
+        except subprocess.TimeoutExpired:
+            timed_out = time.monotonic() >= deadline
+            if not timed_out and not _stop_waiting(monitor, dialog):
+                continue
+            process.kill()
+            process.communicate()
+            if timed_out:
+                return "{} timed out after {} seconds".format(
+                    " ".join(command), _REMOUNT_TIMEOUT
+                )
+            return _string(30635)
+    if process.returncode == 0:
+        return ""
+    text = output.decode("utf-8", "replace").strip()
+    return text or "{} exited {}".format(command[0], process.returncode)
+
+
 def remount(mount):
     """Remount ``mount``; return ``(ok, detail)``.
 
     ``detail`` is the last command's error output when the mount still isn't
     up. Runs fixed argv lists (no shell) with a timeout so an unreachable NAS
-    can't hang the caller forever.
+    can't hang the caller forever, behind a progress dialog because a mount
+    that can't reach its server takes that long to fail.
     """
+    monitor = xbmc.Monitor()
+    dialog = xbmcgui.DialogProgress()
+    dialog.create(_addon_name(), _fmt(30634, mount.mountpoint))
     detail = ""
-    for command in _remount_commands(mount):
-        try:
-            result = subprocess.run(  # nosec B603 -- fixed argv, no shell
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=_REMOUNT_TIMEOUT,
-                check=False,
-            )
-        except (OSError, subprocess.SubprocessError) as error:
-            detail = str(error)
-            continue
-        if result.returncode != 0:
-            output = result.stdout.decode("utf-8", "replace").strip()
-            detail = output or "{} exited {}".format(command[0], result.returncode)
+    try:
+        for command in _remount_commands(mount):
+            detail = _run_remount_command(command, monitor, dialog) or detail
+            if _stop_waiting(monitor, dialog):
+                break
+    finally:
+        dialog.close()
     ok = not _mount_down(mount)
+    detail = detail or _string(30636)
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: remount {} -> {}{}".format(
             mount.mountpoint,
