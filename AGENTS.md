@@ -43,6 +43,15 @@ These must stay true or Kodi playback, shutdown, or updates can break:
 - Non-MP4 pass-through is the default unless settings explicitly choose a force-remux path.
 - Test imports depend on `tests/conftest.py` pre-mocking `xbmc*` modules before `resources.lib.*` imports.
 
+## Code Review Rules
+
+### Security
+
+[SECURITY.md](SECURITY.md#security-invariants) has the full rules. Flag changes that break either of these:
+
+- Parse XML only through `safe_fromstring` in `xml_safety.py`, to block XXE and Billion Laughs attacks.
+- Fail closed when a secret is missing: return `False` first, then compare. `if expected and not compare_digest(...)` authorizes requests when the secret is empty.
+
 ## Fast commands
 
 ```bash
