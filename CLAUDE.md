@@ -1,4 +1,5 @@
 @AGENTS.md
+@SECURITY.md
 
 ## Model routing policy (Claude-specific)
 
