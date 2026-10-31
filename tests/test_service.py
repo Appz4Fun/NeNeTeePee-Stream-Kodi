@@ -792,3 +792,33 @@ def test_show_player_failure_falls_back_to_toast_on_error(mock_notify):
         svc._show_player_failure("Failed", "Movie", "http://127.0.0.1/x", 1.0)
 
     mock_notify.assert_called_once()
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_completed")
+def test_on_playback_ended_reports_the_ended_episodes_identity(mock_mark):
+    """Completion is checked against what actually played, not the latest pick."""
+    player = NzbdavPlayer()
+    player._state = PlaybackState.MONITORING
+    metadata = {
+        "mediatype": "episode",
+        "tvdb": "275274",
+        "tvshowtitle": "Rick and Morty",
+        "season": 2,
+        "episode": 6,
+    }
+    player._playback_metadata = dict(metadata)
+
+    player.onPlayBackEnded()
+
+    mock_mark.assert_called_once_with(metadata)
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_completed")
+def test_on_playback_stopped_never_reports_completion(mock_mark):
+    player = NzbdavPlayer()
+    player._state = PlaybackState.MONITORING
+    player._playback_metadata = {"mediatype": "episode", "season": 2, "episode": 6}
+
+    player.onPlayBackStopped()
+
+    mock_mark.assert_not_called()

@@ -52,12 +52,95 @@ def _script_play_recover_episode_info(params, title, season, episode):
     return title, season, episode
 
 
+def _remember_last_episode_pick(params):
+    """Record the season/episode about to be resolved as "last picked".
+
+    Feeds ``router_lastepisode.recall_next_episode``'s next-episode guess for
+    a future blank-season/episode RunScript play of the same show. No-op for
+    movies or when season/episode weren't resolved (nothing numeric to
+    remember).
+    """
+    from resources.lib.router_lastepisode import remember_last_episode
+
+    remember_last_episode(params, params.get("season"), params.get("episode"))
+
+
 def _write_back_episode_params(params, season, episode):
     """Thread recovered season/episode back into ``params`` (skip blanks)."""
     if season:
         params["season"] = season
     if episode:
         params["episode"] = episode
+
+
+# Player tokens that describe the episode TMDBHelper asked for. Once a play is
+# retargeted at another episode they would label it with the wrong title and
+# episode TMDB id (playback_context.metadata_from_params), so they are dropped.
+_EPISODE_SPECIFIC_PARAMS = (
+    "episode_tmdb_id",
+    "episode_title",
+    "ep_season",
+    "ep_episode",
+)
+
+
+def _retarget_episode_params(params, season, episode):
+    """Point ``params`` at another episode and drop the old episode's metadata."""
+    for key in _EPISODE_SPECIFIC_PARAMS:
+        params.pop(key, None)
+    _write_back_episode_params(params, season, episode)
+
+
+def _notify_next_episode(season, episode):
+    """Show which episode a remembered-pick retarget is about to search."""
+    from resources.lib.http_util import notify
+    from resources.lib.i18n import addon_name, fmt
+
+    notify(addon_name(), fmt(30372, int(season), int(episode)), 4000)
+
+
+def _stale_premiere_guard_enabled():
+    """Whether the season-premiere misfire guard is switched on (default on)."""
+    import resources.lib.router as _router
+
+    setting = _router._get_script_setting("next_episode_premiere_guard", "true")
+    return str(setting).strip().lower() != "false"
+
+
+def _script_play_guard_stale_premiere(params, title, season, episode):
+    """Retarget a stale season-premiere play at the real next episode.
+
+    Unlike the blank-season/episode recovery above, the numbers here arrive
+    explicitly populated -- they are simply the wrong ones, chosen upstream by
+    whatever auto-fired the play when the previous episode ended.
+    ``recall_stale_premiere`` decides whether this play matches that signature;
+    everything else passes through untouched.
+    """
+    if not _stale_premiere_guard_enabled():
+        return title, season, episode
+
+    from resources.lib.router_lastepisode import recall_stale_premiere
+
+    guard_season, guard_episode = recall_stale_premiere(params, season, episode)
+    if not (guard_season and guard_episode):
+        return title, season, episode
+
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: Season-premiere misfire for {!r}; "
+        "targeting S{:02d}E{:02d} instead of S{:02d}E{:02d}".format(
+            title,
+            int(guard_season),
+            int(guard_episode),
+            int(season),
+            int(episode),
+        ),
+        xbmc.LOGINFO,
+    )
+    # Tell the user we overrode what they clicked -- backing out and playing
+    # the premiere again goes through, since the guard is one-shot.
+    _notify_next_episode(guard_season, guard_episode)
+    _retarget_episode_params(params, guard_season, guard_episode)
+    return title, guard_season, guard_episode
 
 
 def _script_play_resolve_episode_args(
@@ -78,9 +161,37 @@ def _script_play_resolve_episode_args(
 
     # TMDBHelper Next-Up / widget / home-screen plays often invoke the player
     # with only the series ids and empty season/episode, so an episode search
-    # broadens to the whole show. Recover the numbers from the focused
-    # ListItem, but trust them only when that item is the same show being
-    # searched (the focus may have moved by the time the player fires).
+    # broadens to the whole show. When both are blank -- the actual Next-Up
+    # signature -- prefer "one past whatever was last picked for this show"
+    # over the focused-ListItem guess below: after an episode ends, Kodi's UI
+    # focus can reset to the top of the season folder, which the ListItem
+    # probe would misread as "episode 1" instead of "the next episode".
+    if search_type == "episode" and not season and not episode:
+        from resources.lib.router_lastepisode import recall_next_episode
+
+        recalled_season, recalled_episode = recall_next_episode(params)
+        if recalled_season and recalled_episode:
+            season, episode = recalled_season, recalled_episode
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Next-Up play for {!r} without "
+                "season/episode; targeting S{:02d}E{:02d} after the last "
+                "pick".format(title, int(season), int(episode)),
+                xbmc.LOGINFO,
+            )
+            _notify_next_episode(season, episode)
+            _retarget_episode_params(params, season, episode)
+            return title, season, episode
+
+    # The other broken shape: season/episode arrive fully populated but point
+    # at the season premiere, auto-fired right after a later episode of that
+    # same season finished. Nothing in the params looks wrong -- only the pick
+    # we remember for this show gives it away.
+    if search_type == "episode" and season and episode:
+        return _script_play_guard_stale_premiere(params, title, season, episode)
+
+    # Recover the numbers from the focused ListItem, but trust them only when
+    # that item is the same show we're about to search (the focus may have
+    # moved by the time the player fires).
     if search_type == "episode" and not (season and episode):
         title, season, episode = _script_play_recover_episode_info(
             params, title, season, episode
@@ -355,6 +466,7 @@ def _script_play_auto_select(params, best, filtered):
     _router._attach_selected_result_metadata(resolver_params, target)
     if best.get("_season_pack"):
         resolver_params["_season_pack"] = best["_season_pack"]
+    _remember_last_episode_pick(params)
     _router._script_play_stage("resolve start '{}'".format(target.get("title", "")))
     resolve_and_play(target["link"], target["title"], params=resolver_params)
     _router._script_play_stage("resolve returned")
@@ -392,6 +504,7 @@ def _script_play_resolve_selected(params, selected, filtered, completed_jobs):
     _router._attach_selected_result_metadata(resolver_params, target)
     if selected.get("_season_pack"):
         resolver_params["_season_pack"] = selected["_season_pack"]
+    _remember_last_episode_pick(params)
     _router._script_play_stage("resolve start '{}'".format(target.get("title", "")))
     resolve_and_play(target["link"], target["title"], params=resolver_params)
     _router._script_play_stage("resolve returned")

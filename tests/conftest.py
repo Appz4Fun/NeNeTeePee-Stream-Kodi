@@ -262,3 +262,19 @@ def stateful_handoff_windows():
                 ("getProperty", "setProperty", "clearProperty"), previous
             ):
                 getattr(home, name).side_effect = effect
+
+
+@pytest.fixture(autouse=True)
+def _offline_episode_order(monkeypatch):
+    """Keep the next-episode season lookup off the network in unit tests.
+
+    ``router_lastepisode`` asks ``episode_order`` for per-season episode
+    counts whenever it recalls a pick, which would otherwise call TMDB/TVmaze
+    for real. Tests that exercise the lookup pass their own ``http_get``.
+    """
+    from resources.lib import episode_order
+
+    def _offline(*_args, **_kwargs):
+        raise OSError("network disabled in unit tests")
+
+    monkeypatch.setattr(episode_order, "_default_http_get", lambda: _offline)

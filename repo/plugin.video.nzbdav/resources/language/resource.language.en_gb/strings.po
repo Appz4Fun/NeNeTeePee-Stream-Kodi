@@ -1450,6 +1450,18 @@ msgctxt "#30371"
 msgid "FILTERED: {}"
 msgstr "FILTERED: {}"
 
+msgctxt "#30372"
+msgid "Playing next episode S{:02d}E{:02d}"
+msgstr "Playing next episode S{:02d}E{:02d}"
+
+msgctxt "#30373"
+msgid "Correct season-premiere misfires after an episode ends"
+msgstr "Correct season-premiere misfires after an episode ends"
+
+msgctxt "#30374"
+msgid "When a play auto-fires for episode 1 of the season you just finished a later episode of, search for the next episode instead. Turn this off if you often replay a season premiere straight after finishing an episode."
+msgstr "When a play auto-fires for episode 1 of the season you just finished a later episode of, search for the next episode instead. Turn this off if you often replay a season premiere straight after finishing an episode."
+
 msgctxt "#30400"
 msgid "Unknown"
 msgstr "Unknown"
