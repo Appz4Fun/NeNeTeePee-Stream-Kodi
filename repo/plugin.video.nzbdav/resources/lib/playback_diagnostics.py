@@ -20,6 +20,7 @@ import os
 import re
 import shutil
 import subprocess  # nosec B404 -- fixed argv lists, no shell
+import threading
 import time
 
 import xbmc
@@ -46,6 +47,7 @@ _PROC_MOUNTS = "/proc/mounts"
 _FSTAB = "/etc/fstab"
 _REMOUNT_TIMEOUT = 60
 _REMOUNT_POLL = 0.25
+_AUTOMOUNT_WAIT = 10
 _LOG_TAIL_BYTES = 512 * 1024
 # The player can fail before the service notices the play and notes its start.
 _LOG_START_SLACK = 5
@@ -199,16 +201,25 @@ def _mount_down(mount):
     """True when ``mount`` is configured but nothing is mounted on it.
 
     Lists the mount point once first, so an armed automount gets its chance
-    to mount before this reports it as down.
+    to mount before this reports it as down. With its server unreachable that
+    listing blocks until systemd gives up, so it only gets a short head start.
     """
     if is_mounted(mount.mountpoint):
         return False
-    try:
-        os.listdir(mount.mountpoint)
-    except OSError:
-        # Only the side effect matters; the re-check below decides.
-        pass
+    lister = threading.Thread(
+        target=_list_quietly, args=(mount.mountpoint,), daemon=True
+    )
+    lister.start()
+    lister.join(_AUTOMOUNT_WAIT)
     return not is_mounted(mount.mountpoint)
+
+
+def _list_quietly(path):
+    try:
+        os.listdir(path)
+    except OSError:
+        # Only the side effect matters; the caller's re-check decides.
+        pass
 
 
 def mount_problem(root):

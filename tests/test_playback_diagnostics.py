@@ -5,6 +5,7 @@
 
 import ntpath
 import sys
+import threading
 import time
 from unittest.mock import MagicMock, patch
 
@@ -338,10 +339,8 @@ def test_recent_kodi_errors_finds_real_errors_just_before_the_start_and_drops_ow
     stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - 2))
     log = tmp_path / "kodi.log"
     log.write_text(
-        "{}.1 T:1    error <general>: OpenDemuxStream - Error creating demuxer\n".format(
-            stamp
-        )
-        + "{}.2 T:2    error <general>: NeNeTeePee-Stream-Kodi: Playback never\n".format(
+        "{0}.1 T:1 error <general>: OpenDemuxStream - Error creating demuxer\n"
+        "{0}.2 T:2 error <general>: NeNeTeePee-Stream-Kodi: Playback never\n".format(
             stamp
         )
     )
@@ -349,3 +348,14 @@ def test_recent_kodi_errors_finds_real_errors_just_before_the_start_and_drops_ow
     errors = diag.recent_kodi_errors(now, log_path=str(log))
 
     assert errors == ["OpenDemuxStream - Error creating demuxer"]
+
+
+def test_mount_down_does_not_wait_out_a_hung_automount(fs):
+    mount = diag.MountConfig("/mnt/nas", "systemd", "mnt-nas", True)
+    release = threading.Event()
+    with patch.object(diag.os, "listdir", side_effect=lambda _p: release.wait(30)):
+        with patch.object(diag, "_AUTOMOUNT_WAIT", 0.05):
+            started = time.monotonic()
+            assert diag._mount_down(mount) is True
+            assert time.monotonic() - started < 10
+    release.set()
