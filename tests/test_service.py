@@ -58,6 +58,29 @@ def test_check_active_ignores_when_not_signaled(mock_window):
     assert player._state == PlaybackState.IDLE
 
 
+@patch("resources.lib.router_lastepisode.mark_last_episode_started")
+def test_av_start_before_the_tick_still_counts_as_started(mock_mark):
+    player = NzbdavPlayer()
+    player._stream_url = "/mnt/nas/ep.mkv"
+    player._playback_metadata = {"mediatype": "episode", "season": 2, "episode": 6}
+    with patch.object(player, "isPlayingVideo", return_value=True, create=True), patch.object(
+        player, "getPlayingFile", return_value="/mnt/nas/ep.mkv", create=True
+    ):
+        player._note_early_av_start()
+    mock_mark.assert_called_once_with(player._playback_metadata)
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_started")
+def test_other_playback_at_adoption_is_not_counted_as_started(mock_mark):
+    player = NzbdavPlayer()
+    player._stream_url = "/mnt/nas/ep.mkv"
+    with patch.object(player, "isPlayingVideo", return_value=True, create=True), patch.object(
+        player, "getPlayingFile", return_value="/other.mkv", create=True
+    ):
+        player._note_early_av_start()
+    mock_mark.assert_not_called()
+
+
 def test_on_av_started_resets_retry_count():
     """onAVStarted resets retry count when monitoring."""
     player = NzbdavPlayer()

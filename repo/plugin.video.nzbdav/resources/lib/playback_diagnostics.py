@@ -19,6 +19,7 @@ reports what it saw instead of raising into a failure path.
 import os
 import re
 import shutil
+import signal
 import subprocess  # nosec B404 -- fixed argv lists, no shell
 import threading
 import time
@@ -354,6 +355,20 @@ def _stop_waiting(monitor, dialog):
     return monitor.abortRequested() is True or dialog.iscanceled() is True
 
 
+def _stop_command(process):
+    """Kill a command and its helpers, like ``mount.nfs``, which share its pipe."""
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (AttributeError, OSError):
+        # Not POSIX, or it has already exited.
+        process.kill()
+    try:
+        process.communicate(timeout=_REMOUNT_POLL)
+    except subprocess.TimeoutExpired:
+        # Something still holds the pipe; don't let it hold the dialog too.
+        pass
+
+
 def _run_remount_command(command, monitor, dialog):
     """Run one command to completion; return its error text, or "" on success.
 
@@ -362,7 +377,10 @@ def _run_remount_command(command, monitor, dialog):
     """
     try:
         process = subprocess.Popen(  # nosec B603 pylint: disable=consider-using-with
-            command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
         )
     except OSError as error:
         return str(error)
@@ -375,8 +393,7 @@ def _run_remount_command(command, monitor, dialog):
             timed_out = time.monotonic() >= deadline
             if not timed_out and not _stop_waiting(monitor, dialog):
                 continue
-            process.kill()
-            process.communicate()
+            _stop_command(process)
             if timed_out:
                 return "{} timed out after {} seconds".format(
                     " ".join(command), _REMOUNT_TIMEOUT

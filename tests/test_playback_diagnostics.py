@@ -242,6 +242,24 @@ def test_remount_kills_a_command_that_times_out(progress):
     progress.close.assert_called_once()
 
 
+def test_remount_timeout_is_not_held_up_by_a_helper_process(progress):
+    mount = diag.MountConfig("/mnt/nas", "fstab")
+    parent = _python(
+        "import subprocess, sys, time;"
+        "subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']);"
+        "time.sleep(30)"
+    )
+    with patch.object(diag, "_remount_commands", return_value=[parent]), patch.object(
+        diag, "_mount_down", return_value=True
+    ), patch.object(diag, "_REMOUNT_TIMEOUT", 0.5), patch.object(
+        diag, "_REMOUNT_POLL", 0.02
+    ):
+        started = time.monotonic()
+        ok, _detail = diag.remount(mount)
+    assert ok is False
+    assert time.monotonic() - started < 10
+
+
 def test_remount_cancel_stops_the_running_command(progress):
     mount = diag.MountConfig("/mnt/nas", "fstab")
     progress.iscanceled.return_value = True

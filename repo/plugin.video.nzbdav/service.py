@@ -326,6 +326,23 @@ class NzbdavPlayer(xbmc.Player):
             "NeNeTeePee-Stream-Kodi: Service monitoring stream '{}'".format(title),
             xbmc.LOGINFO,
         )
+        self._note_early_av_start()
+
+    def _note_early_av_start(self):
+        """Count a play whose onAVStarted fired before this tick adopted it."""
+        with self._state_lock:
+            stream_url = self._stream_url
+            metadata = dict(self._playback_metadata)
+        try:
+            started = (
+                self.isPlayingVideo() is True and self.getPlayingFile() == stream_url
+            )
+        except _PLAYER_RUNTIME_ERRORS:
+            return
+        if started:
+            from resources.lib.router_lastepisode import mark_last_episode_started
+
+            mark_last_episode_started(metadata)
 
     def onAVStarted(self):
         """Reset retry state when playback begins successfully."""
