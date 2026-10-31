@@ -12,12 +12,19 @@ import sys
 # the extreme functional test can pull it out of the kodi container even if
 # stderr/stdout are dropped on the floor when Kodi crashes.
 # Kodi runs each add-on call in its own Python sub-interpreter, but this hook
-# is process-wide: enabling it again releases a log file object owned by an
-# interpreter that is already gone, which segfaults Kodi. Enable it only once.
+# is process-wide: enabling it again releases the previous call's log file
+# object after its interpreter is gone, which segfaults Kodi. So enable it only
+# once, on a plain descriptor that stays open for the life of the process.
 try:
     if not faulthandler.is_enabled():
-        _fh = open("/tmp/nzbdav-faulthandler.log", "a", buffering=1)  # nosec B108
-        faulthandler.enable(file=_fh, all_threads=True)
+        faulthandler.enable(
+            file=os.open(
+                "/tmp/nzbdav-faulthandler.log",  # nosec B108
+                os.O_WRONLY | os.O_APPEND | os.O_CREAT,
+                0o644,
+            ),
+            all_threads=True,
+        )
 except OSError:
     pass
 
