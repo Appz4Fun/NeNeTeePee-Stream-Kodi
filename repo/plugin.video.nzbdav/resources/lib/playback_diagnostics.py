@@ -47,12 +47,15 @@ _FSTAB = "/etc/fstab"
 _REMOUNT_TIMEOUT = 60
 _REMOUNT_POLL = 0.25
 _LOG_TAIL_BYTES = 512 * 1024
+# The player can fail before the service notices the play and notes its start.
+_LOG_START_SLACK = 5
+_OWN_LOG_PREFIX = "NeNeTeePee-Stream-Kodi:"
 _LOG_LINE = re.compile(
     r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\.\d+\s+T:\d+\s+error <[^>]*>: (.*)$"
 )
 _PLAYBACK_ERROR = re.compile(
     r"VideoPlayer|OpenFile|OpenInputStream|CFile|DVD|Demux|InputStream|"
-    r"smb|nfs|NeNeTeePee",
+    r"smb|nfs|could not open",
     re.IGNORECASE,
 )
 
@@ -434,7 +437,10 @@ def recent_kodi_errors(since, limit=5, log_path=None):
         if not match:
             continue
         logged = _parse_log_time(match.group(1))
-        if logged is None or logged < since - 1:
+        if logged is None or logged < since - _LOG_START_SLACK:
+            continue
+        # The dialog's headline already says what the add-on logged.
+        if match.group(2).startswith(_OWN_LOG_PREFIX):
             continue
         message = _redact_text(match.group(2).strip())[:200]
         if message and (not messages or messages[-1] != message):

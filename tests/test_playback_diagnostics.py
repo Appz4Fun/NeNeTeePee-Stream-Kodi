@@ -329,3 +329,23 @@ def test_recent_kodi_errors_prefers_player_lines(tmp_path):
     errors = diag.recent_kodi_errors(time.time() - 5, log_path=str(log))
 
     assert errors == ["CVideoPlayer::OpenInputStream - error"]
+
+
+def test_recent_kodi_errors_finds_real_errors_just_before_the_start_and_drops_own(
+    tmp_path,
+):
+    now = time.time()
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(now - 2))
+    log = tmp_path / "kodi.log"
+    log.write_text(
+        "{}.1 T:1    error <general>: OpenDemuxStream - Error creating demuxer\n".format(
+            stamp
+        )
+        + "{}.2 T:2    error <general>: NeNeTeePee-Stream-Kodi: Playback never\n".format(
+            stamp
+        )
+    )
+
+    errors = diag.recent_kodi_errors(now, log_path=str(log))
+
+    assert errors == ["OpenDemuxStream - Error creating demuxer"]
