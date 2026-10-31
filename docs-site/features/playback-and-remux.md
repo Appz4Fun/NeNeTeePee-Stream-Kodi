@@ -53,13 +53,14 @@ flowchart TD
 
 ## Settings that control playback
 
-These settings are in the **Proxy** group on the **Advanced** tab. The defaults are safe,
-so only change them if you have a specific reason.
+These settings are on the **Playback backend** tab. Kodi shows them only when
+nzbdav / InfiniDysk is the selected backend. The defaults are safe, so only change
+them if you have a specific reason.
 
 | Setting | Default | What it does |
 |---------|---------|--------------|
 | **Large non-MP4 stream mode** | Direct pass-through (default) | Chooses how NeNeTeePee-Stream-Kodi serves large non-MP4 files: **Direct pass-through** (no ffmpeg), **fMP4 HLS (compatibility, experimental)** (full random seek), or **Matroska remux (compatibility)**. |
-| **Force ffmpeg remux above (MB, 0=off)** | 15000 (~15 GB) | The size where the selected remux mode takes over for non-MP4 files. `0` turns the size-based remux off, so those files always stream pass-through. It has no effect while the mode is Direct pass-through. |
+| **Remux size threshold (MB, 0=off)** | 15000 (~15 GB) | The size where the selected remux mode takes over for non-MP4 files. `0` turns the size-based remux off, so those files always stream pass-through. It has no effect while the mode is Direct pass-through. |
 | **Convert MP4 subtitles to SRT** | On | During a Matroska remux, converts subtitles from non-MKV sources (MP4 `mov_text`) to SRT so embedded subtitles survive. The remux copies MKV subtitle tracks unchanged. |
 
 With a remux mode selected, NeNeTeePee-Stream-Kodi also remuxes any non-MP4 file whose size
@@ -115,8 +116,8 @@ serve Dolby Vision sources unchanged.
 
 ## Resilience knobs
 
-The **Pass-through validation** group on the **Advanced** tab controls how the
-pass-through path recovers:
+The pass-through validation options on the **Playback backend** tab (visible for
+nzbdav / InfiniDysk) control how the pass-through path recovers:
 
 | Setting | Default |
 |---------|---------|

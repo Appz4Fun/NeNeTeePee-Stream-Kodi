@@ -41,8 +41,9 @@ startup window can starve the live stream. Every backup adopted after
 warmer picks it up.
 
 The related settings, **Enable fallback streams** (on) and **Maximum standby
-fallback streams** (default 5, hard ceiling 5), live in
-**Advanced › Fallback Streams**.
+fallback streams** (default 5, hard ceiling 5), live on
+the **Playback backend** tab, visible only when nzbdav / InfiniDysk is the
+selected backend.
 
 ### The "playing" liveness signal
 
