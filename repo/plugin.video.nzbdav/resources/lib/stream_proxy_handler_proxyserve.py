@@ -179,7 +179,7 @@ class _ProxyServeMixin:  # pylint: disable=too-few-public-methods
         waited_for_initial_prefetch = False
         # Never let the cached prefix cover a stored EBML plan's bytes.
         prefix_end = self._ebml_read_bound(ctx, st)
-        if range_header and st.current == 0 and prefix_end >= st.current:
+        if range_header and 0 == st.current <= prefix_end:
             cached_prefix = self._pop_cached_fallback_range(ctx, st.current, prefix_end)
             if not cached_prefix:
                 self._wait_for_initial_range_prefetch(ctx, st.current)
