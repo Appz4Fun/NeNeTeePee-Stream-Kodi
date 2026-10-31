@@ -80,7 +80,7 @@ The URL, username, password, category, and completed-folder fields appear on
 
 ### Playback backend options
 
-The following groups appear on **Playback backend**, after the selected backend's connection fields. Kodi shows them as one list without group headings. Stream resilience is visible for nzbdav / InfiniDysk and NZBGet. Every other group in this section is visible only for nzbdav / InfiniDysk, the only backend that plays through the add-on's stream proxy.
+The following groups appear on **Playback backend**, after the selected backend's connection fields. Kodi shows them as one list without group headings. Stream resilience is visible for nzbdav / InfiniDysk and NZBGet. Every other group in this section is visible only for nzbdav / InfiniDysk, the only backend that plays through the add-on's stream proxy. The diagnostic `/direct_play` route also uses the Proxy and Pass-through validation values on any backend; select nzbdav / InfiniDysk to change them.
 
 #### Submit and queue
 

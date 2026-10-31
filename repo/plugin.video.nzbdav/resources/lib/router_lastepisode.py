@@ -21,9 +21,16 @@ already used by ``resolver_resume.py`` / ``stream_proxy_serviceprops.py`` for
 cross-invocation state within a single Kodi session.
 """
 
+from functools import wraps
+
+import xbmc
 import xbmcgui
 
 _HOME_WINDOW_ID = 10000
+# One "season:episode:started" value per show, so alternating between shows
+# keeps each show's place. The four properties below track only the latest
+# pick, for the "watched to the end" guard.
+_PROP_SHOW_PICK = "nzbdav.last_ep_pick."
 _PROP_SHOW_ID = "nzbdav.last_ep_show_id"
 _PROP_SEASON = "nzbdav.last_ep_season"
 _PROP_EPISODE = "nzbdav.last_ep_episode"
@@ -41,6 +48,28 @@ _PROP_COMPLETED = "nzbdav.last_ep_completed"
 _ID_FIELDS = ("tvdb", "imdb", "tvshow_tmdb_id", "tmdb_id")
 
 
+def _fail_soft(default):
+    """Keep this optional memory from ever turning into a playback failure."""
+
+    def decorate(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as exc:  # pylint: disable=broad-except
+                xbmc.log(
+                    "NeNeTeePee-Stream-Kodi: episode memory {} failed: {}".format(
+                        func.__name__, type(exc).__name__
+                    ),
+                    xbmc.LOGWARNING,
+                )
+                return default
+
+        return wrapper
+
+    return decorate
+
+
 def _show_identity_key(params):
     """Stable per-show key from ``params``, or "" if the show is unknown."""
     params = params if isinstance(params, dict) else {}
@@ -49,7 +78,11 @@ def _show_identity_key(params):
         if value:
             return "{}:{}".format(field, value)
     title = str(params.get("title") or "").strip().casefold()
-    return "title:{}".format(title) if title else ""
+    if not title:
+        return ""
+    # Remakes and regional versions can share a title but not a year.
+    year = str(params.get("year") or "").strip()
+    return "title:{}:{}".format(title, year) if year else "title:{}".format(title)
 
 
 def _home_window():
@@ -71,6 +104,22 @@ def _remembered_pick(params):
     return int(season), int(episode)
 
 
+def _show_pick(show_id):
+    """Return ``(season, episode, started)`` stored for this show, or None."""
+    fields = (_home_window().getProperty(_PROP_SHOW_PICK + show_id) or "").split(":")
+    if len(fields) != 3 or not (fields[0].isdigit() and fields[1].isdigit()):
+        return None
+    return int(fields[0]), int(fields[1]), fields[2] == "1"
+
+
+def _store_show_pick(show_id, season, episode, started):
+    _home_window().setProperty(
+        _PROP_SHOW_PICK + show_id,
+        "{}:{}:{}".format(season, episode, "1" if started else "0"),
+    )
+
+
+@_fail_soft(None)
 def remember_last_episode(params, season, episode):
     """Record ``season``/``episode`` as the last pick for this show.
 
@@ -91,6 +140,7 @@ def remember_last_episode(params, season, episode):
     home.setProperty(_PROP_SHOW_ID, show_id)
     home.setProperty(_PROP_SEASON, season)
     home.setProperty(_PROP_EPISODE, episode)
+    _store_show_pick(show_id, season, episode, started=False)
 
 
 def _metadata_identity(metadata):
@@ -109,6 +159,7 @@ def _metadata_identity(metadata):
             "imdb": metadata.get("imdb"),
             "tvshow_tmdb_id": metadata.get("tmdb_id"),
             "title": metadata.get("tvshowtitle"),
+            "year": metadata.get("year"),
         }
     )
     season = str(metadata.get("season", ""))
@@ -118,6 +169,24 @@ def _metadata_identity(metadata):
     return show_id, season, episode
 
 
+@_fail_soft(None)
+def mark_last_episode_started(metadata):
+    """Note that the remembered pick really started playing.
+
+    Called from the service's ``onAVStarted``. Until then a pick might still
+    fail or be canceled, and the next Next-Up play has to retry it rather than
+    skip past it.
+    """
+    identity = _metadata_identity(metadata)
+    if identity is None:
+        return
+    show_id, season, episode = identity
+    pick = _show_pick(show_id)
+    if pick is not None and pick[:2] == (int(season), int(episode)):
+        _store_show_pick(show_id, season, episode, started=True)
+
+
+@_fail_soft(None)
 def mark_last_episode_completed(metadata):
     """Flag the remembered pick as played to its natural end by ``metadata``.
 
@@ -161,18 +230,25 @@ def _episode_after(params, season, episode):
     return str(next_season), str(next_episode)
 
 
+@_fail_soft(("", ""))
 def recall_next_episode(params):
     """Return ``(season, episode)`` for the episode after this show's last pick.
 
-    Returns ``("", "")`` when nothing is remembered, the remembered show
-    doesn't match ``params``, or the stored numbers aren't usable.
+    A pick that never started playing is returned as is, so a failed or
+    canceled play is retried instead of skipped. Returns ``("", "")`` when
+    nothing is remembered for this show.
     """
-    pick = _remembered_pick(params)
+    show_id = _show_identity_key(params)
+    pick = _show_pick(show_id) if show_id else None
     if pick is None:
         return "", ""
-    return _episode_after(params, *pick)
+    season, episode, started = pick
+    if not started:
+        return str(season), str(episode)
+    return _episode_after(params, season, episode)
 
 
+@_fail_soft(("", ""))
 def recall_stale_premiere(params, season, episode):
     """Return ``(season, episode)`` correcting a stale season-premiere play.
 

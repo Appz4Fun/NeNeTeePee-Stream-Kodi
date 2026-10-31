@@ -12,9 +12,15 @@ from enum import Enum
 
 # Same faulthandler hook as addon.py, but the service runs continuously so
 # this catches crashes during the long-lived stream-proxy thread too.
+# Kodi runs each add-on call in its own Python sub-interpreter, but this hook
+# is process-wide: enabling it again releases a log file object owned by an
+# interpreter that is already gone, which segfaults Kodi. Enable it only once.
 try:
-    _fh = open("/tmp/nzbdav-faulthandler-service.log", "a", buffering=1)  # nosec B108
-    faulthandler.enable(file=_fh, all_threads=True)
+    if not faulthandler.is_enabled():
+        _fh = open(
+            "/tmp/nzbdav-faulthandler-service.log", "a", buffering=1
+        )  # nosec B108
+        faulthandler.enable(file=_fh, all_threads=True)
 except OSError:
     pass
 
@@ -325,10 +331,14 @@ class NzbdavPlayer(xbmc.Player):
             self._av_started = True
             self._state = PlaybackState.MONITORING
             title = self._title
+            metadata = dict(self._playback_metadata)
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: Playback started for '{}'".format(title),
             xbmc.LOGINFO,
         )
+        from resources.lib.router_lastepisode import mark_last_episode_started
+
+        mark_last_episode_started(metadata)
 
     def _clear_stream_properties(self):
         """Erase the IPC window properties for this stream.

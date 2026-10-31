@@ -9,6 +9,7 @@ from resources.lib.playback_context import metadata_from_params
 from resources.lib.router_lastepisode import (
     _show_identity_key,
     mark_last_episode_completed,
+    mark_last_episode_started,
     recall_next_episode,
     recall_stale_premiere,
     remember_last_episode,
@@ -34,6 +35,12 @@ def _finished(params, season, episode):
     """Simulate the service's onPlayBackEnded for this episode's playback."""
     played = dict(params, type="episode", season=season, episode=episode)
     mark_last_episode_completed(metadata_from_params(played))
+
+
+def _started(params, season, episode):
+    """Simulate the service's onAVStarted for this episode's playback."""
+    played = dict(params, type="episode", season=season, episode=episode)
+    mark_last_episode_started(metadata_from_params(played))
 
 
 def _patched_window():
@@ -68,7 +75,51 @@ def test_remember_then_recall_returns_next_episode():
     with _patched_window():
         params = {"tvdb": "124364", "title": "From"}
         remember_last_episode(params, "3", "5")
+        _started(params, "3", "5")
         assert recall_next_episode(params) == ("3", "6")
+
+
+def test_a_pick_that_never_started_is_retried_not_skipped():
+    with _patched_window():
+        params = {"tvdb": "124364", "title": "From"}
+        remember_last_episode(params, "3", "5")
+        _started(params, "3", "5")
+        remember_last_episode(params, "3", "6")
+        assert recall_next_episode(params) == ("3", "6")
+
+
+def test_alternating_shows_keep_their_own_place():
+    with _patched_window():
+        show_a, show_b = {"tvdb": "1"}, {"tvdb": "2"}
+        remember_last_episode(show_a, "1", "4")
+        _started(show_a, "1", "4")
+        remember_last_episode(show_b, "2", "7")
+        _started(show_b, "2", "7")
+        assert recall_next_episode(show_a) == ("1", "5")
+        assert recall_next_episode(show_b) == ("2", "8")
+
+
+def test_title_identity_includes_the_year():
+    with _patched_window():
+        remember_last_episode({"title": "Shameless", "year": "2004"}, "1", "2")
+        _started({"title": "Shameless", "year": "2004"}, "1", "2")
+        assert recall_next_episode({"title": "Shameless", "year": "2011"}) == ("", "")
+        assert recall_next_episode({"title": "Shameless", "year": "2004"}) == (
+            "1",
+            "3",
+        )
+
+
+def test_window_errors_never_escape_the_memory():
+    with patch(
+        "resources.lib.router_lastepisode.xbmcgui.Window",
+        side_effect=RuntimeError("no GUI"),
+    ):
+        remember_last_episode({"tvdb": "1"}, "1", "2")
+        mark_last_episode_started({"mediatype": "episode", "tvdb": "1"})
+        mark_last_episode_completed({"mediatype": "episode", "tvdb": "1"})
+        assert recall_next_episode({"tvdb": "1"}) == ("", "")
+        assert recall_stale_premiere({"tvdb": "1"}, "1", "1") == ("", "")
 
 
 def test_recall_returns_blank_for_a_different_show():
@@ -187,6 +238,7 @@ def test_recall_rolls_over_to_the_next_season_after_a_finale():
     with _patched_window(), _with_counts({2: 10, 3: 8}):
         params = {"tvdb": "124364"}
         remember_last_episode(params, "2", "10")
+        _started(params, "2", "10")
         assert recall_next_episode(params) == ("3", "1")
 
 
@@ -194,6 +246,7 @@ def test_recall_stays_in_season_when_more_episodes_remain():
     with _patched_window(), _with_counts({2: 11, 3: 8}):
         params = {"tvdb": "124364"}
         remember_last_episode(params, "2", "10")
+        _started(params, "2", "10")
         assert recall_next_episode(params) == ("2", "11")
 
 
@@ -214,10 +267,20 @@ def test_recall_falls_back_to_plus_one_when_the_lookup_raises():
     ):
         params = {"tvdb": "124364"}
         remember_last_episode(params, "2", "10")
+        _started(params, "2", "10")
         assert recall_next_episode(params) == ("2", "11")
 
 
 # --- completion only for the playback the pick started ----------------------
+
+
+def test_movie_pick_keeps_the_shows_place_for_next_up():
+    with _patched_window():
+        show = {"tvdb": "1"}
+        remember_last_episode(show, "1", "4")
+        _started(show, "1", "4")
+        remember_last_episode({"tmdb_id": "9", "title": "A Movie"}, "", "")
+        assert recall_next_episode(show) == ("1", "5")
 
 
 def test_movie_ending_after_a_stopped_episode_does_not_arm_the_guard():
@@ -228,7 +291,6 @@ def test_movie_ending_after_a_stopped_episode_does_not_arm_the_guard():
         remember_last_episode(movie, "", "")
         mark_last_episode_completed(metadata_from_params(movie))
         assert recall_stale_premiere(_rick_and_morty("11759791"), "2", "1") == ("", "")
-        assert recall_next_episode(_rick_and_morty("")) == ("", "")
 
 
 def test_older_episode_ending_while_a_new_pick_resolves_flags_nothing():
@@ -257,6 +319,7 @@ def test_completion_ignores_missing_metadata():
 def test_series_tmdb_id_identifies_the_show_when_tvdb_and_imdb_are_missing():
     with _patched_window():
         remember_last_episode({"tvshow_tmdb_id": "60625", "tmdb_id": "1"}, "2", "4")
+        _started({"tvshow_tmdb_id": "60625", "tmdb_id": "1"}, "2", "4")
         assert recall_next_episode({"tvshow_tmdb_id": "60625", "tmdb_id": "2"}) == (
             "2",
             "5",

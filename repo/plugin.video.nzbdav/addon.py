@@ -11,9 +11,13 @@ import sys
 # SIGFPE, SIGABRT, SIGBUS, SIGILL). The trace is written to a fixed path so
 # the extreme functional test can pull it out of the kodi container even if
 # stderr/stdout are dropped on the floor when Kodi crashes.
+# Kodi runs each add-on call in its own Python sub-interpreter, but this hook
+# is process-wide: enabling it again releases a log file object owned by an
+# interpreter that is already gone, which segfaults Kodi. Enable it only once.
 try:
-    _fh = open("/tmp/nzbdav-faulthandler.log", "a", buffering=1)  # nosec B108
-    faulthandler.enable(file=_fh, all_threads=True)
+    if not faulthandler.is_enabled():
+        _fh = open("/tmp/nzbdav-faulthandler.log", "a", buffering=1)  # nosec B108
+        faulthandler.enable(file=_fh, all_threads=True)
 except OSError:
     pass
 

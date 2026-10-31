@@ -174,12 +174,16 @@ def _script_play_resolve_episode_args(
             season, episode = recalled_season, recalled_episode
             xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Next-Up play for {!r} without "
-                "season/episode; targeting S{:02d}E{:02d} after the last "
+                "season/episode; targeting S{:02d}E{:02d} from the last "
                 "pick".format(title, int(season), int(episode)),
                 xbmc.LOGINFO,
             )
             _notify_next_episode(season, episode)
             _retarget_episode_params(params, season, episode)
+            if not title:
+                title, season, episode = _script_play_recover_episode_info(
+                    params, title, season, episode
+                )
             return title, season, episode
 
     # The other broken shape: season/episode arrive fully populated but point

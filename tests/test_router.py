@@ -3298,7 +3298,9 @@ def test_handle_script_play_remembers_pick_and_targets_next_episode_later(
     reported "picker reopens targeting the season premiere" bug and confirms
     the fix. No focused ListItem is available (all InfoLabels blank), so the
     old fallback alone would have broadened the search to the whole show."""
+    from resources.lib.playback_context import metadata_from_params
     from resources.lib.router import _handle_script_play
+    from resources.lib.router_lastepisode import mark_last_episode_started
     from resources.lib.router_scriptplay import _script_play_resolve_selected
 
     mock_infolabel.return_value = ""
@@ -3320,6 +3322,7 @@ def test_handle_script_play_remembers_pick_and_targets_next_episode_later(
         selection = {"title": "From.S01E08.1080p", "link": "http://indexer/ep8.nzb"}
         _script_play_resolve_selected(picked_params, selection, [selection], None)
         mock_resolve_and_play.assert_called_once()
+        mark_last_episode_started(metadata_from_params(picked_params))
 
         # A later Next-Up play for the same show arrives with blank
         # season/episode -- this used to fall through to the stale focused
