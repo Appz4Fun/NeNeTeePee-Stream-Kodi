@@ -43,15 +43,7 @@ tested box, the main gain was taking database writes off the eMMC. A single 64 M
 `fsync` write test ran at 89 MB/s on the T5 and 71 MB/s on the eMMC, so don't
 expect a large speed-up.
 
-Stop Kodi, copy the folder, and verify the copy before you mount over the original:
-
-```bash
-systemctl stop kodi
-mkdir -p /storage/ssd/kodi
-cp -a /storage/.kodi/userdata/Database /storage/ssd/kodi/Database
-```
-
-Mount the SSD by UUID in `/storage/.config/system.d/storage-ssd.mount`:
+First, mount the SSD by UUID in `/storage/.config/system.d/storage-ssd.mount`:
 
 ```ini
 [Unit]
@@ -66,6 +58,26 @@ Options=noatime,nofail
 
 [Install]
 WantedBy=multi-user.target
+```
+
+Start it and confirm the SSD is mounted. If it isn't, the copy in the next step
+lands on the eMMC, and the SSD hides it once it mounts.
+
+```bash
+systemctl daemon-reload
+systemctl enable --now storage-ssd.mount
+grep " /storage/ssd " /proc/mounts   # expect the SSD's device
+```
+
+Next, stop Kodi, copy the folder, and check the copied databases:
+
+```bash
+systemctl stop kodi
+mkdir -p /storage/ssd/kodi
+cp -a /storage/.kodi/userdata/Database /storage/ssd/kodi/Database
+for db in /storage/ssd/kodi/Database/*.db; do
+  echo "$db: $(sqlite3 "$db" 'PRAGMA integrity_check;' | head -1)"   # expect ok
+done
 ```
 
 Then add the bind mount in
@@ -89,7 +101,7 @@ Options=bind,nofail
 WantedBy=kodi.service
 ```
 
-Enable both units, reboot, and check the order with
+Run `systemctl daemon-reload`, enable the bind mount, reboot, and check the order with
 `journalctl -b -o short-monotonic | grep -E "Mounted storage-|Starting kodi"`.
 
 !!! warning "Keep `nofail` on both units"
