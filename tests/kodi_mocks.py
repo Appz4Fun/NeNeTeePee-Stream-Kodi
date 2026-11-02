@@ -14,6 +14,22 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 
+class _KodiModuleMock(MagicMock):
+    """MagicMock whose auto-created attributes survive ``monkeypatch`` undo.
+
+    pytest 9.2 reads the value to restore from the target's ``__dict__``.
+    MagicMock keeps auto-created attributes elsewhere, so pytest deleted them
+    on undo, and every later read in the session raised ``AttributeError``.
+    Keeping each attribute in ``__dict__`` lets pytest restore it.
+    """
+
+    def __getattr__(self, name):
+        child = super().__getattr__(name)
+        if not name.startswith("_"):
+            self.__dict__[name] = child
+        return child
+
+
 def install_kodi_mocks() -> None:
     """Install Kodi module mocks and add addon modules to sys.path.
 
@@ -23,7 +39,7 @@ def install_kodi_mocks() -> None:
 
     # Mock all xbmc* modules that Kodi provides at runtime
     for module_name in ["xbmc", "xbmcgui", "xbmcplugin", "xbmcaddon", "xbmcvfs"]:
-        sys.modules[module_name] = MagicMock()
+        sys.modules[module_name] = _KodiModuleMock()
 
     # Install realistic defaults on the xbmcaddon MagicMock. Without these,
     # ``xbmcaddon.Addon().getSetting("anything")`` returns a MagicMock,

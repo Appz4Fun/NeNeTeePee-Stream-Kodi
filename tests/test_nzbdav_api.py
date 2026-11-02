@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
+import gzip
 import json
 import socket
 from unittest.mock import patch
 from urllib.error import URLError
 
+import pytest
 from resources.lib.nzbdav_api import (
     _DEFAULT_SUBMIT_TIMEOUT,
     _get_submit_timeout,
@@ -24,8 +26,13 @@ from resources.lib.nzbdav_api import (
 
 
 @patch("resources.lib.nzbdav_api._get_settings")
+@patch(
+    "resources.lib.nzbdav_api._http_get_bytes",
+    side_effect=OSError("fetch unavailable"),
+)
 @patch("resources.lib.nzbdav_api._http_get")
-def test_submit_nzb_returns_nzo_id(mock_http, mock_settings):
+def test_submit_nzb_returns_nzo_id(mock_http, _mock_fetch, mock_settings):
+    """Failed local fetch falls back to the legacy addurl GET."""
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")
     mock_http.return_value = json.dumps(
         {"status": True, "nzo_ids": ["SABnzbd_nzo_abc123"]}
@@ -40,10 +47,176 @@ def test_submit_nzb_returns_nzo_id(mock_http, mock_settings):
     assert "apikey=testkey" in call_url
 
 
+_NZB_XML = '<?xml version="1.0"?><nzb><file subject="x"/></nzb>'
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch("resources.lib.nzbdav_api._http_get_bytes")
+def test_submit_nzb_prefers_addfile_upload(mock_get, mock_post, mock_settings):
+    """When the indexer fetch yields an NZB, submit POSTs it via addfile."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    mock_get.return_value = _NZB_XML.encode("utf-8")
+    mock_post.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_af1"]})
+
+    nzo_id, error = submit_nzb(
+        "http://hydra:5076/getnzb/abc123?apikey=testkey", "The.Matrix.1999"
+    )
+
+    assert (nzo_id, error) == ("nzo_af1", None)
+    # The only raw GET is the indexer fetch; the submit itself is the POST.
+    fetch_url = mock_get.call_args.args[0]
+    assert fetch_url.startswith("http://hydra:5076/getnzb/")
+    post_url = mock_post.call_args.args[0]
+    assert "mode=addfile" in post_url
+    assert "apikey=testkey" in post_url
+    assert "nzbname=The.Matrix.1999" in post_url
+    body = mock_post.call_args.args[1]
+    content_type = mock_post.call_args.kwargs["headers"]["Content-Type"]
+    assert content_type.startswith("multipart/form-data; boundary=")
+    boundary = content_type.split("boundary=", 1)[1]
+    assert boundary.encode("ascii") in body
+    assert b'name="name"' in body  # SAB-documented field; C# fork accepts both
+    assert b'filename="The.Matrix.1999.nzb"' in body
+    assert _NZB_XML.encode("utf-8") in body
+    assert body.endswith("--{}--\r\n".format(boundary).encode("ascii"))
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch(
+    "resources.lib.nzbdav_api._http_get_bytes",
+    side_effect=OSError("connection refused"),
+)
+@patch("resources.lib.nzbdav_api._http_get")
+def test_submit_nzb_falls_back_to_addurl_when_fetch_fails(
+    mock_get, _mock_fetch, mock_post, mock_settings
+):
+    """Indexer fetch error -> server-side addurl GET, no POST attempted."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    mock_get.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_url1"]})
+
+    nzo_id, error = submit_nzb("http://hydra:5076/getnzb/abc123", "Test.Movie")
+
+    assert (nzo_id, error) == ("nzo_url1", None)
+    mock_post.assert_not_called()
+    submit_url = mock_get.call_args.args[0]
+    assert "mode=addurl" in submit_url
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch("resources.lib.nzbdav_api._http_get_bytes")
+def test_submit_nzb_addfile_uses_submit_timeout(mock_get, mock_post, mock_settings):
+    """The addfile POST inherits the configured submit timeout, while the
+    indexer fetch keeps its own short flat timeout + size cap."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    mock_get.return_value = _NZB_XML.encode("utf-8")
+    mock_post.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_af2"]})
+
+    submit_nzb("http://hydra:5076/getnzb/abc123", "Test", submit_timeout=77)
+
+    assert mock_get.call_args.kwargs["timeout"] == 30
+    assert mock_post.call_args.kwargs["timeout"] == 77
+
+
+def _http_error(code):
+    import io
+    from urllib.error import HTTPError as _HTTPError
+
+    return _HTTPError("http://nzbdav:3000/api", code, "err", {}, io.BytesIO(b""))
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch("resources.lib.nzbdav_api._http_get_bytes")
+@patch("resources.lib.nzbdav_api._http_get")
+def test_submit_nzb_addfile_4xx_falls_back_to_addurl(
+    mock_get, mock_fetch, mock_post, mock_settings
+):
+    """A whole-request 4xx from addfile (endpoint without multipart
+    support) retries via the legacy server-side addurl path."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    mock_fetch.return_value = _NZB_XML.encode("utf-8")
+    mock_post.side_effect = _http_error(405)
+    mock_get.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_via_url"]})
+
+    nzo_id, error = submit_nzb("http://hydra:5076/getnzb/abc123", "Test")
+
+    assert (nzo_id, error) == ("nzo_via_url", None)
+    assert "mode=addurl" in mock_get.call_args.args[0]
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch("resources.lib.nzbdav_api._http_get_bytes")
+@patch("resources.lib.nzbdav_api._http_get")
+def test_submit_nzb_addfile_timeout_never_retries_addurl(
+    mock_get, mock_fetch, mock_post, mock_settings
+):
+    """A client-side timeout is ambiguous (the server may have accepted
+    the job) — no addurl retry; the caller's adoption probes own it."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    mock_fetch.return_value = _NZB_XML.encode("utf-8")
+    mock_post.side_effect = socket.timeout("timed out")
+
+    nzo_id, error = submit_nzb("http://hydra:5076/getnzb/abc123", "Test")
+
+    assert nzo_id is None
+    assert error["status"] == "timeout"
+    mock_get.assert_not_called()
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch("resources.lib.nzbdav_api._http_get_bytes")
+def test_submit_nzb_preserves_non_utf8_nzb_bytes(mock_fetch, mock_post, mock_settings):
+    """The uploaded body carries the indexer's exact bytes — a lossy
+    UTF-8 round-trip would corrupt non-UTF-8 NZB documents."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    latin1_nzb = (
+        b'<?xml version="1.0" encoding="ISO-8859-1"?>'
+        b'<nzb><file subject="caf\xe9"/></nzb>'
+    )
+    mock_fetch.return_value = latin1_nzb
+    mock_post.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_l1"]})
+
+    nzo_id, _error = submit_nzb("http://hydra:5076/getnzb/abc123", "Test")
+
+    assert nzo_id == "nzo_l1"
+    assert latin1_nzb in mock_post.call_args.args[1]
+
+
+@patch("resources.lib.nzbdav_api._get_settings")
+@patch("resources.lib.nzbdav_api._http_post")
+@patch("resources.lib.nzbdav_api._http_get_bytes")
+@patch("resources.lib.nzbdav_api._http_get")
+def test_submit_nzb_rejects_html_body_and_falls_back(
+    mock_get, mock_fetch, mock_post, mock_settings
+):
+    """An indexer HTML error page served with HTTP 200 is not an NZB —
+    the old starts-with-'<' sniff uploaded it; now it falls back."""
+    mock_settings.return_value = ("http://nzbdav:3000", "testkey")
+    mock_fetch.return_value = b"<html><body>Rate limited</body></html>"
+    mock_get.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_url2"]})
+
+    nzo_id, error = submit_nzb("http://hydra:5076/getnzb/abc123", "Test")
+
+    assert (nzo_id, error) == ("nzo_url2", None)
+    mock_post.assert_not_called()
+    assert "mode=addurl" in mock_get.call_args.args[0]
+
+
 @patch("resources.lib.nzbdav_api._get_submit_timeout")
 @patch("resources.lib.nzbdav_api._get_settings")
+@patch(
+    "resources.lib.nzbdav_api._http_get_bytes",
+    side_effect=OSError("fetch unavailable"),
+)
 @patch("resources.lib.nzbdav_api._http_get")
-def test_submit_nzb_passes_configured_timeout(mock_http, mock_settings, mock_timeout):
+def test_submit_nzb_passes_configured_timeout(
+    mock_http, _mock_fetch, mock_settings, mock_timeout
+):
     """submit_nzb should read the submit_timeout setting and pass it to http_get."""
     mock_settings.return_value = ("http://nzbdav:3000", "testkey")
     mock_timeout.return_value = 90
@@ -54,10 +227,18 @@ def test_submit_nzb_passes_configured_timeout(mock_http, mock_settings, mock_tim
     assert mock_http.call_args.kwargs["timeout"] == 90
 
 
-@patch("resources.lib.nzbdav_api.xbmcaddon.Addon")
+@patch(
+    "resources.lib.router._get_script_setting",
+    side_effect=AssertionError("disk fallback used despite provided getter"),
+)
+@patch(
+    "resources.lib.nzbdav_api._http_get_bytes",
+    side_effect=OSError("fetch unavailable"),
+)
 @patch("resources.lib.nzbdav_api._http_get")
-def test_submit_nzb_uses_settings_getter_without_kodi_addon(mock_http, mock_addon):
-    mock_addon.side_effect = RuntimeError("Kodi settings unavailable")
+def test_submit_nzb_uses_settings_getter_without_kodi_addon(
+    mock_http, _mock_fetch, mock_disk
+):
     mock_http.return_value = json.dumps({"status": True, "nzo_ids": ["nzo_1"]})
 
     def settings_getter(key, default=""):
@@ -73,7 +254,7 @@ def test_submit_nzb_uses_settings_getter_without_kodi_addon(mock_http, mock_addo
         submit_timeout=12,
     )
 
-    mock_addon.assert_not_called()
+    mock_disk.assert_not_called()
     assert (nzo_id, error) == ("nzo_1", None)
     call_url = mock_http.call_args.args[0]
     assert call_url.startswith("http://nzbdav:3000/api?")
@@ -130,46 +311,46 @@ def test_find_terminal_by_name_returns_newest_acceptable_completed_slot(
     assert result["completed"] == 200
 
 
-@patch("resources.lib.nzbdav_api.xbmcaddon")
-def test_get_submit_timeout_reads_setting(mock_xbmcaddon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_submit_timeout_reads_setting(mock_get):
     """_get_submit_timeout returns the parsed setting value."""
-    mock_xbmcaddon.Addon.return_value.getSetting.return_value = "300"
+    mock_get.return_value = "300"
     assert _get_submit_timeout() == 300
 
 
-@patch("resources.lib.nzbdav_api.xbmcaddon")
-def test_get_submit_timeout_falls_back_on_empty(mock_xbmcaddon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_submit_timeout_falls_back_on_empty(mock_get):
     """_get_submit_timeout returns the default when the setting is empty."""
-    mock_xbmcaddon.Addon.return_value.getSetting.return_value = ""
+    mock_get.return_value = ""
     assert _get_submit_timeout() == _DEFAULT_SUBMIT_TIMEOUT
 
 
-@patch("resources.lib.nzbdav_api.xbmcaddon")
-def test_get_submit_timeout_falls_back_on_garbage(mock_xbmcaddon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_submit_timeout_falls_back_on_garbage(mock_get):
     """_get_submit_timeout returns the default when the setting is non-numeric."""
-    mock_xbmcaddon.Addon.return_value.getSetting.return_value = "not a number"
+    mock_get.return_value = "not a number"
     assert _get_submit_timeout() == _DEFAULT_SUBMIT_TIMEOUT
 
 
-@patch("resources.lib.nzbdav_api.xbmcaddon")
-def test_get_submit_timeout_clamps_typo_high(mock_xbmcaddon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_submit_timeout_clamps_typo_high(mock_get):
     """A typo'd huge value (for example, 300000—meant 300, accidentally
     typed too many zeros, observed in the wild) is clamped to the
     upper bound rather than producing a multi-hour timeout that
     would block the resolver effectively forever."""
     from resources.lib.nzbdav_api import _SUBMIT_TIMEOUT_MAX
 
-    mock_xbmcaddon.Addon.return_value.getSetting.return_value = "300000"
+    mock_get.return_value = "300000"
     assert _get_submit_timeout() == _SUBMIT_TIMEOUT_MAX
 
 
-@patch("resources.lib.nzbdav_api.xbmcaddon")
-def test_get_submit_timeout_clamps_too_low(mock_xbmcaddon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_submit_timeout_clamps_too_low(mock_get):
     """A nonsensically small value (for example, 0 or 1) is clamped up to
     the minimum so nzbdav has a fighting chance of responding."""
     from resources.lib.nzbdav_api import _SUBMIT_TIMEOUT_MIN
 
-    mock_xbmcaddon.Addon.return_value.getSetting.return_value = "1"
+    mock_get.return_value = "1"
     assert _get_submit_timeout() == _SUBMIT_TIMEOUT_MIN
 
 
@@ -1333,3 +1514,19 @@ def test_clear_queue_passes_per_delete_timeout(mock_cancel):
     assert mock_cancel.call_count == 2
     for call in mock_cancel.call_args_list:
         assert call.kwargs.get("timeout") == 5
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        gzip.compress(b"<nzb></nzb>")[:-6],
+        b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03not a deflate stream",
+    ],
+    ids=["truncated", "corrupt"],
+)
+def test_fetch_nzb_body_treats_bad_gzip_as_fetch_failure(body):
+    """A bad gzip body returns None, so submit_nzb can fall back to addurl."""
+    from resources.lib.nzbdav_api import _fetch_nzb_body
+
+    with patch("resources.lib.nzbdav_api._http_get_bytes", return_value=body):
+        assert _fetch_nzb_body("http://hydra/nzb", "Title") is None

@@ -121,11 +121,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   next episode number in the same season.
 - New setting: **Correct season-premiere misfires after an episode ends**
   (on by default).
+- **Kodi crash about two minutes into playback.** Background threads read
+  settings through Kodi's add-on API at the same time, which could crash Kodi.
+  They now read `settings.xml` from disk.
+- **NZB submission to newer nzbdav builds.** These builds refuse to fetch an NZB
+  from a private address, which includes a local NZBHydra2. The add-on now
+  downloads the NZB and uploads it, and asks nzbdav to fetch it only if that
+  download or upload isn't possible.
+- **Wrong show on episode searches.** Releases of another show whose episode
+  title matches your search no longer rank first, so auto-select no longer plays
+  them.
+- **Same-file fallbacks.** Fallback matching now reads dotted lowercase codec
+  names and accepts WEB-DL copies of one file posted by different groups. It also
+  reuses a backup that nzbdav already imported when it refuses a new submit.
+- **Stuck on Queued during a backend outage.** If job status, history, and WebDAV
+  all stay unavailable for 60 seconds, the add-on stops waiting and shows a
+  connection error. The job on the server keeps running.
+- **Credentials in logs.** Newznab keys embedded in non-standard `getnzb` URL
+  paths are now redacted.
+- **Cluster-first MKV probing.** Dolby Vision probing again handles MKV files
+  that store Cluster before Tracks.
 
 ### Documentation
 
 - The NZBGet backend page now shows how to keep an NFS share working after a
   slow network at boot, using a systemd automount unit.
+- The CoreELEC tuning page now covers moving Kodi's database to an SSD, TRIM over
+  USB, and testing a drive first. The suggested ephemeral port range starts at
+  10240 to stay clear of service ports.
 
 ## [2.0.0-beta.3][] — 2026-10-11
 

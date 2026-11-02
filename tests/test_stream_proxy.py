@@ -8777,7 +8777,7 @@ def test_live_fallback_selection_reuses_probe_bases_for_fingerprint_validation()
             },
         )
 
-    def setting(key):
+    def setting(key, default=""):
         return {
             "webdav_url": "http://webdav/content",
             "nzbdav_url": "http://nzbdav:3000",
@@ -8786,7 +8786,7 @@ def test_live_fallback_selection_reuses_probe_bases_for_fingerprint_validation()
     with patch.object(handler, "_refresh_standby_fallback_sources"), patch(
         "resources.lib.fallback_streams.urlopen", side_effect=range_response
     ) as mock_urlopen, patch(
-        "resources.lib.fallback_streams.xbmcaddon.Addon.return_value.getSetting",
+        "resources.lib.router._get_script_setting",
         side_effect=setting,
     ) as mock_setting:
         source = handler._select_live_fallback_source(ctx, 0, 9999)
@@ -8835,7 +8835,7 @@ def test_live_fallback_selection_reuses_validated_probe_urls_for_range_reads():
             },
         )
 
-    def setting(key):
+    def setting(key, default=""):
         return {
             "webdav_url": "http://webdav/content",
             "nzbdav_url": "http://nzbdav:3000",
@@ -8853,7 +8853,7 @@ def test_live_fallback_selection_reuses_validated_probe_urls_for_range_reads():
     with patch.object(handler, "_refresh_standby_fallback_sources"), patch(
         "resources.lib.fallback_streams.urlopen", side_effect=range_response
     ) as mock_urlopen, patch(
-        "resources.lib.fallback_streams.xbmcaddon.Addon.return_value.getSetting",
+        "resources.lib.router._get_script_setting",
         side_effect=setting,
     ) as mock_setting, patch(
         "resources.lib.fallback_streams._validated_probe_url",
@@ -11554,7 +11554,7 @@ def test_standby_refresh_reuses_probe_bases_for_content_length_checks():
     ]
     ctx = {"fallback_sources": sources}
 
-    def setting(key):
+    def setting(key, default=""):
         return {
             "webdav_url": "http://webdav/content",
             "nzbdav_url": "http://nzbdav:3000",
@@ -11587,7 +11587,7 @@ def test_standby_refresh_reuses_probe_bases_for_content_length_checks():
             [b""], status=200, headers={"Content-Length": "10"}
         ),
     ) as mock_urlopen, patch(
-        "resources.lib.fallback_streams.xbmcaddon.Addon.return_value.getSetting",
+        "resources.lib.router._get_script_setting",
         side_effect=setting,
     ) as mock_setting:
         handler._refresh_standby_fallback_sources(ctx)

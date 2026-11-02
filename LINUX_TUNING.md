@@ -102,7 +102,7 @@ pinned to a consistent core via the flow table to avoid cache-line bouncing.
 ```bash
 sysctl -w net.ipv4.tcp_tw_reuse=1              # recycle TIME_WAIT for outbound
 sysctl -w net.ipv4.tcp_fin_timeout=30           # 30s half-close (default 60)
-sysctl -w net.ipv4.ip_local_port_range="1024 65535"  # 64K ports (default 28K)
+sysctl -w net.ipv4.ip_local_port_range="10240 65535"  # 55K ports (default 28K)
 ```
 
 **Why.** The warmup services make hundreds of short-lived HTTP connections per
@@ -110,7 +110,9 @@ second. Each closed connection holds an ephemeral port in TIME_WAIT for
 `tcp_fin_timeout` seconds. At 90+ conn/s with a 60 s timeout, that's 5,400 ports
 in TIME_WAIT, which is 19% of the default 28K range. `tcp_tw_reuse` allows outbound
 connections to reuse TIME_WAIT sockets, and the expanded port range provides
-headroom.
+headroom. The range starts at 10240 so outgoing connections can't take service
+ports such as Kodi's 8080. Reserve any higher listening ports with
+`net.ipv4.ip_local_reserved_ports`.
 
 The existing TCP buffer sizes (`rmem_max=16 MB`, `wmem_max=16 MB`) are already
 well-tuned for high-throughput streaming and don't need changes.
@@ -184,6 +186,16 @@ CoreELEC ships with `governor=performance` on all 6 cores (1.8 GHz LITTLE,
 2.208 GHz big). This is correct for a media center: it eliminates frequency
 scaling latency when Kodi needs burst compute for HDR tone mapping or UI
 rendering. Power consumption is irrelevant for a plugged-in device.
+
+---
+
+## 11. Database on the SSD, TRIM, and device names
+
+The docs site covers moving Kodi's database to the SSD with a bind mount, enabling
+TRIM over USB, and testing a drive first:
+[Going further](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/operations/coreelec-tuning/#going-further).
+The UAS rebind can also move the drive from `sda` to `sdb`, so adjust the `sda`
+paths on this page to match your device.
 
 ---
 
