@@ -179,12 +179,13 @@ def _fetch_nzb_body(nzb_url, nzb_name):
         # treat overflow as a fetch failure (addurl fallback).
         import gzip
         import io
+        import zlib
 
         try:
             with gzip.GzipFile(fileobj=io.BytesIO(body)) as gz:
                 inflated = gz.read(_NZB_FETCH_MAX_BYTES + 1)
             body = b"" if len(inflated) > _NZB_FETCH_MAX_BYTES else inflated
-        except OSError:
+        except (OSError, EOFError, zlib.error):
             body = b""
     if not body or not _looks_like_nzb_document(body):
         xbmc.log(
@@ -347,7 +348,7 @@ def submit_nzb(nzb_url, nzb_name="", settings_getter=None, submit_timeout=None):
           caller may retry.
 
     Side effects:
-        Reads nzbdav settings from Kodi via xbmcaddon.Addon("plugin.video.nzbdav").
+        Reads nzbdav settings from settings.xml when no ``settings_getter`` is given.
         Fetches the NZB from the indexer and POSTs it to nzbdav /api with
         mode=addfile; falls back to a GET with mode=addurl when the local
         fetch fails or the addfile upload is refused with a whole-request
@@ -958,7 +959,7 @@ def get_completed_jobs(settings_getter=None):
         mapping on any error or when no completed jobs exist.
 
     Side effects:
-        Reads nzbdav settings from Kodi via xbmcaddon.Addon("plugin.video.nzbdav")
+        Reads nzbdav settings from settings.xml when no ``settings_getter`` is given
         unless ``settings_getter`` is supplied.
         Performs an HTTP GET to nzbdav /api?mode=history on every call; avoid
         calling this in tight loops.

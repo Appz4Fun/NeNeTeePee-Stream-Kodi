@@ -1,11 +1,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
+import gzip
 import json
 import socket
 from unittest.mock import patch
 from urllib.error import URLError
 
+import pytest
 from resources.lib.nzbdav_api import (
     _DEFAULT_SUBMIT_TIMEOUT,
     _get_submit_timeout,
@@ -1512,3 +1514,19 @@ def test_clear_queue_passes_per_delete_timeout(mock_cancel):
     assert mock_cancel.call_count == 2
     for call in mock_cancel.call_args_list:
         assert call.kwargs.get("timeout") == 5
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        gzip.compress(b"<nzb></nzb>")[:-6],
+        b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x00\x03not a deflate stream",
+    ],
+    ids=["truncated", "corrupt"],
+)
+def test_fetch_nzb_body_treats_bad_gzip_as_fetch_failure(body):
+    """A bad gzip body returns None, so submit_nzb can fall back to addurl."""
+    from resources.lib.nzbdav_api import _fetch_nzb_body
+
+    with patch("resources.lib.nzbdav_api._http_get_bytes", return_value=body):
+        assert _fetch_nzb_body("http://hydra/nzb", "Title") is None

@@ -730,7 +730,7 @@ def find_video_file(
         located or an error occurs.
 
     Side effects:
-        Reads WebDAV settings from Kodi via xbmcaddon.Addon("plugin.video.nzbdav").
+        Reads WebDAV settings from settings.xml.
         Issues a PROPFIND request at the target path and, if no video is found
         at that level, recurses into subdirectories up to two levels deep
         (three total levels including the starting folder).

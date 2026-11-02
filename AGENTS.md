@@ -37,7 +37,8 @@ These must stay true or Kodi playback, shutdown, or updates can break:
 - If a change deliberately revises that failure handling, update the tests to match.
 - The NZBGet backend supports both kinds of entry path.
 - Kodi polling loops must use `xbmc.Monitor.waitForAbort()` instead of `time.sleep()` so Kodi can shut down cleanly.
-- Settings must be defined in `resources/settings.xml` and read through `xbmcaddon.Addon().getSetting(...)`.
+- Settings must be defined in `resources/settings.xml`.
+- Code that can run on a background thread reads settings through a `settings_getter`, or through `router._get_script_setting` when it has none. Concurrent `xbmcaddon.Addon().getSetting(...)` calls can crash Kodi, so use that API only on Kodi's own add-on thread.
 - The stream proxy must preserve HTTP Range behavior; seeking depends on it.
 - MP4 rewrite and ffmpeg remux paths must keep ffmpeg optional and degrade gracefully when it is missing.
 - Non-MP4 pass-through is the default unless settings explicitly choose a force-remux path.
@@ -173,7 +174,7 @@ The background service (`service.py`) runs `StreamProxy`. MP4 sources may be rew
 ### Adding settings
 
 1. Add the setting to `repo/plugin.video.nzbdav/resources/settings.xml`.
-2. Read it via `xbmcaddon.Addon().getSetting("setting_id")`.
+2. Read it via `xbmcaddon.Addon().getSetting("setting_id")` on Kodi's add-on thread, or via `router._get_script_setting("setting_id")` on any path a background thread can reach.
 3. Add tests that mock the setting value.
 4. Run `just test` and `just lint`.
 
