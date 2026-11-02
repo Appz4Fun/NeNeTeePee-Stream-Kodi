@@ -88,7 +88,7 @@ Visible only with nzbdav / InfiniDysk selected.
 
 | Setting | ID | Default | Description |
 |---------|----|---------|-------------|
-| NZB submit timeout (seconds) | `submit_timeout` | `300` | Max wait for nzbdav to accept the NZB (it fetches and parses the NZB before replying). Clamped to 5–600. |
+| NZB submit timeout (seconds) | `submit_timeout` | `300` | Max wait for nzbdav to accept the NZB (it parses the NZB before replying). Clamped to 5–600. |
 | Clear download queue when starting a new download | `clear_queue_on_submit` | `0` (Ask) | `0` Ask, `1` Always clear, `2` Never. Excludes this title's own in-flight job, and never clears a completed copy you're about to reuse. |
 
 #### Stream resilience

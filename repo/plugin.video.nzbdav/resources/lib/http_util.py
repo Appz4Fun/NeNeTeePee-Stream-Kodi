@@ -314,7 +314,7 @@ def http_get_bytes(url, timeout=15, headers=None, max_bytes=None):
 
     Like ``http_get`` (same scheme allowlist, status handling, and
     ``max_bytes`` cap) but without the UTF-8-with-replacement decode:
-    used where the exact bytes matter, e.g. NZB payloads re-uploaded to
+    used where the exact bytes matter, such as NZB payloads re-uploaded to
     nzbdav — a lossy decode would corrupt non-UTF-8 documents.
     """
     scheme = urlsplit(url).scheme.lower()

@@ -28,8 +28,8 @@ sequenceDiagram
     participant W as WebDAV
     participant X as Stream proxy
 
-    R->>N: submit_nzb (mode=addurl)
-    Note over R,N: UI pump every 250ms,<br/>probe threads adopt the job<br/>if it appears before addurl replies
+    R->>N: submit_nzb (mode=addfile, or addurl if that fails)
+    Note over R,N: UI pump every 250ms,<br/>probe threads adopt the job<br/>if it appears before the submit replies
     N-->>R: nzo_id (or timeout, then probe and adopt)
     loop poll (interval 1s, timeout 3600s)
         par

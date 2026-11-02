@@ -57,7 +57,7 @@ These options appear only when **Playback backend** is nzbdav / InfiniDysk.
 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
-| NZB submit timeout (seconds)[^source-submit_timeout]<br>`submit_timeout` | 300 | Max seconds to wait for nzbdav to accept the submitted NZB (it fetches and parses the NZB before replying). Clamped to 5-600. |
+| NZB submit timeout (seconds)[^source-submit_timeout]<br>`submit_timeout` | 300 | Max seconds to wait for nzbdav to accept the submitted NZB (it parses the NZB before replying). Clamped to 5-600. |
 | Clear download queue when starting a new download[^source-clear_queue_on_submit]<br>`clear_queue_on_submit` | Ask | Choose whether to clear other in-progress downloads before starting a new one. Never clears this title's own in-flight job or a completed copy you're about to reuse. Choices: 0 = Ask, 1 = Always clear, 2 = Never. |
 
 ### Stream resilience (nzbdav / InfiniDysk and NZBGet)
