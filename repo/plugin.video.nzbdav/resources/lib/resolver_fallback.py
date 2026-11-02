@@ -116,7 +116,15 @@ def _submit_one_fallback_candidate(
 def _recover_fallback_submit_error(
     submit_error, nzb_url, job_name, monitor, settings_getter, dead
 ):
-    """Adopt a timed-out fallback submit, or log+mark-dead and return None."""
+    """Adopt an existing nzbdav job for a failed fallback submit, or give up.
+
+    Timeouts probe queue/history repeatedly (the in-flight submit may
+    still land). REFUSED submits (indexer grab quota 403 on the NZB
+    fetch, nzbdav's addurl SSRF reject, any 4xx) probe ONCE: the job
+    name is deterministic per candidate, so a PRIOR session's ingest of
+    this same standby sits in nzbdav's queue/history under the same
+    name and serves without any fresh grab.
+    """
     status = submit_error.get("status")
     nzo_id = None
     if status == "timeout":
@@ -128,6 +136,16 @@ def _recover_fallback_submit_error(
         nzo_id = _resolver._adopt_queued_or_completed_job(
             job_name, monitor, settings_getter=settings_getter
         )
+    else:
+        nzo_id = _resolver._find_adoptable_job_during_submit(
+            job_name, settings_getter=settings_getter
+        )
+        if nzo_id:
+            _resolver.xbmc.log(
+                "NZB-DAV: Fallback submit refused for '{}' (status={}); "
+                "adopted prior ingest nzo_id={}".format(job_name, status, nzo_id),
+                _resolver.xbmc.LOGINFO,
+            )
     if not nzo_id:
         if dead is not None and _resolver.is_provably_dead_submit_error(submit_error):
             dead.add(nzb_url=nzb_url)
@@ -235,14 +253,18 @@ def _resolve_fallback_candidate_job(
 
 
 def _fallback_streams_enabled(settings_getter=None):
-    """Return whether fallback streams are enabled in Kodi settings."""
+    """Return whether fallback streams are enabled in Kodi settings.
+
+    With no getter, read settings.xml from disk instead of the
+    ``xbmcaddon`` binding: this runs on the fallback submit worker
+    thread, and a concurrent ``CAddon::LoadUserSettings`` from two
+    threads SIGSEGVs inside TinyXML (gdb-confirmed on the extreme
+    harness at prewarm time).
+    """
     try:
         if settings_getter is None:
-            raw = _resolver.xbmcaddon.Addon("plugin.video.nzbdav").getSetting(
-                "fallback_streams_enabled"
-            )
-        else:
-            raw = settings_getter("fallback_streams_enabled", "true")
+            from resources.lib.router import _get_script_setting as settings_getter
+        raw = settings_getter("fallback_streams_enabled", "true")
     except (AttributeError, RuntimeError, TypeError):
         return True
     return str(raw or "").strip().lower() != "false"
@@ -377,15 +399,14 @@ def _get_fallback_submit_delay_seconds(settings_getter=None):
     """
     try:
         if settings_getter is None:
-            raw = _resolver.xbmcaddon.Addon("plugin.video.nzbdav").getSetting(
-                "fallback_submit_delay"
-            )
-        else:
-            raw = settings_getter("fallback_submit_delay", "")
+            # Disk read, not the xbmcaddon binding: callable from worker
+            # threads (see _fallback_streams_enabled).
+            from resources.lib.router import _get_script_setting as settings_getter
+        raw = settings_getter("fallback_submit_delay", "")
         value = int(raw) if raw else _resolver._FALLBACK_PREWARM_DELAY_SECONDS
         return value if value >= 0 else _resolver._FALLBACK_PREWARM_DELAY_SECONDS
     except Exception:  # pylint: disable=broad-except
-        # xbmcaddon import failure, unexpected setting shapes, int() on a
+        # settings read failure, unexpected setting shapes, int() on a
         # MagicMock in tests—all funnel to the documented default.
         return _resolver._FALLBACK_PREWARM_DELAY_SECONDS
 

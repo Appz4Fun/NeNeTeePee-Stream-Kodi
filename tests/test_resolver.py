@@ -5121,9 +5121,10 @@ def test_fallback_submit_worker_does_not_notify_no_candidates_when_disabled(
 ):
     from resources.lib.resolver import _start_fallback_submit_worker
 
-    mock_xbmcaddon.Addon.return_value.getSetting.return_value = "false"
+    del mock_xbmcaddon  # no-getter reads now come from settings.xml on disk
 
-    state = _start_fallback_submit_worker(candidate_loader=lambda: [])
+    with patch("resources.lib.router._get_script_setting", return_value="false"):
+        state = _start_fallback_submit_worker(candidate_loader=lambda: [])
 
     assert state["finished"].wait(timeout=2)
     mock_submit_fallbacks.assert_not_called()
@@ -10096,3 +10097,55 @@ def test_advertised_size_bytes_non_finite_numeric_fails_open():
     assert _advertised_size_bytes(81_610_612_736) == 81_610_612_736
     # the floor helper must not propagate the error either.
     assert _stub_min_size_floor(float("inf")) == 0
+
+
+# --- refused fallback submits adopt a prior session's ingest ---
+
+
+@patch("resources.lib.resolver._find_adoptable_job_during_submit")
+def test_refused_fallback_submit_adopts_prior_ingest(mock_find):
+    """A refused fallback submit (indexer grab-quota 403 on the NZB fetch,
+    then nzbdav's addurl SSRF reject -> HTTP 400) must probe queue/history
+    once: the deterministic job name means a prior session's ingest of the
+    same standby serves without any fresh grab (hit live: standby-less
+    sessions rode 180-204s player-death recoveries when grabs 403'd)."""
+    from resources.lib.resolver import _recover_fallback_submit_error
+
+    mock_find.return_value = "nzo-prior"
+    submit_error = {"status": 400, "message": "non-public IP address"}
+
+    nzo_id = _recover_fallback_submit_error(
+        submit_error,
+        "http://hydra/getnzb/1",
+        "Show.S01E23 [fallback-1-abcd1234]",
+        MagicMock(),
+        None,
+        None,
+    )
+
+    assert nzo_id == "nzo-prior"
+    mock_find.assert_called_once()
+    assert mock_find.call_args[0][0] == "Show.S01E23 [fallback-1-abcd1234]"
+
+
+@patch("resources.lib.resolver.is_provably_dead_submit_error", return_value=True)
+@patch("resources.lib.resolver._find_adoptable_job_during_submit", return_value=None)
+def test_refused_fallback_submit_without_prior_ingest_still_marks_dead(
+    mock_find, mock_dead_check
+):
+    from resources.lib.resolver import _recover_fallback_submit_error
+
+    dead = MagicMock()
+    submit_error = {"status": 400, "message": "nope"}
+
+    nzo_id = _recover_fallback_submit_error(
+        submit_error,
+        "http://hydra/getnzb/2",
+        "Show.S01E24 [fallback-2-ffff0000]",
+        MagicMock(),
+        None,
+        dead,
+    )
+
+    assert nzo_id is None
+    dead.add.assert_called_once_with(nzb_url="http://hydra/getnzb/2")

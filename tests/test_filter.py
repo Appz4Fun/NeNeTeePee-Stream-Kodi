@@ -130,6 +130,69 @@ def test_parse_title_metadata_720p_web():
     assert meta["resolution"] == "720p"
 
 
+def test_parse_title_metadata_dotted_h264_maps_to_avc_label():
+    """PTT emits lowercase dotted codecs ("h.264"); the canonical label
+    must still come out, or an enabled AVC filter drops every release
+    titled "H.264" (hit live: byte-identical NF WEB-DL reposts vanished
+    from the fallback pool while an "AVC"-titled sibling passed)."""
+    meta = parse_title_metadata(
+        "The.Good.the.Bad.and.the.Ugly.2025.S01E14.1080p.NF.WEB-DL.H.264.AAC-UBWEB"
+    )
+    assert meta["codec"] == "x264/AVC"
+
+
+def test_parse_title_metadata_dotted_h265_maps_to_hevc_label():
+    meta = parse_title_metadata("The.Odyssey.2026.2160p.IQ.WEB-DL.H.265.AAC-ADWeb")
+    assert meta["codec"] == "x265/HEVC"
+
+
+def test_partition_series_rows_demotes_episode_title_collision():
+    """A series name colliding with another show's EPISODE title must not
+    win selection: searching the 2025 series "The Good the Bad and the
+    Ugly" returned The.Rookie.S01E03.The.Good.the.Bad.and.the.Ugly...
+    and auto-select played The Rookie (run 2026-07-18T20-08-47Z)."""
+    from resources.lib.filter import partition_series_rows, prefer_series_rows
+
+    rookie = _make_result(
+        "The.Rookie.S01E03.The.Good.the.Bad.and.the.Ugly.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb"
+    )
+    true_show = _make_result(
+        "The.Good.the.Bad.and.the.Ugly.2025.S01E03.1080p.NF.WEB-DL.H.264.AAC-UBWEB"
+    )
+
+    matching, rest = partition_series_rows(
+        [rookie, true_show], "The Good the Bad and the Ugly"
+    )
+    assert matching == [true_show]
+    assert rest == [rookie]
+
+    ordered = prefer_series_rows([rookie, true_show], "The Good the Bad and the Ugly")
+    assert ordered == [true_show, rookie]
+
+
+def test_prefer_series_rows_keeps_order_when_nothing_matches():
+    from resources.lib.filter import prefer_series_rows
+
+    rows = [
+        _make_result("The.Rookie.S01E03.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb"),
+        _make_result("Alien.1979.1080p.BluRay.DDP.5.1.x264-hallowed"),
+    ]
+    assert prefer_series_rows(rows, "The Good the Bad and the Ugly") == rows
+
+
+def test_partition_series_rows_unparsed_title_needs_exact_match():
+    """When PTT cannot isolate a show title the identity falls back to
+    the WHOLE normalized release name, which contains the searched
+    phrase by construction — containment must not count for those."""
+    from resources.lib.filter import partition_series_rows
+
+    row = _make_result("The.Good.the.Bad.and.the.Ugly.Extra.Tokens.XYZ")
+    with patch("resources.lib.ptt.parse_title", return_value={}):
+        matching, rest = partition_series_rows([row], "The Good the Bad and the Ugly")
+    assert not matching
+    assert rest == [row]
+
+
 def test_parse_title_metadata_4k_hdr():
     meta = parse_title_metadata(
         "Dune.Part.Two.2024.2160p.WEB-DL.DDP5.1.Atmos.DV.HDR.H.265-FLUX"
@@ -994,8 +1057,8 @@ def test_filter_results_logs_timing(
 # --- _get_filter_settings tests (direct coverage of the Kodi-settings reader) ---
 
 
-@patch("xbmcaddon.Addon")
-def test_get_filter_settings_collects_enabled_resolutions_and_codecs(mock_addon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_filter_settings_collects_enabled_resolutions_and_codecs(mock_get):
     """When specific resolution / codec toggles are `true`, the
     corresponding labels show up in the returned lists; `false`
     toggles don't leak through."""
@@ -1010,7 +1073,7 @@ def test_get_filter_settings_collects_enabled_resolutions_and_codecs(mock_addon)
         "filter_atmos": "true",
         "filter_english": "true",
     }
-    mock_addon.return_value.getSetting.side_effect = lambda k: enabled.get(k, "false")
+    mock_get.side_effect = lambda k, default="": enabled.get(k, "false")
 
     settings = _get_filter_settings()
 
@@ -1030,8 +1093,8 @@ def test_get_filter_settings_collects_enabled_resolutions_and_codecs(mock_addon)
     assert "es" not in settings["languages"]
 
 
-@patch("xbmcaddon.Addon")
-def test_get_filter_settings_csv_fields_split_and_stripped(mock_addon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_filter_settings_csv_fields_split_and_stripped(mock_get):
     """Comma-separated settings (exclude_keywords, release_group, etc.)
     must be split on commas, whitespace trimmed, and empty entries
     dropped."""
@@ -1043,7 +1106,7 @@ def test_get_filter_settings_csv_fields_split_and_stripped(mock_addon):
         "filter_release_group": "GRP1,GRP2",
         "filter_exclude_release_group": "  NUKED  , ",
     }
-    mock_addon.return_value.getSetting.side_effect = lambda k: raw.get(k, "")
+    mock_get.side_effect = lambda k, default="": raw.get(k, default)
 
     settings = _get_filter_settings()
 
@@ -1053,8 +1116,8 @@ def test_get_filter_settings_csv_fields_split_and_stripped(mock_addon):
     assert settings["exclude_release_group"] == ["nuked"]
 
 
-@patch("xbmcaddon.Addon")
-def test_get_filter_settings_int_fields_fall_back_on_non_numeric(mock_addon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_filter_settings_int_fields_fall_back_on_non_numeric(mock_get):
     """Non-numeric strings for int-valued settings must fall back to the
     documented defaults rather than raising ValueError."""
     from resources.lib.filter import _get_filter_settings
@@ -1064,7 +1127,7 @@ def test_get_filter_settings_int_fields_fall_back_on_non_numeric(mock_addon):
         "filter_max_size": "",
         "max_results": "",
     }
-    mock_addon.return_value.getSetting.side_effect = lambda k: raw.get(k, "")
+    mock_get.side_effect = lambda k, default="": raw.get(k, default)
 
     settings = _get_filter_settings()
 
@@ -1074,12 +1137,12 @@ def test_get_filter_settings_int_fields_fall_back_on_non_numeric(mock_addon):
     assert settings["max_results"] == 25
 
 
-@patch("xbmcaddon.Addon")
-def test_get_filter_settings_returns_empty_lists_when_nothing_enabled(mock_addon):
+@patch("resources.lib.router._get_script_setting")
+def test_get_filter_settings_returns_empty_lists_when_nothing_enabled(mock_get):
     """Toggles explicitly set to false produce empty known-format selections."""
     from resources.lib.filter import _get_filter_settings
 
-    mock_addon.return_value.getSetting.side_effect = lambda k: (
+    mock_get.side_effect = lambda k, d="": (
         "false"
         if k.startswith("filter_")
         and k

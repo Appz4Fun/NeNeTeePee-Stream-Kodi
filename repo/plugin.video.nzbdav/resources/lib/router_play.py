@@ -321,7 +321,7 @@ def _lookup_search_episode_args(params, search_type, title, season, episode, imd
     return title, season, episode
 
 
-def _prepare_picker_rows(results, title, notify, pack_result):
+def _prepare_picker_rows(results, title, notify, pack_result, requested_series=None):
     """Filter provider rows; return the picker's two views plus a total count.
 
     Returns ``(picker_rows, all_rows, total_count)`` -- ``picker_rows`` is
@@ -331,14 +331,22 @@ def _prepare_picker_rows(results, title, notify, pack_result):
     truly nothing to show (nothing parsed AND no local pack row):
     zero-survivor filtering no longer prompts -- the picker opens directly
     in show-all mode instead.
+
+    ``requested_series`` (episode searches only) demotes rows whose
+    PTT-parsed show title is a different series. An episode search matches
+    the phrase anywhere in the release name, so another show's
+    identically titled episode otherwise outranks the requested series and
+    auto-select plays the wrong show.
     """
     import resources.lib.router as _router
-    from resources.lib.filter import filter_results
+    from resources.lib.filter import filter_results, prefer_series_rows
 
     filtered, all_parsed = filter_results(results)
     if not filtered and not all_parsed and pack_result is None:
         notify(_router._addon_name(), _router._fmt(30087, title), 3000)
         return None
+    if requested_series:
+        filtered = prefer_series_rows(filtered, requested_series)
     provider_row_count = len(filtered)
     picker_rows = _prepend_pack(filtered, pack_result)
     all_rows = _prepend_pack(all_parsed, pack_result)
@@ -347,13 +355,21 @@ def _prepare_picker_rows(results, title, notify, pack_result):
 
 
 def _handle_play_filter_and_select(
-    handle, results, title, year, notify, identity=None, pack_result=None
+    handle,
+    results,
+    title,
+    year,
+    notify,
+    identity=None,
+    pack_result=None,
+    requested_series=None,
 ):
     """Filter, optionally auto-select, tag, and run the picker for ``_handle_play``.
 
     Resolves the Kodi handle itself (False on cancel / no selection, or via the
     auto-select / picker-selection resolvers). ``identity`` carries the release
-    id fields the NZBGet DupeKey is built from (#372).
+    id fields the NZBGet DupeKey is built from (#372). ``requested_series``
+    demotes wrong-show rows on episode searches (see _prepare_picker_rows).
     """
     import resources.lib.router as _router
 
@@ -364,7 +380,9 @@ def _handle_play_filter_and_select(
         xbmc.LOGDEBUG,
     )
 
-    prepared = _prepare_picker_rows(results, title, notify, pack_result)
+    prepared = _prepare_picker_rows(
+        results, title, notify, pack_result, requested_series=requested_series
+    )
     if prepared is None:
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
@@ -864,12 +882,20 @@ def _handle_play_resolve_selection(
 
 
 def _handle_search_filter_and_select(
-    handle, params, results, title, year, notify, pack_result=None
+    handle,
+    params,
+    results,
+    title,
+    year,
+    notify,
+    pack_result=None,
+    requested_series=None,
 ):
     """Filter, optionally auto-select, tag, and run the picker for ``_handle_search``.
 
     Always ends the Kodi directory (succeeded=False) so the route never hangs.
-    Extracted verbatim from the tail of ``_handle_search``.
+    Extracted verbatim from the tail of ``_handle_search``. ``requested_series``
+    demotes wrong-show rows on episode searches (see _prepare_picker_rows).
     """
     import resources.lib.router as _router
 
@@ -879,7 +905,9 @@ def _handle_search_filter_and_select(
         ),
         xbmc.LOGDEBUG,
     )
-    prepared = _prepare_picker_rows(results, title, notify, pack_result)
+    prepared = _prepare_picker_rows(
+        results, title, notify, pack_result, requested_series=requested_series
+    )
     if prepared is None:
         xbmcplugin.endOfDirectory(handle, succeeded=False)
         return
