@@ -188,3 +188,26 @@ def test_release_check_runs_once_per_distinct_name_not_per_row():
     assert spy.call_count == 10
     assert len(ordered) == 100
     assert _nzb_copy_count(rows[0], rows) == 10
+
+
+def test_dotted_and_parenthesized_listings_of_one_release_pool_their_copies():
+    # Real Six Feet Under S02E01 listings: the same HONE release under its
+    # dotted scene name and its parenthesized "(... - HONE) [REMASTERED]"
+    # name. Once both parse the HONE group, all four NZBs count together.
+    dotted = (
+        "Six.Feet.Under.2001.S02E01.1080p.AMZN.WEB-DL.H265.SDR.DDP.5.1."
+        "English-HONE.REMASTERED"
+    )
+    parenthesized = (
+        "Six Feet Under (2001) S02E01 (1080p AMZN WEB-DL H265 SDR DDP 5.1 "
+        "English - HONE) [REMASTERED]"
+    )
+    rows = [
+        _row(dotted, "h1", size="4139961138"),
+        _row(parenthesized, "h2", size="4139958706"),
+        _row(dotted, "h3", size="4139958706"),
+        _row(parenthesized, "h4", size="4139814085"),
+    ]
+
+    assert {row["_meta"]["group"] for row in rows} == {"HONE"}
+    assert _nzb_copy_count(rows[0], rows) == 4
