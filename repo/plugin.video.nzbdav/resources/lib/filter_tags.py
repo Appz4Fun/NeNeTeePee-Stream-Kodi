@@ -4,6 +4,7 @@
 import re
 
 from resources.lib.filter_languages import title_languages
+from resources.lib.release_subject import release_name_from_subject
 
 
 def _pattern(expression):
@@ -70,9 +71,6 @@ _CODEC_PATTERNS = tuple(
 )
 
 
-# A Usenet subject such as ``[1/3] - "Name-GROUP.mkv" yEnc 4400443301`` wraps
-# the real release name in quotes; the group lives inside them.
-_QUOTED_NAME = re.compile(r'"([^"]+)"')
 _MEDIA_EXTENSION = re.compile(
     r"\.(?:mkv|mp4|m4v|avi|ts|m2ts|wmv|mov|webm|iso|nzb|nfo|par2|rar|7z|zip"
     r"|r\d{2}|\d{3})$",
@@ -131,9 +129,8 @@ def _group_candidate(value):
 
 
 def _release_name(title):
-    """The release name inside ``title``: a quoted yEnc filename, no extension."""
-    quoted = _QUOTED_NAME.search(title)
-    name = quoted.group(1) if quoted else title
+    """The release name inside ``title`` (see ``release_subject``), no extension."""
+    name = release_name_from_subject(title)
     return _MEDIA_EXTENSION.sub("", name.strip().rstrip("/"))
 
 
@@ -158,12 +155,7 @@ def detect_release_group(title, parsed_group=""):
     group = _group_candidate(match.group(1)) if match else ""
     if group:
         return group
-    quoted = bool(_QUOTED_NAME.search(title))
-    if (
-        not quoted
-        and _valid_group(parsed_group)
-        and not _TRAILING_TAG.search("-" + str(parsed_group))
-    ):
+    if _valid_group(parsed_group) and not _TRAILING_TAG.search("-" + str(parsed_group)):
         return str(parsed_group)
     leading = _LEADING_GROUP.match(name)
     if leading and _valid_group(leading.group(1)):
