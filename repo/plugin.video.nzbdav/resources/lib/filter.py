@@ -745,8 +745,8 @@ def _sort_results(results, settings):
     """Sort results by configured sort order, with preferred groups boosted.
 
     Sort orders:
-        0 = Relevance (ties broken by more NZB copies of the release,
-            then original order)
+        0 = Relevance (among rows tied before size, more NZB copies of the
+            release first, then larger size, then original order)
         1 = Size (largest first)
         2 = Size (smallest first)
         3 = Age (newest first) -- pubdate descending
@@ -767,53 +767,85 @@ def _normalized_release_name(title):
     return " ".join(str(title or "").split()).casefold()
 
 
+def _parsed_group(row):
+    """The row's parsed release group, casefolded, or ``""`` when unknown."""
+    meta = row.get("_meta")
+    group = meta.get("group") if isinstance(meta, dict) else None
+    return str(group or "").casefold()
+
+
 def _is_release_copy(target, row):
     """Whether ``row`` is another NZB of ``target``'s release.
 
-    Uses the same grouping as the NZBGet duplicate fleet: an exact
+    Uses the NZBGet duplicate fleet's release grouping: an exact
     (case/whitespace-normalized) same-name row, or a row that
-    ``nzbget_fleet_dedup.same_release`` accepts under another name. A season
-    pack only groups with season packs and an episode only with episodes.
+    ``nzbget_fleet_dedup.same_release`` accepts under another name. The parsed
+    group must be equal too, so another group's mirror of the same file counts
+    for its own group, not this one. A season pack only groups with season
+    packs and an episode only with episodes.
     """
     if bool(target.get("_season_pack")) != bool(row.get("_season_pack")):
         return False
     target_name = _normalized_release_name(target.get("title"))
     if target_name and target_name == _normalized_release_name(row.get("title")):
         return True
+    group = _parsed_group(target)
+    if not group or group != _parsed_group(row):
+        return False
     from resources.lib.nzbget_fleet_dedup import same_release
 
     return same_release(target, row)
 
 
-def _nzb_copy_count(target, pool):
-    """How many NZBs in ``pool`` carry ``target``'s release, itself included.
+def _nzb_copy_counts(rows):
+    """Map ``id(row)`` to how many NZBs of its release ``rows`` hold.
 
-    Each distinct NZB link counts once, so a row listed twice under one link
-    adds nothing. A row without a link still counts itself.
+    Rows with the same normalized name are bucketed first, with no release
+    check. Each bucket then joins the first cluster whose first row it is a
+    copy of, so ``same_release`` runs once per distinct name and cluster, not
+    once per pair of rows. With the parsed group required to match, the
+    check depends only on the titles, so one comparison stands for the whole
+    bucket. A cluster's count is its distinct NZB links: a link listed twice
+    counts once and a row without a link adds nothing (every row counts at
+    least 1).
     """
-    target_link = target.get("link") or None
-    seen = {target_link} if target_link else set()
-    copies = 1
-    for row in pool:
-        if row is target or not isinstance(row, dict):
-            continue
-        link = row.get("link")
-        if not link or link in seen:
-            continue
-        if _is_release_copy(target, row):
-            seen.add(link)
-            copies += 1
-    return copies
+    buckets = {}
+    for row in rows:
+        name = _normalized_release_name(row.get("title"))
+        key = (bool(row.get("_season_pack")), name)
+        buckets.setdefault(key, []).append(row)
+    clusters = []
+    for bucket in buckets.values():
+        for cluster in clusters:
+            if _is_release_copy(cluster[0], bucket[0]):
+                cluster.extend(bucket)
+                break
+        else:
+            clusters.append(list(bucket))
+    counts = {}
+    for cluster in clusters:
+        links = {row.get("link") for row in cluster if row.get("link")}
+        copies = max(1, len(links))
+        for row in cluster:
+            counts[id(row)] = copies
+    return counts
+
+
+def _nzb_copy_count(target, rows):
+    """How many NZBs in ``rows`` carry ``target``'s release, itself included."""
+    pool = [target] + [row for row in rows if row is not target]
+    return _nzb_copy_counts(pool)[id(target)]
 
 
 def _break_ties_by_copies(ordered, relevance_key):
-    """Final relevance tiebreaker: more NZB copies of the release first.
+    """Rank more NZB copies of a release above size among top-tier ties.
 
-    ``ordered`` is already sorted by ``relevance_key``. Only runs of rows that
-    tie on every relevance criterion are reordered, and a stable sort keeps
-    their original order when the copy counts tie too. Copies are counted
-    across the whole list, and only for tied rows, so the release-matching
-    cost is paid only where it can change the order.
+    ``ordered`` is already sorted by ``relevance_key``, whose last element is
+    size. Each run of rows that ties on everything before size (resolution,
+    HDR, REMUX, group tier, audio) is re-sorted by copy count, most first,
+    then by size as before. A stable sort keeps the original order when both
+    tie. Copies are counted within the run: same_release requires matching
+    resolution, HDR, and audio, which puts a release's copies in one run.
     """
     if len(ordered) < 2:
         return ordered
@@ -822,13 +854,21 @@ def _break_ties_by_copies(ordered, relevance_key):
     start = 0
     total = len(ordered)
     while start < total:
+        prefix = keys[start][:-1]
         end = start + 1
-        while end < total and keys[end] == keys[start]:
+        while end < total and keys[end][:-1] == prefix:
             end += 1
-        run = ordered[start:end]
-        if len(run) > 1:
-            copies = {id(row): _nzb_copy_count(row, ordered) for row in run}
-            run.sort(key=lambda row: -copies[id(row)])
-        result.extend(run)
+        result.extend(_order_by_copies(ordered[start:end], keys[start:end]))
         start = end
     return result
+
+
+def _order_by_copies(run, run_keys):
+    """Stable-sort one tied run by copy count (most first), then size key."""
+    if len(run) < 2:
+        return run
+    copies = _nzb_copy_counts(run)
+    ranked = sorted(
+        zip(run, run_keys), key=lambda pair: (-copies[id(pair[0])], pair[1][-1])
+    )
+    return [row for row, _key in ranked]
