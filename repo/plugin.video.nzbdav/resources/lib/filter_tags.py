@@ -128,13 +128,20 @@ def _group_candidate(value):
     return "-".join(kept)
 
 
+# Source tags written with a hyphen ("Blu-Ray", "WEB-DL", "DVD-Rip").
+_HYPHENATED_SOURCE = _pattern(
+    r"blu-ray|web-(?:dl|rip)|hd-(?:dvd|tv|rip)|dvd-(?:rip|r)|bd-(?:rip|remux)"
+)
+
+
 def _without_hyphenated_tags(name):
-    """``name`` with hyphenated audio/codec tags ("DTS-HD-MA", "DTS-X") blanked.
+    """``name`` with hyphenated source/audio/codec tags blanked.
 
     Splitting the trailing "-" run would otherwise read "MA-FGT" or "MA" as
-    the group of "x264.DTS-HD-MA-FGT".
+    the group of "x264.DTS-HD-MA-FGT", and "Ray-GRP" as that of
+    "x264.Blu-Ray-GRP".
     """
-    for pattern in _TAG_PATTERNS:
+    for pattern in (_HYPHENATED_SOURCE,) + _TAG_PATTERNS:
         name = pattern.sub(
             lambda match: " " if "-" in match.group(0) else match.group(0), name
         )
