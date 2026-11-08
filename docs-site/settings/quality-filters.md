@@ -50,8 +50,8 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | HDR10+[^source-filter_hdr10plus]<br>`filter_hdr10plus` | On | Include HDR10+, HDR+, HDRPlus, HDR10Plus, and HDR10P title tags. Missing or unlisted metadata follows the Other / Unknown option in this category. |
 | Dolby Vision[^source-filter_dolby_vision]<br>`filter_dolby_vision` | On | Include releases explicitly tagged DV, DoVi, or Dolby Vision. Missing or unlisted metadata follows the Other / Unknown option in this category. |
 | HLG[^source-filter_hlg]<br>`filter_hlg` | On | Include HLG releases. Missing or unlisted metadata follows the Other / Unknown option in this category. |
-| SDR[^source-filter_sdr]<br>`filter_sdr` | On | Include SDR releases. Missing or unlisted metadata follows the Other / Unknown option in this category. |
-| Other / Unknown HDR[^source-filter_unknown_hdr]<br>`filter_unknown_hdr` | On | Allow releases with no recognized HDR / dynamic-range tag, or an unlisted value. Enabled by default. This does not bypass selections for recognized HDR / dynamic-range tag values. |
+| SDR[^source-filter_sdr]<br>`filter_sdr` | On | Include SDR releases: every release without a Dolby Vision, HDR10, HDR10+, or HLG tag. |
+| Other / Unknown HDR[^source-filter_unknown_hdr]<br>`filter_unknown_hdr` | On | No longer used: a release with no HDR tag is SDR, so the SDR option decides it. |
 
 ### Audio
 

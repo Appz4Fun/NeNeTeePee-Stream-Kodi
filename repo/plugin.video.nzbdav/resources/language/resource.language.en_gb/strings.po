@@ -1131,8 +1131,8 @@ msgid "Install the NeNeTeePee-Stream-Kodi player file into another add-on that h
 msgstr "Install the NeNeTeePee-Stream-Kodi player file into another add-on that has a players folder."
 
 msgctxt "#30292"
-msgid "Include SDR releases. Missing or unlisted metadata follows the Other / Unknown option in this category."
-msgstr "Include SDR releases. Missing or unlisted metadata follows the Other / Unknown option in this category."
+msgid "Include SDR releases: every release without a Dolby Vision, HDR10, HDR10+, or HLG tag."
+msgstr "Include SDR releases: every release without a Dolby Vision, HDR10, HDR10+, or HLG tag."
 
 msgctxt "#30293"
 msgid "Include 2160p / 4K releases. Missing or unlisted metadata follows the Other / Unknown option in this category."
@@ -1291,8 +1291,8 @@ msgid "Remove releases unless their title contains every one of these comma-sepa
 msgstr "Remove releases unless their title contains every one of these comma-separated keywords."
 
 msgctxt "#30332"
-msgid "Relevance ranks highest resolution first, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR/unknown. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, then larger size. Size and age modes sort by that property only."
-msgstr "Relevance ranks highest resolution first, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR/unknown. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, then larger size. Size and age modes sort by that property only."
+msgid "Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, then larger size. Size and age modes sort by that property only."
+msgstr "Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, then larger size. Size and age modes sort by that property only."
 
 msgctxt "#30333"
 msgid "Caps how many results are requested per provider and how many appear in the picker after filtering."
@@ -2075,8 +2075,8 @@ msgid "Allow releases with no recognized resolution, or an unlisted value. Enabl
 msgstr "Allow releases with no recognized resolution, or an unlisted value. Enabled by default. This does not bypass selections for recognized resolution values."
 
 msgctxt "#30575"
-msgid "Allow releases with no recognized HDR / dynamic-range tag, or an unlisted value. Enabled by default. This does not bypass selections for recognized HDR / dynamic-range tag values."
-msgstr "Allow releases with no recognized HDR / dynamic-range tag, or an unlisted value. Enabled by default. This does not bypass selections for recognized HDR / dynamic-range tag values."
+msgid "No longer used: a release with no HDR tag is SDR, so the SDR option decides it."
+msgstr "No longer used: a release with no HDR tag is SDR, so the SDR option decides it."
 
 msgctxt "#30576"
 msgid "Allow releases with no recognized audio format, or an unlisted value. Enabled by default. This does not bypass selections for recognized audio format values."

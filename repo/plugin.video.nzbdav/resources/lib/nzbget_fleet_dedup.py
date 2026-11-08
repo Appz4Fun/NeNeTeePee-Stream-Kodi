@@ -17,7 +17,8 @@ backup, so this module collapses them before submission:
   postings share none. A byte-identical repost with 0% shared IDs is a
   DIFFERENT posting and the best kind of backup, so it is kept.
 
-Release identity never uses size: postings of one release can differ by GBs.
+Release identity (``release_match.same_release``) uses size only when neither
+row names a group: postings of one release can differ by GBs.
 """
 
 import collections
@@ -34,6 +35,11 @@ import xbmc
 
 from resources.lib.http_util import pubdate_to_epoch, redact_text
 
+# The one "same release" rule, shared with the picker's copy grouping.
+from resources.lib.release_match import (  # noqa: F401  pylint: disable=unused-import
+    same_release,
+)
+
 SAME_LISTING_WINDOW_SECONDS = 120
 PREFETCH_WINDOW = 4
 
@@ -42,89 +48,6 @@ PREFETCH_WINDOW = 4
 # set or sorted copy ever materialized, so even a large remux fleet (and four
 # fingerprints being built at once) stays small on a CoreELEC box.
 _SAME_POSTING_SHARE = 0.01
-
-
-# Release variants the fallback-stream gates leave open (the stream proxy's
-# byte checks cover them there; an NZBGet failover plays whatever it gets).
-_VARIANT_FLAGS = (
-    "3d",
-    "dubbed",
-    "subbed",
-    "hardcoded",
-    "extended",
-    "unrated",
-    "uncensored",
-    "remastered",
-)
-
-
-def _variant_signature(title):
-    """PTT variant flags plus sorted languages for a release title."""
-    from resources.lib.ptt import parse_title
-    from resources.lib.release_subject import release_name_from_subject
-
-    parsed = parse_title(release_name_from_subject(title))
-    flags = tuple(bool(parsed.get(key)) for key in _VARIANT_FLAGS)
-    languages = tuple(
-        sorted(str(lang).lower() for lang in parsed.get("languages") or [])
-    )
-    return flags, languages
-
-
-def _movie_years_match(pick, row):
-    """For a movie pick, both parsed years must be equal -- absent included.
-
-    ``_same_content`` lets a missing year match any year because the stream
-    proxy byte-verifies a switch; an NZBGet failover has no such check, so a
-    yearless ``Dune.1080p`` must never back up ``Dune.1984``. Episodes (any
-    season/episode evidence on the pick) keep the content gate's rules.
-    """
-    from resources.lib import fallback_streams as _fs
-
-    _title, pick_year, seasons, episodes, _part = _fs._release_identity(pick)
-    if seasons or episodes:
-        return True
-    return pick_year == _fs._release_identity(row)[1]
-
-
-def same_variant(pick, row):
-    """The NZBGet-only gates: variant tags, languages, and the movie year.
-
-    ``row`` must carry the pick's 3D, dub/sub, hardsub, and cut flags and its
-    languages, and a movie row the pick's exact year. The fallback loader's
-    same-content extras skip these upstream (the stream proxy byte-verifies a
-    switch there), but an NZBGet failover plays whatever it promotes.
-    Fail-closed on a parse error.
-    """
-    try:
-        return _variant_signature(pick.get("title")) == _variant_signature(
-            row.get("title")
-        ) and _movie_years_match(pick, row)
-    except Exception:  # pylint: disable=broad-except
-        return False
-
-
-def same_release(pick, row):
-    """Whether ``row`` is the same release as ``pick`` (fail-closed).
-
-    Reuses the hardened fallback-stream gates: ``_same_content`` (title, year or
-    SxxEyy, part, edition, PROPER/REPACK) plus the same-group profile match
-    (group and resolution parsed and equal, no conflicting profile, HDR, or
-    audio fields). Those gates are deliberately loose for the stream proxy,
-    which byte-verifies a fallback before switching; an NZBGet failover has no
-    such check, so the 3D, dubbed/MULTi, subbed, hardcoded-subs, cut flags and
-    the language set must match exactly too. Any parse error rejects.
-    """
-    from resources.lib import fallback_streams as _fs
-
-    try:
-        return (
-            bool(_fs._same_content(pick, row))
-            and bool(_fs._metadata_profiles_match(pick, row, require_same_group=True))
-            and same_variant(pick, row)
-        )
-    except Exception:  # pylint: disable=broad-except
-        return False
 
 
 def _size_bytes(row):

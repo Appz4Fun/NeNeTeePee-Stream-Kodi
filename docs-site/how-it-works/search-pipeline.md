@@ -90,8 +90,8 @@ result and reused by filtering, ranking, and fallback matching.
 ## Filtering and ranking
 
 Filtering applies your format, keyword, size, and excluded-group rules. Each
-format category has a default-enabled **Other / Unknown** option. Missing HDR
-is unknown, while an explicit SDR tag is SDR. Addon-owned tag normalization
+format category has a default-enabled **Other / Unknown** option. A release
+with no Dolby Vision, HDR10, HDR10+, or HLG tag is SDR, tagged or not. Addon-owned tag normalization
 corrects audio families, HDR aliases, dimensions, and language names without
 editing vendored PTT. See [Quality filtering](../features/quality-filtering.md).
 
@@ -105,7 +105,8 @@ Under **Relevance** sort, NeNeTeePee-Stream-Kodi orders results by this priority
 ```mermaid
 flowchart LR
     A[Resolution: highest first]
-    A --> B[HDR: DV > HDR10+ > HDR10 > HLG > SDR / other > none]
+    A --> G[Has a release group > none]
+    G --> B[HDR: DV > HDR10+ > HDR10 > HLG > SDR]
     B --> R[Hybrid REMUX > REMUX > other]
     R --> C[Preferred tier 1 > 2 > 3]
     C --> D[Audio]

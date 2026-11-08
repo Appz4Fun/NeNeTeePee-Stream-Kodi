@@ -86,6 +86,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **One rule for "same release", in the picker and for NZBGet backups.** Two
+  NZBs are the same release when they are the same content and every parsed
+  field is equal: resolution, HDR, audio, channels, codec, quality, edition,
+  PROPER/REPACK, the 3D, dubbed, hardcoded-subtitle and cut tags, and the
+  release group. Language and soft-subtitle tags no longer split a release,
+  while a different codec or source now does. A result with no release group
+  is never grouped (a literal `NOGRP` or `P2P` counts as a group), and the
+  WEB-DL same-size exception for different groups is gone. Fallback-loader
+  backups use the same rule.
+- **SDR is the absence of HDR.** The HDR types are Dolby Vision, HDR10,
+  HDR10+ (`HDR+`, `HDRP`, `HDRPlus`, `HDR10P`) and HLG; every other release is
+  SDR, so an explicit `SDR` tag no longer ranks above an untagged release.
+  **Other / Unknown HDR** no longer has an effect; the **SDR** option decides.
+- **Releases with no group rank last in their resolution** under Relevance.
+
 - A completed NZBGet match whose share is down no longer gets re-submitted
   (NZBGet would only reject the duplicate). It fails with the dialog above.
 - **Backend-specific playback options moved to Playback backend.** Only

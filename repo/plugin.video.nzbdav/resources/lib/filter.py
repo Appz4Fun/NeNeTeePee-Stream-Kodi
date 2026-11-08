@@ -674,7 +674,8 @@ def _audio_rank(audio_list):
 
 
 def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
-    """Rank resolution and HDR first, then REMUX, groups, audio, and size."""
+    """Rank resolution, then named groups before none, then HDR, REMUX, group
+    tier, audio, and size."""
     tier_patterns = compile_remux_tiers(remux_tiers)
 
     def _relevance_key(r):
@@ -684,6 +685,7 @@ def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
         priority = remux_priority(r)
         return (
             res_rank,
+            0 if meta.get("group") else 1,  # no release group: last in its resolution
             _hdr_rank(meta.get("hdr", [])),
             priority,
             remux_group_rank(r, tier_patterns),

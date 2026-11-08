@@ -11,11 +11,10 @@ def _pattern(expression):
     return re.compile(r"(?<![a-z0-9])(?:" + expression + r")(?![a-z0-9])", re.I)
 
 
-_HDR_PLUS = _pattern(r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr10p")
+_HDR_PLUS = _pattern(r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr(?:10)?p")
 _HDR = _pattern(r"hdr(?:10)?")
 _DV = _pattern(r"dv|dovi|dolby[. _-]?vision")
 _HLG = _pattern(r"hlg")
-_SDR = _pattern(r"sdr")
 _RESOLUTION = _pattern(r"\d{3,4}x\d{3,4}|\d{3,4}[pi]|[48]k|qhd")
 
 _AUDIO_PATTERNS = tuple(
@@ -178,7 +177,12 @@ def detect_release_group(title, parsed_group=""):
 
 
 def detect_hdr(title):
-    """Only explicit title tags identify HDR or SDR; missing tags stay unknown."""
+    """HDR formats tagged in the title, or ``["SDR"]`` when none is.
+
+    The HDR types are Dolby Vision, HDR10, HDR10+ (HDR+, HDRP, HDRPLUS,
+    HDR10P) and HLG. Anything else is SDR, so an explicit "SDR" tag adds
+    nothing and is ignored: it only states the absence of HDR.
+    """
     values = ["Dolby Vision"] if _DV.search(title) else []
     plus = bool(_HDR_PLUS.search(title))
     if plus:
@@ -188,9 +192,7 @@ def detect_hdr(title):
         values.append("HDR10")
     if _HLG.search(title):
         values.append("HLG")
-    if _SDR.search(title):
-        values.append("SDR")
-    return values
+    return values or ["SDR"]
 
 
 def detect_audio(title):
