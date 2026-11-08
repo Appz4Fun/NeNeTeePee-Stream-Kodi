@@ -16,10 +16,13 @@ def release_groups(rows):
 
     Each group keeps its rows in the input (ranked) order, and groups are
     ordered by their first row, so the top-ranked copy of each release leads
-    its group and the groups read in the same order as the plain list. Rows
-    with the same normalized name always share a group; a new name joins the
-    first existing group whose lead row it is a copy of. Season-pack rows
-    (the synthetic local pack included) are never grouped with anything.
+    its group and the groups read in the same order as the plain list. A row
+    joins the first group whose lead row ``_is_release_copy`` accepts, so the
+    release rule alone decides (a row with no parsed group, for example, can
+    stay apart even from a row with the same name). Rows sharing a normalized
+    name are checked against that name's group first, one comparison, before
+    the other groups are tried. Season-pack rows (the synthetic local pack
+    included) are never grouped with anything.
     """
     groups = []
     by_name = {}
@@ -29,17 +32,17 @@ def release_groups(rows):
             continue
         name = _normalized_release_name(row.get("title"))
         group = by_name.get(name) if name else None
+        if group is not None and _is_release_copy(group[0], row):
+            group.append(row)
+            continue
+        group = _matching_group(groups, row)
         if group is None:
-            group = _matching_group(groups, row)
-            if group is None:
-                group = [row]
-                groups.append(group)
-            else:
-                group.append(row)
-            if name:
-                by_name[name] = group
+            group = [row]
+            groups.append(group)
         else:
             group.append(row)
+        if name and name not in by_name:
+            by_name[name] = group
     return groups
 
 

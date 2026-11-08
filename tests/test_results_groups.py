@@ -3,6 +3,8 @@
 
 """List compacted: picker rows grouped by release."""
 
+from unittest.mock import patch
+
 from resources.lib.filter import parse_title_metadata
 from resources.lib.results_groups import release_groups
 
@@ -64,3 +66,28 @@ def test_season_pack_rows_never_group():
 
 def test_empty_input_has_no_groups():
     assert not release_groups([])
+
+
+def test_release_rule_alone_decides_even_for_same_name_rows():
+    # The shared rule can keep same-name rows apart (no parsed group, say);
+    # the picker must not group them on the name alone.
+    rows = [_row(ALPHA, "a1"), _row(ALPHA, "a2")]
+    with patch("resources.lib.results_groups._is_release_copy", return_value=False):
+        groups = release_groups(rows)
+
+    assert _links(groups) == [["a1"], ["a2"]]
+
+
+def test_same_name_row_is_checked_against_its_name_group_lead():
+    calls = []
+
+    def fake_copy(lead, row):
+        calls.append((lead["link"], row["link"]))
+        return True
+
+    rows = [_row(ALPHA, "a1"), _row(BRAVO, "b1"), _row(ALPHA, "a2")]
+    with patch("resources.lib.results_groups._is_release_copy", side_effect=fake_copy):
+        groups = release_groups(rows)
+
+    assert _links(groups) == [["a1", "b1", "a2"]]
+    assert calls == [("a1", "b1"), ("a1", "a2")]
