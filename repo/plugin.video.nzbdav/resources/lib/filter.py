@@ -767,32 +767,18 @@ def _normalized_release_name(title):
     return " ".join(str(title or "").split()).casefold()
 
 
-def _parsed_group(row):
-    """The row's parsed release group, casefolded, or ``""`` when unknown."""
-    meta = row.get("_meta")
-    group = meta.get("group") if isinstance(meta, dict) else None
-    return str(group or "").casefold()
-
-
 def _is_release_copy(target, row):
     """Whether ``row`` is another NZB of ``target``'s release.
 
-    Uses the NZBGet duplicate fleet's release grouping: an exact
-    (case/whitespace-normalized) same-name row, or a row that
-    ``nzbget_fleet_dedup.same_release`` accepts under another name. The parsed
-    group must be equal too, so another group's mirror of the same file counts
-    for its own group, not this one. A season pack only groups with season
+    The same rule as NZBGet duplicate backups:
+    ``release_match.same_release`` alone, so the picker and the backups count
+    the same NZBs. A row without a parsed group never groups, not even with a
+    listing of the identical name. A season pack only groups with season
     packs and an episode only with episodes.
     """
     if bool(target.get("_season_pack")) != bool(row.get("_season_pack")):
         return False
-    target_name = _normalized_release_name(target.get("title"))
-    if target_name and target_name == _normalized_release_name(row.get("title")):
-        return True
-    group = _parsed_group(target)
-    if not group or group != _parsed_group(row):
-        return False
-    from resources.lib.nzbget_fleet_dedup import same_release
+    from resources.lib.release_match import same_release
 
     return same_release(target, row)
 
@@ -800,22 +786,24 @@ def _is_release_copy(target, row):
 def _nzb_copy_counts(rows):
     """Map ``id(row)`` to how many NZBs of its release ``rows`` hold.
 
-    Rows with the same normalized name are bucketed first, with no release
-    check. Each bucket then joins the first cluster whose first row it is a
-    copy of, so ``same_release`` runs once per distinct name and cluster, not
-    once per pair of rows. With the parsed group required to match, the
-    check depends only on the titles, so one comparison stands for the whole
-    bucket. A cluster's count is its distinct NZB links: a link listed twice
-    counts once and a row without a link adds nothing (every row counts at
-    least 1).
+    ``same_release`` reads only a row's title and the metadata parsed from
+    it, so rows with the identical title are bucketed first and one check
+    stands for the whole bucket. A bucket whose title does not match itself
+    (no parsed group) splits into single rows. Each remaining bucket joins
+    the first cluster whose first row it is a copy of, so ``same_release``
+    runs once per distinct title and cluster, not once per pair of rows. A
+    cluster's count is its distinct NZB links: a link listed twice counts
+    once and a row without a link adds nothing (every row counts at least 1).
     """
     buckets = {}
     for row in rows:
-        name = _normalized_release_name(row.get("title"))
-        key = (bool(row.get("_season_pack")), name)
+        key = (bool(row.get("_season_pack")), str(row.get("title") or ""))
         buckets.setdefault(key, []).append(row)
     clusters = []
     for bucket in buckets.values():
+        if not _is_release_copy(bucket[0], bucket[0]):
+            clusters.extend([row] for row in bucket)
+            continue
         for cluster in clusters:
             if _is_release_copy(cluster[0], bucket[0]):
                 cluster.extend(bucket)
@@ -844,8 +832,9 @@ def _break_ties_by_copies(ordered, relevance_key):
     size. Each run of rows that ties on everything before size (resolution,
     HDR, REMUX, group tier, audio) is re-sorted by copy count, most first,
     then by size as before. A stable sort keeps the original order when both
-    tie. Copies are counted within the run: same_release requires matching
-    resolution, HDR, and audio, which puts a release's copies in one run.
+    tie. Copies are counted within the run: same_release requires equal
+    resolution, HDR, audio, and group, which puts a release's copies in one
+    run.
     """
     if len(ordered) < 2:
         return ordered

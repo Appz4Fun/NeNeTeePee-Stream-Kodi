@@ -166,12 +166,14 @@ def test_other_groups_web_mirror_counts_for_its_own_group():
     assert _nzb_copy_count(rows[0], rows) == 1
 
 
-def test_release_check_runs_once_per_distinct_name_not_per_row():
+def test_release_check_runs_per_distinct_title_not_per_pair():
     # 100 equal-size listings: ten groups, each listed ten times under two
-    # names. Only the two names within a group are ever compared.
+    # titles. Identical titles share one check, so the release rule runs per
+    # distinct title and cluster (20 titles, 10 clusters), far below the
+    # 4950 pairs a row-by-row scan would compare.
     from unittest.mock import patch
 
-    from resources.lib import nzbget_fleet_dedup
+    from resources.lib import release_match
 
     rows = []
     for group in range(10):
@@ -181,13 +183,23 @@ def test_release_check_runs_once_per_distinct_name_not_per_row():
             title = sep.join(parts + ["H265-GRP" + "ABCDEFGHIJ"[group]])
             rows.append(_row(title, "g{}-{}".format(group, copy)))
 
-    real = nzbget_fleet_dedup.same_release
-    with patch.object(nzbget_fleet_dedup, "same_release", side_effect=real) as spy:
+    real = release_match.same_release
+    with patch.object(release_match, "same_release", side_effect=real) as spy:
         ordered = _sort_results(rows, _settings())
 
-    assert spy.call_count == 10
+    assert spy.call_count <= 20 + 20 * 10
     assert len(ordered) == 100
     assert _nzb_copy_count(rows[0], rows) == 10
+
+
+def test_groupless_identical_titles_do_not_pool():
+    # The shared rule never groups a row without a parsed group, not even
+    # with a listing of the identical name.
+    title = "Some.Show.S01E01.1080p.WEB.H264"
+    rows = [_row(title, "x1"), _row(title, "x2")]
+
+    assert not rows[0]["_meta"]["group"]
+    assert _nzb_copy_count(rows[0], rows) == 1
 
 
 def test_dotted_and_parenthesized_listings_of_one_release_pool_their_copies():
