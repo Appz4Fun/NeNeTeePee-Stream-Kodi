@@ -70,6 +70,107 @@ _CODEC_PATTERNS = tuple(
 )
 
 
+# A Usenet subject such as ``[1/3] - "Name-GROUP.mkv" yEnc 4400443301`` wraps
+# the real release name in quotes; the group lives inside them.
+_QUOTED_NAME = re.compile(r'"([^"]+)"')
+_MEDIA_EXTENSION = re.compile(
+    r"\.(?:mkv|mp4|m4v|avi|ts|m2ts|wmv|mov|webm|iso|nzb|nfo|par2|rar|7z|zip"
+    r"|r\d{2}|\d{3})$",
+    re.I,
+)
+# Tags posted AFTER the group ("-HONE.REMASTERED", "-GRP[rarbg]",
+# "(... - HONE) [REMASTERED]") and the posting/indexer suffixes that replace
+# it ("-GRP-Obfuscated", "-GRP-postbot"). Each pass strips one from the end.
+_TRAILING_TAG = re.compile(
+    r"(?:\s*\[[^\[\]]*\]"
+    r"|[ ._](?:remastered|proper|repack\d?|rerip|internal|readnfo|real|dirfix"
+    r"|nfofix|subfix|sample|hybrid)"
+    r"|-(?:obfuscated|scrambled|postbot|xpost|rakuv\w*|whiterev|buymore"
+    r"|asrequested|alternativetorequested|repackpost|chamele0n|4p|4planet"
+    r"|altezachen|gerov|z0ids3n|nzbgeek|sample|pre|rp))\s*$",
+    re.I,
+)
+# Groups may hold hyphens ("GROUP-NAME", "D-Z0N3"); _group_candidate drops a
+# leading source/codec segment such as the "DL" of "WEB-DL-GRP".
+_GROUP_AT_END = re.compile(r"(?:-|\s-\s?)([a-z0-9][\w&@-]*)\)?\s*$", re.I)
+_LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
+_NOT_A_GROUP = re.compile(
+    r"\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
+    r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
+    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed",
+    re.I,
+)
+
+
+_TAG_PATTERNS = tuple(pattern for _name, pattern in _AUDIO_PATTERNS + _CODEC_PATTERNS)
+
+
+def _valid_group(value):
+    """Whether ``value`` can be a group: not a source, codec or audio tag."""
+    value = str(value or "").strip()
+    return (
+        bool(value)
+        and "/" not in value
+        and not _NOT_A_GROUP.fullmatch(value)
+        and not any(pattern.fullmatch(value) for pattern in _TAG_PATTERNS)
+    )
+
+
+def _group_candidate(value):
+    """The trailing hyphen segments of ``value`` up to the first tag-like one.
+
+    Keeps "GROUP-NAME" and "D-Z0N3" whole, but drops the "DL" of "WEB-DL-GRP"
+    and never returns a slug run such as "matrix-1999-1080p-x264-grp".
+    """
+    kept = []
+    for part in reversed(value.split("-")):
+        if not _valid_group(part) or len(kept) == 3:
+            break
+        kept.insert(0, part)
+    return "-".join(kept)
+
+
+def _release_name(title):
+    """The release name inside ``title``: a quoted yEnc filename, no extension."""
+    quoted = _QUOTED_NAME.search(title)
+    name = quoted.group(1) if quoted else title
+    return _MEDIA_EXTENSION.sub("", name.strip().rstrip("/"))
+
+
+def detect_release_group(title, parsed_group=""):
+    """Return the release group, correcting PTT where its group is wrong.
+
+    PTT only reads a group at the very end of a name, so a tag posted after
+    the group ("-HONE.REMASTERED"), a parenthesized name ("(... - HONE)
+    [REMASTERED]"), an indexer suffix ("-GRP-Obfuscated") or a yEnc subject
+    (``[1/3] - "Name-GRP.mkv" yEnc``, read as group "1/3") loses it. Strip
+    those from the end and read the "-GROUP" left there; else keep PTT's
+    group when it is plausible, else a leading "[Group]" (anime style).
+    Unknown stays "".
+    """
+    title = str(title or "")
+    name = _release_name(title)
+    previous = None
+    while previous != name:
+        previous = name
+        name = _TRAILING_TAG.sub("", name)
+    match = _GROUP_AT_END.search(name)
+    group = _group_candidate(match.group(1)) if match else ""
+    if group:
+        return group
+    quoted = bool(_QUOTED_NAME.search(title))
+    if (
+        not quoted
+        and _valid_group(parsed_group)
+        and not _TRAILING_TAG.search("-" + str(parsed_group))
+    ):
+        return str(parsed_group)
+    leading = _LEADING_GROUP.match(name)
+    if leading and _valid_group(leading.group(1)):
+        return leading.group(1).strip()
+    return ""
+
+
 def detect_hdr(title):
     """Only explicit title tags identify HDR or SDR; missing tags stay unknown."""
     values = ["Dolby Vision"] if _DV.search(title) else []
@@ -141,4 +242,5 @@ def supplement_metadata(title, meta):
         ]
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])
+    meta["group"] = detect_release_group(title, meta.get("group", ""))
     return meta
