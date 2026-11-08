@@ -61,6 +61,7 @@ def test_check_active_ignores_when_not_signaled(mock_window):
 @patch("resources.lib.router_lastepisode.mark_last_episode_started")
 def test_av_start_before_the_tick_still_counts_as_started(mock_mark):
     player = NzbdavPlayer()
+    player._state = PlaybackState.MONITORING
     player._stream_url = "/mnt/nas/ep.mkv"
     player._playback_metadata = {"mediatype": "episode", "season": 2, "episode": 6}
     with patch.object(
@@ -70,6 +71,7 @@ def test_av_start_before_the_tick_still_counts_as_started(mock_mark):
     ):
         player._note_early_av_start()
     mock_mark.assert_called_once_with(player._playback_metadata)
+    assert player._av_started is True
 
 
 @patch("resources.lib.router_lastepisode.mark_last_episode_started")
@@ -81,6 +83,63 @@ def test_other_playback_at_adoption_is_not_counted_as_started(mock_mark):
     ), patch.object(player, "getPlayingFile", return_value="/other.mkv", create=True):
         player._note_early_av_start()
     mock_mark.assert_not_called()
+    assert player._av_started is False
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_started")
+@patch("service.xbmc")
+@patch("service._HOME_WINDOW")
+def test_early_av_start_then_silent_stop_is_not_a_never_started_failure(
+    mock_window, mock_xbmc, _mock_mark
+):
+    """onAVStarted lands before the tick adopts the session; hours later the
+    player stops without a stop callback (the box going to sleep). That must
+    not be reported as "playback never started"."""
+    props = {
+        "nzbdav.active": "true",
+        "nzbdav.stream_url": "/mnt/nas/ep.mkv",
+        "nzbdav.stream_title": "ep.mkv",
+    }
+    mock_window.getProperty.side_effect = lambda key: props.get(key, "")
+
+    player = NzbdavPlayer()
+    player.onAVStarted()  # still IDLE: ignored, as in Kodi's real ordering
+    assert player._av_started is False
+    with patch.object(
+        player, "isPlayingVideo", return_value=True, create=True
+    ), patch.object(
+        player, "getPlayingFile", return_value="/mnt/nas/ep.mkv", create=True
+    ):
+        player._check_active()
+    assert player._state == PlaybackState.MONITORING
+    assert player._av_started is True
+
+    props.clear()
+    player._play_time = time.monotonic() - 33179
+    player.isPlaying = lambda: False
+    with patch.object(player, "_report_failure") as mock_report:
+        assert player._handle_startup_grace() is False
+    mock_report.assert_not_called()
+    assert player._state == PlaybackState.MONITORING
+
+
+@patch("resources.lib.router_lastepisode.mark_last_episode_started")
+@patch("service.xbmc")
+def test_startup_grace_latches_a_missed_av_start_while_playing(mock_xbmc, mock_mark):
+    """Past the grace window and still playing our stream with no onAVStarted
+    seen: latch the start instead of keeping the timeout armed."""
+    player = NzbdavPlayer()
+    player._state = PlaybackState.MONITORING
+    player._stream_url = "/mnt/nas/ep.mkv"
+    player._play_time = time.monotonic() - 60
+    player.isPlaying = lambda: True
+    with patch.object(
+        player, "isPlayingVideo", return_value=True, create=True
+    ), patch.object(
+        player, "getPlayingFile", return_value="/mnt/nas/ep.mkv", create=True
+    ):
+        assert player._handle_startup_grace() is False
+    assert player._av_started is True
 
 
 def test_on_av_started_resets_retry_count():
