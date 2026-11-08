@@ -39,6 +39,10 @@ from resources.lib.nzbget_fleet_dedup import same_release
         ("Six.Feet.Under.S02E01.1080p.AMZN.WEB-DL.DDP2.0.H.264.1-KAIZEN", "KAIZEN"),
         ("Movie.2024.1080p.WEB-DL.x264-GROUP-NAME", "GROUP-NAME"),
         ("Movie.2020.1080p.BluRay.DTS.x264-D-Z0N3", "D-Z0N3"),
+        # A hyphenated audio tag before the group is not part of it.
+        ("Movie.2020.1080p.BluRay.x264.DTS-HD-MA-FGT", "FGT"),
+        ("Movie.2020.1080p.BluRay.x264.DTS-X-FGT", "FGT"),
+        ("Movie.2020.1080p.BluRay.x264.DTS-HD-MA", ""),
         ("Movie.2024.1080p.WEB-DL-GRP", "GRP"),
         ("Movie.2020.MULTi.1080p.WEB.x264-GRP.mkv", "GRP"),
         ("[SubsPlease] Show - 01 (1080p) [ABCD1234].mkv", "SubsPlease"),
@@ -80,10 +84,14 @@ def test_both_hone_naming_styles_are_one_release():
     assert same_release(dotted, parenthesized)
 
 
+_HONE_PARENTHESIZED = (
+    "Six Feet Under (2001) S02E01 (1080p AMZN WEB-DL H265 SDR DDP 5.1 English - "
+    "HONE) [REMASTERED]"
+)
+
 _SUBJECT_BASES = [
     "Six.Feet.Under.S02E01.In.The.Game.1080p.AMZN.WEB-DL.DDP5.1.H.264-ASiANLAD",
-    "Six Feet Under (2001) S02E01 (1080p AMZN WEB-DL H265 SDR DDP 5.1 English - "
-    "HONE) [REMASTERED]",
+    _HONE_PARENTHESIZED,
     "The.Matrix.1999.2160p.UHD.BluRay.REMUX.DV.HDR10.HEVC.TrueHD.7.1.Atmos-FGT",
     "Breaking.Bad.S05.1080p.BluRay.x264-ROVERS",
     "The.Office.US.S03E01E02.1080p.WEB-DL.DD5.1.H.264-NTb",
@@ -144,3 +152,14 @@ def test_a_yenc_backup_is_the_same_release_as_its_named_listing():
         "size": "5000000000",
     }
     assert same_release(named, subject)
+
+
+def test_a_full_name_outside_the_quotes_beats_a_short_archive_name():
+    from resources.lib.release_subject import release_name_from_subject
+
+    subject = (
+        'Movie.Title.2020.1080p.BluRay.x264-GRP [01/50] - "Movie.Title.2020.part01.rar"'
+        " yEnc"
+    )
+    name = "Movie.Title.2020.1080p.BluRay.x264-GRP"
+    assert release_name_from_subject(subject) == name

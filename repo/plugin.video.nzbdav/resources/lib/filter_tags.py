@@ -128,6 +128,19 @@ def _group_candidate(value):
     return "-".join(kept)
 
 
+def _without_hyphenated_tags(name):
+    """``name`` with hyphenated audio/codec tags ("DTS-HD-MA", "DTS-X") blanked.
+
+    Splitting the trailing "-" run would otherwise read "MA-FGT" or "MA" as
+    the group of "x264.DTS-HD-MA-FGT".
+    """
+    for pattern in _TAG_PATTERNS:
+        name = pattern.sub(
+            lambda match: " " if "-" in match.group(0) else match.group(0), name
+        )
+    return name
+
+
 def _release_name(title):
     """The release name inside ``title`` (see ``release_subject``), no extension."""
     name = release_name_from_subject(title)
@@ -151,6 +164,7 @@ def detect_release_group(title, parsed_group=""):
     while previous != name:
         previous = name
         name = _TRAILING_TAG.sub("", name)
+    name = _without_hyphenated_tags(name)
     match = _GROUP_AT_END.search(name)
     group = _group_candidate(match.group(1)) if match else ""
     if group:

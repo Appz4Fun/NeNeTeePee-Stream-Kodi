@@ -54,6 +54,15 @@ _RELEASE_TAG = re.compile(
     re.I,
 )
 _NAME_CHARS = re.compile(r"[ ._-]")
+# Tags that make one candidate name richer than another (resolution, source,
+# codec, audio, HDR, episode, year) when a subject carries several.
+_DETAIL_TAG = re.compile(
+    r"(?<![a-z0-9])(?:s\d{1,2}(?:e\d{1,3})*|\d{3,4}[pi]|[48]k|(?:19|20)\d{2}"
+    r"|web-?(?:dl|rip)?|blu-?ray|hdtv|remux|uhd|[xh]\.?26[456]|hevc|avc|av1"
+    r"|ddp?\d?|dts|aac\d?|atmos|truehd|flac|hdr\d*|dv|sdr)(?![a-z0-9])",
+    re.I,
+)
+_ENDS_WITH_GROUP = re.compile(r"-[a-z0-9]\w*$", re.I)
 
 
 def is_usenet_subject(title):
@@ -76,13 +85,32 @@ def _looks_like_release(name):
     return bool(_RELEASE_TAG.search(name)) and len(_NAME_CHARS.findall(name)) >= 2
 
 
+def _detail(name):
+    """How much release detail ``name`` carries: distinct tags, then a group."""
+    tags = {tag.lower() for tag in _DETAIL_TAG.findall(name)}
+    return len(tags) + (1 if _ENDS_WITH_GROUP.search(name) else 0)
+
+
+def _subject_remainder(title):
+    """``title`` with quoted filenames, counters, sizes and the yEnc tail removed."""
+    remainder = _QUOTED.sub(" ", title)
+    previous = None
+    while previous != remainder:
+        previous = remainder
+        remainder = _SUBJECT_NOISE.sub(" ", remainder)
+    remainder = " ".join(remainder.split()).strip(' -"')
+    return _strip_file_suffix(remainder)
+
+
 def release_name_from_subject(title):
     """Return the release name inside a raw Usenet subject.
 
-    Prefer a quoted filename that looks like a release, then a bracketed
-    segment that does (the WtFnZb style keeps the real name in brackets and
-    an empty or obfuscated quoted filename), then the subject with its
-    counters, size, quotes and ``yEnc`` tail removed. A title that is not a
+    The candidates are the quoted filenames, the WtFnZb bracket name, the
+    other bracketed segments, and the subject with its counters, size, quotes
+    and ``yEnc`` tail removed. The one that looks like a release and carries
+    the most detail wins, so a full name outside the quotes beats a short
+    archive name inside them ("Name.2020.part01.rar"), and an obfuscated
+    quoted filename never wins. Ties keep that order. A title that is not a
     subject comes back unchanged.
     """
     title = str(title or "")
@@ -93,13 +121,11 @@ def release_name_from_subject(title):
     if named:
         candidates.append(_strip_file_suffix(named.group(1)))
     candidates += [_strip_file_suffix(b) for b in _BRACKETED.findall(title)]
+    remainder = _subject_remainder(title)
+    candidates.append(remainder)
+    best = None
     for candidate in candidates:
         if candidate and _looks_like_release(candidate):
-            return candidate
-    remainder = _QUOTED.sub(" ", title)
-    previous = None
-    while previous != remainder:
-        previous = remainder
-        remainder = _SUBJECT_NOISE.sub(" ", remainder)
-    remainder = " ".join(remainder.split()).strip(' -"')
-    return _strip_file_suffix(remainder) or title
+            if best is None or _detail(candidate) > _detail(best):
+                best = candidate
+    return best or remainder or title
