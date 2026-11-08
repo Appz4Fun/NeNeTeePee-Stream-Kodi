@@ -63,4 +63,4 @@ def test_season_pack_rows_never_group():
 
 
 def test_empty_input_has_no_groups():
-    assert release_groups([]) == []
+    assert not release_groups([])
