@@ -43,6 +43,11 @@ from resources.lib.nzbget_fleet_dedup import same_release
         ("Movie.2020.1080p.BluRay.x264.DTS-HD-MA-FGT", "FGT"),
         ("Movie.2020.1080p.BluRay.x264.DTS-X-FGT", "FGT"),
         ("Movie.2020.1080p.BluRay.x264.DTS-HD-MA", ""),
+        # Nor is a hyphenated source tag.
+        ("Movie.2020.1080p.x264.Blu-Ray-GRP", "GRP"),
+        ("Movie.2020.1080p.x264.Blu-Ray", ""),
+        ("Movie.2020.1080p.x264.WEB-Rip-GRP", "GRP"),
+        ("Movie.2020.480p.x264.DVD-Rip", ""),
         ("Movie.2024.1080p.WEB-DL-GRP", "GRP"),
         ("Movie.2020.MULTi.1080p.WEB.x264-GRP.mkv", "GRP"),
         ("[SubsPlease] Show - 01 (1080p) [ABCD1234].mkv", "SubsPlease"),
