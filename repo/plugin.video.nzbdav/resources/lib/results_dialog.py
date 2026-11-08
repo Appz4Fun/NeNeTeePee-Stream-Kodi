@@ -9,6 +9,7 @@ import xbmcgui
 from resources.lib.http_util import format_size as _format_size
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
+from resources.lib.results_groups import release_groups
 from resources.lib.results_input import OkHold
 
 # Color constants matching the mockup
@@ -57,6 +58,20 @@ ACTION_NAV_BACK = 92
 ACTION_CONTEXT_MENU = 117
 
 LIST_ID = 50
+COMPACT_LIST_ID = 51
+
+VIEW_LIST = "list"
+VIEW_COMPACT = "compact"
+# ``results_view`` setting values (settings.xml option order).
+_VIEW_SETTING = {"0": VIEW_COMPACT, "1": VIEW_LIST}
+
+# Copies listed in the List compacted side panel before "+N more".
+_PANEL_MAX_COPIES = 14
+# Characters per line when the panel breaks a release name at its dots.
+_PANEL_NAME_WIDTH = 46
+_COPY_LEAD_COLOR = "FFFFFFFF"
+_COPY_COLOR = "FF4A9EFF"
+_COPIES_CHIP_COLOR = "FFA8CCFF"
 
 
 def _available_text():
@@ -65,10 +80,18 @@ def _available_text():
 
 def _build_result_item(result, row_index):
     """Build a styled ListItem for a single search result row."""
-    meta = result.get("_meta", {})
-    is_pack = bool(result.get("_season_pack"))
     label = result.get("_display_title") or result.get("title", "")
     li = xbmcgui.ListItem(label=label)
+    _set_result_properties(li, result)
+    # Alternating row background
+    li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
+    return li
+
+
+def _set_result_properties(li, result):
+    """Set a result row's colored metadata properties on ``li``."""
+    meta = result.get("_meta", {})
+    is_pack = bool(result.get("_season_pack"))
 
     res = meta.get("resolution", "")
     li.setProperty("resolution", _c(res, _RES_COLORS.get(res, "FFEEEEEE")))
@@ -114,9 +137,111 @@ def _build_result_item(result, row_index):
         "filter_reason", _c(_fmt(30371, reject), "FFFBBF24") if reject else ""
     )
 
-    # Alternating row background
-    li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
-    return li
+
+def _wrap_release_name(name, width=_PANEL_NAME_WIDTH):
+    """Break a dotted release name into ``[CR]``-joined lines for the panel.
+
+    Kodi wraps text only at spaces, so a scene name (no spaces) would be cut
+    off; break it after a dot (or space) instead, keeping the dots visible.
+    A single piece longer than ``width`` gets a line of its own.
+    """
+    lines = []
+    line = ""
+    piece = ""
+    for char in str(name or ""):
+        piece += char
+        if char in ". ":
+            if line and len(line) + len(piece) > width:
+                lines.append(line)
+                line = ""
+            line += piece
+            piece = ""
+    if piece:
+        if line and len(line) + len(piece) > width:
+            lines.append(line)
+            line = ""
+        line += piece
+    if line:
+        lines.append(line)
+    return "[CR]".join(lines)
+
+
+def _tech_summary(item_props):
+    """The panel's one-line tech summary from a row's colored properties."""
+    keys = ("resolution", "hdr", "codec", "audio", "quality", "container", "group")
+    return "   ".join(item_props[key] for key in keys if item_props.get(key))
+
+
+def _panel_copy_lines(group):
+    """Panel columns (marks, indexers, sizes, ages) for one release group."""
+    shown = group[:_PANEL_MAX_COPIES]
+    if len(group) > _PANEL_MAX_COPIES:
+        shown = group[: _PANEL_MAX_COPIES - 1]
+    marks, indexers, sizes, ages = [], [], [], []
+    for index, row in enumerate(shown):
+        marks.append(_available_text() if row.get("_available") else " ")
+        color = _COPY_LEAD_COLOR if index == 0 else _COPY_COLOR
+        indexers.append(_c(row.get("indexer", "") or " ", color))
+        sizes.append(_c(_format_size(row.get("size")) or " ", "FFA1A1AA"))
+        ages.append(_c(row.get("age", "") or " ", "FF6B7280"))
+    if len(shown) < len(group):
+        marks.append(" ")
+        indexers.append(_c(_fmt(30489, len(group) - len(shown)), "FF9CA3AF"))
+        sizes.append(" ")
+        ages.append(" ")
+    return ["[CR]".join(column) for column in (marks, indexers, sizes, ages)]
+
+
+class _PropertyRecorder:  # pylint: disable=too-few-public-methods
+    """Wrap a ListItem to remember the properties set on it."""
+
+    def __init__(self, item):
+        self.item = item
+        self.props = {}
+
+    def setProperty(self, key, value):  # pylint: disable=invalid-name
+        self.props[key] = value
+        self.item.setProperty(key, value)
+
+
+def _build_group_item(group, row_index):
+    """Build the List compacted row for one release group.
+
+    The row is the group's lead (top-ranked) copy, built like a List row, plus
+    the copy count, an any-copy DL mark, and the side-panel properties the skin
+    reads from the focused item (``Container(51).ListItem.Property(...)``).
+    """
+    lead = group[0]
+    label = lead.get("_display_title") or lead.get("title", "")
+    item = xbmcgui.ListItem(label=label)
+    recorder = _PropertyRecorder(item)
+    _set_result_properties(recorder, lead)
+    item.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
+    count = len(group)
+    indexers = []
+    for row in group:
+        name = row.get("indexer", "")
+        if name and name not in indexers:
+            indexers.append(name)
+    any_available = any(row.get("_available") for row in group)
+    if any_available:
+        item.setProperty("available", _available_text())
+    if count > 1:
+        item.setProperty("copies", _c(_fmt(30479, count), _COPIES_CHIP_COLOR))
+        kicker = _fmt(30478, count, len(indexers))
+    else:
+        item.setProperty("copies", _c(lead.get("indexer", ""), "FF4A9EFF"))
+        kicker = _fmt(30480, lead.get("indexer", "") or "?")
+    item.setProperty("panel_kicker", kicker)
+    item.setProperty("panel_title", _wrap_release_name(label))
+    item.setProperty("panel_tech", _tech_summary(recorder.props))
+    marks, names, sizes, ages = _panel_copy_lines(group)
+    item.setProperty("panel_marks", marks)
+    item.setProperty("panel_indexers", names)
+    item.setProperty("panel_sizes", sizes)
+    item.setProperty("panel_ages", ages)
+    item.setProperty("panel_foot", _string(30487 if any_available else 30488))
+    return item
 
 
 def _provider_only(results):
@@ -144,6 +269,9 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         self.title = kwargs.get("title", "")
         self.year = kwargs.get("year", "")
         self.total_count = kwargs.get("total_count", 0)
+        self.view = VIEW_COMPACT if kwargs.get("view") == VIEW_COMPACT else VIEW_LIST
+        self._list_id = COMPACT_LIST_ID if self.view == VIEW_COMPACT else LIST_ID
+        self._entries = []
         self.show_all = not _provider_only(self.results) and bool(self.all_results)
         self.selected_result = None
         self._closing = False
@@ -156,6 +284,12 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
 
     def _active_results(self):
         return self.all_results if self.show_all else self.results
+
+    def _build_entries(self, active):
+        """One entry (a list of rows, lead first) per list row of this view."""
+        if self.view == VIEW_COMPACT:
+            return release_groups(active)
+        return [[row] for row in active]
 
     def _footer_hints(self):
         if not self._toggle_available():
@@ -170,11 +304,26 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         title_display = self.title
         if self.year:
             title_display = "{} ({})".format(self.title, self.year)
+        self._entries = self._build_entries(active)
+        compact = self.view == VIEW_COMPACT
+        releases = len(self._entries)
+        self.setProperty("view", self.view)
         self.setProperty("title", title_display)
-        self.setProperty("count", _fmt(30110, len(active)))
-        self.setProperty("sort_info", _string(30111))
-        if self.show_all:
+        if compact:
+            self.setProperty("count", _fmt(30481, releases, len(active)))
+            sort_info = "{} · {}".format(_string(30111), _string(30492))
+            self.setProperty("sort_info", sort_info)
+        else:
+            self.setProperty("count", _fmt(30110, len(active)))
+            self.setProperty("sort_info", _string(30111))
+        if self.show_all and compact:
+            self.setProperty("filter_info", _fmt(30483, len(active), releases))
+        elif self.show_all:
             self.setProperty("filter_info", _fmt(30367, len(active)))
+        elif compact:
+            self.setProperty(
+                "filter_info", _fmt(30482, releases, len(active), self.total_count)
+            )
         else:
             self.setProperty("filter_info", _fmt(30112, len(active), self.total_count))
         hints = self._footer_hints()
@@ -182,48 +331,55 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
             hints += "     " + _string(30477)
         self.setProperty("footer_hints", hints)
 
-        list_control = self.getControl(LIST_ID)
+        list_control = self.getControl(self._list_id)
         list_control.reset()
-        list_control.addItems(
-            [_build_result_item(result, i) for i, result in enumerate(active)]
-        )
+        if compact:
+            items = [
+                _build_group_item(group, i) for i, group in enumerate(self._entries)
+            ]
+        else:
+            items = [_build_result_item(result, i) for i, result in enumerate(active)]
+        list_control.addItems(items)
+
+    def _focused_entry(self):
+        """The focused entry (list of rows) of the active view, or None."""
+        pos = self.getControl(self._list_id).getSelectedPosition()
+        if isinstance(pos, int) and 0 <= pos < len(self._entries):
+            return self._entries[pos]
+        return None
 
     def onInit(self):
         """Populate the dialog with results data."""
         if self.all_results:
             self._ok_hold.start()
         self._populate()
-        self.setFocusId(LIST_ID)
+        self.setFocusId(self._list_id)
 
     def _toggle_show_all(self):
-        """Flip views, repopulate, and re-focus the same row by identity."""
-        previous = self._active_results()
-        pos = self.getControl(LIST_ID).getSelectedPosition()
-        focused = (
-            previous[pos] if isinstance(pos, int) and 0 <= pos < len(previous) else None
-        )
+        """Flip views, repopulate, and re-focus the same row by identity.
+
+        In List compacted the groups are rebuilt for the new row set, so the
+        focus lands on whichever new group holds the previously focused lead.
+        """
+        entry = self._focused_entry()
+        focused = entry[0] if entry else None
         self.show_all = not self.show_all
         self._populate()
-        active = self._active_results()
         index = 0
         if focused is not None:
-            for i, row in enumerate(active):
-                if row is focused:
+            for i, rows in enumerate(self._entries):
+                if any(row is focused for row in rows):
                     index = i
                     break
-        self.getControl(LIST_ID).selectItem(index)
-        self.setFocusId(LIST_ID)
+        self.getControl(self._list_id).selectItem(index)
+        self.setFocusId(self._list_id)
 
     def _select_focused(self):
-        """Record the focused row of the active view and close."""
+        """Record the focused row (a group's lead copy) and close."""
         if self._closing:
             return
-        pos = self.getControl(LIST_ID).getSelectedPosition()
-        active = self._active_results()
-        if isinstance(pos, int) and 0 <= pos < len(active):
-            self.selected_result = active[pos]
-        else:
-            self.selected_result = None
+        entry = self._focused_entry()
+        self.selected_result = entry[0] if entry else None
         self.close()
 
     def _show_all(self):
@@ -243,14 +399,17 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
 
     def onClick(self, controlId):
         """Handle item selection."""
-        if controlId == LIST_ID and not self._ok_hold.defer_selection():
+        if controlId == self._list_id and not self._ok_hold.defer_selection():
             self._select_focused()
 
     def onAction(self, action):
         """Handle keyboard/remote actions."""
         action_id = action.getId()
         if action_id in (ACTION_SELECT,):
-            if self.getFocusId() == LIST_ID and not self._ok_hold.defer_selection():
+            if (
+                self.getFocusId() == self._list_id
+                and not self._ok_hold.defer_selection()
+            ):
                 self._select_focused()
         elif action_id in (ACTION_PREVIOUS_MENU, ACTION_NAV_BACK):
             self._cancel()
@@ -265,6 +424,19 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
     def get_selected_result(self):
         """Return the chosen result dict, or ``None`` when cancelled."""
         return self.selected_result
+
+
+def _results_view(addon):
+    """The ``results_view`` setting as a view name; List compacted by default.
+
+    Read on the picker's own (Kodi add-on) thread, like the rest of
+    ``show_results_dialog``. An unset or unknown value is the default.
+    """
+    try:
+        value = str(addon.getSetting("results_view") or "").strip()
+    except Exception:  # pylint: disable=broad-except
+        value = ""
+    return _VIEW_SETTING.get(value, VIEW_COMPACT)
 
 
 def show_results_dialog(results, title="", year="", total_count=0, all_results=None):
@@ -287,10 +459,14 @@ def show_results_dialog(results, title="", year="", total_count=0, all_results=N
     Returns:
         The chosen result dict (same object reference from whichever view
         was active) when the user picks one, or ``None`` when the user
-        cancels the dialog or no results are available.
+        cancels the dialog or no results are available. In List compacted
+        (the ``results_view`` default) a picked group returns its lead,
+        top-ranked copy; the other copies stay in ``results`` for the
+        same-release backups.
     """
     addon = xbmcaddon.Addon("plugin.video.nzbdav")
     addon_path = addon.getAddonInfo("path")
+    view = _results_view(addon)
 
     dialog = ResultsDialog(
         "results-dialog.xml",
@@ -302,6 +478,7 @@ def show_results_dialog(results, title="", year="", total_count=0, all_results=N
         year=year,
         total_count=total_count,
         all_results=all_results,
+        view=view,
     )
     try:
         dialog.doModal()

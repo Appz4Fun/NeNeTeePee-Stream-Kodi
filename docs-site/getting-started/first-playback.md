@@ -26,7 +26,12 @@ and container.
 - A green **DL** tag marks a release that's already completed on your backend
   (nzbdav, or NZBGet in NZBGet mode). NeNeTeePee-Stream-Kodi matches it by exact name and a
   close size match, so it can play almost immediately without downloading again.
-- The status bar shows **Showing N of M sources after filters**.
+- By default the picker uses **List compacted**: a release that several
+  indexers carry is one row, with its copy count on the right of the row.
+  The panel on the right lists the focused release's copies (indexer, size,
+  age). **DL** on the row means any copy is already downloaded. To get one row
+  per copy, set **Sorting › Results view** to **List**.
+- The status bar shows how many releases and sources passed your filters.
 - Press ++enter++ (OK) on a row to download and play it.
 - Press ++esc++ (Back) to close the picker without playing anything.
 

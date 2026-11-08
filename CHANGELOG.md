@@ -68,6 +68,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **List compacted picker view (new default).** The release picker now shows
+  each release once, however many indexers carry it. A panel on the right
+  lists the focused release's copies with indexer, size and age; a green
+  **DL** on the row means any copy is already downloaded. Copies are grouped
+  with the same rule the NZB-copies tiebreak and NZBGet backups use. Enter
+  plays the top-ranked copy. Switch back to one row per copy with
+  **Sorting › Results view › List**.
 - **Playback failure dialog (NZBGet backend).** When NZBGet finishes a
   download but Kodi can't find or read the file, a dialog now says why,
   instead of a short toast. The add-on checks the completed folder directly

@@ -1774,6 +1774,70 @@ msgctxt "#30477"
 msgid "[Hold OK 5s] Filters off"
 msgstr "[Hold OK 5s] Filters off"
 
+msgctxt "#30478"
+msgid "{} copies on {} indexers"
+msgstr "{} copies on {} indexers"
+
+msgctxt "#30479"
+msgid "{} copies"
+msgstr "{} copies"
+
+msgctxt "#30480"
+msgid "1 copy on {}"
+msgstr "1 copy on {}"
+
+msgctxt "#30481"
+msgid "{} releases · {} sources"
+msgstr "{} releases · {} sources"
+
+msgctxt "#30482"
+msgid "Showing {} releases ({} of {} sources) after filters"
+msgstr "Showing {} releases ({} of {} sources) after filters"
+
+msgctxt "#30483"
+msgid "Showing all {} sources in {} releases (filters off)"
+msgstr "Showing all {} sources in {} releases (filters off)"
+
+msgctxt "#30484"
+msgid "Indexer"
+msgstr "Indexer"
+
+msgctxt "#30485"
+msgid "Size"
+msgstr "Size"
+
+msgctxt "#30486"
+msgid "Age"
+msgstr "Age"
+
+msgctxt "#30487"
+msgid "Already downloaded. Enter plays it without a new download."
+msgstr "Already downloaded. Enter plays it without a new download."
+
+msgctxt "#30488"
+msgid "Enter plays the top copy."
+msgstr "Enter plays the top copy."
+
+msgctxt "#30489"
+msgid "+{} more"
+msgstr "+{} more"
+
+msgctxt "#30490"
+msgid "Results view"
+msgstr "Results view"
+
+msgctxt "#30491"
+msgid "List compacted shows each release once and lists the indexers that carry it in a side panel. List shows every indexer copy on its own row."
+msgstr "List compacted shows each release once and lists the indexers that carry it in a side panel. List shows every indexer copy on its own row."
+
+msgctxt "#30492"
+msgid "List compacted"
+msgstr "List compacted"
+
+msgctxt "#30493"
+msgid "List"
+msgstr "List"
+
 msgctxt "#30500"
 msgid "Include 8K / 4320p releases, including titles containing 7680x4320. Missing or unlisted metadata follows Other / Unknown in this category."
 msgstr "Include 8K / 4320p releases, including titles containing 7680x4320. Missing or unlisted metadata follows Other / Unknown in this category."
