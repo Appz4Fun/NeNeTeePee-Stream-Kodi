@@ -745,7 +745,8 @@ def _sort_results(results, settings):
     """Sort results by configured sort order, with preferred groups boosted.
 
     Sort orders:
-        0 = Relevance (original order)
+        0 = Relevance (ties broken by more NZB copies of the release,
+            then original order)
         1 = Size (largest first)
         2 = Size (smallest first)
         3 = Age (newest first) -- pubdate descending
@@ -755,7 +756,79 @@ def _sort_results(results, settings):
     if spec is not None:
         key, reverse = spec
         return sorted(results, key=key, reverse=reverse)
-    return sorted(
-        results,
-        key=_make_relevance_key(settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)),
+    relevance_key = _make_relevance_key(
+        settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)
     )
+    return _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
+
+
+def _normalized_release_name(title):
+    """Case/whitespace-normalized release name for same-name matching."""
+    return " ".join(str(title or "").split()).casefold()
+
+
+def _is_release_copy(target, row):
+    """Whether ``row`` is another NZB of ``target``'s release.
+
+    Uses the same grouping as the NZBGet duplicate fleet: an exact
+    (case/whitespace-normalized) same-name row, or a row that
+    ``nzbget_fleet_dedup.same_release`` accepts under another name. A season
+    pack only groups with season packs and an episode only with episodes.
+    """
+    if bool(target.get("_season_pack")) != bool(row.get("_season_pack")):
+        return False
+    target_name = _normalized_release_name(target.get("title"))
+    if target_name and target_name == _normalized_release_name(row.get("title")):
+        return True
+    from resources.lib.nzbget_fleet_dedup import same_release
+
+    return same_release(target, row)
+
+
+def _nzb_copy_count(target, pool):
+    """How many NZBs in ``pool`` carry ``target``'s release, itself included.
+
+    Each distinct NZB link counts once, so a row listed twice under one link
+    adds nothing. A row without a link still counts itself.
+    """
+    target_link = target.get("link") or None
+    seen = {target_link} if target_link else set()
+    copies = 1
+    for row in pool:
+        if row is target or not isinstance(row, dict):
+            continue
+        link = row.get("link")
+        if not link or link in seen:
+            continue
+        if _is_release_copy(target, row):
+            seen.add(link)
+            copies += 1
+    return copies
+
+
+def _break_ties_by_copies(ordered, relevance_key):
+    """Final relevance tiebreaker: more NZB copies of the release first.
+
+    ``ordered`` is already sorted by ``relevance_key``. Only runs of rows that
+    tie on every relevance criterion are reordered, and a stable sort keeps
+    their original order when the copy counts tie too. Copies are counted
+    across the whole list, and only for tied rows, so the release-matching
+    cost is paid only where it can change the order.
+    """
+    if len(ordered) < 2:
+        return ordered
+    keys = [relevance_key(row) for row in ordered]
+    result = []
+    start = 0
+    total = len(ordered)
+    while start < total:
+        end = start + 1
+        while end < total and keys[end] == keys[start]:
+            end += 1
+        run = ordered[start:end]
+        if len(run) > 1:
+            copies = {id(row): _nzb_copy_count(row, ordered) for row in run}
+            run.sort(key=lambda row: -copies[id(row)])
+        result.extend(run)
+        start = end
+    return result

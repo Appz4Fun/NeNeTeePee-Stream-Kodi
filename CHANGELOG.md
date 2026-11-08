@@ -117,6 +117,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   duplicate backups to `0`, so nothing changes for you.
 - The force-remux size setting (`force_remux_threshold_mb`) is now labeled
   **Remux size threshold (MB, 0=off)**. Your saved value is unchanged.
+- **Relevance breaks ties by NZB copies.** When results tie on resolution,
+  HDR, REMUX, group tier, audio, and size, the release with more NZBs in the
+  results now sorts first, so a pick has more backups if one NZB fails. Copies
+  are grouped the same way as NZBGet duplicate backups. Other ties keep their
+  order.
 
 ### Fixed
 
