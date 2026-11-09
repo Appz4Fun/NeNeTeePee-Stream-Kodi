@@ -33,12 +33,12 @@ from array import array
 
 import xbmc
 
+from resources.lib import release_match
 from resources.lib.http_util import pubdate_to_epoch, redact_text
 
-# The one "same release" rule, shared with the picker's copy grouping.
-from resources.lib.release_match import (  # noqa: F401  pylint: disable=unused-import
-    same_release,
-)
+# The one "same release" rule, shared with the picker's copy grouping; kept
+# importable from here for existing callers.
+same_release = release_match.same_release
 
 SAME_LISTING_WINDOW_SECONDS = 120
 PREFETCH_WINDOW = 4
