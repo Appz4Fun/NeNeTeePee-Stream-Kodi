@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | Playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
+| **[Unreleased](#unreleased--main)** | on `main` | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
@@ -108,7 +108,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   SDR, so an explicit `SDR` tag no longer ranks above an untagged release.
   **Other / Unknown HDR** no longer has an effect; the **SDR** option decides.
 - **Releases with no group rank last in their resolution** under Relevance.
-
 - A completed NZBGet match whose share is down no longer gets re-submitted
   (NZBGet would only reject the duplicate). It fails with the dialog above.
 - **Backend-specific playback options moved to Playback backend.** Only

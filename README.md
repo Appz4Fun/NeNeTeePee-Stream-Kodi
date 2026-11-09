@@ -153,7 +153,13 @@ Full walkthrough:
 - **Quality filtering and ranking** by resolution, HDR, audio, codec, language,
   release group, size, and keywords. Default-enabled Other / Unknown options
   prevent unrecognized formats from disappearing. Relevance ranks resolution
-  first, then HDR, Hybrid REMUX / REMUX, and three editable TRaSH remux group tiers.
+  first, then releases with a group, HDR, Hybrid REMUX / REMUX, three editable
+  TRaSH remux group tiers and audio, and among ties prefers the release with
+  more NZB copies.
+- **A compact release picker**: each release appears once, however many
+  indexers carry it, with a side panel listing its copies. One same-release
+  rule drives the picker, the copies tiebreak and NZBGet duplicate backups.
+  **Sorting › Results view › List** restores one row per copy.
 - **Exact season-pack playback and reuse**: completed multi-episode downloads
   play the requested episode instead of the largest file, then appear as an
   already-downloaded pack for later episodes from that same backend job.

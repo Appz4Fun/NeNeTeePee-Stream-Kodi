@@ -265,6 +265,7 @@ known release groups. An empty list means no exclusions.
 | Setting | ID | Default | Values |
 |---------|----|---------|--------|
 | Sort by | `sort_order` | `0` (Relevance) | `0` Relevance, `1` Size (largest first), `2` Size (smallest first), `3` Age (newest first), `4` Age (oldest first) |
+| Results view | `results_view` | `0` (List compacted) | `0` List compacted: one row per release, with a panel listing its indexer copies; `1` List: one row per indexer copy |
 | Max results | `max_results` | `25` | Provider request limits are clamped to 1–10000. The filtered picker uses the raw positive integer as its limit; 0 or less leaves it unbounded. The picker's show-all view is not truncated. |
 | Auto-select best match (skip result list) | `auto_select_best` | `false` | Play the top-ranked result that passed your filters and skip the picker. If nothing passed, the picker opens instead. |
 
