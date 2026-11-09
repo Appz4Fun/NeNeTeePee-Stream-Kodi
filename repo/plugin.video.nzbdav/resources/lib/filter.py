@@ -808,6 +808,9 @@ def _copy_prefilter_key(row):
     return tuple(fields)
 
 
+_SEASONS_CLASS = ("seasons", (), ())
+
+
 def _content_class(row):
     """Which rows ``same_release``'s content gate can ever accept for ``row``.
 
@@ -818,26 +821,28 @@ def _content_class(row):
       rejects any pair whose episode sets differ in presence or value, and
       with episodes on both sides no phantom-season collapse applies, so the
       seasons must match too.
-    * ``("movie", year)`` for a row with no seasons and no episodes. As a
+    * ``("movie", year, ())`` for a row with no seasons and no episodes. As a
       pick, a movie needs the candidate's exact year (absent included); as a
       candidate of a season-only row it needs the same year for the phantom
       collapse. Movies of other years never match it.
-    * ``("seasons",)`` for a row with seasons but no episodes (a season pack,
+    * ``("seasons", (), ())`` for a row with seasons but no episodes (a season pack,
       or a movie whose group mis-parsed as a season). It can match a movie of
       its year through the collapse and a season row of any year, so it is
       compared with every movie and season row under its profile.
+
+    Every class is a 3-tuple so the keys stay uniform.
     """
     from resources.lib import fallback_streams as _fs
 
     try:
         _title, year, seasons, episodes, _part = _fs._release_identity(row)
     except Exception:  # pylint: disable=broad-except
-        return ("seasons",)
+        return _SEASONS_CLASS
     if episodes:
         return ("episode", tuple(episodes), tuple(seasons))
     if seasons:
-        return ("seasons",)
-    return ("movie", year)
+        return _SEASONS_CLASS
+    return ("movie", year, ())
 
 
 def _peer_candidates(buckets):
@@ -851,7 +856,7 @@ def _peer_candidates(buckets):
     by_class = {}
     for bucket in buckets:
         by_class.setdefault(_content_class(bucket[0]), []).append(bucket)
-    seasons = by_class.get(("seasons",), [])
+    seasons = by_class.get(_SEASONS_CLASS, [])
     movies = [b for key, group in by_class.items() if key[0] == "movie" for b in group]
     candidates = []
     for key, group in by_class.items():

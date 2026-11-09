@@ -301,10 +301,10 @@ def test_season_rows_still_meet_movies_and_other_season_rows():
     from resources.lib import filter as filter_mod
 
     classes = {
-        "m2020": ("movie", 2020),
-        "m2021": ("movie", 2021),
-        "s1": ("seasons",),
-        "s2": ("seasons",),
+        "m2020": ("movie", 2020, ()),
+        "m2021": ("movie", 2021, ()),
+        "s1": ("seasons", (), ()),
+        "s2": ("seasons", (), ()),
         "e1": ("episode", (1,), (1,)),
         "e2": ("episode", (2,), (1,)),
     }
