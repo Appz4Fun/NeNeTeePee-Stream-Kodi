@@ -51,7 +51,7 @@ jobs:
         # Skip on forked PRs: forks lack code-quality:write, and the action
         # cannot upload to the base repo from a fork context.
         if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/upload-code-coverage@82c7aee3fb2ad768e00b00a0a8d749c5815085b6 # v1
+        uses: actions/upload-code-coverage@4a7f4ad1e226171771e0eb042e3a131c34753772 # v1
         with:
           file: coverage.xml
           language: Python
