@@ -329,20 +329,42 @@ class NzbdavPlayer(xbmc.Player):
         self._note_early_av_start()
 
     def _note_early_av_start(self):
-        """Count a play whose onAVStarted fired before this tick adopted it."""
+        """Count a play whose onAVStarted fired before this tick adopted it.
+
+        Kodi can fire onAVStarted before the ~1 Hz tick adopts the session,
+        while the state is still IDLE, so onAVStarted ignores it. Latch
+        ``_av_started`` here too. Otherwise the startup grace stays armed for
+        the whole session, and when the player later stops without a stop
+        callback (for example the box going to sleep), it reports a false
+        "playback never started" and tears the session down.
+        """
         with self._state_lock:
             stream_url = self._stream_url
             metadata = dict(self._playback_metadata)
+            generation = self._session_generation
         try:
             started = (
                 self.isPlayingVideo() is True and self.getPlayingFile() == stream_url
             )
         except _PLAYER_RUNTIME_ERRORS:
             return
-        if started:
-            from resources.lib.router_lastepisode import mark_last_episode_started
+        if not started:
+            return
+        with self._state_lock:
+            if (
+                generation != self._session_generation
+                or self._state != PlaybackState.MONITORING
+            ):
+                return
+            self._av_started = True
+            title = self._title
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Playback already started for '{}'".format(title),
+            xbmc.LOGINFO,
+        )
+        from resources.lib.router_lastepisode import mark_last_episode_started
 
-            mark_last_episode_started(metadata)
+        mark_last_episode_started(metadata)
 
     def onAVStarted(self):
         """Reset retry state when playback begins successfully."""
@@ -758,7 +780,13 @@ class NzbdavPlayer(xbmc.Player):
         if not in_startup_grace:
             return False
         elapsed = time.monotonic() - play_time
-        if elapsed <= 30 or self.isPlaying():
+        if elapsed <= 30:
+            return False
+        if self.isPlaying():
+            # Still playing past the grace window with no onAVStarted seen:
+            # the callback was missed, so latch the start now if this is our
+            # stream rather than keep the timeout armed for the whole session.
+            self._note_early_av_start()
             return False
 
         xbmc.log(
