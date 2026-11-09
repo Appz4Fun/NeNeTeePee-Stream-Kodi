@@ -55,14 +55,19 @@ _RELEASE_TAG = re.compile(
 )
 _NAME_CHARS = re.compile(r"[ ._-]")
 # Tags that make one candidate name richer than another (resolution, source,
-# codec, audio, HDR, episode, year, and the 3D/dub/hardsub/cut variants a
-# backup must match) when a subject carries several.
+# codec, audio, HDR, episode, year, the 3D/dub/hardsub/cut variants, and
+# language tags) when a subject carries several.
 _DETAIL_TAG = re.compile(
     r"(?<![a-z0-9])(?:s\d{1,2}(?:e\d{1,3})*|\d{3,4}[pi]|[48]k|(?:19|20)\d{2}"
     r"|web-?(?:dl|rip)?|blu-?ray|hdtv|remux|uhd|[xh]\.?26[456]|hevc|avc|av1"
     r"|ddp?\d?|dts|aac\d?|atmos|truehd|flac|hdr\d*|dv|sdr"
     r"|3d|h?sbs|h?ou|extended|unrated|uncensored|remastered|dubbed|multi|hc"
-    r"|proper|repack)(?![a-z0-9])",
+    r"|proper|repack"
+    r"|english|german|french|truefrench|spanish|castellano|latino|italian|dutch"
+    r"|flemish|russian|ukrainian|polish|czech|hungarian|portuguese|brazilian"
+    r"|swedish|danish|norwegian|finnish|nordic|turkish|greek|hebrew|arabic|hindi"
+    r"|tamil|telugu|japanese|korean|chinese|mandarin|cantonese|thai|vietnamese"
+    r"|vostfr|vff|vfq|vf2|eng|ger|fre|spa|ita|rus|dual)(?![a-z0-9])",
     re.I,
 )
 _ENDS_WITH_GROUP = re.compile(r"-[a-z0-9]\w*$", re.I)

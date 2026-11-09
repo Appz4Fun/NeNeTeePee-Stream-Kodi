@@ -177,16 +177,18 @@ def detect_release_group(title, parsed_group=""):
     parenthesized = _PAREN_GROUP_AT_END.search(name)
     if parenthesized and _group_candidate(parenthesized.group(1)):
         return _group_candidate(parenthesized.group(1))
+    leading = _LEADING_GROUP.match(name)
+    leading = leading.group(1).strip() if leading else ""
+    leading = leading if _valid_group(leading) else ""
     match = _GROUP_AT_END.search(name)
     group = _group_candidate(match.group(1)) if match else ""
-    if group:
+    # "[SubsPlease] Show - NCOP [1080p]": with a leading [Group], a spaced
+    # " - word" at the end is the episode or special, not the group.
+    if group and not (leading and match.group(0)[:1].isspace()):
         return group
     if _valid_group(parsed_group) and not _TRAILING_TAG.search("-" + str(parsed_group)):
         return str(parsed_group)
-    leading = _LEADING_GROUP.match(name)
-    if leading and _valid_group(leading.group(1)):
-        return leading.group(1).strip()
-    return ""
+    return leading
 
 
 def detect_hdr(title):
