@@ -78,8 +78,15 @@ _MEDIA_EXTENSION = re.compile(
 # Tags posted AFTER the group ("-HONE.REMASTERED", "-GRP[rarbg]",
 # "(... - HONE) [REMASTERED]") and the posting/indexer suffixes that replace
 # it ("-GRP-Obfuscated", "-GRP-postbot"). Each pass strips one from the end.
+# Edition and posting tags, also seen in trailing parentheses ("(Extended)").
+_EDITION_TAGS = (
+    r"extended|remastered|proper|repack\d?|rerip|internal|unrated|uncut|uncensored"
+    r"|imax|theatrical|criterion|limited|hybrid|3d|directors?[ ._-]?cut"
+    r"|special[ ._-]?edition|anniversary[ ._-]?edition"
+)
 _TRAILING_TAG = re.compile(
     r"(?:\s*\[[^\[\]]*\]"
+    r"|[ ._]?\((?:" + _EDITION_TAGS + r")\)"
     r"|[ ._](?:remastered|proper|repack\d?|rerip|internal|readnfo|real|dirfix"
     r"|nfofix|subfix|sample|hybrid)"
     r"|-(?:obfuscated|scrambled|postbot|xpost|rakuv\w*|whiterev|buymore"
@@ -96,7 +103,7 @@ _LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
 _NOT_A_GROUP = re.compile(
     r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
     r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
-    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed",
+    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed|" + _EDITION_TAGS,
     re.I,
 )
 
