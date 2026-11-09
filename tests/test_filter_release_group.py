@@ -51,6 +51,9 @@ from resources.lib.nzbget_fleet_dedup import same_release
         ("Movie.2024.1080p.WEB-DL-GRP", "GRP"),
         ("Movie.2020.MULTi.1080p.WEB.x264-GRP.mkv", "GRP"),
         ("[SubsPlease] Show - 01 (1080p) [ABCD1234].mkv", "SubsPlease"),
+        # A versioned episode number is not a group.
+        ("[SubsPlease] Show - 01v2 [1080p] [ABCD1234].mkv", "SubsPlease"),
+        ("[Erai-raws] Show - 12v3 [1080p][Multiple Subtitle]", "Erai-raws"),
         # No group: tags and title words are never read as one.
         ("Movie.2020.1080p.WEB-DL", ""),
         ("Movie.2024.1080p.WEB-DL.HE-AAC", ""),
@@ -103,6 +106,8 @@ _SUBJECT_BASES = [
     "Band.of.Brothers.Part.1.Currahee.2001.1080p.BluRay.x264-HDMaNiAcS",
     "[SubsPlease] Sousou no Frieren - 28 (1080p) [A1B2C3D4]",
     "Movie.Title.2020.1080p.WEB-DL.H.264",
+    "Dune.2021",
+    "Up.2009.1080p.BluRay.x264-GRP",
 ]
 
 _SUBJECT_SHAPES = [
@@ -118,6 +123,7 @@ _SUBJECT_SHAPES = [
     '"{name}.001" yEnc (1/200)',
     '[1 of 3] - "{name}.mkv" yEnc',
     "{name} (1/45)",
+    '[1080p WEB-DL x265] [1/3] - "{name}.mkv" yEnc',
 ]
 
 

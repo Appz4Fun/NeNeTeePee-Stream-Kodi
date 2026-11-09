@@ -81,8 +81,51 @@ def _strip_file_suffix(name):
     return name.strip(" -")
 
 
+# Tokens that are tags, not title words, beyond the ones _DETAIL_TAG knows.
+_TAG_WORDS = frozenset(
+    (
+        "dl",
+        "rip",
+        "bit",
+        "10bit",
+        "8bit",
+        "amzn",
+        "nf",
+        "dsnp",
+        "hmax",
+        "atvp",
+        "multi",
+        "proper",
+        "repack",
+        "remastered",
+        "internal",
+        "sbs",
+        "hsbs",
+    )
+)
+_TOKEN_SPLIT = re.compile(r"[\s._\-\[\]()]+")
+
+
+def _has_title_word(name):
+    """Whether ``name`` holds a word that isn't a tag (a title, not just tags)."""
+    for token in _TOKEN_SPLIT.split(name):
+        if (
+            sum(c.isalpha() for c in token) >= 2
+            and token.lower() not in _TAG_WORDS
+            and not _DETAIL_TAG.fullmatch(token)
+            and not _RELEASE_TAG.fullmatch(token)
+        ):
+            return True
+    return False
+
+
 def _looks_like_release(name):
-    return bool(_RELEASE_TAG.search(name)) and len(_NAME_CHARS.findall(name)) >= 2
+    """A recognizable tag plus a title word: "Dune.2021", not "1080p WEB-DL x265"."""
+    return (
+        bool(_RELEASE_TAG.search(name))
+        and bool(_NAME_CHARS.search(name))
+        and _has_title_word(name)
+    )
 
 
 def _detail(name):
