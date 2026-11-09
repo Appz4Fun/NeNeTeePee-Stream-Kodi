@@ -110,7 +110,8 @@ flowchart LR
     B --> R[Hybrid REMUX > REMUX > other]
     R --> C[Preferred tier 1 > 2 > 3]
     C --> D[Audio]
-    D --> E[Size: larger wins]
+    D --> N[More NZB copies of the release]
+    N --> E[Size: larger wins]
 ```
 
 The preferred tiers apply to all releases. Explicit size or age sorting
@@ -138,6 +139,14 @@ state from `/dev/input`, holding **OK** for five seconds also switches to
 show-all. If nothing survives
 filtering, the picker opens straight into show-all. NeNeTeePee-Stream-Kodi computes DL tags
 over the full row set, so rows revealed by show-all keep them.
+
+In the default **List compacted** view (`results_view` `0`),
+`results_groups.release_groups` folds the ranked rows into one row per release
+with the same `release_match.same_release` rule the copies tiebreak and NZBGet
+backups use. A row joins a group only when it matches every member, because the
+rule isn't transitive. The group keeps the position of its best-ranked copy, and
+selecting it plays the first copy with a **DL** tag, otherwise that best-ranked
+copy. **List** (`results_view` `1`) skips the grouping.
 
 ## Caching
 

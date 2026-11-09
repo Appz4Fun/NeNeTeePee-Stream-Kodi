@@ -19,6 +19,7 @@ devices.
 
     Keep only the resolutions, HDR formats, codecs, audio, and languages you
     want. Rank by relevance, size, or age, and optionally auto-select the best.
+    The picker shows each release once and lists the indexers that carry it.
 
 -   :material-play-speed: __[Playback, remux, and seeking](playback-and-remux.md)__
 

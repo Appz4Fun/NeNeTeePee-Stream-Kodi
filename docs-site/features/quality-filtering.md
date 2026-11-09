@@ -81,6 +81,7 @@ On the **Sorting** tab:
 | Setting | Options | Default |
 |---------|---------|---------|
 | **Sort by** | Relevance, Size (largest first), Size (smallest first), Age (newest first), Age (oldest first) | Relevance |
+| **Results view** | List compacted, List | List compacted |
 | **Max results** | Whole number, clamped to 1–10000 when sent to providers | 25 |
 | **Auto-select best match (skip result list)** | Skip the picker and play the top-ranked result | Off |
 
@@ -102,7 +103,12 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 6. **Audio:** TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
    DTS-HD MA/FLAC/PCM/ALAC, then DTS-HD High Resolution/DTS, DD+, DD, AAC,
    other formats, and finally no audio tag.
-7. **Size:** larger files win the final tie-break.
+7. **NZB copies:** among releases still tied, the release with more NZBs in
+   the results sorts first, so a pick has more backups if one NZB fails.
+   Copies are counted with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release)
+   that NZBGet duplicate backups use, so a release with no group counts only
+   itself.
+8. **Size:** larger files win the final tie-break.
 
 The three editable, comma-separated preferred group lists default to the
 [TRaSH tier 1](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-01.json),
@@ -123,6 +129,23 @@ view (below) is not truncated. With **Auto-select best match** on, NeNeTeePee-St
 plays the first release that passed your filters after ranking, so "best"
 always means "the top item under your current sort order." If nothing passed
 your filters, the picker opens instead.
+
+## Picker views
+
+**Sorting › Results view** picks how the picker lays out results:
+
+- **List compacted** (default) shows each release once, however many indexers
+  carry it, with its copy count on the right of the row. A panel on the right
+  lists the focused release's copies with indexer, size and age. A green
+  **DL** on the row means a copy is already downloaded. Press ++enter++ to
+  play the downloaded copy if there is one, otherwise the top-ranked copy.
+- **List** shows every indexer copy on its own row, as earlier versions did.
+
+Copies are grouped with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release):
+the same title and year or episode, and equal resolution, HDR, audio,
+channels, codec, quality (source), edition, PROPER/REPACK, 3D, dubbed,
+hardcoded-subtitle and cut tags, and release group. Language and soft-subtitle tags don't split a release, and a
+result with no release group is never grouped with another.
 
 ## Filtered and all results in the picker
 
