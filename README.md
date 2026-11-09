@@ -93,7 +93,7 @@ delivers automatic updates on one of two channels:
 | Channel | Repository add-on | NeNeTeePee-Stream-Kodi today |
 |---------|-------------------|---------------|
 | **Stable** | `repository.appz4fun.stable` | 1.2.3 |
-| **Beta** | `repository.appz4fun.beta` | 2.0.0-beta.3 (pre-releases included) |
+| **Beta** | `repository.appz4fun.beta` | 2.0.0-rc.1 (pre-releases included) |
 
 1. Open [appz4fun.github.io/Appz4Fun-Kodi-Repo](https://appz4fun.github.io/Appz4Fun-Kodi-Repo/)
    and download the channel zip (for example `repository.appz4fun.stable-1.0.1.zip`).

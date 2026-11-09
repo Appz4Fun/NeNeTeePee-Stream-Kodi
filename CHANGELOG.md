@@ -13,7 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| **[Unreleased](#unreleased--main)** | on `main` | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
+| [Unreleased](#unreleased--main) | on `main` | Nothing yet |
+| **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
 | **[2.0.0-beta.1](#200-beta1--2026-07-09)** | 2026-07-09 | NZBGet backend + Smart Duplicates, tiered fallback/dropout hardening, manual indexer manager, TVDB-aware TV search, versioned settings.xml with per-option help text, unified XXE protection, large complexity-reduction refactor, MkDocs documentation site |
@@ -65,6 +66,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 
 ## [Unreleased][] — main
+
+Nothing yet.
+
+## [2.0.0-rc.1][] — 2026-11-09
+
+> First release candidate for 2.0.0. The picker now shows each release once,
+> with a panel listing the indexers that carry it, and one "same release" rule
+> drives the picker, the new NZB-copies tiebreak and NZBGet duplicate backups.
+> NZBGet playback failures explain themselves in a dialog that can remount a
+> dropped share, and Next-Up plays the right next episode across seasons.
+>
+> **Before you upgrade,** read the upgrade notes: the picker layout and some
+> settings moved.
+
+### Upgrade notes
+
+- The picker opens in **List compacted**. To keep one row per indexer copy,
+  set **Sorting › Results view** to **List**.
+- Fallback Streams, Proxy, Pass-through validation, Submit timeout, Clear
+  queue on submit and Stream Resilience moved from **Advanced** to
+  **Playback backend**. Saved values carry over.
+- NZBGet users who had **Enable fallback streams** off get **Maximum
+  duplicate backups** set to `0` once, so their behavior doesn't change.
+- **Other / Unknown HDR** no longer has an effect; untagged releases are SDR
+  and follow the **SDR** option.
 
 ### Added
 
@@ -1591,7 +1617,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.3...main
+[Unreleased]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-rc.1...main
+[2.0.0-rc.1]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.3...v2.0.0-rc.1
 [2.0.0-beta.3]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.2...v2.0.0-beta.3
 [2.0.0-beta.2]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v2.0.0-beta.1...v2.0.0-beta.2
 [2.0.0-beta.1]: https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/compare/v1.2.3...v2.0.0-beta.1

@@ -13,12 +13,13 @@ to report problems.
 | Channel | Version | Released |
 |---------|---------|----------|
 | Stable | 1.2.3 | 2026-05-08 |
-| Beta | 2.0.0-beta.3 | 2026-10-11 |
+| Beta | 2.0.0-rc.1 | 2026-11-09 |
 
 Beta releases so far:
 
 | Version | Released |
 |---------|----------|
+| 2.0.0-rc.1 | 2026-11-09 |
 | 2.0.0-beta.3 | 2026-10-11 |
 | 2.0.0-beta.2 | 2026-07-18 |
 | 2.0.0-beta.1 | 2026-07-09 |
@@ -37,7 +38,7 @@ as `v2.0.0-beta.3`.
 
 ## What's in the beta
 
-These features are in 2.0.0-beta.1, 2.0.0-beta.2, or 2.0.0-beta.3 and are
+These features are in the 2.0.0 betas or 2.0.0-rc.1 and are
 **not** in Stable 1.2.3. The full notes are in the
 [changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md).
 
@@ -47,6 +48,9 @@ These features are in 2.0.0-beta.1, 2.0.0-beta.2, or 2.0.0-beta.3 and are
 |---------|--------------|---------|
 | **NZBGet backend** | Use NZBGet instead of nzbdav. NeNeTeePee-Stream-Kodi submits the NZB, shows download and post-processing progress, then plays the finished file from your completed-downloads folder. | [NZBGet backend](../features/nzbget-backend.md) |
 | **Smart Duplicates failover** (NZBGet) | Other same-name results are queued as backups. If your pick can't be repaired, NZBGet switches to a backup and playback follows it. In beta.3, the backups go to NZBGet in one `appendfleet` request. The add-on falls back to one-by-one submissions on servers that don't support it. | [Smart Duplicates](../features/nzbget-backend.md#smart-duplicates-failover) |
+| **List compacted picker** (rc.1) | Each release appears once, however many indexers carry it. A panel on the right lists its copies with indexer, size and age. **Sorting › Results view › List** restores one row per copy. | [Picker views](../features/quality-filtering.md#picker-views) |
+| **Playback failure dialog** (rc.1, NZBGet) | When a finished download can't be found or read, a dialog says why: share not mounted, folder missing, no video, or unreadable. It can remount a dropped share and start playback. | [Changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md#200-rc1--2026-11-09) |
+| **Next episode after one ends** (rc.1) | A Next-Up play without an episode, or a misfired season premiere, searches for the episode after the one you watched, rolling over to the next season. | [Changelog](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/main/CHANGELOG.md#200-rc1--2026-11-09) |
 | **StreamNZB backend** (beta.3) | Play through a StreamNZB server with the full NZB picker and the add-on's local filters. | [StreamNZB backend](../features/streamnzb-backend.md) |
 | **One Playback backend section** (beta.3) | A single **Playback backend** section replaces the old **Connection** and **NZBGet** tabs. Your old "use NZBGet" choice is migrated once. NZBHydra2, Prowlarr, and the TMDB key moved to **Indexers**, and languages have their own category. | [Settings guide](../settings/index.md) |
 | **Complete media filters and ranking** (beta.3) | Filters cover resolution, HDR, audio, codec, and language. Results rank by resolution, then HDR, then REMUX, with three editable release-group tiers. The old preferred-groups list is gone. | [Settings reference](../reference/settings.md) |
@@ -62,6 +66,12 @@ These features are in 2.0.0-beta.1, 2.0.0-beta.2, or 2.0.0-beta.3 and are
 | **Help text for every setting** | The settings screen was rebuilt on Kodi's newer settings format, so every setting and category shows a help line. | [Settings reference](../reference/settings.md) |
 
 ### Improvements
+
+- **One same-release rule** (rc.1) groups copies in the picker, picks NZBGet
+  duplicate backups, and counts NZB copies for the new relevance tiebreak:
+  among top ties, the release with more NZBs ranks first. Release groups are
+  read correctly in more names, including raw yEnc subjects. See
+  [What counts as the same release](../features/nzbget-backend.md#what-counts-as-the-same-release).
 
 - **Fallback streams** match alternate releases in tiers and search more
   widely for same-content peers. For files of 1 GiB or more, the byte-fingerprint

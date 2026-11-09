@@ -23,7 +23,7 @@ Which build each channel serves right now:
 | Channel | NeNeTeePee-Stream-Kodi version | Notes |
 |---------|-----------------|-------|
 | Stable | **1.2.3** | Last non-pre-release build (May 2026). |
-| Beta | **2.0.0-beta.3** | The 2.0.0 line, with NZBGet and StreamNZB backends, the unified **Playback backend** settings, exact season-pack reuse, and more. See [Beta channel and beta features](beta-channel.md). |
+| Beta | **2.0.0-rc.1** | The 2.0.0 line, with NZBGet and StreamNZB backends, the compact release picker, the unified **Playback backend** settings, exact season-pack reuse, and more. See [Beta channel and beta features](beta-channel.md). |
 
 !!! note "This site documents the newest code"
     These pages follow the `main` branch, which can be ahead of both
