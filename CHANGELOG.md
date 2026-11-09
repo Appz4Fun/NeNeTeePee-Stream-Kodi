@@ -120,9 +120,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Relevance ranks releases with more NZB copies first.** Among results that
   tie on resolution, HDR, REMUX, group tier, and audio, the group's release
   with more NZBs in the results now sorts first, so a pick has more backups if
-  one NZB fails. Size breaks the ties that remain. Copies are counted with the
-  same rule NZBGet duplicate backups use, so a release with no group counts
-  only itself.
+  one NZB fails. Size breaks the ties that remain. Copies are counted among
+  those tied results with the same rule NZBGet duplicate backups use, so a
+  release with no group counts only itself.
 
 ### Fixed
 

@@ -762,11 +762,6 @@ def _sort_results(results, settings):
     return _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
 
 
-def _normalized_release_name(title):
-    """Case/whitespace-normalized release name for same-name matching."""
-    return " ".join(str(title or "").split()).casefold()
-
-
 def _is_release_copy(target, row):
     """Whether ``row`` is another NZB of ``target``'s release.
 
@@ -788,12 +783,18 @@ def _fold_meta_value(value):
 
 
 def _copy_prefilter_key(row):
-    """The parsed fields ``same_release`` requires equal, read from ``_meta``.
+    """Fields ``same_release`` requires equal, so only rows sharing it compare.
 
-    A cheap subset of ``release_match.release_profile`` (everything but the
-    variant flags, which need a fresh title parse). Rows with different keys
-    can never be the same release, so only rows sharing a key are compared.
-    None for a row with no parsed group, which the rule never groups.
+    A cheap subset of ``release_match.release_profile`` read from ``_meta``
+    (everything but the variant flags), plus the content the episode gate
+    requires equal: the parsed episode set, and the season set when the row
+    names episodes. ``_same_content`` rejects any pair whose episode sets
+    differ in presence or value, and with episodes on both sides no phantom
+    season collapse applies, so seasons must match too. A season pack or movie
+    (no episodes) keys on an empty tuple, because a phantom season can still
+    collapse there. Without this, every episode of a whole-show search from one
+    group would share one key and be compared pairwise. None for a row with no
+    parsed group, which the rule never groups.
     """
     meta = row.get("_meta")
     if not isinstance(meta, dict):
@@ -810,7 +811,19 @@ def _copy_prefilter_key(row):
             values = [values]
         fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
     fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
+    fields.extend(_episode_key(row))
     return tuple(fields)
+
+
+def _episode_key(row):
+    """``(episodes, seasons)`` from the cached release identity; see above."""
+    from resources.lib import fallback_streams as _fs
+
+    try:
+        _title, _year, seasons, episodes, _part = _fs._release_identity(row)
+    except Exception:  # pylint: disable=broad-except
+        return ((), ())
+    return (tuple(episodes), tuple(seasons) if episodes else ())
 
 
 def _nzb_copy_counts(rows):
@@ -851,12 +864,6 @@ def _nzb_copy_counts(rows):
     return counts
 
 
-def _nzb_copy_count(target, rows):
-    """How many NZBs in ``rows`` carry ``target``'s release, itself included."""
-    pool = [target] + [row for row in rows if row is not target]
-    return _nzb_copy_counts(pool)[id(target)]
-
-
 def _break_ties_by_copies(ordered, relevance_key):
     """Rank more NZB copies of a release above size among top-tier ties.
 
@@ -864,9 +871,11 @@ def _break_ties_by_copies(ordered, relevance_key):
     size. Each run of rows that ties on everything before size (resolution,
     HDR, REMUX, group tier, audio) is re-sorted by copy count, most first,
     then by size as before. A stable sort keeps the original order when both
-    tie. Copies are counted within the run: same_release requires equal
-    resolution, HDR, audio, and group, which puts a release's copies in one
-    run.
+    tie. Copies are counted within the run. same_release requires equal
+    resolution, HDR, audio, and group, so a release's copies almost always
+    share a run; the rare split (REMUX priority reads the raw title, so a
+    "Hybrid" listing can rank apart from its plain twin) counts each side
+    within its own run.
     """
     if len(ordered) < 2:
         return ordered

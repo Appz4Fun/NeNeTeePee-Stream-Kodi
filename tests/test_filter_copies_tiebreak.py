@@ -4,7 +4,6 @@
 """Relevance: among top-tier ties, more NZB copies of the release first."""
 
 from resources.lib.filter import (
-    _nzb_copy_count,
     _nzb_copy_counts,
     _sort_results,
     parse_title_metadata,
@@ -13,6 +12,11 @@ from resources.lib.filter import (
 ALPHA = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264-GRPA"
 BRAVO = "Bravo.2024.1080p.WEB-DL.DDP5.1.H264-GRPB"
 SIZE = "5000000000"
+
+
+def _nzb_copy_count(target, rows):
+    """How many NZBs in ``rows`` carry ``target``'s release, itself included."""
+    return _nzb_copy_counts(rows)[id(target)]
 
 
 def _row(title, link, size=SIZE, **extra):
@@ -240,3 +244,28 @@ def test_copies_are_counted_per_release_not_per_cluster():
     counts = _nzb_copy_counts(rows)
 
     assert [counts[id(row)] for row in rows] == [3, 2, 2]
+
+
+def test_whole_show_list_only_compares_listings_of_one_episode():
+    # A title-only fallback search returns every episode of the show from one
+    # group with one quality profile. Different episodes can never be the same
+    # release, so they must not be compared pairwise.
+    from unittest.mock import patch
+
+    from resources.lib import release_match
+
+    rows = []
+    for copy in range(2):
+        for season in range(1, 5):
+            for episode in range(1, 26):
+                title = "Show.S{:02d}E{:02d}.1080p.WEB-DL.DDP5.1.H264-GRP".format(
+                    season, episode
+                )
+                rows.append(_row(title, "s{}e{}-{}".format(season, episode, copy)))
+
+    real = release_match.same_release
+    with patch.object(release_match, "same_release", side_effect=real) as spy:
+        counts = _nzb_copy_counts(rows)
+
+    assert spy.call_count == 0
+    assert set(counts.values()) == {2}
