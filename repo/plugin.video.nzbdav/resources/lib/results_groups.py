@@ -8,6 +8,7 @@ NZBGet backups already treat as the same release (``filter._is_release_copy``).
 Grouping rule changes belong there, so the picker follows them unchanged.
 """
 
+from resources.lib.fallback_streams import _release_identity
 from resources.lib.filter import _is_release_copy
 from resources.lib.release_match import release_profile
 
@@ -24,23 +25,25 @@ def release_groups(rows):
     2005 and 2023 shows, which reject each other), so matching one member
     does not mean matching the rest.
 
-    ``same_release`` only accepts rows with equal ``release_profile`` tuples
-    and a known group, so each row's profile is computed once and only the
-    groups with that same profile are compared; a row with no group (or one
-    whose profile cannot be parsed) stays on its own. That keeps grouping
-    near linear: comparing every row against every earlier group made a few
-    hundred distinct releases take tens of seconds. Season-pack rows (the
-    synthetic local pack included) are never grouped with anything.
+    ``same_release`` only accepts rows with equal ``release_profile`` tuples,
+    a known group and (through the content gate) the same episode set, and
+    the same season set when episodes are present. Each row's key is computed
+    once and only groups with the same key are compared; a row with no group
+    (or one that cannot be parsed) stays on its own. That keeps grouping near
+    linear: comparing every row against every earlier group made a few
+    hundred distinct releases, or episodes of one group, take seconds.
+    Season-pack rows (the synthetic local pack included) are never grouped
+    with anything.
     """
     groups = []
     by_profile = {}
     verdicts = {}
     for row in rows:
-        profile = _groupable_profile(row)
-        if profile is None:
+        key = _grouping_key(row)
+        if key is None:
             groups.append([row])
             continue
-        candidates = by_profile.setdefault(profile, [])
+        candidates = by_profile.setdefault(key, [])
         for group in candidates:
             if _matches_every_member(group, row, verdicts):
                 group.append(row)
@@ -86,14 +89,21 @@ def group_pick(group):
     return group[0]
 
 
-def _groupable_profile(row):
-    """``row``'s release profile, or None when it can never group."""
+def _grouping_key(row):
+    """Fields two copies must share, or None when ``row`` can never group.
+
+    The release profile plus the content gate's exact-match parts: the
+    episode set (presence and value must match), and the season set when the
+    row names episodes (the phantom-season collapse only applies without
+    episodes). The fuzzy title and year checks stay in ``same_release``.
+    """
     if not isinstance(row, dict) or row.get("_season_pack"):
         return None
     try:
         profile = release_profile(row)
+        if not dict(profile).get("group"):
+            return None
+        _title, _year, seasons, episodes, _part = _release_identity(row)
     except Exception:  # pylint: disable=broad-except
         return None
-    if not dict(profile).get("group"):
-        return None
-    return profile
+    return (profile, tuple(episodes), tuple(seasons) if episodes else None)

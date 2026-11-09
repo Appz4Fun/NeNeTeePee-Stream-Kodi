@@ -134,3 +134,23 @@ def test_group_pick_prefers_an_already_downloaded_copy():
 
     assert group_pick([lead, done]) is done
     assert group_pick([lead, _row(ALPHA, "a3")]) is lead
+
+
+def test_distinct_episodes_of_one_group_are_never_compared():
+    rows = [
+        _row("Show.S{:02d}E{:02d}.1080p.WEB-DL.H264-GRP".format(s, e), str(s * 100 + e))
+        for s in range(1, 13)
+        for e in range(1, 26)
+    ]
+    with patch("resources.lib.results_groups._is_release_copy") as copy:
+        groups = release_groups(rows)
+
+    assert len(groups) == 300
+    copy.assert_not_called()
+
+
+def test_renamed_episode_copy_still_groups():
+    title = "Show.S02E01.1080p.WEB-DL.DDP5.1.H264-GRP"
+    rows = [_row(title, "e1"), _row(title.replace(".", " "), "e2"), _row(title, "e3")]
+
+    assert _links(release_groups(rows)) == [["e1", "e2", "e3"]]
