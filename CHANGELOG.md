@@ -105,6 +105,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Release groups are read correctly in more names.** The group is now found
+  when a tag follows it (`-HONE.REMASTERED`, `-GRP.PROPER`, `-GRP[rarbg]`), in
+  the parenthesized style (`(... English - HONE) [REMASTERED]`), behind an
+  indexer suffix (`-GRP-Obfuscated`, `-GRP-postbot`), and inside a yEnc
+  subject (`[1/3] - "Name-GRP.mkv" yEnc`, which used to read as group `1/3`).
+  A raw Usenet subject from a raw-search indexer (`[1/3] - "Name.mkv" yEnc`,
+  `[PRiVATE]-[WtFnZb]-[Name]-[1/7] - "" yEnc`, split-archive and par2 file
+  names) is now parsed as the release name inside it, so its title, episode,
+  resolution, HDR, audio and group match the named listings. NZBs of one
+  release under these names now group together as NZBGet duplicate backups,
+  and the release-group filter and preferred-group ranking see the right
+  group.
+
 - **Kodi crash on repeated plays.** The add-on's crash logger was switched on
   again every time it ran, which could segfault Kodi after a few plays. It's now
   switched on once per Kodi session.

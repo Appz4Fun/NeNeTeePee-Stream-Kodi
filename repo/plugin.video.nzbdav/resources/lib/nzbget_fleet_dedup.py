@@ -61,8 +61,9 @@ _VARIANT_FLAGS = (
 def _variant_signature(title):
     """PTT variant flags plus sorted languages for a release title."""
     from resources.lib.ptt import parse_title
+    from resources.lib.release_subject import release_name_from_subject
 
-    parsed = parse_title(str(title or ""))
+    parsed = parse_title(release_name_from_subject(title))
     flags = tuple(bool(parsed.get(key)) for key in _VARIANT_FLAGS)
     languages = tuple(
         sorted(str(lang).lower() for lang in parsed.get("languages") or [])

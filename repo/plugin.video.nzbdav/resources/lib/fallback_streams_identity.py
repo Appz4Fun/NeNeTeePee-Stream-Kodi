@@ -157,11 +157,19 @@ def _release_identity(result):
         cached, tuple
     ):
         return cached
-    parsed = _fs._parsed_title_fields(title)
-    norm_title = _fs._normalize_title(parsed.get("title") or title)
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    name = release_name_from_subject(title)
+    parsed = _fs._parsed_title_fields(name)
+    norm_title = _fs._normalize_title(
+        parsed.get("title") or without_media_extension(name)
+    )
     seasons = _fs._sorted_int_tuple(parsed.get("seasons"))
     episodes = _fs._sorted_int_tuple(parsed.get("episodes"))
-    part = _fs._part_number_from_title(title)
+    part = _fs._part_number_from_title(name)
     identity = (norm_title, parsed["year"], seasons, episodes, part)
     result[_fs._RELEASE_IDENTITY_CACHE_TITLE_KEY] = title
     result[_fs._RELEASE_IDENTITY_CACHE_VALUE_KEY] = identity

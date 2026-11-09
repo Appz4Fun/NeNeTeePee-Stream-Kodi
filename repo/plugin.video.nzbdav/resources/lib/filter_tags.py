@@ -4,6 +4,7 @@
 import re
 
 from resources.lib.filter_languages import title_languages
+from resources.lib.release_subject import release_name_from_subject
 
 
 def _pattern(expression):
@@ -68,6 +69,136 @@ _CODEC_PATTERNS = tuple(
         ("Theora", r"theora"),
     ]
 )
+
+
+_MEDIA_EXTENSION = re.compile(
+    r"\.(?:mkv|mp4|m4v|avi|ts|m2ts|wmv|mov|webm|iso|nzb|nfo|par2|rar|7z|zip"
+    r"|r\d{2}|\d{3})$",
+    re.I,
+)
+# Tags posted AFTER the group ("-HONE.REMASTERED", "-GRP[rarbg]",
+# "(... - HONE) [REMASTERED]") and the posting/indexer suffixes that replace
+# it ("-GRP-Obfuscated", "-GRP-postbot"). Each pass strips one from the end.
+# Edition and posting tags, also seen in trailing parentheses ("(Extended)").
+_EDITION_TAGS = (
+    r"extended|remastered|proper|repack\d?|rerip|internal|unrated|uncut|uncensored"
+    r"|imax|theatrical|criterion|limited|hybrid|3d|directors?[ ._-]?cut"
+    r"|special[ ._-]?edition|anniversary[ ._-]?edition"
+)
+_TRAILING_TAG = re.compile(
+    r"(?:\s*\[[^\[\]]*\]"
+    r"|[ ._]?\((?:" + _EDITION_TAGS + r")\)"
+    r"|[ ._](?:remastered|proper|repack\d?|rerip|internal|readnfo|real|dirfix"
+    r"|nfofix|subfix|sample|hybrid)"
+    r"|-(?:obfuscated|scrambled|postbot|xpost|rakuv\w*|whiterev|buymore"
+    r"|asrequested|alternativetorequested|repackpost|chamele0n|4p|4planet"
+    r"|altezachen|gerov|z0ids3n|nzbgeek|sample|pre|rp))\s*$",
+    re.I,
+)
+# Groups may hold hyphens ("GROUP-NAME", "D-Z0N3"); _group_candidate drops a
+# leading source/codec segment such as the "DL" of "WEB-DL-GRP".
+_GROUP_AT_END = re.compile(r"(?:-|\s-\s?)([a-z0-9][\w&@-]*)\)?\s*$", re.I)
+# A whole group in trailing parentheses: "x264.(D-Z0N3)", "(GROUP-NAME)".
+_PAREN_GROUP_AT_END = re.compile(r"[ ._-]\(([a-z0-9][\w&@-]*)\)\s*$", re.I)
+_LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
+_NOT_A_GROUP = re.compile(
+    r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
+    r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
+    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed|bits?|"
+    + _EDITION_TAGS,
+    re.I,
+)
+
+
+_TAG_PATTERNS = tuple(pattern for _name, pattern in _AUDIO_PATTERNS + _CODEC_PATTERNS)
+
+
+def _valid_group(value):
+    """Whether ``value`` can be a group: not a source, codec or audio tag."""
+    value = str(value or "").strip()
+    return (
+        bool(value)
+        and "/" not in value
+        and not _NOT_A_GROUP.fullmatch(value)
+        and not any(pattern.fullmatch(value) for pattern in _TAG_PATTERNS)
+    )
+
+
+def _group_candidate(value):
+    """The trailing hyphen segments of ``value`` up to the first tag-like one.
+
+    Keeps "GROUP-NAME" and "D-Z0N3" whole, but drops the "DL" of "WEB-DL-GRP"
+    and never returns a slug run such as "matrix-1999-1080p-x264-grp".
+    """
+    kept = []
+    for part in reversed(value.split("-")):
+        if not _valid_group(part) or len(kept) == 3:
+            break
+        kept.insert(0, part)
+    return "-".join(kept)
+
+
+# Source and format tags written with a hyphen ("Blu-Ray", "WEB-DL",
+# "DVD-Rip", "10-bit", "DTS-ES", "DD-EX").
+_HYPHENATED_SOURCE = _pattern(
+    r"blu-ray|web-(?:dl|rip)|hd-(?:dvd|tv|rip)|dvd-(?:rip|r)|bd-(?:rip|remux)"
+    r"|\d{1,2}-bits?|dts-(?:es|hr)|dd-?ex"
+)
+
+
+def _without_hyphenated_tags(name):
+    """``name`` with hyphenated source/HDR/audio/codec tags blanked.
+
+    Splitting the trailing "-" run would otherwise read "MA-FGT" or "MA" as
+    the group of "x264.DTS-HD-MA-FGT", and "Ray-GRP" as that of
+    "x264.Blu-Ray-GRP".
+    """
+    for pattern in (_HYPHENATED_SOURCE, _HDR_PLUS, _DV) + _TAG_PATTERNS:
+        name = pattern.sub(
+            lambda match: " " if "-" in match.group(0) else match.group(0), name
+        )
+    return name
+
+
+def _release_name(title):
+    """The release name inside ``title`` (see ``release_subject``), no extension."""
+    name = release_name_from_subject(title)
+    return _MEDIA_EXTENSION.sub("", name.strip().rstrip("/"))
+
+
+def detect_release_group(title, parsed_group=""):
+    """Return the release group, correcting PTT where its group is wrong.
+
+    PTT only reads a group at the very end of a name, so a tag posted after
+    the group ("-HONE.REMASTERED"), a parenthesized name ("(... - HONE)
+    [REMASTERED]"), an indexer suffix ("-GRP-Obfuscated") or a yEnc subject
+    (``[1/3] - "Name-GRP.mkv" yEnc``, read as group "1/3") loses it. Strip
+    those from the end and read the "-GROUP" left there; else keep PTT's
+    group when it is plausible, else a leading "[Group]" (anime style).
+    Unknown stays "".
+    """
+    title = str(title or "")
+    name = _release_name(title)
+    previous = None
+    while previous != name:
+        previous = name
+        name = _TRAILING_TAG.sub("", name)
+    name = _without_hyphenated_tags(name)
+    parenthesized = _PAREN_GROUP_AT_END.search(name)
+    if parenthesized and _group_candidate(parenthesized.group(1)):
+        return _group_candidate(parenthesized.group(1))
+    leading = _LEADING_GROUP.match(name)
+    leading = leading.group(1).strip() if leading else ""
+    leading = leading if _valid_group(leading) else ""
+    match = _GROUP_AT_END.search(name)
+    group = _group_candidate(match.group(1)) if match else ""
+    # "[SubsPlease] Show - NCOP [1080p]": with a leading [Group], a spaced
+    # " - word" at the end is the episode or special, not the group.
+    if group and not (leading and match.group(0)[:1].isspace()):
+        return group
+    if _valid_group(parsed_group) and not _TRAILING_TAG.search("-" + str(parsed_group)):
+        return str(parsed_group)
+    return leading
 
 
 def detect_hdr(title):
@@ -141,4 +272,5 @@ def supplement_metadata(title, meta):
         ]
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])
+    meta["group"] = detect_release_group(title, meta.get("group", ""))
     return meta

@@ -233,7 +233,14 @@ def _get_filter_settings(settings_getter=None):
 
 
 def parse_title_metadata(title):
-    """Parse a scene title and return normalized metadata dict."""
+    """Parse a scene title and return normalized metadata dict.
+
+    A raw Usenet subject (``[1/3] - "Name.mkv" yEnc``) is parsed as the
+    release name inside it.
+    """
+    from resources.lib.release_subject import release_name_from_subject
+
+    title = release_name_from_subject(title)
     try:
         from resources.lib.ptt import parse_title
 
