@@ -783,39 +783,71 @@ def _is_release_copy(target, row):
     return same_release(target, row)
 
 
+def _fold_meta_value(value):
+    return str(value or "").strip().casefold()
+
+
+def _copy_prefilter_key(row):
+    """The parsed fields ``same_release`` requires equal, read from ``_meta``.
+
+    A cheap subset of ``release_match.release_profile`` (everything but the
+    variant flags, which need a fresh title parse). Rows with different keys
+    can never be the same release, so only rows sharing a key are compared.
+    None for a row with no parsed group, which the rule never groups.
+    """
+    meta = row.get("_meta")
+    if not isinstance(meta, dict):
+        return None
+    group = _fold_meta_value(meta.get("group"))
+    if not group:
+        return None
+    fields = [bool(row.get("_season_pack")), group]
+    for name in ("resolution", "channels", "codec", "quality", "edition"):
+        fields.append(_fold_meta_value(meta.get(name)))
+    for name in ("hdr", "audio"):
+        values = meta.get(name) or []
+        if isinstance(values, str):
+            values = [values]
+        fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
+    fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
+    return tuple(fields)
+
+
 def _nzb_copy_counts(rows):
     """Map ``id(row)`` to how many NZBs of its release ``rows`` hold.
 
-    ``same_release`` reads only a row's title and the metadata parsed from
-    it, so rows with the identical title are bucketed first and one check
-    stands for the whole bucket. A bucket whose title does not match itself
-    (no parsed group) splits into single rows. Each remaining bucket joins
-    the first cluster whose first row it is a copy of, so ``same_release``
-    runs once per distinct title and cluster, not once per pair of rows. A
-    cluster's count is its distinct NZB links: a link listed twice counts
-    once and a row without a link adds nothing (every row counts at least 1).
+    Each title counts the NZBs it accepts itself. ``same_release`` is not
+    transitive (a yearless episode matches both a 2005 and a 2023 reboot that
+    reject each other), so no group of rows shares one representative's count.
+
+    Two shortcuts keep that cheap. Rows with the identical title are bucketed,
+    because ``same_release`` reads only the title and the metadata parsed from
+    it. And ``same_release`` requires equal parsed fields and a known group,
+    so a bucket is only compared with buckets sharing ``_copy_prefilter_key``;
+    a bucket alone under its key counts only its own NZBs, and a groupless row
+    counts only itself. A count is the distinct NZB links of every bucket the
+    title accepts: a link listed twice counts once and a row without a link
+    adds nothing (every row counts at least 1).
     """
     buckets = {}
     for row in rows:
         key = (bool(row.get("_season_pack")), str(row.get("title") or ""))
         buckets.setdefault(key, []).append(row)
-    clusters = []
+    peer_sets = {}
     for bucket in buckets.values():
-        if not _is_release_copy(bucket[0], bucket[0]):
-            clusters.extend([row] for row in bucket)
-            continue
-        for cluster in clusters:
-            if _is_release_copy(cluster[0], bucket[0]):
-                cluster.extend(bucket)
-                break
-        else:
-            clusters.append(list(bucket))
-    counts = {}
-    for cluster in clusters:
-        links = {row.get("link") for row in cluster if row.get("link")}
-        copies = max(1, len(links))
-        for row in cluster:
-            counts[id(row)] = copies
+        prefilter = _copy_prefilter_key(bucket[0])
+        if prefilter is not None:
+            peer_sets.setdefault(prefilter, []).append(bucket)
+    counts = {id(row): 1 for row in rows}
+    for peers in peer_sets.values():
+        for bucket in peers:
+            links = {row.get("link") for row in bucket if row.get("link")}
+            for other in peers:
+                if other is not bucket and _is_release_copy(bucket[0], other[0]):
+                    links.update(row.get("link") for row in other if row.get("link"))
+            copies = max(1, len(links))
+            for row in bucket:
+                counts[id(row)] = copies
     return counts
 
 

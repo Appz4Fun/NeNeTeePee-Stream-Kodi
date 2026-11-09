@@ -5,6 +5,7 @@
 
 from resources.lib.filter import (
     _nzb_copy_count,
+    _nzb_copy_counts,
     _sort_results,
     parse_title_metadata,
 )
@@ -223,3 +224,19 @@ def test_dotted_and_parenthesized_listings_of_one_release_pool_their_copies():
 
     assert {row["_meta"]["group"] for row in rows} == {"HONE"}
     assert _nzb_copy_count(rows[0], rows) == 4
+
+
+def test_copies_are_counted_per_release_not_per_cluster():
+    # same_release is not transitive: the yearless listing matches both
+    # dated reboots, which reject each other. Each dated release holds two
+    # NZBs (itself and the yearless one); the yearless listing holds three.
+    yearless = "Doctor.Who.S01E01.1080p.WEB-DL.DDP5.1.H264-GRP"
+    rows = [
+        _row(yearless, "y1"),
+        _row("Doctor.Who.2005.S01E01.1080p.WEB-DL.DDP5.1.H264-GRP", "a1"),
+        _row("Doctor.Who.2023.S01E01.1080p.WEB-DL.DDP5.1.H264-GRP", "b1"),
+    ]
+
+    counts = _nzb_copy_counts(rows)
+
+    assert [counts[id(row)] for row in rows] == [3, 2, 2]
