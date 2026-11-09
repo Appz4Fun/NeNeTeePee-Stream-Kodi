@@ -14,6 +14,7 @@ extras in ``nzbget_resolver_dupes``) and the picker's copy grouping all ask
 * the group is known. A row with no group is never grouped with another
   (a literal ``NOGRP`` or ``P2P`` tag is a group like any other).
 
+A container (".mkv", ".mp4") splits a release only when both rows name one.
 Languages and soft subtitles are not compared: they don't make a different
 video. An unknown value only equals another unknown: a row that names a codec
 is a different release from one that names none.
@@ -110,6 +111,19 @@ def _movie_years_match(pick, row):
     return pick_year == _fs._release_identity(row)[1]
 
 
+def _containers_conflict(pick, row):
+    """Both rows name a container (".mkv", ".mp4") and they differ.
+
+    Most listings name none, so an unknown container never splits a release;
+    a known .mkv and a known .mp4 are different files.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    left = _fold(_fs._result_meta(pick).get("container"))
+    right = _fold(_fs._result_meta(row).get("container"))
+    return bool(left and right and left != right)
+
+
 def same_release(pick, row):
     """Whether ``row`` is the same release as ``pick``. Fail-closed."""
     from resources.lib import fallback_streams as _fs
@@ -119,6 +133,8 @@ def same_release(pick, row):
         # runs before the content gate.
         profile = release_profile(pick)
         if not dict(profile)["group"] or profile != release_profile(row):
+            return False
+        if _containers_conflict(pick, row):
             return False
         return bool(_fs._same_content(pick, row) and _movie_years_match(pick, row))
     except Exception:  # pylint: disable=broad-except
