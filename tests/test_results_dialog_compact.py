@@ -114,6 +114,18 @@ def test_compact_selection_returns_the_groups_lead_copy():
     assert dialog._closed is True
 
 
+def test_compact_selection_plays_the_downloaded_copy_when_only_it_is_dl():
+    lead = _row(ALPHA, "a1")
+    done = _row(ALPHA, "a2", _available=True)
+    dialog = _dialog([lead, done])
+    dialog.onInit()
+
+    dialog.getControl(COMPACT_LIST_ID).getSelectedPosition.return_value = 0
+    dialog.onAction(_Action(ACTION_SELECT))
+
+    assert dialog.get_selected_result() is done
+
+
 def test_compact_click_on_second_group_returns_its_lead():
     bravo = _row(BRAVO, "b1")
     dialog = _dialog([_row(ALPHA, "a1"), _row(ALPHA, "a2"), bravo])
@@ -206,6 +218,8 @@ def test_dl_on_any_copy_marks_the_group_row_and_that_panel_line():
     assert props["available"] == "[COLOR FF22C55E]DL[/COLOR]"
     marks = props["panel_marks"].split("[CR]")
     assert "DL" not in marks[0] and "DL" in marks[1]
+    indexers = props["panel_indexers"].split("[CR]")
+    assert "FFFFFFFF" not in indexers[0] and "FFFFFFFF" in indexers[1]
     assert props["panel_foot"].startswith("Already downloaded")
 
 
@@ -216,6 +230,16 @@ def test_panel_caps_long_groups_with_a_more_line():
     indexers = props["panel_indexers"].split("[CR]")
     assert len(indexers) == 14
     assert "+7 more" in indexers[-1]
+
+
+def test_capped_panel_still_lists_the_copy_enter_plays():
+    group = [_row(ALPHA, "a{}".format(i)) for i in range(19)]
+    group.append(_row(ALPHA, "done", indexer="DLIDX", _available=True))
+    props = _group_props(group)
+
+    indexers = props["panel_indexers"].split("[CR]")
+    assert len(indexers) == 14
+    assert "DLIDX" in indexers[-2] and "FFFFFFFF" in indexers[-2]
 
 
 def test_group_row_carries_the_leads_filter_reason():

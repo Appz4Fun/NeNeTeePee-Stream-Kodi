@@ -9,7 +9,7 @@ import xbmcgui
 from resources.lib.http_util import format_size as _format_size
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
-from resources.lib.results_groups import release_groups
+from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
 
 # Color constants matching the mockup
@@ -174,13 +174,16 @@ def _tech_summary(item_props):
 
 def _panel_copy_lines(group):
     """Panel columns (marks, indexers, sizes, ages) for one release group."""
+    pick = group_pick(group)
     shown = group[:_PANEL_MAX_COPIES]
     if len(group) > _PANEL_MAX_COPIES:
         shown = group[: _PANEL_MAX_COPIES - 1]
+        if not any(row is pick for row in shown):
+            shown = shown[:-1] + [pick]
     marks, indexers, sizes, ages = [], [], [], []
-    for index, row in enumerate(shown):
+    for row in shown:
         marks.append(_available_text() if row.get("_available") else " ")
-        color = _COPY_LEAD_COLOR if index == 0 else _COPY_COLOR
+        color = _COPY_LEAD_COLOR if row is pick else _COPY_COLOR
         indexers.append(_c(row.get("indexer", "") or " ", color))
         sizes.append(_c(_format_size(row.get("size")) or " ", "FFA1A1AA"))
         ages.append(_c(row.get("age", "") or " ", "FF6B7280"))
@@ -241,6 +244,7 @@ def _build_group_item(group, row_index):
     item.setProperty("panel_sizes", sizes)
     item.setProperty("panel_ages", ages)
     item.setProperty("panel_foot", _string(30487 if any_available else 30488))
+    # The highlighted (white) panel line is the copy Enter plays.
     return item
 
 
@@ -375,11 +379,15 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         self.setFocusId(self._list_id)
 
     def _select_focused(self):
-        """Record the focused row (a group's lead copy) and close."""
+        """Record the focused row and close.
+
+        For a List compacted group that is ``group_pick``: an already
+        downloaded copy when the group has one, else the lead copy.
+        """
         if self._closing:
             return
         entry = self._focused_entry()
-        self.selected_result = entry[0] if entry else None
+        self.selected_result = group_pick(entry) if entry else None
         self.close()
 
     def _show_all(self):
@@ -460,9 +468,9 @@ def show_results_dialog(results, title="", year="", total_count=0, all_results=N
         The chosen result dict (same object reference from whichever view
         was active) when the user picks one, or ``None`` when the user
         cancels the dialog or no results are available. In List compacted
-        (the ``results_view`` default) a picked group returns its lead,
-        top-ranked copy; the other copies stay in ``results`` for the
-        same-release backups.
+        (the ``results_view`` default) a picked group returns its first
+        already-downloaded copy, else its lead, top-ranked copy; the other
+        copies stay in ``results`` for the same-release backups.
     """
     addon = xbmcaddon.Addon("plugin.video.nzbdav")
     addon_path = addon.getAddonInfo("path")
