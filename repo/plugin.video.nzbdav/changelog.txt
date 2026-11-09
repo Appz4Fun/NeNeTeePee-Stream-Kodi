@@ -1,2 +1,3 @@
+v2.0.0-rc.1: compact picker, same-release rule, failure dialog, next episode.
 v2.0.0-beta.3: renamed add-on, StreamNZB, NZBGet fleet, filters, scrobbling.
 v2.0.0-beta.2: Exact season-pack episode reuse, SMB readability gate, polish.

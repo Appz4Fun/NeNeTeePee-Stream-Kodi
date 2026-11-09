@@ -25,6 +25,6 @@ The **Playback backend** and **Advanced** screenshots were recaptured on October
 
 Debug overlays were turned off before capture. Connection examples use `192.0.2.10` and dummy credentials. They do not show working servers or account secrets. Scrolled views overlap to keep the surrounding controls visible. The [capture manifest](../images/kodi/capture-manifest.json) records the context and checksum for each screenshot. The **Standard** setting level shows this add-on's visible options; hidden migration fields do not appear in screenshots.
 
-The unified backend tab, StreamNZB support, and renamed display name ship in Beta 2.0.0-beta.3. Stable 1.2.3 uses an earlier settings layout. Later changes on `main` are not in beta.3 until a release includes them.
+The unified backend tab, StreamNZB support, and renamed display name ship in Beta 2.0.0-beta.3. Stable 1.2.3 uses an earlier settings layout. Later changes on `main` are not in the Beta channel until a release includes them.
 
 Repository screenshots show the public Beta repository available at capture time. The [TMDBHelper project](https://github.com/jurialmunkey/plugin.video.themoviedb.helper) is a required dependency for the browsing and player workflow.

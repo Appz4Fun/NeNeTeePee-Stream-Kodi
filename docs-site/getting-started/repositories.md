@@ -3,7 +3,7 @@
 The [Appz4Fun Kodi Repository project](https://github.com/Appz4Fun/Appz4Fun-Kodi-Repo) publishes Stable and Beta channels. Install the repository add-on ZIP first, then install the video add-on from that repository. These are two different ZIPs: the repository ZIP supplies the catalog and updates; the video add-on ZIP supplies the player.
 
 !!! note "Name and feature changes"
-    The Beta channel serves **NeNeTeePee-Stream-Kodi 2.0.0-beta.3**, which includes the unified **Playback backend** section and StreamNZB support. The add-on ID remains `plugin.video.nzbdav`. The Stable channel still serves **NZB-DAV 1.2.3**.
+    The Beta channel serves **NeNeTeePee-Stream-Kodi 2.0.0-rc.1**, which includes the unified **Playback backend** section and StreamNZB support. The add-on ID remains `plugin.video.nzbdav`. The Stable channel still serves **NZB-DAV 1.2.3**.
 
     The screenshots on this page were captured on October 3, 2026, when the Beta channel served 2.0.0-beta.2 under the name **NZB-DAV**. Beta 2.0.0-beta.3 shows the new name in the same places.
 
