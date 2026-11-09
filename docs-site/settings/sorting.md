@@ -15,6 +15,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
 | Sort by[^source-sort_order]<br>`sort_order` | Relevance | Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, more NZB copies of the release, then larger size. Size and age modes sort by that property only. Choices: 0 = Relevance, 1 = Size (largest first), 2 = Size (smallest first), 3 = Age (newest first), 4 = Age (oldest first). |
+| Results view<br>`results_view` | List compacted | How the picker lays out results. List compacted shows each release once and lists the indexers that carry it in a panel on the right; copies are grouped with the same rule as the NZB-copies tiebreak and NZBGet backups, and Enter plays a copy that is already downloaded if there is one, otherwise the top-ranked copy. List shows every indexer copy on its own row. Choices: 0 = List compacted, 1 = List. |
 | Max results[^source-max_results]<br>`max_results` | 25 | Local provider clients clamp the request limit to 1–10000. The filtered picker uses the raw integer and truncates only when it is positive. A value of 0 requests one result per local provider but leaves the combined filtered picker unbounded; values above 10000 remain the picker limit. The show-all view is not truncated. StreamNZB owns its server search limit. |
 
 ### Auto-select

@@ -64,6 +64,7 @@
 
     <!-- Results list — 2 lines per item, 66px each -->
     <control type="list" id="50">
+      <visible>!String.IsEqual(Window.Property(view),compact)</visible>
       <left>0</left><top>60</top><width>1910</width><height>975</height>
       <orientation>vertical</orientation>
       <pagecontrol>60</pagecontrol>
@@ -265,6 +266,7 @@
 
     <!-- Scrollbar for the results list -->
     <control type="scrollbar" id="60">
+      <visible>!String.IsEqual(Window.Property(view),compact)</visible>
       <left>1910</left><top>60</top><width>10</width><height>975</height>
       <orientation>vertical</orientation>
       <onleft>50</onleft>
@@ -277,6 +279,290 @@
       <texturesliderbarfocus colordiffuse="FF4A9EFF">white.png</texturesliderbarfocus>
       <textureslidernib></textureslidernib>
       <textureslidernibfocus></textureslidernibfocus>
+    </control>
+
+    <!-- ==================== LIST COMPACTED (results_view default) ====================
+         One row per release group; the docked panel on the right follows the
+         focused row through Container(51).ListItem properties and is not
+         focusable, so remote navigation is the same as the List view. -->
+    <control type="list" id="51">
+      <visible>String.IsEqual(Window.Property(view),compact)</visible>
+      <left>0</left><top>60</top><width>1250</width><height>975</height>
+      <orientation>vertical</orientation>
+      <pagecontrol>61</pagecontrol>
+      <onleft>51</onleft>
+      <onright>61</onright>
+      <onup>51</onup>
+      <ondown>51</ondown>
+      <scrolltime>200</scrolltime>
+
+      <itemlayout width="1250" height="66">
+        <control type="image">
+          <left>0</left><top>0</top><width>1250</width><height>66</height>
+          <texture>white.png</texture>
+          <colordiffuse>$INFO[ListItem.Property(row_bg)]</colordiffuse>
+        </control>
+
+        <!-- LINE 1: DL (any copy) + Filename + Size + Copies (or the lone indexer) -->
+        <control type="label">
+          <left>6</left><top>4</top><width>32</width><height>30</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(available)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>40</left><top>4</top><width>860</width><height>30</height>
+          <font>font13</font><textcolor>FFD4D4D8</textcolor>
+          <label>$INFO[ListItem.Label]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>910</left><top>4</top><width>140</width><height>30</height>
+          <font>font13</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(size)]</label><aligny>center</aligny><align>right</align>
+        </control>
+        <control type="label">
+          <left>1060</left><top>4</top><width>176</width><height>30</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(copies)]</label><aligny>center</aligny><align>right</align>
+        </control>
+
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + Container + Filter reason + Group -->
+        <control type="label">
+          <left>20</left><top>34</top><width>90</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(resolution)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>110</left><top>34</top><width>120</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(hdr)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>230</left><top>34</top><width>145</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(codec)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>380</left><top>34</top><width>180</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(audio)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>560</left><top>34</top><width>130</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>690</left><top>34</top><width>80</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>780</left><top>34</top><width>210</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>1000</left><top>34</top><width>236</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(group)]</label><aligny>center</aligny><align>right</align>
+        </control>
+
+        <!-- Row separator -->
+        <control type="image">
+          <left>0</left><top>65</top><width>1250</width><height>1</height>
+          <texture>white.png</texture><colordiffuse>FF18181C</colordiffuse>
+        </control>
+      </itemlayout>
+
+      <focusedlayout width="1250" height="66">
+        <control type="image">
+          <left>0</left><top>0</top><width>1250</width><height>66</height>
+          <texture>white.png</texture>
+          <colordiffuse>FF182538</colordiffuse>
+        </control>
+
+        <!-- Same high-contrast left focus bar as the List view. -->
+        <control type="image">
+          <left>0</left><top>0</top><width>4</width><height>66</height>
+          <texture>white.png</texture>
+          <colordiffuse>FF4A9EFF</colordiffuse>
+        </control>
+
+        <!-- LINE 1: DL (any copy) + Filename + Size + Copies (or the lone indexer) -->
+        <control type="label">
+          <left>6</left><top>4</top><width>32</width><height>30</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(available)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>40</left><top>4</top><width>860</width><height>30</height>
+          <font>font13</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Label]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>910</left><top>4</top><width>140</width><height>30</height>
+          <font>font13</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(size)]</label><aligny>center</aligny><align>right</align>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>1060</left><top>4</top><width>176</width><height>30</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(copies)]</label><aligny>center</aligny><align>right</align>
+          <scroll>true</scroll>
+        </control>
+
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + Container + Filter reason + Group -->
+        <control type="label">
+          <left>20</left><top>34</top><width>90</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(resolution)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>110</left><top>34</top><width>120</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(hdr)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>230</left><top>34</top><width>145</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(codec)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>380</left><top>34</top><width>180</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(audio)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>560</left><top>34</top><width>130</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>690</left><top>34</top><width>80</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>780</left><top>34</top><width>210</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>1000</left><top>34</top><width>236</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(group)]</label><aligny>center</aligny><align>right</align>
+          <scroll>true</scroll>
+        </control>
+
+        <!-- Row separator -->
+        <control type="image">
+          <left>0</left><top>65</top><width>1250</width><height>1</height>
+          <texture>white.png</texture><colordiffuse>FF18181C</colordiffuse>
+        </control>
+      </focusedlayout>
+    </control>
+
+    <control type="scrollbar" id="61">
+      <visible>String.IsEqual(Window.Property(view),compact)</visible>
+      <left>1250</left><top>60</top><width>10</width><height>975</height>
+      <orientation>vertical</orientation>
+      <onleft>51</onleft>
+      <onright>61</onright>
+      <onup>61</onup>
+      <ondown>61</ondown>
+      <showonepage>false</showonepage>
+      <texturesliderbackground colordiffuse="00FFFFFF">white.png</texturesliderbackground>
+      <texturesliderbar colordiffuse="FF4A5568">white.png</texturesliderbar>
+      <texturesliderbarfocus colordiffuse="FF4A9EFF">white.png</texturesliderbarfocus>
+      <textureslidernib></textureslidernib>
+      <textureslidernibfocus></textureslidernibfocus>
+    </control>
+
+    <!-- Docked indexer panel: the focused release's copies, one line each. -->
+    <control type="group">
+      <visible>String.IsEqual(Window.Property(view),compact)</visible>
+      <left>1260</left><top>60</top>
+      <control type="image">
+        <left>0</left><top>0</top><width>660</width><height>975</height>
+        <colordiffuse>FF101017</colordiffuse>
+        <texture>white.png</texture>
+      </control>
+      <control type="image">
+        <left>0</left><top>0</top><width>1</width><height>975</height>
+        <colordiffuse>FF262632</colordiffuse>
+        <texture>white.png</texture>
+      </control>
+      <control type="label">
+        <left>30</left><top>20</top><width>600</width><height>30</height>
+        <font>font10</font><textcolor>FF9CA3AF</textcolor>
+        <label>$INFO[Container(51).ListItem.Property(panel_kicker)]</label><aligny>center</aligny>
+      </control>
+      <control type="textbox">
+        <left>30</left><top>58</top><width>600</width><height>110</height>
+        <font>font12</font><textcolor>FFFFFFFF</textcolor>
+        <label>$INFO[Container(51).ListItem.Property(panel_title)]</label>
+      </control>
+      <control type="textbox">
+        <left>30</left><top>172</top><width>600</width><height>70</height>
+        <font>font12</font><textcolor>FFFFFFFF</textcolor>
+        <label>$INFO[Container(51).ListItem.Property(panel_tech)]</label>
+      </control>
+      <control type="image">
+        <left>30</left><top>250</top><width>600</width><height>1</height>
+        <colordiffuse>FF262632</colordiffuse>
+        <texture>white.png</texture>
+      </control>
+      <control type="label">
+        <left>74</left><top>262</top><width>280</width><height>28</height>
+        <font>font10</font><textcolor>FF6B7280</textcolor>
+        <label>$ADDON[plugin.video.nzbdav 30484]</label><aligny>center</aligny>
+      </control>
+      <control type="label">
+        <left>354</left><top>262</top><width>130</width><height>28</height>
+        <font>font10</font><textcolor>FF6B7280</textcolor><align>right</align>
+        <label>$ADDON[plugin.video.nzbdav 30485]</label><aligny>center</aligny>
+      </control>
+      <control type="label">
+        <left>484</left><top>262</top><width>146</width><height>28</height>
+        <font>font10</font><textcolor>FF6B7280</textcolor><align>right</align>
+        <label>$ADDON[plugin.video.nzbdav 30486]</label><aligny>center</aligny>
+      </control>
+      <control type="textbox">
+        <left>30</left><top>298</top><width>44</width><height>580</height>
+        <font>font12</font><textcolor>FFFFFFFF</textcolor>
+        <label>$INFO[Container(51).ListItem.Property(panel_marks)]</label>
+      </control>
+      <control type="textbox">
+        <left>74</left><top>298</top><width>280</width><height>580</height>
+        <font>font12</font><textcolor>FFFFFFFF</textcolor>
+        <label>$INFO[Container(51).ListItem.Property(panel_indexers)]</label>
+      </control>
+      <control type="textbox">
+        <left>354</left><top>298</top><width>130</width><height>580</height>
+        <font>font12</font><textcolor>FFFFFFFF</textcolor>
+        <align>right</align>
+        <label>$INFO[Container(51).ListItem.Property(panel_sizes)]</label>
+      </control>
+      <control type="textbox">
+        <left>484</left><top>298</top><width>146</width><height>580</height>
+        <font>font12</font><textcolor>FFFFFFFF</textcolor>
+        <align>right</align>
+        <label>$INFO[Container(51).ListItem.Property(panel_ages)]</label>
+      </control>
+      <control type="textbox">
+        <left>30</left><top>890</top><width>600</width><height>70</height>
+        <font>font10</font><textcolor>FF9CA3AF</textcolor>
+        <label>$INFO[Container(51).ListItem.Property(panel_foot)]</label>
+      </control>
     </control>
 
     <!-- Footer background -->

@@ -45,6 +45,18 @@ _FALLBACK_STRINGS = {
     30371: "FILTERED: {}",
     30400: "Unknown",
     30477: "[Hold OK 5s] Filters off",
+    30478: "{} copies on {} indexers",
+    30479: "{} copies",
+    30480: "1 copy on {}",
+    30481: "{} releases · {} sources",
+    30482: "Showing {} releases ({} of {} sources) after filters",
+    30483: "Showing all {} sources in {} releases (filters off)",
+    30484: "Indexer",
+    30485: "Size",
+    30486: "Age",
+    30487: "Already downloaded. Enter plays it without a new download.",
+    30488: "Enter plays the top copy.",
+    30489: "+{} more",
     # 30115/30116/30121 are surfaced from the service-side retry/error
     # handler when strings.po hasn't been loaded yet (early in service
     # startup). Without these, the user saw a blank notification body.
