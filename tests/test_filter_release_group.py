@@ -38,6 +38,8 @@ from resources.lib.nzbget_fleet_dedup import same_release
         ("Show S01E01 1080p WEB-DL DDP5 1 H 264-FLUX", "FLUX"),
         ("Six.Feet.Under.S02E01.1080p.AMZN.WEB-DL.DDP2.0.H.264.1-KAIZEN", "KAIZEN"),
         ("Movie.2024.1080p.WEB-DL.x264-GROUP-NAME", "GROUP-NAME"),
+        ("Movie.2020.1080p.BluRay.x264.(D-Z0N3)", "D-Z0N3"),
+        ("Movie.2020.1080p.BluRay.x264 (GROUP-NAME)", "GROUP-NAME"),
         ("Movie.2020.1080p.BluRay.DTS.x264-D-Z0N3", "D-Z0N3"),
         # A hyphenated audio tag before the group is not part of it.
         ("Movie.2020.1080p.BluRay.x264.DTS-HD-MA-FGT", "FGT"),
@@ -174,3 +176,18 @@ def test_a_full_name_outside_the_quotes_beats_a_short_archive_name():
     )
     name = "Movie.Title.2020.1080p.BluRay.x264-GRP"
     assert release_name_from_subject(subject) == name
+
+
+def test_a_subject_keeps_the_variant_its_outer_name_states():
+    """A 3D outer name must not lose to an archive name that omits the 3D."""
+    from resources.lib.release_subject import release_name_from_subject
+
+    subject = (
+        "Movie.Title.2020.3D.1080p.BluRay.x264-GRP [01/50] - "
+        '"Movie.Title.2020.1080p.BluRay.x264-GRP.part01.rar" yEnc'
+    )
+    assert release_name_from_subject(subject) == (
+        "Movie.Title.2020.3D.1080p.BluRay.x264-GRP"
+    )
+    flat = {"title": "Movie.Title.2020.1080p.BluRay.x264-GRP", "link": "a"}
+    assert not same_release(flat, {"title": subject, "link": "b"})

@@ -91,6 +91,8 @@ _TRAILING_TAG = re.compile(
 # Groups may hold hyphens ("GROUP-NAME", "D-Z0N3"); _group_candidate drops a
 # leading source/codec segment such as the "DL" of "WEB-DL-GRP".
 _GROUP_AT_END = re.compile(r"(?:-|\s-\s?)([a-z0-9][\w&@-]*)\)?\s*$", re.I)
+# A whole group in trailing parentheses: "x264.(D-Z0N3)", "(GROUP-NAME)".
+_PAREN_GROUP_AT_END = re.compile(r"[ ._-]\(([a-z0-9][\w&@-]*)\)\s*$", re.I)
 _LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
 _NOT_A_GROUP = re.compile(
     r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
@@ -172,6 +174,9 @@ def detect_release_group(title, parsed_group=""):
         previous = name
         name = _TRAILING_TAG.sub("", name)
     name = _without_hyphenated_tags(name)
+    parenthesized = _PAREN_GROUP_AT_END.search(name)
+    if parenthesized and _group_candidate(parenthesized.group(1)):
+        return _group_candidate(parenthesized.group(1))
     match = _GROUP_AT_END.search(name)
     group = _group_candidate(match.group(1)) if match else ""
     if group:
