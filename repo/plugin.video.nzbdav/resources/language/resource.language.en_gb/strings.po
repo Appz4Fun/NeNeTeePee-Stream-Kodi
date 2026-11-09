@@ -1291,8 +1291,8 @@ msgid "Remove releases unless their title contains every one of these comma-sepa
 msgstr "Remove releases unless their title contains every one of these comma-separated keywords."
 
 msgctxt "#30332"
-msgid "Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, then larger size. Size and age modes sort by that property only."
-msgstr "Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, then larger size. Size and age modes sort by that property only."
+msgid "Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, more NZB copies of the release, then larger size. Size and age modes sort by that property only."
+msgstr "Relevance ranks highest resolution first, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio, more NZB copies of the release, then larger size. Size and age modes sort by that property only."
 
 msgctxt "#30333"
 msgid "Caps how many results are requested per provider and how many appear in the picker after filtering."

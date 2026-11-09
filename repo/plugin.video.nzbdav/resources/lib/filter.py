@@ -745,7 +745,8 @@ def _sort_results(results, settings):
     """Sort results by configured sort order, with preferred groups boosted.
 
     Sort orders:
-        0 = Relevance (original order)
+        0 = Relevance (among rows tied before size, more NZB copies of the
+            release first, then larger size, then original order)
         1 = Size (largest first)
         2 = Size (smallest first)
         3 = Age (newest first) -- pubdate descending
@@ -755,7 +756,193 @@ def _sort_results(results, settings):
     if spec is not None:
         key, reverse = spec
         return sorted(results, key=key, reverse=reverse)
-    return sorted(
-        results,
-        key=_make_relevance_key(settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)),
+    relevance_key = _make_relevance_key(
+        settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)
     )
+    return _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
+
+
+def _is_release_copy(target, row):
+    """Whether ``row`` is another NZB of ``target``'s release.
+
+    The same rule as NZBGet duplicate backups:
+    ``release_match.same_release`` alone, so the picker and the backups count
+    the same NZBs. A row without a parsed group never groups, not even with a
+    listing of the identical name. A season pack only groups with season
+    packs and an episode only with episodes.
+    """
+    if bool(target.get("_season_pack")) != bool(row.get("_season_pack")):
+        return False
+    from resources.lib.release_match import same_release
+
+    return same_release(target, row)
+
+
+def _fold_meta_value(value):
+    return str(value or "").strip().casefold()
+
+
+def _copy_prefilter_key(row):
+    """Profile fields ``same_release`` requires equal, read from ``_meta``.
+
+    A cheap subset of ``release_match.release_profile`` (everything but the
+    variant flags). Rows with different keys can never be the same release,
+    so only rows sharing a key are compared. None for a row with no parsed
+    group, which the rule never groups.
+    """
+    meta = row.get("_meta")
+    if not isinstance(meta, dict):
+        return None
+    group = _fold_meta_value(meta.get("group"))
+    if not group:
+        return None
+    fields = [bool(row.get("_season_pack")), group]
+    for name in ("resolution", "channels", "codec", "quality", "edition"):
+        fields.append(_fold_meta_value(meta.get(name)))
+    for name in ("hdr", "audio"):
+        values = meta.get(name) or []
+        if isinstance(values, str):
+            values = [values]
+        fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
+    fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
+    return tuple(fields)
+
+
+_SEASONS_CLASS = ("seasons", (), ())
+
+
+def _content_class(row):
+    """Which rows ``same_release``'s content gate can ever accept for ``row``.
+
+    From the cached release identity ``(title, year, seasons, episodes,
+    part)``:
+
+    * ``("episode", episodes, seasons)`` for a row naming episodes. The gate
+      rejects any pair whose episode sets differ in presence or value, and
+      with episodes on both sides no phantom-season collapse applies, so the
+      seasons must match too.
+    * ``("movie", year, ())`` for a row with no seasons and no episodes. As a
+      pick, a movie needs the candidate's exact year (absent included); as a
+      candidate of a season-only row it needs the same year for the phantom
+      collapse. Movies of other years never match it.
+    * ``("seasons", (), ())`` for a row with seasons but no episodes (a season pack,
+      or a movie whose group mis-parsed as a season). It can match a movie of
+      its year through the collapse and a season row of any year, so it is
+      compared with every movie and season row under its profile.
+
+    Every class is a 3-tuple so the keys stay uniform.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    try:
+        _title, year, seasons, episodes, _part = _fs._release_identity(row)
+    except Exception:  # pylint: disable=broad-except
+        return _SEASONS_CLASS
+    if episodes:
+        return ("episode", tuple(episodes), tuple(seasons))
+    if seasons:
+        return _SEASONS_CLASS
+    return ("movie", year, ())
+
+
+def _peer_candidates(buckets):
+    """For buckets sharing one profile, map each to the buckets to compare.
+
+    Uses ``_content_class``: episodes meet the same episode, movies meet
+    movies of their year plus season rows, and season rows meet every movie
+    and season row. Without this, every episode of a whole-show search, or
+    every movie a group posted, would be compared pairwise.
+    """
+    by_class = {}
+    for bucket in buckets:
+        by_class.setdefault(_content_class(bucket[0]), []).append(bucket)
+    seasons = by_class.get(_SEASONS_CLASS, [])
+    movies = [b for key, group in by_class.items() if key[0] == "movie" for b in group]
+    candidates = []
+    for key, group in by_class.items():
+        if key[0] == "episode":
+            peers = group
+        elif key[0] == "movie":
+            peers = group + seasons
+        else:
+            peers = movies + seasons
+        candidates.extend((bucket, peers) for bucket in group)
+    return candidates
+
+
+def _nzb_copy_counts(rows):
+    """Map ``id(row)`` to how many NZBs of its release ``rows`` hold.
+
+    Each title counts the NZBs it accepts itself. ``same_release`` is not
+    transitive (a yearless episode matches both a 2005 and a 2023 reboot that
+    reject each other), so no group of rows shares one representative's count.
+
+    Three shortcuts keep that cheap without changing the answer. Rows with the
+    identical title are bucketed, because ``same_release`` reads only the
+    title and the metadata parsed from it. A bucket is only compared with
+    buckets sharing ``_copy_prefilter_key``, and among those only with the
+    content ``_peer_candidates`` allows. A groupless row counts only itself.
+    A count is the distinct NZB links of every bucket the title accepts: a
+    link listed twice counts once and a row without a link adds nothing
+    (every row counts at least 1).
+    """
+    buckets = {}
+    for row in rows:
+        key = (bool(row.get("_season_pack")), str(row.get("title") or ""))
+        buckets.setdefault(key, []).append(row)
+    profiles = {}
+    for bucket in buckets.values():
+        prefilter = _copy_prefilter_key(bucket[0])
+        if prefilter is not None:
+            profiles.setdefault(prefilter, []).append(bucket)
+    counts = {id(row): 1 for row in rows}
+    for profile_buckets in profiles.values():
+        for bucket, peers in _peer_candidates(profile_buckets):
+            links = {row.get("link") for row in bucket if row.get("link")}
+            for other in peers:
+                if other is not bucket and _is_release_copy(bucket[0], other[0]):
+                    links.update(row.get("link") for row in other if row.get("link"))
+            copies = max(1, len(links))
+            for row in bucket:
+                counts[id(row)] = copies
+    return counts
+
+
+def _break_ties_by_copies(ordered, relevance_key):
+    """Rank more NZB copies of a release above size among top-tier ties.
+
+    ``ordered`` is already sorted by ``relevance_key``, whose last element is
+    size. Each run of rows that ties on everything before size (resolution,
+    HDR, REMUX, group tier, audio) is re-sorted by copy count, most first,
+    then by size as before. A stable sort keeps the original order when both
+    tie. Copies are counted within the run. same_release requires equal
+    resolution, HDR, audio, and group, so a release's copies almost always
+    share a run; the rare split (REMUX priority reads the raw title, so a
+    "Hybrid" listing can rank apart from its plain twin) counts each side
+    within its own run.
+    """
+    if len(ordered) < 2:
+        return ordered
+    keys = [relevance_key(row) for row in ordered]
+    result = []
+    start = 0
+    total = len(ordered)
+    while start < total:
+        prefix = keys[start][:-1]
+        end = start + 1
+        while end < total and keys[end][:-1] == prefix:
+            end += 1
+        result.extend(_order_by_copies(ordered[start:end], keys[start:end]))
+        start = end
+    return result
+
+
+def _order_by_copies(run, run_keys):
+    """Stable-sort one tied run by copy count (most first), then size key."""
+    if len(run) < 2:
+        return run
+    copies = _nzb_copy_counts(run)
+    ranked = sorted(
+        zip(run, run_keys), key=lambda pair: (-copies[id(pair[0])], pair[1][-1])
+    )
+    return [row for row, _key in ranked]
