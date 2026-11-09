@@ -236,8 +236,11 @@ def parse_title_metadata(title):
     """Parse a scene title and return normalized metadata dict.
 
     A raw Usenet subject (``[1/3] - "Name.mkv" yEnc``) is parsed as the
-    release name inside it.
+    release name inside it. ``meta["variant"]`` holds PTT's 3D, dub, hardsub
+    and cut flags (``release_match.variant_tags``), so the same-release rule
+    never reparses the title.
     """
+    from resources.lib.release_match import variant_tags
     from resources.lib.release_subject import release_name_from_subject
 
     title = release_name_from_subject(title)
@@ -251,6 +254,7 @@ def parse_title_metadata(title):
             xbmc.LOGERROR,
         )
         parsed = _fallback_parse(title)
+    variant = variant_tags(parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
         # PTT returned empty, try fallback
@@ -265,16 +269,18 @@ def parse_title_metadata(title):
     # release name doesn't stop the whole search; fall back to the
     # regular-expression-only metadata extractor.
     try:
-        return supplement_metadata(title, _normalize_parsed_meta(parsed))
+        meta = supplement_metadata(title, _normalize_parsed_meta(parsed))
     except (TypeError, AttributeError, KeyError) as e:
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: PTT metadata normalisation failed for '{}': {}; "
             "falling back to regex parse".format(title, e),
             xbmc.LOGWARNING,
         )
-        return supplement_metadata(
+        meta = supplement_metadata(
             title, _normalize_fallback_meta(_fallback_parse(title))
         )
+    meta["variant"] = variant
+    return meta
 
 
 def matches_filters(result, meta, settings):

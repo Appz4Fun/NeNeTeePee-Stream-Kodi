@@ -60,3 +60,27 @@ def test_release_profile_is_hashable_and_ignores_languages():
     plain = release_profile(_row(_PICK))
     assert hash(english) == hash(plain)
     assert english == plain
+
+
+def test_same_release_reuses_parsed_metadata_instead_of_reparsing():
+    """Sorting compares a row many times; PTT must not run on each compare."""
+    from unittest.mock import patch
+
+    from resources.lib.filter import parse_title_metadata
+
+    rows = [_row(_PICK), _row(_PICK.replace(".", " "))]
+    for row in rows:
+        row["_meta"] = parse_title_metadata(row["title"])
+    assert rows[0]["_meta"]["variant"] == []
+    assert same_release(rows[0], rows[1])  # warms the per-row caches
+    with patch("resources.lib.ptt.parse_title", side_effect=AssertionError):
+        for _ in range(3):
+            assert same_release(rows[0], rows[1])
+            assert same_release(rows[1], rows[0])
+
+
+def test_variant_tags_are_stored_in_the_metadata():
+    from resources.lib.filter import parse_title_metadata
+
+    meta = parse_title_metadata("Movie.2020.3D.HSBS.1080p.BluRay.x264-GRP")
+    assert meta["variant"] == ["3d"]

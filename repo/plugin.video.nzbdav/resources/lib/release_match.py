@@ -38,19 +38,33 @@ _STRING_FIELDS = (
 )
 _SET_FIELDS = ("hdr", "audio")
 _FLAG_FIELDS = ("proper", "repack")
+# Per-row cache of (title, profile): sorting compares one row many times.
+_PROFILE_CACHE_KEY = "_release_profile"
 
 
 def _fold(value):
     return str(value or "").strip().casefold()
 
 
-def _variant_flags(title):
-    """PTT's 3D, dub, hardsub and cut flags for the release name in ``title``."""
+def variant_tags(parsed):
+    """The 3D, dub, hardsub and cut flags set in a PTT result, as sorted names.
+
+    ``filter.parse_title_metadata`` stores these as ``meta["variant"]`` so
+    ``same_release`` never reparses a title.
+    """
+    parsed = parsed if isinstance(parsed, dict) else {}
+    return sorted(key for key in _VARIANT_FLAGS if parsed.get(key))
+
+
+def _variant_flags(row, meta):
+    """``meta["variant"]`` when the parse stored it, else a PTT parse of the title."""
+    stored = meta.get("variant")
+    if isinstance(stored, list):
+        return tuple(sorted(stored))
     from resources.lib.ptt import parse_title
     from resources.lib.release_subject import release_name_from_subject
 
-    parsed = parse_title(release_name_from_subject(title))
-    return tuple(bool(parsed.get(key)) for key in _VARIANT_FLAGS)
+    return tuple(variant_tags(parse_title(release_name_from_subject(row.get("title")))))
 
 
 def release_profile(row):
@@ -62,6 +76,10 @@ def release_profile(row):
     """
     from resources.lib import fallback_streams as _fs
 
+    title = row.get("title")
+    cached = row.get(_PROFILE_CACHE_KEY)
+    if isinstance(cached, tuple) and len(cached) == 2 and cached[0] == title:
+        return cached[1]
     meta = _fs._result_meta(row)
     fields = [(key, _fold(meta.get(key))) for key in _STRING_FIELDS]
     for key in _SET_FIELDS:
@@ -70,8 +88,10 @@ def release_profile(row):
             values = [values]
         fields.append((key, tuple(sorted({_fold(v) for v in values if v}))))
     fields.extend((key, bool(meta.get(key))) for key in _FLAG_FIELDS)
-    fields.append(("variant", _variant_flags(row.get("title"))))
-    return tuple(fields)
+    fields.append(("variant", _variant_flags(row, meta)))
+    profile = tuple(fields)
+    row[_PROFILE_CACHE_KEY] = (title, profile)
+    return profile
 
 
 def _movie_years_match(pick, row):
@@ -95,9 +115,11 @@ def same_release(pick, row):
     from resources.lib import fallback_streams as _fs
 
     try:
-        if not (_fs._same_content(pick, row) and _movie_years_match(pick, row)):
-            return False
+        # The cached profile comparison is cheap and rejects most pairs, so it
+        # runs before the content gate.
         profile = release_profile(pick)
-        return bool(dict(profile)["group"]) and profile == release_profile(row)
+        if not dict(profile)["group"] or profile != release_profile(row):
+            return False
+        return bool(_fs._same_content(pick, row) and _movie_years_match(pick, row))
     except Exception:  # pylint: disable=broad-except
         return False
