@@ -56,6 +56,9 @@ from resources.lib.nzbget_fleet_dedup import same_release
         # A versioned episode number is not a group.
         ("[SubsPlease] Show - 01v2 [1080p] [ABCD1234].mkv", "SubsPlease"),
         ("[Erai-raws] Show - 12v3 [1080p][Multiple Subtitle]", "Erai-raws"),
+        # A special's name after " - " is not the group either.
+        ("[SubsPlease] Show - NCOP [1080p] [ABCD1234].mkv", "SubsPlease"),
+        ("[Erai-raws] Show - Special [1080p]", "Erai-raws"),
         # No group: tags and title words are never read as one.
         ("Movie.2020.1080p.WEB-DL", ""),
         ("Movie.2024.1080p.WEB-DL.HE-AAC", ""),
@@ -191,3 +194,15 @@ def test_a_subject_keeps_the_variant_its_outer_name_states():
     )
     flat = {"title": "Movie.Title.2020.1080p.BluRay.x264-GRP", "link": "a"}
     assert not same_release(flat, {"title": subject, "link": "b"})
+
+
+def test_a_subject_keeps_the_language_its_outer_name_states():
+    from resources.lib.release_subject import release_name_from_subject
+
+    subject = (
+        "Movie.Title.2020.German.1080p.BluRay.x264-GRP [01/50] - "
+        '"Movie.Title.2020.1080p.BluRay.x264-GRP.part01.rar" yEnc'
+    )
+    assert release_name_from_subject(subject) == (
+        "Movie.Title.2020.German.1080p.BluRay.x264-GRP"
+    )
