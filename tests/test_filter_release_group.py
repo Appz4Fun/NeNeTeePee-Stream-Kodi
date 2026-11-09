@@ -54,6 +54,9 @@ from resources.lib.nzbget_fleet_dedup import same_release
         ("Movie.2020.1080p.x264.Blu-Ray", ""),
         ("Movie.2020.1080p.x264.WEB-Rip-GRP", "GRP"),
         ("Movie.2020.480p.x264.DVD-Rip", ""),
+        # Nor is a hyphenated bit depth.
+        ("Movie.2020.1080p.BluRay.x265.10-bit-GRP", "GRP"),
+        ("Movie.2020.1080p.BluRay.x265.10-bit", ""),
         ("Movie.2024.1080p.WEB-DL-GRP", "GRP"),
         ("Movie.2020.MULTi.1080p.WEB.x264-GRP.mkv", "GRP"),
         ("[SubsPlease] Show - 01 (1080p) [ABCD1234].mkv", "SubsPlease"),
