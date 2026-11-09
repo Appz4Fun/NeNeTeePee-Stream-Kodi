@@ -157,11 +157,16 @@ def _release_identity(result):
         cached, tuple
     ):
         return cached
-    from resources.lib.release_subject import release_name_from_subject
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
 
     name = release_name_from_subject(title)
     parsed = _stored_ptt_identity(result, name) or _fs._parsed_title_fields(name)
-    norm_title = _fs._normalize_title(parsed.get("title") or name)
+    norm_title = _fs._normalize_title(
+        parsed.get("title") or without_media_extension(name)
+    )
     seasons = _fs._sorted_int_tuple(parsed.get("seasons"))
     episodes = _fs._sorted_int_tuple(parsed.get("episodes"))
     part = _fs._part_number_from_title(name)

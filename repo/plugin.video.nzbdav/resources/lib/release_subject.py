@@ -30,18 +30,18 @@ _CHAIN_BRACKET = re.compile(
 _YENC = re.compile(r"\byEnc\b", re.I)
 _COUNTER = re.compile(r"[\[(]\s*\d+\s*(?:/|of)\s*\d+\s*[\])]", re.I)
 
-# File extensions a posted file carries, outermost first: a par2 volume
+# File suffixes a posted file carries, outermost first: a par2 volume
 # (".vol003+04.par2"), a split archive (".part01.rar", ".7z.001", ".r00",
-# ".001"), or the media file itself.
+# ".001"), or a side file (".nfo", ".sfv"). Not the media extension.
 _FILE_SUFFIX = re.compile(
     r"(?:\.vol\d+[+-]\d+)?\.par2$"
     r"|(?:\.part\d+)?\.rar$"
-    r"|\.(?:7z|zip|rar|mkv|mp4|avi|ts)\.\d{3}$"
     r"|\.(?:r\d{2}|(?!26[456]$)\d{3})$"
-    r"|\.(?:7z|zip|mkv|mp4|m4v|avi|ts|m2ts|wmv|mov|webm|iso|nzb|nfo|sfv|srr"
-    r"|srt|sub|idx|jpg|png)$",
+    r"|\.(?:7z|zip|iso|nzb|nfo|sfv|srr|srt|sub|idx|jpg|png)$",
     re.I,
 )
+# A media extension is kept on the name: PTT reads the container from it.
+_MEDIA_EXTENSION = re.compile(r"\.(?:mkv|mp4|m4v|avi|ts|m2ts|wmv|mov|webm)$", re.I)
 # Subject tails and wrappers left once the name is taken out.
 _SUBJECT_NOISE = re.compile(
     r"\byEnc\b.*$"
@@ -118,9 +118,25 @@ _TAG_WORDS = frozenset(
 _TOKEN_SPLIT = re.compile(r"[\s._\-\[\]()\\]+")
 
 
+_YEAR = re.compile(r"(?:19|20)\d{2}")
+
+
+def _numeric_title(tokens):
+    """A leading number that is the title: "300.2006", "1917.2019", "9.2009"."""
+    if len(tokens) < 2 or not tokens[0].isdigit():
+        return False
+    first = tokens[0]
+    if _YEAR.fullmatch(first):  # "1917.2019": a year-shaped title needs a year after
+        return any(_YEAR.fullmatch(token) for token in tokens[1:])
+    return not _DETAIL_TAG.fullmatch(first)
+
+
 def _has_title_word(name):
     """Whether ``name`` holds a word that isn't a tag (a title, not just tags)."""
-    for token in _TOKEN_SPLIT.split(name):
+    tokens = [token for token in _TOKEN_SPLIT.split(name) if token]
+    if _numeric_title(tokens):
+        return True
+    for token in tokens:
         if (
             sum(c.isalpha() for c in token) >= 2
             and token.lower() not in _TAG_WORDS
@@ -206,10 +222,17 @@ def release_name_from_subject(title):
     return best or remainder or title
 
 
+def without_media_extension(name):
+    """``name`` without a trailing media extension (".mkv", ".mp4", ...)."""
+    return _MEDIA_EXTENSION.sub("", str(name or ""))
+
+
 def _tokens(name):
     """The words of ``name`` as a multiset, so a dropped repeated word counts."""
     return collections.Counter(
-        token.lower() for token in _TOKEN_SPLIT.split(name) if token
+        token.lower()
+        for token in _TOKEN_SPLIT.split(_MEDIA_EXTENSION.sub("", name))
+        if token
     )
 
 
