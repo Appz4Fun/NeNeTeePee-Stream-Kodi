@@ -40,6 +40,10 @@ from resources.lib.nzbget_fleet_dedup import same_release
         ("Movie.2024.1080p.WEB-DL.x264-GROUP-NAME", "GROUP-NAME"),
         ("Movie.2020.1080p.BluRay.x264.(D-Z0N3)", "D-Z0N3"),
         ("Movie.2020.1080p.BluRay.x264 (GROUP-NAME)", "GROUP-NAME"),
+        # A parenthesized edition or posting tag is not a group.
+        ("Movie.2020.1080p.BluRay.x264-AAA (Extended)", "AAA"),
+        ("Movie.2020.1080p.BluRay.x264-BBB (REMASTERED)", "BBB"),
+        ("Movie.2020.1080p.BluRay.x264 (PROPER)", ""),
         ("Movie.2020.1080p.BluRay.DTS.x264-D-Z0N3", "D-Z0N3"),
         # A hyphenated audio tag before the group is not part of it.
         ("Movie.2020.1080p.BluRay.x264.DTS-HD-MA-FGT", "FGT"),
@@ -206,3 +210,34 @@ def test_a_subject_keeps_the_language_its_outer_name_states():
     assert release_name_from_subject(subject) == (
         "Movie.Title.2020.German.1080p.BluRay.x264-GRP"
     )
+
+
+def test_a_subject_keeps_every_episode_its_outer_name_states():
+    from resources.lib.release_subject import release_name_from_subject
+
+    subject = (
+        "Show.S01E01E02.1080p.WEB-DL.x264-GRP [01/50] - "
+        '"Show.S01E01.1080p.WEB-DL.x264-GRP.part01.rar" yEnc'
+    )
+    assert release_name_from_subject(subject) == "Show.S01E01E02.1080p.WEB-DL.x264-GRP"
+
+
+_GOT = "Game.of.Thrones.S08E03.1080p.WEB.h264-GRP"
+_LOTR = "The.Lord.of.the.Rings.2001.1080p.BluRay.x264-GRP"
+_ALIEN = "Alien.1979.Directors.Cut.1080p.BluRay.x264-GRP"
+
+
+@pytest.mark.parametrize(
+    "outer, archive",
+    [
+        # The archive filename dropped a title word, a repeated word, or a tag.
+        (_GOT, _GOT.replace("Game.of.", "Game.")),
+        (_LOTR, _LOTR.replace("of.the.Rings", "of.Rings")),
+        (_ALIEN, _ALIEN.replace("Directors.", "")),
+    ],
+)
+def test_outer_name_wins_when_the_archive_name_dropped_words(outer, archive):
+    from resources.lib.release_subject import release_name_from_subject
+
+    subject = '{} [01/50] - "{}.part01.rar" yEnc'.format(outer, archive)
+    assert release_name_from_subject(subject) == outer

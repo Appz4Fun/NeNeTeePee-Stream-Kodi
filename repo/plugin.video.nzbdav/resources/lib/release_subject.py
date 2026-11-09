@@ -13,6 +13,7 @@ part number as an episode). ``release_name_from_subject`` returns the
 release name inside, and returns a normal release title unchanged.
 """
 
+import collections
 import re
 
 _QUOTED = re.compile(r'"([^"]*)"')
@@ -22,6 +23,9 @@ _BRACKETED = re.compile(r"\[([^\[\]]*)\]")
 _BRACKET_NAME = re.compile(
     r"^\s*(?:\[[^\[\]]*\]\s*-\s*)*\[(.+?)\]\s*-\s*\[\s*\d+\s*(?:/|of)\s*\d+\s*\]",
     re.I,
+)
+_CHAIN_BRACKET = re.compile(
+    r"\[([^\[\]]*)\](?=\s*-\s*\[)|(?<=\]-)\[([^\[\]]*)\]|(?<=\] - )\[([^\[\]]*)\]"
 )
 _YENC = re.compile(r"\byEnc\b", re.I)
 _COUNTER = re.compile(r"[\[(]\s*\d+\s*(?:/|of)\s*\d+\s*[\])]", re.I)
@@ -111,7 +115,7 @@ _TAG_WORDS = frozenset(
         "hsbs",
     )
 )
-_TOKEN_SPLIT = re.compile(r"[\s._\-\[\]()]+")
+_TOKEN_SPLIT = re.compile(r"[\s._\-\[\]()\\]+")
 
 
 def _has_title_word(name):
@@ -136,10 +140,22 @@ def _looks_like_release(name):
     )
 
 
+_EPISODE_NUMBER = re.compile(r"(?<=\d)e\d{1,3}", re.I)
+
+
 def _detail(name):
-    """How much release detail ``name`` carries: distinct tags, then a group."""
+    """How much release detail ``name`` carries.
+
+    Distinct tags, plus each episode number past the first of an SxxEyy run
+    (so "S01E01E02" beats "S01E01"), plus one for a trailing group.
+    """
     tags = {tag.lower() for tag in _DETAIL_TAG.findall(name)}
-    return len(tags) + (1 if _ENDS_WITH_GROUP.search(name) else 0)
+    extra_episodes = sum(max(0, len(_EPISODE_NUMBER.findall(tag)) - 1) for tag in tags)
+    return len(tags) + extra_episodes + (1 if _ENDS_WITH_GROUP.search(name) else 0)
+
+
+def _unwrap_if_release(inner):
+    return inner if _looks_like_release(inner) else " "
 
 
 def _subject_remainder(title):
@@ -149,6 +165,13 @@ def _subject_remainder(title):
     while previous != remainder:
         previous = remainder
         remainder = _SUBJECT_NOISE.sub(" ", remainder)
+    # A "[a]-[b]-[c]" wrapper chain (WtFnZb style) loses its wrapper brackets
+    # ("[PRiVATE]", "[WtFnZb]"); a chain bracket holding the release name is
+    # unwrapped. Other brackets ("[SubsPlease] Show") stay.
+    remainder = _CHAIN_BRACKET.sub(
+        lambda m: _unwrap_if_release(next(g for g in m.groups() if g is not None)),
+        remainder,
+    )
     remainder = " ".join(remainder.split()).strip(' -"')
     return _strip_file_suffix(remainder)
 
@@ -173,10 +196,45 @@ def release_name_from_subject(title):
         candidates.append(_strip_file_suffix(named.group(1)))
     candidates += [_strip_file_suffix(b) for b in _BRACKETED.findall(title)]
     remainder = _subject_remainder(title)
-    candidates.append(remainder)
+    if not named:  # a WtFnZb chain already names the release
+        candidates.append(remainder)
     best = None
     for candidate in candidates:
         if candidate and _looks_like_release(candidate):
-            if best is None or _detail(candidate) > _detail(best):
+            if best is None or _richer(candidate, best):
                 best = candidate
     return best or remainder or title
+
+
+def _tokens(name):
+    """The words of ``name`` as a multiset, so a dropped repeated word counts."""
+    return collections.Counter(
+        token.lower() for token in _TOKEN_SPLIT.split(name) if token
+    )
+
+
+def _strictly_contains(outer, inner):
+    """Whether multiset ``outer`` holds all of ``inner`` and more."""
+    return outer != inner and not inner - outer
+
+
+def _richer(candidate, best):
+    """Whether ``candidate`` carries more of the release than ``best``.
+
+    A name holding every word of the other plus words outside brackets wins
+    (an outer name beats an archive filename that dropped a title word, a
+    language, a variant or an episode); a strict subset never wins; otherwise
+    the one with more recognized detail wins.
+    """
+    mine, theirs = _tokens(candidate), _tokens(best)
+    if mine != theirs and not mine - theirs:  # a strict subset never wins
+        return False
+    if _strictly_contains(mine, theirs):
+        # Extra words inside brackets are wrappers ("[PRiVATE]", "[N3wZ]");
+        # extra words outside them are release detail an archive name dropped.
+        wrapped = collections.Counter()
+        for inner in _BRACKETED.findall(candidate):
+            wrapped |= _tokens(inner)
+        if (mine - theirs) - wrapped:
+            return True
+    return _detail(candidate) > _detail(best)
