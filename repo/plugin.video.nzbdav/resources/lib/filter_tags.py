@@ -103,7 +103,8 @@ _LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
 _NOT_A_GROUP = re.compile(
     r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
     r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
-    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed|" + _EDITION_TAGS,
+    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed|bits?|"
+    + _EDITION_TAGS,
     re.I,
 )
 
@@ -136,9 +137,11 @@ def _group_candidate(value):
     return "-".join(kept)
 
 
-# Source tags written with a hyphen ("Blu-Ray", "WEB-DL", "DVD-Rip").
+# Source and format tags written with a hyphen ("Blu-Ray", "WEB-DL",
+# "DVD-Rip", "10-bit", "DTS-ES", "DD-EX").
 _HYPHENATED_SOURCE = _pattern(
     r"blu-ray|web-(?:dl|rip)|hd-(?:dvd|tv|rip)|dvd-(?:rip|r)|bd-(?:rip|remux)"
+    r"|\d{1,2}-bits?|dts-(?:es|hr)|dd-?ex"
 )
 
 
