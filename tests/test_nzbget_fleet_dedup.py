@@ -60,6 +60,9 @@ def _nzb(msgids):
     ).encode("utf-8")
 
 
+_REL = "Show.S01E02.1080p.WEB.h264-GRP"
+
+
 def _ids(prefix, count):
     return ["{}{}@post.example".format(prefix, i) for i in range(count)]
 
@@ -374,13 +377,12 @@ def test_hydra_duplicate_upload_carries_posted_epoch():
     "title",
     [
         "The.Matrix.1999.3D.HSBS.1080p.BluRay.x264-GRP",
-        "The.Matrix.1999.German.DL.1080p.BluRay.x264-GRP",
         "The.Matrix.1999.MULTi.1080p.BluRay.x264-GRP",
         "The.Matrix.1999.1080p.BluRay.x264.DUBBED-GRP",
         "The.Matrix.1999.1080p.BluRay.x264.HC-GRP",
     ],
 )
-def test_same_release_rejects_language_and_3d_variants(title):
+def test_same_release_rejects_dubbed_hardsub_and_3d_variants(title):
     # An NZBGet failover plays whatever it promotes (no stream-proxy byte check),
     # so a 3D / dubbed / foreign-language / hardsub variant is a different release.
     pick = {"title": "The.Matrix.1999.1080p.BluRay.x264-GRP", "link": "p"}
@@ -403,17 +405,20 @@ def test_capped_submit_stops_fetching_once_the_cap_is_met():
     assert fetch.call_count == 1
 
 
-def test_loader_extras_drop_language_and_3d_variants_of_the_pick():
+def test_loader_extras_keep_only_the_picks_release():
     from resources.lib.nzbget_resolver import _extra_backups_from_loader
 
     pick = {"title": "The.Matrix.1999.1080p.BluRay.x264-GRP", "link": "p"}
     cands = [
         {"link": "de", "title": "The.Matrix.1999.German.DL.1080p.BluRay.x264-GRP"},
         {"link": "3d", "title": "The.Matrix.1999.3D.HSBS.1080p.BluRay.x264-GRP"},
-        {"link": "ok", "title": "The.Matrix.1999.1080p.BluRay.x265-OTHER"},
+        {"link": "other", "title": "The.Matrix.1999.1080p.BluRay.x265-OTHER"},
+        {"link": "ok", "title": "The Matrix 1999 1080p BluRay x264-GRP"},
     ]
     got = _extra_backups_from_loader(lambda: cands, [], limit=None, pick=pick)
-    assert [e["link"] for e in got] == ["ok"]
+    # The same rule as the picker: a language tag doesn't split a release, a 3D
+    # variant or another group/codec does.
+    assert [e["link"] for e in got] == ["de", "ok"]
 
 
 def test_completed_backup_is_ledger_recorded_under_its_own_title():
@@ -596,7 +601,7 @@ def _fleet_dupe(backups, **extra):
         "key": "k",
         "pick_score": 1000,
         "score_base": 1000,
-        "pick": {"link": "pick", "title": "T", "size": "100", "pubdate": _PUB},
+        "pick": {"link": "pick", "title": _REL, "size": "100", "pubdate": _PUB},
         "backups": [
             dict(b, score=b.get("score", 999 - i)) for i, b in enumerate(backups)
         ],
@@ -686,8 +691,15 @@ def test_fleet_skips_a_backup_of_the_picks_own_posting(_fleet_env):
 def test_fleet_pick_falls_back_to_a_mirror_of_its_posting(_fleet_env):
     from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
-    mirror = {"link": "mirror", "size": "100", "pubdate": _PUB_90S}
-    hydra = [{"link": "hydra-mirror", "size": 100, "_posted_epoch": 1791028860}]
+    mirror = {"title": _REL, "link": "mirror", "size": "100", "pubdate": _PUB_90S}
+    hydra = [
+        {
+            "title": _REL,
+            "link": "hydra-mirror",
+            "size": 100,
+            "_posted_epoch": 1791028860,
+        }
+    ]
     ctx = _fleet_ctx(_fleet_dupe([mirror], hydra_uploads=lambda: hydra))
     fetched = []
 
@@ -793,8 +805,8 @@ def test_fleet_unlimited_skips_the_veto_probe_and_flags_extras(_fleet_env):
     from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dupe = _fleet_dupe(
-        [{"link": "b0"}],
-        loader=lambda: [{"link": "x", "title": "X", "pubdate": _PUB}],
+        [{"title": _REL, "link": "b0"}],
+        loader=lambda: [{"link": "x", "title": _REL, "pubdate": _PUB}],
     )
     ctx = _fleet_ctx(dupe)
     with patch(_FETCH, side_effect=_valid), patch(
@@ -808,8 +820,8 @@ def test_fleet_unlimited_skips_the_veto_probe_and_flags_extras(_fleet_env):
 def test_fleet_dead_backup_is_rescued_by_a_hydra_mirror(_fleet_env):
     from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
-    dead = {"link": "dead", "title": "t", "size": "200", "pubdate": _PUB}
-    mirror = {"link": "mirror", "size": 200, "_posted_epoch": 1791028860}
+    dead = {"link": "dead", "title": _REL, "size": "200", "pubdate": _PUB}
+    mirror = {"title": _REL, "link": "mirror", "size": 200, "_posted_epoch": 1791028860}
     ctx = _fleet_ctx(_fleet_dupe([dead], hydra_uploads=lambda: [mirror]))
 
     def _fetch(url, **_kw):
@@ -1098,13 +1110,9 @@ def test_config_probe_is_abortable_and_reads_only_a_snapshot(_fleet_env):
 )
 def test_nzbget_gates_require_the_movie_year(pick_title, row_title, expected):
     # Codex r11 (P1): a yearless candidate could be a different film.
-    from resources.lib.nzbget_fleet_dedup import same_variant
-
     pick = {"title": pick_title, "link": "p"}
     row = {"title": row_title, "link": "x"}
-    assert same_variant(pick, row) is expected
-    if not expected:
-        assert not same_release(pick, row)
+    assert same_release(pick, row) is expected
 
 
 def test_stale_successes_use_the_snapshot_taken_before_the_fleet():
@@ -1233,9 +1241,9 @@ def test_capped_fleet_consults_the_loader_when_rows_fail_to_fill_the_cap(
     from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     dupe = _fleet_dupe(
-        [{"link": "dead"}],
+        [{"title": _REL, "link": "dead"}],
         max_backups=1,
-        loader=lambda: [{"link": "x", "title": "X"}],
+        loader=lambda: [{"link": "x", "title": _REL}],
     )
     ctx = _fleet_ctx(dupe)
 
@@ -1306,9 +1314,9 @@ def test_unsent_posting_does_not_block_a_later_mirror(_fleet_env):
     shared = _ids("s", 100)
     bodies = {"pick": _ids("p", 50), "b0": shared, "relist": shared[:-1] + ["r@x"]}
     dupe = _fleet_dupe(
-        [{"link": "b0"}],
+        [{"title": _REL, "link": "b0"}],
         max_backups=1,
-        loader=lambda: [{"link": "relist", "title": "R"}],
+        loader=lambda: [{"link": "relist", "title": _REL}],
     )
     ctx = _fleet_ctx(dupe)
     with patch(_FETCH, side_effect=_posting_bodies(bodies)), patch(
@@ -1324,7 +1332,7 @@ def test_loader_is_asked_for_more_after_a_rejected_candidate(_fleet_env):
     from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     limit = {"n": None}
-    pool = [{"link": "x1", "title": "X1"}, {"link": "x2", "title": "X2"}]
+    pool = [{"link": "x1", "title": _REL}, {"link": "x2", "title": _REL}]
     asked = []
 
     def _loader():
@@ -1668,14 +1676,14 @@ def test_pick_is_fetched_into_memory_so_a_full_disk_cannot_fail_it(_fleet_env):
 
 
 def test_loader_widens_past_filtered_out_rows(_fleet_env):
-    # Codex r18: the loader's first rows are a German variant (filtered out);
+    # Codex r18: the loader's first rows are a 3D variant (filtered out);
     # the fleet keeps widening until a suitable candidate appears.
     from resources.lib.nzbget_fleet_run import _submit_legacy_fleet as submit_fleet
 
     limit = {"n": None}
     pool = [
-        {"link": "de", "title": "The.Matrix.1999.German.DL.1080p.BluRay.x264-GRP"},
-        {"link": "ok", "title": "The.Matrix.1999.1080p.BluRay.x265-OTHER"},
+        {"link": "3d", "title": "The.Matrix.1999.3D.HSBS.1080p.BluRay.x264-GRP"},
+        {"link": "ok", "title": "The Matrix 1999 1080p BluRay x264-GRP"},
     ]
     asked = []
 

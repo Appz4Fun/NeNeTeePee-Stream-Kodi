@@ -5219,11 +5219,11 @@ def test_release_dupe_key_episode_prefixes_tvdb_then_imdb_with_se():
 def test_nzbget_dupe_submission_scores_pick_highest_and_backups_descending():
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "The Movie 2024 1080p"}
+    selected = {"link": "http://i/pick.nzb", "title": "The Movie 2024 1080p-GRP"}
     filtered = [
         selected,
-        {"link": "http://i/a.nzb", "title": "The Movie 2024 1080p"},  # same name
-        {"link": "http://i/b.nzb", "title": "the  movie  2024  1080P"},  # norm-equal
+        {"link": "http://i/a.nzb", "title": "The Movie 2024 1080p-GRP"},  # same name
+        {"link": "http://i/b.nzb", "title": "the  movie  2024  1080P-grp"},  # norm-eq
         {"link": "http://i/c.nzb", "title": "Different Movie"},  # different
     ]
     identity = {"type": "movie", "imdb": "tt42", "title": "The Movie", "year": "2024"}
@@ -5233,7 +5233,7 @@ def test_nzbget_dupe_submission_scores_pick_highest_and_backups_descending():
     ):
         dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity)
     # Release-scoped key: content id prefix + the pick's normalized release name.
-    assert dupe["key"] == "imdb=42|the-movie-2024-1080p"
+    assert dupe["key"] == "imdb=42|the-movie-2024-1080p-grp"
     assert [b["link"] for b in dupe["backups"]] == ["http://i/a.nzb", "http://i/b.nzb"]
     # Pick strictly highest; backups strictly lower descending.
     assert "pick_score" not in dupe
@@ -5275,8 +5275,8 @@ def test_nzbget_dupe_submission_none_when_no_release_name():
 def test_nzbget_dupe_submission_none_when_backend_or_setting_off():
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "X"}
-    filtered = [selected, {"link": "http://i/a.nzb", "title": "X"}]
+    selected = {"link": "http://i/pick.nzb", "title": "X 1080p-GRP"}
+    filtered = [selected, {"link": "http://i/a.nzb", "title": "X 1080p-GRP"}]
     identity = {"type": "movie", "imdb": "tt1"}
     with patch(
         "resources.lib.router._get_addon_setting",
@@ -5309,9 +5309,9 @@ def test_nzbget_dupe_submission_none_when_backend_or_setting_off():
 def test_nzbget_dupe_submission_caps_backups_by_setting():
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "X"}
+    selected = {"link": "http://i/pick.nzb", "title": "X 1080p-GRP"}
     filtered = [selected] + [
-        {"link": "http://i/{}.nzb".format(n), "title": "X"} for n in range(10)
+        {"link": "http://i/{}.nzb".format(n), "title": "X 1080p-GRP"} for n in range(10)
     ]
     identity = {"type": "movie", "imdb": "tt1"}
     with patch(
@@ -5356,8 +5356,11 @@ def test_script_play_resolve_selected_attaches_nzbget_dupe_end_to_end():
         "year": "1999",
         "imdb": "tt0133093",
     }
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
-    filtered = [selected, {"link": "http://i/b.nzb", "title": "The Matrix 1999 1080p"}]
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
+    filtered = [
+        selected,
+        {"link": "http://i/b.nzb", "title": "The Matrix 1999 1080p-GRP"},
+    ]
     captured = {}
 
     def fake_rap(link, title, params=None):
@@ -5381,7 +5384,7 @@ def test_script_play_resolve_selected_attaches_nzbget_dupe_end_to_end():
         router_scriptplay._script_play_resolve_selected(params, selected, filtered, {})
 
     dupe = captured["params"]["_nzbget_dupe"]
-    assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p"
+    assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p-grp"
     assert [b["link"] for b in dupe["backups"]] == ["http://i/b.nzb"]
     assert "score" not in dupe["backups"][0]
 
@@ -5435,11 +5438,11 @@ def test_nzbget_dupe_submission_reports_standby_max_for_extras_bound():
     # extras must count against the cap).
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
     filtered = [
         selected,
-        {"link": "http://i/b.nzb", "title": "The Matrix 1999 1080p"},
-        {"link": "http://i/c.nzb", "title": "The Matrix 1999 1080p"},
+        {"link": "http://i/b.nzb", "title": "The Matrix 1999 1080p-GRP"},
+        {"link": "http://i/c.nzb", "title": "The Matrix 1999 1080p-GRP"},
     ]
     identity = {"type": "movie", "imdb": "tt0133093"}
     with patch(
@@ -5456,9 +5459,9 @@ def test_nzbget_dupe_submission_unlimited_by_default():
     # with no cap at all (fallback_streams_max no longer applies to NZBGet).
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
     filtered = [selected] + [
-        {"link": "http://i/{}.nzb".format(i), "title": "The Matrix 1999 1080p"}
+        {"link": "http://i/{}.nzb".format(i), "title": "The Matrix 1999 1080p-GRP"}
         for i in range(60)
     ]
     identity = {"type": "movie", "imdb": "tt0133093"}
@@ -5534,8 +5537,11 @@ def test_nzbget_dupe_scores_ride_on_the_wall_clock_base():
     # a failed playback (review threads: replay dupe scores).
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
-    filtered = [selected, {"link": "http://i/b.nzb", "title": "The Matrix 1999 1080p"}]
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
+    filtered = [
+        selected,
+        {"link": "http://i/b.nzb", "title": "The Matrix 1999 1080p-GRP"},
+    ]
     identity = {"type": "movie", "imdb": "tt0133093"}
     with patch(
         "resources.lib.router._get_addon_setting",
@@ -5573,7 +5579,7 @@ def test_attach_nzbget_dupe_allows_loader_only_submission():
     from resources.lib import router_play
 
     params = {}
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
     filtered = [selected]  # single row: no same-name backups
     identity = {"type": "movie", "imdb": "tt0133093"}
     with patch(
@@ -5589,7 +5595,7 @@ def test_attach_nzbget_dupe_allows_loader_only_submission():
     dupe = params["_nzbget_dupe"]
     assert dupe["backups"] == []
     assert dupe["loader"] == "LOADER"
-    assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p"
+    assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p-grp"
     assert "pick_score" not in dupe
     assert "score_base" not in dupe
 
@@ -5599,7 +5605,7 @@ def test_attach_nzbget_dupe_no_loader_only_when_loader_absent():
     from resources.lib import router_play
 
     params = {}
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
     with patch(
         "resources.lib.router._get_addon_setting",
         _dupe_setting_getter({"nzbget_enabled": "true"}),
@@ -5623,12 +5629,12 @@ def test_same_name_backups_carry_their_own_pubdates():
 
     selected = {
         "link": "http://i/pick.nzb",
-        "title": "The Matrix 1999 1080p",
+        "title": "The Matrix 1999 1080p-GRP",
         "pubdate": "Mon, 01 Jun 2026 10:00:00 +0000",
     }
     backup_row = {
         "link": "http://i/b.nzb",
-        "title": "The Matrix 1999 1080p",
+        "title": "The Matrix 1999 1080p-GRP",
         "pubdate": "Tue, 02 Jun 2026 11:00:00 +0000",
     }
     with patch(
@@ -5650,7 +5656,7 @@ def test_play_auto_select_attaches_nzbget_completed_hint():
     # (review finding: reuse before auto-select submission).
     from resources.lib.router_play import _handle_play_auto_select
 
-    best = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
+    best = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
     captured = {}
 
     def fake_resolve(handle, params):
@@ -5685,9 +5691,9 @@ def test_retry_pick_outranks_bigger_earlier_fleet_within_seconds():
     # (round-6 review finding).
     from resources.lib.router_play import _nzbget_dupe_submission_for_selection
 
-    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p"}
+    selected = {"link": "http://i/pick.nzb", "title": "The Matrix 1999 1080p-GRP"}
     five_backups = [selected] + [
-        {"link": "http://i/b{}.nzb".format(i), "title": "The Matrix 1999 1080p"}
+        {"link": "http://i/b{}.nzb".format(i), "title": "The Matrix 1999 1080p-GRP"}
         for i in range(5)
     ]
     identity = {"type": "movie", "imdb": "tt0133093"}

@@ -33,12 +33,12 @@ require a recognized value in that group. It never overrides a known format
 you've cleared. If you clear every known option in a group, known formats
 are no longer restricted there; **Other / Unknown** still applies on its own.
 
-A release with no HDR tag counts as **Other / Unknown**, not SDR. `HDR` selects HDR/HDR10;
-`HDR+`, `HDRPlus`, `HDR10P`, and `HDR10+` select HDR10+. Dolby Vision requires
-`DV`, `DoVi`, or `Dolby Vision`. Multiple explicit HDR tags are retained, and a
-release passes when any selected format matches. `HLG` and explicit `SDR` are
-recognized independently. These are filename attributes, not a scan of the
-actual video tracks.
+There are four HDR types: Dolby Vision, HDR/HDR10, HDR10+ and HLG. A release
+with none of their tags is **SDR**, so an explicit `SDR` tag changes nothing.
+`HDR` selects HDR/HDR10; `HDR+`, `HDRP`, `HDRPlus`, `HDR10P`, and `HDR10+`
+select HDR10+. Dolby Vision requires `DV`, `DoVi`, or `Dolby Vision`. Multiple
+explicit HDR tags are retained, and a release passes when any selected format
+matches. These are filename attributes, not a scan of the actual video tracks.
 
 Resolution aliases share their filters: `2560x1440` is 1440p, `8K` and
 `7680x4320` are 4320p, and 1080i/720i use the 1080p(i)/720p(i) selections.
@@ -91,16 +91,18 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 1. **Resolution:** highest resolution first, from 8K down to 240p; unknown
    resolution last. A 2160p release always ranks higher than a 1080p release,
    regardless of HDR or REMUX.
-2. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR and other tags,
-   then releases with no HDR tag. A release with several tags ranks by its best.
-3. **Release type:** filenames containing both REMUX and HYBRID first,
+2. **Release group:** a release with a group ranks above one without, so a
+   release with no group ranks last within its resolution.
+3. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
+   release with several tags ranks by its best.
+4. **Release type:** filenames containing both REMUX and HYBRID first,
    then other REMUX releases, then everything else.
-4. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
+5. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
-5. **Audio:** TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
+6. **Audio:** TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
    DTS-HD MA/FLAC/PCM/ALAC, then DTS-HD High Resolution/DTS, DD+, DD, AAC,
    other formats, and finally no audio tag.
-6. **Size:** larger files win the final tie-break.
+7. **Size:** larger files win the final tie-break.
 
 The three editable, comma-separated preferred group lists default to the
 [TRaSH tier 1](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-01.json),

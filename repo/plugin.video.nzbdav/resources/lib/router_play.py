@@ -614,9 +614,10 @@ def _backup_row(result):
 def _same_release_backups(selected, filtered):
     """The other picker results that are the pick's release, deduped/capped.
 
-    Exact same-name rows (case/whitespace-normalized) come first, then rows
-    that ``nzbget_fleet_dedup.same_release`` accepts under a different name, each
-    group in picker order. Every such row is returned: ``nzbget_max_backups``
+    Only rows ``release_match.same_release`` accepts (the picker groups with the
+    same rule); exact same-name rows (case/whitespace-normalized) come first,
+    then the other names, each in picker order. A pick with no release group
+    has no backups. Every such row is returned: ``nzbget_max_backups``
     caps the LIVE backups in the worker, after same-posting dedup, so a row
     that collapses as a duplicate never uses up a slot.
     """
@@ -630,12 +631,12 @@ def _same_release_backups(selected, filtered):
     for result in filtered or []:
         if not _is_backup_row(result, selected_link, seen):
             continue
+        if not same_release(selected, result):
+            continue
         if _normalize_release_name(result.get("title")) == target:
             exact.append(result)
-        elif same_release(selected, result):
-            similar.append(result)
         else:
-            continue
+            similar.append(result)
         seen.add(result["link"])
     return [_backup_row(result) for result in exact + similar]
 

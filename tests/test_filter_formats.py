@@ -49,18 +49,20 @@ def test_audio_tags_keep_their_own_format(tag, expected):
         ("HDR+", ["HDR10+"]),
         ("HDRPlus", ["HDR10+"]),
         ("HDR10P", ["HDR10+"]),
+        ("HDRP", ["HDR10+"]),
         ("HDR10+", ["HDR10+"]),
         ("HDR10.Plus", ["HDR10+"]),
         ("HLG", ["HLG"]),
+        # SDR is the absence of HDR: tagged or not, it reads the same.
         ("SDR", ["SDR"]),
         ("DV.HDR10P", ["Dolby Vision", "HDR10+"]),
         ("Dolby.Vision.HDR", ["Dolby Vision", "HDR10"]),
         ("DoVi", ["Dolby Vision"]),
-        ("10bit", []),
-        ("", []),
+        ("10bit", ["SDR"]),
+        ("", ["SDR"]),
     ],
 )
-def test_hdr_aliases_do_not_invent_dolby_vision_or_sdr(tag, expected):
+def test_hdr_aliases_do_not_invent_dolby_vision_and_untagged_is_sdr(tag, expected):
     assert filters.parse_title_metadata(_title("2160p.HEVC." + tag))["hdr"] == expected
 
 
@@ -392,3 +394,19 @@ def test_explicit_size_sort_does_not_apply_remux_priority():
         "Movie.2024.1080p.HYBRID.REMUX.HEVC-CiNEPHiLES",
     ]
     assert _sorted_titles(titles, {"sort_order": 1}) == titles
+
+
+def test_a_release_without_a_group_ranks_last_in_its_resolution():
+    rows = [
+        {"title": "Movie.2024.2160p.WEB-DL.DV.HEVC.Atmos", "size": "9"},
+        {"title": "Movie.2024.2160p.WEB-DL.HEVC.AAC-GRP", "size": "1"},
+        {"title": "Movie.2024.1080p.BluRay.DV.x264.TrueHD.Atmos-GRP", "size": "9"},
+    ]
+    for row in rows:
+        row["_meta"] = filters.parse_title_metadata(row["title"])
+    ordered = sorted(rows, key=filters._make_relevance_key())
+    assert [r["title"] for r in ordered] == [
+        "Movie.2024.2160p.WEB-DL.HEVC.AAC-GRP",
+        "Movie.2024.2160p.WEB-DL.DV.HEVC.Atmos",
+        "Movie.2024.1080p.BluRay.DV.x264.TrueHD.Atmos-GRP",
+    ]

@@ -249,15 +249,24 @@ never removed by this play's cancel.
 
 ### What counts as the same release
 
-A result is a backup when either of these is true:
+The picker groups NZB copies with the same rule. A result is a backup when it
+is the same content as your pick (title, year or season and episode, part) and
+every parsed release field is equal:
 
-- It has exactly the same release name as your pick.
-- It has a different name but parses to the same title, year or
-  season and episode, part, edition, PROPER or REPACK flag, release group, and
-  resolution, with no conflicting HDR, audio, or profile tags. 3D, dubbed or
-  MULTi, subbed, hardcoded-subtitle, and cut tags (Extended, Unrated,
-  Uncensored, Remastered) and the language tags must also match, so a
-  failover never plays a different language or a 3D version.
+- resolution, HDR (Dolby Vision, HDR10, HDR10+, HLG, or SDR when none),
+  audio formats and channels
+- codec and quality (source, such as WEB-DL or BluRay)
+- edition, PROPER and REPACK
+- 3D, dubbed or MULTi, hardcoded-subtitle, and cut tags (Extended, Unrated,
+  Uncensored, Remastered)
+- release group
+
+A field one name states and the other leaves out counts as different. Language
+and soft-subtitle tags aren't compared, and the naming style (dots, spaces,
+brackets) never matters. A result with no release group is never grouped with
+another, even one with the same name; a literal `NOGRP` or `P2P` tag counts as
+a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`) is read as the
+release name inside it.
 
 NeNeTeePee-Stream-Kodi never uses file size to decide whether two results are
 the same release. The backup pool reuses same-title uploads retained from the

@@ -206,7 +206,7 @@ def test_parse_title_metadata_empty_title():
     assert meta["resolution"] == ""
     assert meta["codec"] == ""
     assert meta["group"] == ""
-    assert meta["hdr"] == []
+    assert meta["hdr"] == ["SDR"]  # no HDR tag means SDR
     assert meta["audio"] == []
     assert meta["languages"] == []
 

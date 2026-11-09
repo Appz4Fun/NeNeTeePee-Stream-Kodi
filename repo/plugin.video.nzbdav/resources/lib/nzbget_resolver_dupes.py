@@ -27,7 +27,7 @@ from resources.lib.nzbget_fleet_dedup import (  # noqa: F401
     posting_fingerprint,
     posting_fingerprint_file,
     prefetched_clusters,
-    same_variant,
+    same_release,
 )
 
 
@@ -752,7 +752,7 @@ def _extra_backups_from_loader(  # pylint: disable=too-many-arguments
             link = _core._usable_backup_link(candidate, seen)
             if not link:
                 continue
-            if pick and not same_variant(pick, candidate):
+            if pick and not same_release(pick, candidate):
                 continue
             seen.add(link)
             row = {key: candidate[key] for key in _FLEET_ROW_KEYS if key in candidate}
