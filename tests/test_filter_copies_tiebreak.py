@@ -269,3 +269,57 @@ def test_whole_show_list_only_compares_listings_of_one_episode():
 
     assert spy.call_count == 0
     assert set(counts.values()) == {2}
+
+
+def test_one_groups_movies_only_compare_listings_of_one_year():
+    # Every movie a group posted shares one quality profile. A movie only
+    # matches a movie of the same year, so different years are never compared.
+    from unittest.mock import patch
+
+    from resources.lib import release_match
+
+    rows = []
+    for copy in range(2):
+        for year in range(1950, 2030):
+            title = "Film.Number.{y}.{y}.1080p.BluRay.DTS.x264-GRP".format(y=year)
+            rows.append(_row(title, "m{}-{}".format(year, copy)))
+
+    real = release_match.same_release
+    with patch.object(release_match, "same_release", side_effect=real) as spy:
+        counts = _nzb_copy_counts(rows)
+
+    assert spy.call_count == 0
+    assert set(counts.values()) == {2}
+
+
+def test_season_rows_still_meet_movies_and_other_season_rows():
+    # A season-only row may be a movie whose group mis-parsed as a season, so
+    # it meets every movie and season row; a movie meets its own year plus the
+    # season rows; an episode meets only the same episode.
+    from unittest.mock import patch
+
+    from resources.lib import filter as filter_mod
+
+    classes = {
+        "m2020": ("movie", 2020),
+        "m2021": ("movie", 2021),
+        "s1": ("seasons",),
+        "s2": ("seasons",),
+        "e1": ("episode", (1,), (1,)),
+        "e2": ("episode", (2,), (1,)),
+    }
+    buckets = [[{"title": name}] for name in classes]
+
+    with patch.object(
+        filter_mod, "_content_class", side_effect=lambda row: classes[row["title"]]
+    ):
+        candidates = filter_mod._peer_candidates(buckets)
+
+    peers = {
+        bucket[0]["title"]: sorted(other[0]["title"] for other in group)
+        for bucket, group in candidates
+    }
+    assert peers["m2020"] == ["m2020", "s1", "s2"]
+    assert peers["m2021"] == ["m2021", "s1", "s2"]
+    assert peers["s1"] == ["m2020", "m2021", "s1", "s2"]
+    assert peers["e1"] == ["e1"]

@@ -783,18 +783,12 @@ def _fold_meta_value(value):
 
 
 def _copy_prefilter_key(row):
-    """Fields ``same_release`` requires equal, so only rows sharing it compare.
+    """Profile fields ``same_release`` requires equal, read from ``_meta``.
 
-    A cheap subset of ``release_match.release_profile`` read from ``_meta``
-    (everything but the variant flags), plus the content the episode gate
-    requires equal: the parsed episode set, and the season set when the row
-    names episodes. ``_same_content`` rejects any pair whose episode sets
-    differ in presence or value, and with episodes on both sides no phantom
-    season collapse applies, so seasons must match too. A season pack or movie
-    (no episodes) keys on an empty tuple, because a phantom season can still
-    collapse there. Without this, every episode of a whole-show search from one
-    group would share one key and be compared pairwise. None for a row with no
-    parsed group, which the rule never groups.
+    A cheap subset of ``release_match.release_profile`` (everything but the
+    variant flags). Rows with different keys can never be the same release,
+    so only rows sharing a key are compared. None for a row with no parsed
+    group, which the rule never groups.
     """
     meta = row.get("_meta")
     if not isinstance(meta, dict):
@@ -811,19 +805,64 @@ def _copy_prefilter_key(row):
             values = [values]
         fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
     fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
-    fields.extend(_episode_key(row))
     return tuple(fields)
 
 
-def _episode_key(row):
-    """``(episodes, seasons)`` from the cached release identity; see above."""
+def _content_class(row):
+    """Which rows ``same_release``'s content gate can ever accept for ``row``.
+
+    From the cached release identity ``(title, year, seasons, episodes,
+    part)``:
+
+    * ``("episode", episodes, seasons)`` for a row naming episodes. The gate
+      rejects any pair whose episode sets differ in presence or value, and
+      with episodes on both sides no phantom-season collapse applies, so the
+      seasons must match too.
+    * ``("movie", year)`` for a row with no seasons and no episodes. As a
+      pick, a movie needs the candidate's exact year (absent included); as a
+      candidate of a season-only row it needs the same year for the phantom
+      collapse. Movies of other years never match it.
+    * ``("seasons",)`` for a row with seasons but no episodes (a season pack,
+      or a movie whose group mis-parsed as a season). It can match a movie of
+      its year through the collapse and a season row of any year, so it is
+      compared with every movie and season row under its profile.
+    """
     from resources.lib import fallback_streams as _fs
 
     try:
-        _title, _year, seasons, episodes, _part = _fs._release_identity(row)
+        _title, year, seasons, episodes, _part = _fs._release_identity(row)
     except Exception:  # pylint: disable=broad-except
-        return ((), ())
-    return (tuple(episodes), tuple(seasons) if episodes else ())
+        return ("seasons",)
+    if episodes:
+        return ("episode", tuple(episodes), tuple(seasons))
+    if seasons:
+        return ("seasons",)
+    return ("movie", year)
+
+
+def _peer_candidates(buckets):
+    """For buckets sharing one profile, map each to the buckets to compare.
+
+    Uses ``_content_class``: episodes meet the same episode, movies meet
+    movies of their year plus season rows, and season rows meet every movie
+    and season row. Without this, every episode of a whole-show search, or
+    every movie a group posted, would be compared pairwise.
+    """
+    by_class = {}
+    for bucket in buckets:
+        by_class.setdefault(_content_class(bucket[0]), []).append(bucket)
+    seasons = by_class.get(("seasons",), [])
+    movies = [b for key, group in by_class.items() if key[0] == "movie" for b in group]
+    candidates = []
+    for key, group in by_class.items():
+        if key[0] == "episode":
+            peers = group
+        elif key[0] == "movie":
+            peers = group + seasons
+        else:
+            peers = movies + seasons
+        candidates.extend((bucket, peers) for bucket in group)
+    return candidates
 
 
 def _nzb_copy_counts(rows):
@@ -833,27 +872,27 @@ def _nzb_copy_counts(rows):
     transitive (a yearless episode matches both a 2005 and a 2023 reboot that
     reject each other), so no group of rows shares one representative's count.
 
-    Two shortcuts keep that cheap. Rows with the identical title are bucketed,
-    because ``same_release`` reads only the title and the metadata parsed from
-    it. And ``same_release`` requires equal parsed fields and a known group,
-    so a bucket is only compared with buckets sharing ``_copy_prefilter_key``;
-    a bucket alone under its key counts only its own NZBs, and a groupless row
-    counts only itself. A count is the distinct NZB links of every bucket the
-    title accepts: a link listed twice counts once and a row without a link
-    adds nothing (every row counts at least 1).
+    Three shortcuts keep that cheap without changing the answer. Rows with the
+    identical title are bucketed, because ``same_release`` reads only the
+    title and the metadata parsed from it. A bucket is only compared with
+    buckets sharing ``_copy_prefilter_key``, and among those only with the
+    content ``_peer_candidates`` allows. A groupless row counts only itself.
+    A count is the distinct NZB links of every bucket the title accepts: a
+    link listed twice counts once and a row without a link adds nothing
+    (every row counts at least 1).
     """
     buckets = {}
     for row in rows:
         key = (bool(row.get("_season_pack")), str(row.get("title") or ""))
         buckets.setdefault(key, []).append(row)
-    peer_sets = {}
+    profiles = {}
     for bucket in buckets.values():
         prefilter = _copy_prefilter_key(bucket[0])
         if prefilter is not None:
-            peer_sets.setdefault(prefilter, []).append(bucket)
+            profiles.setdefault(prefilter, []).append(bucket)
     counts = {id(row): 1 for row in rows}
-    for peers in peer_sets.values():
-        for bucket in peers:
+    for profile_buckets in profiles.values():
+        for bucket, peers in _peer_candidates(profile_buckets):
             links = {row.get("link") for row in bucket if row.get("link")}
             for other in peers:
                 if other is not bucket and _is_release_copy(bucket[0], other[0]):
