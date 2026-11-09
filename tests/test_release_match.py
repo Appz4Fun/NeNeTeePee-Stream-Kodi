@@ -72,7 +72,6 @@ def test_same_release_reuses_parsed_metadata_instead_of_reparsing():
     for row in rows:
         row["_meta"] = parse_title_metadata(row["title"])
     assert rows[0]["_meta"]["variant"] == []
-    assert same_release(rows[0], rows[1])  # warms the per-row caches
     with patch("resources.lib.ptt.parse_title", side_effect=AssertionError):
         for _ in range(3):
             assert same_release(rows[0], rows[1])
@@ -84,3 +83,17 @@ def test_variant_tags_are_stored_in_the_metadata():
 
     meta = parse_title_metadata("Movie.2020.3D.HSBS.1080p.BluRay.x264-GRP")
     assert meta["variant"] == ["3d"]
+
+
+def test_release_identity_reuses_the_metadata_parse():
+    from unittest.mock import patch
+
+    from resources.lib import fallback_streams as fs
+    from resources.lib.filter import parse_title_metadata
+
+    title = '[1/3] - "Show.S01E02.1080p.WEB.h264-GRP.mkv" yEnc 1234'
+    row = {"title": title, "_meta": parse_title_metadata(title)}
+    with patch("resources.lib.ptt.parse_title", side_effect=AssertionError):
+        identity = fs._release_identity(row)
+    assert identity == fs._release_identity({"title": title})
+    assert identity[2:4] == ((1,), (2,))

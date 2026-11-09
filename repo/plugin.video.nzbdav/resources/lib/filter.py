@@ -255,6 +255,7 @@ def parse_title_metadata(title):
         )
         parsed = _fallback_parse(title)
     variant = variant_tags(parsed)
+    identity = _ptt_identity(title, parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
         # PTT returned empty, try fallback
@@ -280,7 +281,29 @@ def parse_title_metadata(title):
             title, _normalize_fallback_meta(_fallback_parse(title))
         )
     meta["variant"] = variant
+    meta["ptt_identity"] = identity
     return meta
+
+
+def _ptt_identity(name, parsed):
+    """The PTT fields ``fallback_streams._release_identity`` needs, for reuse.
+
+    Sorting and grouping compare each row many times; storing these lets the
+    content gate skip a second PTT parse of the same name. ``name`` is the
+    release name PTT parsed (the subject-cleaned title).
+    """
+    parsed = parsed if isinstance(parsed, dict) else {}
+    try:
+        year = int(parsed.get("year") or 0)
+    except (TypeError, ValueError):
+        year = 0
+    return {
+        "name": name,
+        "title": parsed.get("title") or "",
+        "year": year,
+        "seasons": list(parsed.get("seasons") or []),
+        "episodes": list(parsed.get("episodes") or []),
+    }
 
 
 def matches_filters(result, meta, settings):

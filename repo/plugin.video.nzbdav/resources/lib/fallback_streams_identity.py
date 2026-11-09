@@ -160,7 +160,7 @@ def _release_identity(result):
     from resources.lib.release_subject import release_name_from_subject
 
     name = release_name_from_subject(title)
-    parsed = _fs._parsed_title_fields(name)
+    parsed = _stored_ptt_identity(result, name) or _fs._parsed_title_fields(name)
     norm_title = _fs._normalize_title(parsed.get("title") or name)
     seasons = _fs._sorted_int_tuple(parsed.get("seasons"))
     episodes = _fs._sorted_int_tuple(parsed.get("episodes"))
@@ -169,6 +169,18 @@ def _release_identity(result):
     result[_fs._RELEASE_IDENTITY_CACHE_TITLE_KEY] = title
     result[_fs._RELEASE_IDENTITY_CACHE_VALUE_KEY] = identity
     return identity
+
+
+def _stored_ptt_identity(result, name):
+    """PTT fields ``filter.parse_title_metadata`` stored for ``name``, or None."""
+    meta = result.get("_meta")
+    stored = meta.get("ptt_identity") if isinstance(meta, dict) else None
+    if not isinstance(stored, dict) or stored.get("name") != name:
+        return None
+    year = stored.get("year")
+    if not isinstance(year, int) or isinstance(year, bool):
+        return None
+    return stored
 
 
 def _parsed_title_fields(title):
