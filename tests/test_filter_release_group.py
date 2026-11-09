@@ -241,3 +241,18 @@ def test_outer_name_wins_when_the_archive_name_dropped_words(outer, archive):
 
     subject = '{} [01/50] - "{}.part01.rar" yEnc'.format(outer, archive)
     assert release_name_from_subject(subject) == outer
+
+
+@pytest.mark.parametrize("name", ["300.2006", "1917.2019", "9.2009"])
+def test_a_numeric_movie_title_survives_a_tag_bracket(name):
+    from resources.lib.release_subject import release_name_from_subject
+
+    subject = '[1080p WEB-DL x265] [1/3] - "{}.mkv" yEnc'.format(name)
+    assert release_name_from_subject(subject) == name + ".mkv"
+
+
+def test_a_subjects_container_still_separates_mkv_from_mp4():
+    mp4 = {"title": "Movie.Title.2020.1080p.WEB-DL.x264-GRP.mp4", "link": "a"}
+    subject = '[1/3] - "Movie.Title.2020.1080p.WEB-DL.x264-GRP.mkv" yEnc'
+    assert parse_title_metadata(subject)["container"] == "mkv"
+    assert not same_release(mp4, {"title": subject, "link": "b"})
