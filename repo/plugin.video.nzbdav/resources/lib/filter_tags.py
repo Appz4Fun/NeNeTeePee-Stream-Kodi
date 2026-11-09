@@ -147,13 +147,13 @@ _HYPHENATED_SOURCE = _pattern(
 
 
 def _without_hyphenated_tags(name):
-    """``name`` with hyphenated source/audio/codec tags blanked.
+    """``name`` with hyphenated source/HDR/audio/codec tags blanked.
 
     Splitting the trailing "-" run would otherwise read "MA-FGT" or "MA" as
     the group of "x264.DTS-HD-MA-FGT", and "Ray-GRP" as that of
     "x264.Blu-Ray-GRP".
     """
-    for pattern in (_HYPHENATED_SOURCE,) + _TAG_PATTERNS:
+    for pattern in (_HYPHENATED_SOURCE, _HDR_PLUS, _DV) + _TAG_PATTERNS:
         name = pattern.sub(
             lambda match: " " if "-" in match.group(0) else match.group(0), name
         )

@@ -57,6 +57,9 @@ from resources.lib.nzbget_fleet_dedup import same_release
         # Nor is a hyphenated bit depth.
         ("Movie.2020.1080p.BluRay.x265.10-bit-GRP", "GRP"),
         ("Movie.2020.1080p.BluRay.x265.10-bit", ""),
+        # Nor a hyphenated HDR tag.
+        ("Movie.2020.2160p.BluRay.x265.HDR10-Plus-GRP", "GRP"),
+        ("Movie.2020.2160p.BluRay.x265.Dolby-Vision-GRP", "GRP"),
         ("Movie.2024.1080p.WEB-DL-GRP", "GRP"),
         ("Movie.2020.MULTi.1080p.WEB.x264-GRP.mkv", "GRP"),
         ("[SubsPlease] Show - 01 (1080p) [ABCD1234].mkv", "SubsPlease"),
@@ -246,7 +249,9 @@ def test_outer_name_wins_when_the_archive_name_dropped_words(outer, archive):
     assert release_name_from_subject(subject) == outer
 
 
-@pytest.mark.parametrize("name", ["300.2006", "1917.2019", "9.2009"])
+@pytest.mark.parametrize(
+    "name", ["300.2006", "1917.2019", "9.2009", "M.1931", "X.2022"]
+)
 def test_a_numeric_movie_title_survives_a_tag_bracket(name):
     from resources.lib.release_subject import release_name_from_subject
 

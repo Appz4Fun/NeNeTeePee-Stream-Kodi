@@ -122,12 +122,21 @@ _YEAR = re.compile(r"(?:19|20)\d{2}")
 
 
 def _numeric_title(tokens):
-    """A leading number that is the title: "300.2006", "1917.2019", "9.2009"."""
-    if len(tokens) < 2 or not tokens[0].isdigit():
+    """A leading number or letter that is the title.
+
+    "300.2006", "1917.2019", "9.2009", "M.1931", "X.2022". A year-shaped title
+    (1917) or a single letter needs a year after it.
+    """
+    if len(tokens) < 2:
         return False
     first = tokens[0]
-    if _YEAR.fullmatch(first):  # "1917.2019": a year-shaped title needs a year after
-        return any(_YEAR.fullmatch(token) for token in tokens[1:])
+    has_year_after = any(_YEAR.fullmatch(token) for token in tokens[1:])
+    if len(first) == 1 and first.isalpha():
+        return has_year_after
+    if not first.isdigit():
+        return False
+    if _YEAR.fullmatch(first):
+        return has_year_after
     return not _DETAIL_TAG.fullmatch(first)
 
 
