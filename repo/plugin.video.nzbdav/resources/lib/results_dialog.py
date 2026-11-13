@@ -75,7 +75,7 @@ VIEW_COMPACT = "compact"
 # ``results_view`` setting values (settings.xml option order).
 _VIEW_SETTING = {"0": VIEW_COMPACT, "1": VIEW_LIST}
 
-# Copies listed in the List compacted side panel before "+N more".
+# Indexer lines in the List compacted side panel before "+N more".
 _PANEL_MAX_COPIES = 14
 # Characters per line when the panel breaks a release name at its dots.
 _PANEL_NAME_WIDTH = 46
@@ -250,24 +250,115 @@ def _tech_summary(item_props):
     return "   ".join(item_props[key] for key in keys if item_props.get(key))
 
 
+def _panel_indexer_entries(group):
+    """The group's copies gathered by indexer, in the order each first ranks."""
+    entries = []
+    by_name = {}
+    for row in group:
+        name = row.get("indexer", "") or ""
+        entry = by_name.get(name)
+        if entry is None:
+            entry = by_name[name] = {"name": name, "copies": []}
+            entries.append(entry)
+        entry["copies"].append(row)
+    return entries
+
+
+# Characters of an indexer's name the panel's column holds on one line; a
+# longer line would wrap and push every later row out of step.
+_PANEL_INDEXER_WIDTH = 20
+
+
+def _panel_indexer_name(name, copies):
+    """ "NZB Finder x3", shortened so the line never wraps."""
+    name = name or " "
+    suffix = _fmt(30667, "", copies).strip() if copies > 1 else ""
+    room = _PANEL_INDEXER_WIDTH - (len(suffix) + 1 if suffix else 0)
+    if len(name) > room:
+        name = name[: room - 1].rstrip() + "\u2026"
+    return "{} {}".format(name, suffix) if suffix else name
+
+
+def _size_bytes(row):
+    try:
+        return int(str(row.get("size") or "").strip())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _size_range(copies, lead):
+    """One indexer's size cell: "39-42 GB" when its copies differ, else one size."""
+    sizes = [size for size in (_size_bytes(row) for row in copies) if size > 0]
+    single = _format_size(lead.get("size"))
+    if len(sizes) < 2:
+        return single
+    # Whole gigabytes once every copy is about a gigabyte or more.
+    unit, label = (1024**3, "GB") if min(sizes) >= 0.95 * 1024**3 else (1024**2, "MB")
+    low, high = round(min(sizes) / unit), round(max(sizes) / unit)
+    # Copies within the same whole number are one size to the eye.
+    return single if low == high else "{}-{} {}".format(low, high, label)
+
+
+_AGE_LABEL = re.compile(r"^\s*(\d+)\s*(day|month|year)s?\s*$")
+_AGE_DAYS = {"day": 1, "month": 30, "year": 365}
+_AGE_SHORT = {"day": "d", "month": "mo", "year": "y"}
+
+
+def _age_parts(label):
+    """``(days, short)`` for an age label ("3 days" -> ``(3, "3d")``), or None."""
+    text = str(label or "").strip().lower()
+    if text == "today":
+        return 0, "0d"
+    match = _AGE_LABEL.match(text)
+    if match is None:
+        return None
+    count, unit = int(match.group(1)), match.group(2)
+    return count * _AGE_DAYS[unit], "{}{}".format(count, _AGE_SHORT[unit])
+
+
+def _age_range(copies, lead):
+    """One indexer's age cell: "30d-2mo" when its copies differ, else one age."""
+    single = lead.get("age", "") or ""
+    parts = [part for part in (_age_parts(row.get("age")) for row in copies) if part]
+    if len(parts) < 2:
+        return single
+    newest, oldest = min(parts), max(parts)
+    return single if newest[1] == oldest[1] else "{}-{}".format(newest[1], oldest[1])
+
+
 def _panel_copy_lines(group):
-    """Panel columns (marks, indexers, sizes, ages) for one release group."""
+    """Panel columns (marks, indexers, sizes, ages): one line per indexer.
+
+    An indexer that lists the release several times is one line, "NZB Finder
+    x3", so every indexer carrying the release is visible instead of the first
+    few copies and a "+N more". Its size and age are ranges when its copies
+    differ ("39-42 GB", "30d-2mo"), so it is plain that more than one upload
+    sits behind the line; otherwise they are those of the copy Enter plays
+    when that indexer has it, else of its best-ranked copy. The indexer
+    holding the copy Enter plays is highlighted.
+    """
     pick = group_pick(group)
-    shown = group[:_PANEL_MAX_COPIES]
-    if len(group) > _PANEL_MAX_COPIES:
-        shown = group[: _PANEL_MAX_COPIES - 1]
-        if not any(row is pick for row in shown):
-            shown = shown[:-1] + [pick]
+    entries = _panel_indexer_entries(group)
+    shown = entries[:_PANEL_MAX_COPIES]
+    if len(entries) > _PANEL_MAX_COPIES:
+        shown = entries[: _PANEL_MAX_COPIES - 1]
+        if not any(pick in entry["copies"] for entry in shown):
+            holder = next(entry for entry in entries if pick in entry["copies"])
+            shown = shown[:-1] + [holder]
     marks, indexers, sizes, ages = [], [], [], []
-    for row in shown:
-        marks.append(_available_text() if row.get("_available") else " ")
-        color = _COPY_LEAD_COLOR if row is pick else _COPY_COLOR
-        indexers.append(_c(row.get("indexer", "") or " ", color))
-        sizes.append(_c(_format_size(row.get("size")) or " ", "FFA1A1AA"))
-        ages.append(_c(row.get("age", "") or " ", "FF6B7280"))
-    if len(shown) < len(group):
+    for entry in shown:
+        copies = entry["copies"]
+        has_pick = any(row is pick for row in copies)
+        lead = pick if has_pick else copies[0]
+        available = any(row.get("_available") for row in copies)
+        marks.append(_available_text() if available else " ")
+        name = _panel_indexer_name(entry["name"], len(copies))
+        indexers.append(_c(name, _COPY_LEAD_COLOR if has_pick else _COPY_COLOR))
+        sizes.append(_c(_size_range(copies, lead) or " ", "FFA1A1AA"))
+        ages.append(_c(_age_range(copies, lead) or " ", "FF6B7280"))
+    if len(shown) < len(entries):
         marks.append(" ")
-        indexers.append(_c(_fmt(30489, len(group) - len(shown)), "FF9CA3AF"))
+        indexers.append(_c(_fmt(30489, len(entries) - len(shown)), "FF9CA3AF"))
         sizes.append(" ")
         ages.append(" ")
     return ["[CR]".join(column) for column in (marks, indexers, sizes, ages)]
