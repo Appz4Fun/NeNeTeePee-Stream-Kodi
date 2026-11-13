@@ -206,7 +206,10 @@ def _update_active_dialog(dialog, group, state=None, fleet=None):
     message = nzbget_progress.progress_message(
         state if state is not None else {}, group, fleet
     )
-    dialog.update(group["percent"], message)
+    # After the download the bar follows the stage (an unpack at 43%) when
+    # NZBGet reports its progress, instead of resting at the download's 100%.
+    stage = nzbget_progress.stage_percent(group)
+    dialog.update(group["percent"] if stage is None else stage, message)
 
 
 # The backups' twin/alt marks are read from NZBGet's history at most this many
@@ -241,13 +244,16 @@ def _refresh_backup_kinds(state, fleet, settings_getter):
             state["kinds_reads"] = _KIND_READS
             return
         rows = nzbget_api.history_rows(settings_getter)
+        if rows is None:
+            return  # the read failed: keep what the last one found
         kinds = nzbget_progress.backup_kinds(rows, ids, state.get("current"))
     except Exception:  # pylint: disable=broad-except
         return
-    if kinds:
-        state["backup_kinds"] = kinds
-        if sum(kinds.values()) >= len(ids) - 1:
-            state["kinds_reads"] = _KIND_READS  # every backup is marked
+    # A read that finds none replaces the count too: once the last parked
+    # backup has been promoted there are no backups left to show.
+    state["backup_kinds"] = kinds
+    if kinds and sum(kinds.values()) >= len(ids) - 1:
+        state["kinds_reads"] = _KIND_READS  # every backup is marked
 
 
 def _update_waiting_dialog(dialog, state):

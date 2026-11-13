@@ -203,6 +203,8 @@ _FALLBACK_STRINGS = {
     30676: "1 alt",
     30677: "{} alts",
     30678: "{} of {} copies ready",
+    30679: "running NZBGet's scripts",
+    30680: "repairing from backups",
 }
 
 

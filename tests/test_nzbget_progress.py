@@ -69,7 +69,9 @@ def test_a_single_copy_has_no_total():
         ("REPAIRING", "repairing"),
         ("UNPACKING", "unpacking"),
         ("MOVING", "moving into place"),
-        ("EXECUTING_SCRIPT", "finishing up"),
+        ("EXECUTING_SCRIPT", "running NZBGet's scripts"),
+        ("STREAM_REPAIRING", "repairing from backups"),
+        ("PP_FINISHED", "finishing up"),
         ("SOMETHING_NEW", "finishing up"),
     ],
 )
@@ -545,3 +547,111 @@ def test_a_failed_history_read_never_breaks_the_poll():
         )
     assert result["outcome"] == "success"
     assert dialog.lines[0][1].startswith("Copy 1 of 2 - downloading 43%")
+
+
+def _post(status, post_percent=0, post_seconds=0):
+    return dict(
+        _group(status, 100, 10650, 10650),
+        post_percent=post_percent,
+        post_seconds=post_seconds,
+    )
+
+
+@pytest.mark.parametrize(
+    "group, first_line, bar_percent",
+    [
+        (_post("UNPACKING", 43, 25), "Copy 1 - unpacking 43% - 25s", 43),
+        (_post("UNPACKING", 43, 2), "Copy 1 - unpacking 43%", 43),
+        (_post("MOVING", 0, 51), "Copy 1 - moving into place - 51s", None),
+        (
+            _post("EXECUTING_SCRIPT", 0, 130),
+            "Copy 1 - running NZBGet's scripts - 2m 10s",
+            None,
+        ),
+        (_post("REPAIRING", 100, 3725), "Copy 1 - repairing - 1h 2m", None),
+        (_post("LOADING_PARS"), "Copy 1 - checking the files", None),
+        # While downloading, the stage fields are ignored.
+        (dict(_group(), post_percent=50, post_seconds=90), None, None),
+    ],
+)
+def test_a_post_stage_shows_its_progress_and_how_long_it_has_run(
+    group, first_line, bar_percent
+):
+    text = nzbget_progress.progress_message({}, group, None, now=0)
+    assert _lines(text)[0] == (first_line or "Copy 1 - downloading 43%")
+    assert nzbget_progress.stage_percent(group) == bar_percent
+
+
+def test_the_bar_follows_an_unpack_instead_of_resting_at_100():
+    dialog = _Dialog()
+    groups = [
+        _group(percent=99),
+        _post("UNPACKING", 43, 25),
+        _post("MOVING", 0, 51),
+        {"present": False, "status": "", "percent": 0},
+    ]
+    with patch(_GS, side_effect=groups), patch(_HS, return_value=dict(_DONE)):
+        poll_nzbget_job(1, dialog, _Monitor(), 60, interval=0)
+    assert [percent for percent, _message in dialog.lines[:3]] == [99, 43, 100]
+    assert dialog.lines[1][1].startswith("Copy 1 - unpacking 43% - 25s")
+    assert dialog.lines[2][1].startswith("Copy 1 - moving into place - 51s")
+
+
+def test_the_backup_line_goes_away_once_no_backup_is_left():
+    # Two copies: the pick fails, the only backup takes over. A read that
+    # finds no parked backup must clear the count the first read stored.
+    dialog = _Dialog()
+    absent = {"present": False, "status": "", "percent": 0}
+    groups = {1: [_group(), absent], 2: [_group(), _group(), absent]}
+    hist = {
+        1: {"present": True, "success": False, "status": "FAILURE/HEALTH"},
+        2: dict(_DONE),
+    }
+
+    def _history_rows(_getter=None):
+        if groups[1]:  # the pick is still in the queue: copy 2 is parked
+            return [_history_row(2, "alt")]
+        # Copy 2 was promoted: it is in the queue, not parked in history.
+        return [_history_row(1, None, "FAILURE/HEALTH")]
+
+    promoted = dict(_group(percent=5), nzbid=2)
+    with patch(
+        _GS, side_effect=lambda n, settings_getter=None: groups[n].pop(0)
+    ), patch(_HS, side_effect=lambda n, settings_getter=None: hist[n]), patch(
+        _ACT, return_value=promoted
+    ), patch(
+        _SUC, return_value={"present": False}
+    ), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows",
+        side_effect=_history_rows,
+    ):
+        result = poll_nzbget_job(
+            1, dialog, _Monitor(), 60, interval=0, dupe_key="k", fleet=_fleet(1, 2)
+        )
+    assert result["outcome"] == "success"
+    messages = [message for _percent, message in dialog.lines]
+    assert "Backups: 1 alt" in messages[0]
+    assert messages[-1].startswith("Copy 2 of 2 - ")
+    assert "Backups" not in messages[-1]
+
+
+def test_a_failed_history_read_keeps_the_last_backup_count():
+    dialog = _Dialog()
+    groups = [_group(percent=n) for n in range(1, 13)]
+    groups.append({"present": False, "status": "", "percent": 0})
+    answers = [[_history_row(2, "twin")], None]
+    with patch(_GS, side_effect=groups), patch(_HS, return_value=dict(_DONE)), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows",
+        side_effect=lambda _getter=None: answers.pop(0),
+    ):
+        poll_nzbget_job(1, dialog, _Monitor(), 600, interval=0, fleet=_fleet(1, 2, 3))
+    messages = [message for _percent, message in dialog.lines]
+    assert "Backups: 1 twin" in messages[0]
+    assert "Backups: 1 twin" in messages[-1]
+
+
+def test_a_kept_copy_is_named_after_the_indexer_that_supplied_it():
+    report = nzbget_progress.FleetReport()
+    report.kept({"indexer": "Refuser", "_supplied_by": "Worker"})
+    report.kept({"indexer": "Geek"})
+    assert nzbget_progress.indexers_line(report) == "Geek, Worker"

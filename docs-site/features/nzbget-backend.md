@@ -339,7 +339,11 @@ Copy 1 failed: too many missing articles
   copy NZBGet starts with is copy 1, and the number goes up each time NZBGet
   switches to a backup. The stage is the download percent, or `waiting in the
   queue`, `checking the files`, `repairing`, `unpacking`, `moving into place`,
-  or `finishing up`.
+  `running NZBGet's scripts`, `repairing from backups` (RustyGet), or
+  `finishing up`. After the download, a stage shows its own progress when
+  NZBGet reports one and how long it has run, such as `unpacking 43% - 25s` or
+  `moving into place - 51s`, and the bar follows the stage. A long move or
+  script run is then not mistaken for a hang.
 - **Line 2** is how much has arrived, the speed over the last half minute,
   and the time left at that speed. The speed and time appear after the second
   progress check.

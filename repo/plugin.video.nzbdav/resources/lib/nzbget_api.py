@@ -374,8 +374,23 @@ def group_status(nzbid, settings_getter=None):
                 "percent": percent,
                 "downloaded_mb": downloaded,
                 "total_mb": total,
+                **_post_stage(group),
             }
     return {"present": False, "status": "", "percent": 0}
+
+
+def _post_stage(group):
+    """How far along and how long the group's post-processing stage is.
+
+    ``listgroups`` reports both for every queued job (zero while it still
+    downloads): ``PostStageProgress`` in tenths of a percent and
+    ``PostStageTimeSec``. The progress dialog shows them, so a long unpack,
+    move or script run no longer looks frozen at 100%.
+    """
+    return {
+        "post_percent": int(_as_number(group.get("PostStageProgress")) // 10),
+        "post_seconds": int(_as_number(group.get("PostStageTimeSec"))),
+    }
 
 
 def history_status(nzbid, settings_getter=None):
@@ -750,6 +765,7 @@ def _promoted_group_entry(group, dupe_key, exclude_nzbid):
         "percent": percent,
         "downloaded_mb": downloaded,
         "total_mb": total,
+        **_post_stage(group),
     }
 
 

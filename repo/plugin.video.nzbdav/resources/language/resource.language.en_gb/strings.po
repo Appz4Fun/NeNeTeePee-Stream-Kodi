@@ -2469,3 +2469,11 @@ msgstr ""
 msgctxt "#30678"
 msgid "{} of {} copies ready"
 msgstr ""
+
+msgctxt "#30679"
+msgid "running NZBGet's scripts"
+msgstr ""
+
+msgctxt "#30680"
+msgid "repairing from backups"
+msgstr ""

@@ -476,6 +476,10 @@ def _remove_quietly(path):
         )
 
 
+# Row key: the indexer whose listing supplied a cluster's NZB (display only).
+SUPPLIED_BY = "_supplied_by"
+
+
 def _stopped(events):
     return any(event is not None and event.is_set() for event in events)
 
@@ -503,6 +507,10 @@ def _fetch_cluster(cluster, fetch, stop_events):
         payload, fingerprint = _as_payload(result)
         _log_fetch(member, "ok" if fingerprint else "no usable NZB in the reply")
         if fingerprint:
+            # The head keeps the slot; note which listing supplied the bytes,
+            # so the dialog names the indexer that delivered, not one that
+            # refused.
+            cluster[0][SUPPLIED_BY] = _indexer(member)
             return cluster[0], payload, fingerprint
     return cluster[0], None, None
 

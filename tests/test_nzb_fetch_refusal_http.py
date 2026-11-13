@@ -233,3 +233,36 @@ def test_the_collector_reports_what_it_kept_and_left_out(indexers, tmp_path):
     assert nzbget_progress.ready_toast(2, 100, report) == (
         "2 of 6 copies ready - health 100%"
     )
+
+
+def test_a_copy_a_mirror_supplied_is_named_after_the_mirror(indexers, tmp_path):
+    # One posting listed on a refusing indexer first and a working one second:
+    # the head keeps the slot, but the dialog must name who delivered.
+    import threading as _threading
+
+    importlib.import_module("resources.lib.nzbget_resolver")
+    from resources.lib import nzbget_progress
+    from resources.lib.nzbget_resolver_dupes import _collect_unique, _fleet_fetcher
+
+    dedup = FleetDedup(spool_base=str(tmp_path))
+    spool = NzbSpool(str(tmp_path))
+    clusters = [
+        [indexers("geek", "a", _is_pick=True)],
+        [indexers("square", "b"), indexers("slug", "b")],
+    ]
+    fetch = _fleet_fetcher(clusters, spool, blocked=dedup.blocked_indexers)
+    tally = {"wanted": 50, "seen": 0, "total": len(clusters), "pick_pending": True}
+    stream = prefetched_clusters(clusters, fetch, window=1)
+    try:
+        kept = _collect_unique(
+            stream, (dedup, spool, tally, fetch), _threading.Event(), 50
+        )
+    finally:
+        stream.close()
+        spool.close()
+    # The cluster's head (its title and rank) is still the refused listing.
+    assert [row["indexer"] for row, _handle, _token in kept] == ["geek", "square"]
+    assert dedup.report.sent == ["geek", "slug"]
+    assert nzbget_progress.sending_message(dedup.report, 2) == (
+        "Sending 2 NZBs to NZBGet...[CR]geek, slug"
+    )

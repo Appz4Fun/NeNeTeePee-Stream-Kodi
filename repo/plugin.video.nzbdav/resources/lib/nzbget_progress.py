@@ -17,7 +17,10 @@ While a copy downloads it shows up to four lines:
     Copy 1 failed: too many missing articles
 
 The first line names the copy being followed (the pick is copy 1; every
-failover to a backup counts one up) and the stage NZBGet reports. The second
+failover to a backup counts one up) and the stage NZBGet reports. After the
+download it reads "unpacking 43% - 25s" or "moving into place - 51s": the
+stage's own progress when the server gives one, and how long it has run, so a
+long unpack, move or script is not mistaken for a hang. The second
 appears while it downloads and the sizes are known. The third says what the
 backups are, when the server tells: a twin is a byte-identical copy the
 server can borrow missing articles from, an alt is another upload kept as a
@@ -45,7 +48,8 @@ _STAGE_STRINGS = {
     "RENAMING": 30643,
     "UNPACKING": 30643,
     "MOVING": 30644,
-    "EXECUTING_SCRIPT": 30645,
+    "EXECUTING_SCRIPT": 30679,
+    "STREAM_REPAIRING": 30680,
     "PP_FINISHED": 30645,
 }
 _DOWNLOADING = frozenset(("DOWNLOADING", "FETCHING"))
@@ -100,7 +104,10 @@ class FleetReport:
         return str((row or {}).get("indexer") or "").strip()
 
     def kept(self, row):
-        self.sent.append(self._indexer(row))
+        # The listing that supplied the NZB, when a mirror stood in for the
+        # release's first listing (``nzbget_fleet_dedup.SUPPLIED_BY``).
+        supplier = str((row or {}).get("_supplied_by") or "").strip()
+        self.sent.append(supplier or self._indexer(row))
 
     def duplicate(self):
         self.duplicates += 1
@@ -252,11 +259,35 @@ def _copy_label(state, fleet):
     return fmt(30638, number)
 
 
+# A stage's running time is shown once it has lasted this long.
+_STAGE_TIME_FROM = 5
+
+
 def _stage(group):
+    """ "downloading 43%", "unpacking 43% - 25s", "moving into place - 51s"."""
     status = str(group.get("status") or "").upper()
     if status in _DOWNLOADING:
         return fmt(30639, group.get("percent", 0))
-    return string(_STAGE_STRINGS.get(status, 30645))
+    label = string(_STAGE_STRINGS.get(status, 30645))
+    percent = stage_percent(group)
+    if percent is not None:
+        label = "{} {}%".format(label, percent)
+    seconds = _megabytes(group.get("post_seconds"))
+    if seconds >= _STAGE_TIME_FROM:
+        label = "{} - {}".format(label, _duration(seconds))
+    return label
+
+
+def stage_percent(group):
+    """The post-processing stage's own percent (1 to 99), or None.
+
+    None while downloading, and for a stage NZBGet gives no progress for (a
+    move, a script): the bar then keeps the download's 100%.
+    """
+    if str(group.get("status") or "").upper() in _DOWNLOADING:
+        return None
+    percent = _megabytes(group.get("post_percent"))
+    return int(percent) if 1 <= percent <= 99 else None
 
 
 def _megabytes(value):
