@@ -15,7 +15,6 @@ modules (mocked once in conftest) so they are imported normally.
 """
 
 import re
-import threading
 import time
 
 import xbmc
@@ -741,9 +740,9 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
     """A Smart-Duplicates submission with NO same-release picker backups (#372 r4).
 
     NZBHydra collapses same-release mirrors into a single picker row, so
-    ``filtered`` can hold no same-release backup while the fallback loader can
-    still surface the collapsed duplicate uploads. The caller only uses this
-    when that loader EXISTS; the fleet is then loader-extras-only. Same gates
+    ``filtered`` can hold no same-release backup while NZBHydra's retained
+    duplicate uploads still hold the collapsed ones. The caller only uses this
+    when that uploads lookup EXISTS; the fleet is then uploads-only. Same gates
     as ``_nzbget_dupe_submission_for_selection``; returns ``None`` when they
     fail.
     """
@@ -754,35 +753,6 @@ def _loader_only_dupe_submission(selected, identity, getter=None):
     if not key:
         return None
     return {"key": key, "backups": [], "max_backups": max_backups}
-
-
-def _nzbget_loader_getter(limit):
-    """``_get_script_setting`` for the NZBGet fleet's fallback loader.
-
-    ``fallback_streams_max`` is the nzbdav proxy's standby cap, so the NZBGet
-    loader ignores it. ``limit`` is a ``{"n": ...}`` holder the fleet sets
-    to the number of candidates it can still use (raising it after a rejected
-    append); unset, the loader scans up to ``nzbget_max_backups`` when that is
-    a positive cap. Always within the loader's own ceiling
-    (``fallback_streams._MAX_FALLBACKS``, a bound on its manifest-probing
-    cost); a 0 proxy cap can't switch NZBGet discovery off.
-    """
-    import resources.lib.router as _router
-
-    def _getter(key, default=""):
-        if key != "fallback_streams_max":
-            return _router._get_script_setting(key, default)
-        from resources.lib.fallback_streams import _MAX_FALLBACKS
-
-        wanted = limit.get("n")
-        if wanted is None:
-            cap = _parse_max_backups(
-                _router._get_script_setting("nzbget_max_backups", "-1")
-            )
-            wanted = cap if cap > 0 else _MAX_FALLBACKS
-        return str(max(1, min(_MAX_FALLBACKS, int(wanted))))
-
-    return _getter
 
 
 def _hydra_uploads_loader(selected):
@@ -818,7 +788,6 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
     inherited ``_nzbget_dupe`` first so a stale value from ``dict(params)`` can't
     survive when this selection yields no submission (bypassing the gate).
     """
-    import resources.lib.router as _router
 
     if isinstance(selected, dict) and selected.get("_season_pack"):
         resolver_params.pop("_nzbget_dupe", None)
@@ -831,31 +800,21 @@ def _attach_nzbget_dupe(resolver_params, selected, filtered, identity):
         # build none of its lookups and leave the selection untouched.
         return
     dupe = _nzbget_dupe_submission_for_selection(selected, filtered, identity, getter)
-    # The fallback loader hands the backup worker the same-content /
-    # NZBHydra-deferred duplicate uploads (not just the picker's same-name
-    # rows) as extra, lowest-priority backups (#372 r2). The worker runs it
-    # OFF-THREAD, so build it with the pure-XML _get_script_setting rather than
-    # reusing resolver_params' "_fallback_candidate_loader" -- on the
-    # handle-based /play path that one carries a None getter and would call
-    # xbmcaddon.Addon().getSetting off the main thread (a CoreELEC crash class
-    # the snapshot design exists to avoid).
-    loader_limit = {"n": None}
-    # Lets the fleet stop the loader's manifest engine on cancel/shutdown.
-    loader_stop = threading.Event()
-    if isinstance(selected, dict):
-        selected["_fallback_stop"] = loader_stop
-    loader = _router._fallback_candidate_loader_for_selection(
-        selected, filtered, settings_getter=_nzbget_loader_getter(loader_limit)
-    )
+    # No fallback (manifest) loader on the NZBGet backend. It downloaded every
+    # candidate NZB a second time to look for same-content uploads, and the
+    # fleet was only sent once it finished (a median 20 seconds per play on a
+    # real box). Everything it returns must pass ``same_release`` against the
+    # pick in the worker, and every picker row that passes is already a backup
+    # (``_same_release_backups``), so across 652 picks from 132 real searches
+    # the only rows it could have added were the odd-size ones that rule
+    # leaves out on purpose. NZBHydra's retained duplicate uploads, the rows
+    # the picker never showed, still arrive through ``hydra_uploads``.
     hydra_uploads = _hydra_uploads_loader(selected)
-    if dupe is None and (loader is not None or hydra_uploads is not None):
+    if dupe is None and hydra_uploads is not None:
         # The picker may have removed peers retained in the original search
-        # snapshot. Let the loaders check it without another indexer search.
+        # snapshot. Let the snapshot be checked without another indexer search.
         dupe = _loader_only_dupe_submission(selected, identity, getter)
     if dupe:
-        dupe["loader"] = loader
-        dupe["loader_limit"] = loader_limit
-        dupe["loader_stop"] = loader_stop
         dupe["hydra_uploads"] = hydra_uploads
         # The pick's listing evidence: the worker never re-submits another
         # listing of the pick's own posting.

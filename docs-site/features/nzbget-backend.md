@@ -342,8 +342,8 @@ When you pick a release, the progress dialog walks through every NZB before
 NZBGet starts downloading:
 
 1. **Looking for duplicate NZBs...**: NeNeTeePee-Stream-Kodi gathers the
-   same-release results, retained NZBHydra2 uploads, and the other
-   same-content uploads.
+   same-release results and the retained NZBHydra2 uploads. It reads these
+   from the search it already ran, so this step downloads nothing.
 2. **Downloading NZBs 1 of 25** ... **25 of 25**: it downloads every NZB file
    itself, your pick included, and checks each one against the NZBs it already
    kept. Each unique NZB is saved to a folder in Kodi's temp directory as soon
@@ -383,12 +383,11 @@ same duplicate key:
 Your pick is always sent.
 
 !!! warning "Backups use indexer grabs"
-    With unlimited backups, every backup costs at least one NZB download from
-    your indexer. Backups found by the same-content search (other release
-    groups or codecs, after the same-release results and retained NZBHydra2
-    uploads) cost two: that search downloads each candidate once to check it,
-    and the add-on downloads it again to send it. Those downloads count against
-    your indexer's API and grab limits. If your indexer has a tight daily grab
+    With unlimited backups, every backup costs one NZB download from your
+    indexer. Those downloads count against your indexer's API and grab limits.
+    Earlier versions also ran a same-content search that downloaded every
+    candidate a second time before anything was sent to NZBGet; it no longer
+    runs on the NZBGet backend. If your indexer has a tight daily grab
     limit, set **Maximum duplicate backups** to a small number, or to `0` to
     turn backups off.
 

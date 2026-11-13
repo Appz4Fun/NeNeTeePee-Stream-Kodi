@@ -5401,47 +5401,31 @@ def test_script_play_resolve_selected_attaches_nzbget_dupe_end_to_end():
     assert "score" not in dupe["backups"][0]
 
 
-def test_attach_nzbget_dupe_builds_loader_with_thread_safe_getter():
-    # The backup worker runs the fallback loader OFF-THREAD. On the handle-based
-    # /play path resolver_params carries a loader built with a None getter, which
-    # would call xbmcaddon.Addon().getSetting off the main thread (CoreELEC crash
-    # class). _attach_nzbget_dupe must instead build the dupe loader with the
-    # pure-XML _get_script_setting (round-2 review finding: off-thread getSetting).
+def test_attach_nzbget_dupe_builds_no_manifest_loader():
+    # The fallback loader downloaded every candidate NZB a second time and the
+    # fleet waited for it, yet it could only return rows the same-release rule
+    # had already made backups (or left out on purpose). On the NZBGet backend
+    # it is not built at all; a stale loader in the params is never reused.
     from resources.lib import router_play
 
-    seen = {}
-
-    def _factory(selected, results, settings_getter=None):
-        seen["getter"] = settings_getter
-        return "FRESH_LOADER"
-
-    # Handle path: no "_settings_getter"; a stale None-getter loader is present.
     params = {"_fallback_candidate_loader": "STALE_NONE_GETTER_LOADER"}
-    stub_dupe = {"key": "k", "pick_score": 2, "backups": [{"link": "u", "score": 1}]}
+    stub_dupe = {"key": "k", "backups": [{"link": "u"}]}
+    selected = {"link": "p"}
     with patch("resources.lib.router_play._dupe_max_backups", return_value=-1), patch(
         "resources.lib.router_play._nzbget_dupe_submission_for_selection",
         return_value=stub_dupe,
     ), patch(
-        "resources.lib.router._fallback_candidate_loader_for_selection",
-        side_effect=_factory,
-    ):
-        router_play._attach_nzbget_dupe(params, {"link": "p"}, [{"link": "p"}], {})
+        "resources.lib.router._fallback_candidate_loader_for_selection"
+    ) as factory:
+        router_play._attach_nzbget_dupe(params, selected, [selected], {})
 
-    # The pure-XML script getter (thread-safe), with fallback_streams_max
-    # replaced by the NZBGet fleet's own demand: never the proxy cap.
-    getter = seen.get("getter")
-    limit = params["_nzbget_dupe"]["loader_limit"]
-    with patch("resources.lib.router._get_script_setting", return_value="-1") as xml:
-        assert getter("fallback_streams_max", "0") == "5"
-        assert getter("hydra_url", "") == "-1"
-    xml.assert_any_call("hydra_url", "")
-    # A small NZBGet cap bounds the loader's (grab-costing) scan too ...
-    with patch("resources.lib.router._get_script_setting", return_value="2"):
-        assert getter("fallback_streams_max", "0") == "2"
-    # ... and the fleet raises the demand on the fly after a rejection.
-    limit["n"] = 3
-    assert getter("fallback_streams_max", "0") == "3"
-    assert params["_nzbget_dupe"]["loader"] == "FRESH_LOADER"
+    factory.assert_not_called()
+    dupe = params["_nzbget_dupe"]
+    assert "loader" not in dupe
+    assert "loader_limit" not in dupe
+    assert "loader_stop" not in dupe
+    assert "_fallback_stop" not in selected
+    assert dupe["pick"]["link"] == "p"
 
 
 def test_nzbget_dupe_submission_reports_standby_max_for_extras_bound():
@@ -5582,12 +5566,11 @@ def test_nzbget_dupe_scores_ride_on_the_wall_clock_base():
     assert _dupe_score_base() < 2_000_000_000  # far inside int32 for decades
 
 
-def test_attach_nzbget_dupe_allows_loader_only_submission():
+def test_attach_nzbget_dupe_allows_hydra_uploads_only_submission():
     # NZBHydra collapses mirrors into one picker row -> no same-name backups --
-    # but the fallback loader can still supply same-content duplicate uploads.
-    # The attach must then produce a loader-only submission (empty backups,
-    # DupeKey + based pick score) instead of dropping the widened pool
-    # (review thread: loader-only duplicate backups).
+    # but its retained duplicate uploads can still supply them. The attach
+    # must then produce a submission with empty backups and the uploads
+    # lookup instead of dropping the widened pool.
     from resources.lib import router_play
 
     params = {}
@@ -5598,22 +5581,22 @@ def test_attach_nzbget_dupe_allows_loader_only_submission():
         "resources.lib.router._get_addon_setting",
         _dupe_setting_getter({"nzbget_enabled": "true"}),
     ), patch(
-        "resources.lib.router._fallback_candidate_loader_for_selection",
-        return_value="LOADER",
+        "resources.lib.router_play._hydra_uploads_loader", return_value="UPLOADS"
     ), patch(
         "resources.lib.router_play._dupe_score_base", return_value=100000
     ):
         router_play._attach_nzbget_dupe(params, selected, filtered, identity)
     dupe = params["_nzbget_dupe"]
     assert dupe["backups"] == []
-    assert dupe["loader"] == "LOADER"
+    assert dupe["hydra_uploads"] == "UPLOADS"
+    assert "loader" not in dupe
     assert dupe["key"] == "imdb=0133093|the-matrix-1999-1080p-grp"
     assert "pick_score" not in dupe
     assert "score_base" not in dupe
 
 
-def test_attach_nzbget_dupe_no_loader_only_when_loader_absent():
-    # Single row AND no loader (pool provably has no peers) -> plain submit.
+def test_attach_nzbget_dupe_plain_submit_without_backups_or_uploads():
+    # Single row AND no retained uploads to check -> plain submit.
     from resources.lib import router_play
 
     params = {}
@@ -5621,10 +5604,7 @@ def test_attach_nzbget_dupe_no_loader_only_when_loader_absent():
     with patch(
         "resources.lib.router._get_addon_setting",
         _dupe_setting_getter({"nzbget_enabled": "true"}),
-    ), patch(
-        "resources.lib.router._fallback_candidate_loader_for_selection",
-        return_value=None,
-    ):
+    ), patch("resources.lib.router_play._hydra_uploads_loader", return_value=None):
         router_play._attach_nzbget_dupe(
             params, selected, [selected], {"type": "movie", "imdb": "tt0133093"}
         )
