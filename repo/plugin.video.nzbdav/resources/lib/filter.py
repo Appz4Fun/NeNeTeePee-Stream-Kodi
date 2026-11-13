@@ -303,6 +303,11 @@ def _ptt_identity(name, parsed):
         "year": year,
         "seasons": list(parsed.get("seasons") or []),
         "episodes": list(parsed.get("episodes") or []),
+        # The air date of a daily show ("2026-11-12"); such a name has no
+        # season or episode, so the date is what marks it as an episode.
+        "date": str(parsed.get("date") or ""),
+        # A whole-series pack ("Complete.Series") names no season either.
+        "complete": bool(parsed.get("complete")),
     }
 
 
@@ -642,32 +647,44 @@ def _int_set(values):
 
 
 def _names_other_episode(meta, season, episode):
-    """True when the parsed release name rules out ``season``/``episode``.
+    """True unless the parsed release name can hold ``season``/``episode``.
 
-    Only a name that clearly says so is ruled out:
+    A row stays only when its name says it can be the requested episode:
 
-    * it names seasons and the requested one is not among them (another
-      season's episode or pack);
-    * it names the requested season and episodes, and the requested episode
-      is not among them (a multi-episode file that includes it is kept);
-    * it names episodes but no season, and season 1 was requested. From
-      season 2 on such a number may be an absolute episode count (anime), so
-      the row is kept.
+    * it names seasons, the requested one is among them, and any episodes it
+      names include the requested one (the episode itself, a multi-episode
+      file that includes it, or a pack for the season);
+    * it names an episode but no season, the name also parses as video (a
+      resolution or codec, which a numbered music track lacks), and the
+      number fits: the requested episode's own number, or from season 2 on an
+      absolute count (anime) high enough to reach the requested season;
+    * it names neither, but carries an air date (a daily show), is marked as
+      a complete-series pack, or still parses as video. The last case covers
+      names whose episode number PTT misses (anime such as
+      ``Sousou no Frieren-05 [BD 1920x1080 x265]``), which may be the episode.
 
-    A name with no season and no episode (a daily show's air date, an
-    obfuscated post) is never ruled out, and neither is a pack for the
-    requested season.
+    Everything else is another episode, another season, or not an episode at
+    all (a soundtrack, a disc image, an obfuscated post).
     """
     identity = meta.get("ptt_identity") if isinstance(meta, dict) else None
     if not isinstance(identity, dict):
         return False
     seasons = _int_set(identity.get("seasons"))
     episodes = _int_set(identity.get("episodes"))
-    if seasons and season not in seasons:
-        return True
-    if episodes and episode not in episodes:
-        return bool(seasons) or season == 1
-    return False
+    if seasons:
+        if season not in seasons:
+            return True
+        return bool(episodes) and episode not in episodes
+    looks_like_video = bool(meta.get("resolution") or meta.get("codec"))
+    if episodes:
+        # The season's own numbering ("Show (2023) - 05" for S02E05), or an
+        # absolute count: every earlier season has at least one episode, so
+        # that count is at least ``episode + season - 1``.
+        fits = episode in episodes or (
+            season > 1 and max(episodes) >= episode + season - 1
+        )
+        return not (fits and looks_like_video)
+    return not (identity.get("date") or identity.get("complete") or looks_like_video)
 
 
 def drop_other_episodes(results, requested_episode):
@@ -676,9 +693,10 @@ def drop_other_episodes(results, requested_episode):
     An episode search trusts the indexer to honour the season and episode it
     was asked for, but a raw-subject indexer matches the show name alone and
     returns every episode it has (live: a Six Feet Under S02E01 search listed
-    74 other episodes from S01 through S05). Those rows are not the requested
-    content, so they are removed outright rather than marked as filtered: the
-    picker's show-all view must not offer them either.
+    88 other episodes from S01 through S05, plus music tracks and disc images
+    that only share the name). Those rows are not the requested content, so
+    they are removed outright rather than marked as filtered: the picker's
+    show-all view must not offer them either.
 
     ``requested_episode`` is ``(season, episode)``; anything that does not
     hold two whole numbers (a movie search passes ``None``) leaves ``results``

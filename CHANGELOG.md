@@ -74,8 +74,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   indexer that searches raw post subjects matches the show name alone and
   returned every episode it had. Results whose name clearly gives a different
   season or episode are now removed before filtering, so they appear in
-  neither picker view. Multi-episode files that include the episode, packs for
-  the season, and names with no season or episode number are kept.
+  neither picker view. So are results that are not an episode at all, such as
+  a soundtrack or disc image that only shares the show's name. What stays is
+  the episode itself, a multi-episode file that includes it, a pack for the
+  season or the whole series, a daily show named by its air date, and a video
+  release whose name carries no readable episode number.
 
 ## [2.0.0-rc.1][] — 2026-11-09
 

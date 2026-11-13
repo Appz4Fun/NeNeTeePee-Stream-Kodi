@@ -65,13 +65,17 @@ def test_raw_yenc_subjects_for_other_episodes_are_dropped():
         "Six.Feet.Under.S02.1080p.AMZN.WEB-DL.DDP5.1.H.264-FLUX",
         "Six.Feet.Under.S01-S05.Complete.1080p.WEB-DL.H.264-GRP",
         "Six.Feet.Under.Complete.Series.1080p.WEB-DL.H.264-GRP",
+        "Six.Feet.Under.S02.COMPLETE.1080p.WEB-DL.H.264-GRP",
         "Six Feet Under - 2x01 - In the Game",
         "The.Daily.Show.2026.11.12.Guest.1080p.WEB.h264-GRP",
-        "aBcD1234eFgH5678",
+        "WWE.Raw.2026.11.09.1080p.WEB.h264-HEEL",
+        # PTT misses these episode numbers; a video name is given the benefit.
+        "[Moozzi2] Sousou no Frieren-05 [BD 1920x1080 x265-10Bit Flac]",
+        "[Beatrice-Raws].Sousou.no.Frieren.05.[BDRip.1920x1080.HEVC.TrueHD]",
     ],
 )
 def test_rows_that_may_hold_the_episode_are_kept(title):
-    """Multi-episode files, packs for the season, and names with no numbers."""
+    """Multi-episode files, packs, dated shows, and unnumbered video names."""
     assert _titles(drop_other_episodes([_row(title)], (2, 1))) == [title]
 
 
@@ -85,15 +89,47 @@ def test_rows_that_may_hold_the_episode_are_kept(title):
     ],
 )
 def test_packs_and_multi_episode_files_without_the_episode_are_dropped(title):
-    assert drop_other_episodes([_row(title)], (2, 1)) == []
+    assert not drop_other_episodes([_row(title)], (2, 1))
 
 
-def test_seasonless_episode_number_is_judged_only_in_season_one():
-    """From season 2 on a bare number may be an absolute count (anime)."""
+@pytest.mark.parametrize(
+    "title",
+    [
+        # The rows a raw-subject indexer returned for the show's name alone.
+        "09-six_feet_under-human_target.flac",
+        "09_human8_-_six_feet_under_(original_mix)-idc.mp3",
+        '[2/6] - "Six_Feet_Under-Next_to_Die-CD-FLAC-2026-MOONBLOOD.part1.rar"'
+        " yEnc  104857600",
+        '[3/3] - "Six_Feet_Under-Next_to_Die-2026-BERC.vol00-01.par2" yEnc  33555012',
+        'Metallica - Six Feet Down Under - "scans and support.rar"  14.0 MBytes yEnc',
+        'picasa benelux team + www.d4d.cc [002/167] - "six feet under seizoen4'
+        ' disk5 DVD9 cave10233.part001.rar" yEnc',
+        # No season, episode, air date or video tag: not an episode.
+        "Six Feet Under Original Television Soundtrack",
+        "aBcD1234eFgH5678",
+    ],
+)
+def test_rows_that_are_not_an_episode_are_dropped(title):
+    assert not drop_other_episodes([_row(title)], (2, 1))
+
+
+def test_numbered_track_is_dropped_even_when_the_number_matches():
+    """A bare number only counts on a name that also parses as video."""
+    track = "09-six_feet_under-human_target.flac"
+    assert not drop_other_episodes([_row(track)], (1, 9))
+
+
+def test_seasonless_episode_number_must_fit_the_request():
+    """Season 1 needs the same number; later seasons an absolute count."""
     bare = "[Erai-raws] Frieren - 05 [1080p].mkv"
-    assert drop_other_episodes([_row(bare)], (1, 5)) != []
-    assert drop_other_episodes([_row(bare)], (1, 6)) == []
-    assert _titles(drop_other_episodes([_row(bare)], (2, 6))) == [bare]
+    assert _titles(drop_other_episodes([_row(bare)], (1, 5))) == [bare]
+    assert not drop_other_episodes([_row(bare)], (1, 6))
+    # S02E03 is at least the 4th episode overall, so "05" may be it.
+    assert _titles(drop_other_episodes([_row(bare)], (2, 3))) == [bare]
+    # S02E06 is at least the 7th, so "05" cannot be it.
+    assert not drop_other_episodes([_row(bare)], (2, 6))
+    # A later season may number its own episodes without naming the season.
+    assert _titles(drop_other_episodes([_row(bare)], (2, 5))) == [bare]
 
 
 def test_season_and_episode_given_as_text_are_understood():
@@ -112,7 +148,7 @@ def test_unknown_request_leaves_results_untouched(requested):
 
 
 def test_empty_results_are_returned_as_given():
-    assert drop_other_episodes([], (2, 1)) == []
+    assert not drop_other_episodes([], (2, 1))
     assert drop_other_episodes(None, (2, 1)) is None
 
 
