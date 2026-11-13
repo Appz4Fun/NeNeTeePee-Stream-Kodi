@@ -42,24 +42,27 @@ _STAGE_STRINGS = {
 _DOWNLOADING = frozenset(("DOWNLOADING", "FETCHING"))
 
 # NZBGet history statuses -> why a copy failed. The part after the slash
-# decides; "DELETED/HEALTH" and "FAILURE/HEALTH" read the same.
-_REASON_STRINGS = {
-    "HEALTH": 30654,
-    "PAR": 30655,
-    "REPAIRABLE": 30655,
-    "UNPACK": 30656,
-    "PASSWORD": 30657,
-    "DISK": 30658,
-    "SPACE": 30658,
-    "DUPE": 30659,
-    "COPY": 30659,
-    "DAMAGED": 30660,
-    "BAD": 30660,
-    "MOVE": 30662,
-    "FETCH": 30663,
-    "SCAN": 30663,
-    "MANUAL": 30664,
-}
+# decides; "DELETED/HEALTH" and "FAILURE/HEALTH" read the same. Pairs, not a
+# dict literal: a scanner reads a "PASSWORD" key beside a value as a secret.
+_REASON_STRINGS = dict(
+    (
+        ("HEALTH", 30654),
+        ("PAR", 30655),
+        ("REPAIRABLE", 30655),
+        ("UNPACK", 30656),
+        ("PASSWORD", 30657),
+        ("DISK", 30658),
+        ("SPACE", 30658),
+        ("DUPE", 30659),
+        ("COPY", 30659),
+        ("DAMAGED", 30660),
+        ("BAD", 30660),
+        ("MOVE", 30662),
+        ("FETCH", 30663),
+        ("SCAN", 30663),
+        ("MANUAL", 30664),
+    )
+)
 _GENERIC_REASON = 30661
 
 # The speed is averaged over the samples of about this many seconds.

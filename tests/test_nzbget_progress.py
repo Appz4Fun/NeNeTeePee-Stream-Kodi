@@ -29,6 +29,10 @@ class _Monitor:  # pylint: disable=too-few-public-methods
         return False
 
 
+def _lines(text):
+    return text.split("[CR]", 3)
+
+
 def _fleet(*nzbids):
     return {"owned_nzbids": lambda: list(nzbids)}
 
@@ -45,7 +49,7 @@ def _group(status="DOWNLOADING", percent=43, downloaded=4608, total=10650):
 
 def test_first_line_names_the_copy_and_the_percent():
     text = nzbget_progress.progress_message({}, _group(), _fleet(1, 2, 3), now=0)
-    assert text.split("[CR]")[0] == "Copy 1 of 3 - downloading 43%"
+    assert _lines(text)[0] == "Copy 1 of 3 - downloading 43%"
 
 
 def test_a_single_copy_has_no_total():
@@ -71,17 +75,17 @@ def test_a_single_copy_has_no_total():
 )
 def test_each_nzbget_stage_has_its_own_words(status, stage):
     text = nzbget_progress.progress_message({}, _group(status, 100), None, now=0)
-    assert text.split("[CR]")[0] == "Copy 1 - " + stage
+    assert _lines(text)[0] == "Copy 1 - " + stage
 
 
 def test_size_speed_and_time_left_come_from_the_polls():
     state = {}
     first = nzbget_progress.progress_message(state, _group(downloaded=4000), now=100)
-    assert first.split("[CR]")[1] == "3.9 of 10.4 GB"  # one sample: no speed yet
+    assert _lines(first)[1] == "3.9 of 10.4 GB"  # one sample: no speed yet
     second = nzbget_progress.progress_message(
         state, _group(downloaded=4620, total=10650), now=110
     )
-    assert second.split("[CR]")[1] == "4.5 of 10.4 GB - 62 MB/s - about 1m 37s left"
+    assert _lines(second)[1] == "4.5 of 10.4 GB - 62 MB/s - about 1m 37s left"
 
 
 def test_slow_speed_keeps_a_decimal_and_long_waits_show_hours():
@@ -90,16 +94,16 @@ def test_slow_speed_keeps_a_decimal_and_long_waits_show_hours():
     text = nzbget_progress.progress_message(
         state, _group(downloaded=25, total=20000), now=10
     )
-    assert text.split("[CR]")[1] == "0.0 of 19.5 GB - 2.5 MB/s - about 2h 13m left"
+    assert _lines(text)[1] == "0.0 of 19.5 GB - 2.5 MB/s - about 2h 13m left"
 
 
 def test_speed_is_dropped_while_nothing_arrives_or_the_counter_resets():
     state = {}
     nzbget_progress.progress_message(state, _group(downloaded=4000), now=0)
     stalled = nzbget_progress.progress_message(state, _group(downloaded=4000), now=10)
-    assert stalled.split("[CR]")[1] == "3.9 of 10.4 GB"
+    assert _lines(stalled)[1] == "3.9 of 10.4 GB"
     reset = nzbget_progress.progress_message(state, _group(downloaded=100), now=20)
-    assert reset.split("[CR]")[1] == "0.1 of 10.4 GB"
+    assert _lines(reset)[1] == "0.1 of 10.4 GB"
 
 
 def test_speed_follows_the_last_half_minute_not_the_whole_download():
@@ -173,10 +177,8 @@ def test_several_failures_are_counted_with_the_last_reason():
     nzbget_progress.record_failure(state, "FAILURE/UNPACK")
     nzbget_progress.next_copy(state)
     text = nzbget_progress.progress_message(state, _group(), _fleet(1, 2, 3), now=0)
-    assert text.split("[CR]")[0] == "Copy 3 of 3 - downloading 43%"
-    assert text.split("[CR]")[-1] == (
-        "2 copies failed. Last one: it could not be unpacked"
-    )
+    assert _lines(text)[0] == "Copy 3 of 3 - downloading 43%"
+    assert _lines(text)[-1] == ("2 copies failed. Last one: it could not be unpacked")
 
 
 def test_a_new_copy_starts_its_speed_from_scratch():
