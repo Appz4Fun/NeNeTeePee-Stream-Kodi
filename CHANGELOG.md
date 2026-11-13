@@ -95,6 +95,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **NZBGet downloads start sooner and use half the indexer grabs.** After
+  collecting the backup NZBs, the add-on ran a second "same-content" search
+  that downloaded every candidate NZB again, and NZBGet was only sent the
+  copies once that finished: a median 20 seconds on a real box, on nearly
+  every play. That search no longer runs on the NZBGet backend. Everything it
+  found had to pass the same-release rule, and every result that passes is
+  already a backup, so across 652 picks from 132 real searches the only rows
+  it could have added were the oddly sized copies that rule leaves out on
+  purpose. NZBHydra2's retained duplicate uploads are still used. The nzbdav
+  and InfiniDysk backends are unchanged.
 - **An indexer that refuses an NZB is skipped for the rest of that play.**
   When the add-on collects backup NZBs for NZBGet and an indexer answers 401,
   403 or 429 (a bad key, a used-up download allowance, a rate limit), its other
