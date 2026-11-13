@@ -619,6 +619,96 @@ def prefer_series_rows(rows, requested_title):
     return matching + rest
 
 
+def _requested_episode_numbers(requested_episode):
+    """Return ``(season, episode)`` as ints, or ``None`` when either is unknown."""
+    if not isinstance(requested_episode, (list, tuple)) or len(requested_episode) != 2:
+        return None
+    season, episode = requested_episode
+    try:
+        return int(str(season).strip()), int(str(episode).strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def _int_set(values):
+    """The ints in ``values``; anything that is not a whole number is skipped."""
+    numbers = set()
+    for value in values if isinstance(values, (list, tuple)) else ():
+        try:
+            numbers.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return numbers
+
+
+def _names_other_episode(meta, season, episode):
+    """True when the parsed release name rules out ``season``/``episode``.
+
+    Only a name that clearly says so is ruled out:
+
+    * it names seasons and the requested one is not among them (another
+      season's episode or pack);
+    * it names the requested season and episodes, and the requested episode
+      is not among them (a multi-episode file that includes it is kept);
+    * it names episodes but no season, and season 1 was requested. From
+      season 2 on such a number may be an absolute episode count (anime), so
+      the row is kept.
+
+    A name with no season and no episode (a daily show's air date, an
+    obfuscated post) is never ruled out, and neither is a pack for the
+    requested season.
+    """
+    identity = meta.get("ptt_identity") if isinstance(meta, dict) else None
+    if not isinstance(identity, dict):
+        return False
+    seasons = _int_set(identity.get("seasons"))
+    episodes = _int_set(identity.get("episodes"))
+    if seasons and season not in seasons:
+        return True
+    if episodes and episode not in episodes:
+        return bool(seasons) or season == 1
+    return False
+
+
+def drop_other_episodes(results, requested_episode):
+    """Return ``results`` without rows that name a different episode.
+
+    An episode search trusts the indexer to honour the season and episode it
+    was asked for, but a raw-subject indexer matches the show name alone and
+    returns every episode it has (live: a Six Feet Under S02E01 search listed
+    74 other episodes from S01 through S05). Those rows are not the requested
+    content, so they are removed outright rather than marked as filtered: the
+    picker's show-all view must not offer them either.
+
+    ``requested_episode`` is ``(season, episode)``; anything that does not
+    hold two whole numbers (a movie search passes ``None``) leaves ``results``
+    untouched. Side effect: attaches ``_meta`` to each row, which
+    ``filter_results`` then reuses instead of parsing the title again.
+    """
+    wanted = _requested_episode_numbers(requested_episode)
+    if wanted is None or not results:
+        return results
+    season, episode = wanted
+    parsed_by_title = {}
+    kept = []
+    for result in results:
+        if not isinstance(result, dict) or "title" not in result:
+            kept.append(result)
+            continue
+        meta = _resolve_result_meta(result, parsed_by_title)
+        result["_meta"] = meta
+        if not _names_other_episode(meta, season, episode):
+            kept.append(result)
+    dropped = len(results) - len(kept)
+    if dropped:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: dropped {} result(s) that name a different "
+            "episode than S{:02d}E{:02d}".format(dropped, season, episode),
+            xbmc.LOGINFO,
+        )
+    return kept
+
+
 def _pubdate_sort_key(result):
     """Return a sortable datetime-derived key for RFC-822 pubdate.
 

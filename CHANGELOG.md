@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Nothing yet |
+| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -67,7 +67,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
-Nothing yet.
+### Fixed
+
+- **An episode search lists the requested episode only.** The add-on trusted
+  each indexer to honour the season and episode it was asked for, but an
+  indexer that searches raw post subjects matches the show name alone and
+  returned every episode it had. Results whose name clearly gives a different
+  season or episode are now removed before filtering, so they appear in
+  neither picker view. Multi-episode files that include the episode, packs for
+  the season, and names with no season or episode number are kept.
 
 ## [2.0.0-rc.1][] — 2026-11-09
 
