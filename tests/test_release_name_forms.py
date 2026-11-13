@@ -472,3 +472,65 @@ def test_the_service_and_variant_show_in_the_normalized_name():
     assert "[MAX]" in shown("The.Town.2010.1080p.MAX.WEB-DL.DDP5.1.H.264-GPRS")
     assert "[INTERNAL]" in shown("Cube.1997.iNTERNAL.1080p.WEB.H264-FLAME")
     assert "[MINI]" in shown("Resident.Evil.2002.m1080p.BluRay.x264-GENEMiGE")
+
+
+# --- a release listed once ranks last in its resolution ------------------------
+
+
+def _ranked(rows):
+    filtered, _all = flt.filter_results(rows, settings_getter=_defaults)
+    return filtered
+
+
+def _copies(title, count, size=10 * GB):
+    return [
+        _row(title, size=size, link="http://example.com/{}/{}".format(title, n))
+        for n in range(count)
+    ]
+
+
+def test_a_single_copy_ranks_below_releases_listed_more_than_once():
+    """One NZB from one indexer led its resolution on a better HDR tag."""
+    stray = "Movie.2024.2160p.UHD.BluRay.REMUX.DV.HDR10+.TrueHD.7.1.Atmos-OPTIMUM"
+    common = "Movie.2024.2160p.WEB-DL.DDP5.1.H.265-FLUX"
+    ranked = _ranked(_copies(stray, 1) + _copies(common, 3))
+    assert _titles(ranked) == [common, common, common, stray]
+
+
+def test_a_single_copy_still_ranks_above_a_lower_resolution():
+    stray = "Movie.2024.2160p.WEB-DL.DDP5.1.H.265-GRPA"
+    common = "Movie.2024.1080p.WEB-DL.DDP5.1.H.264-FLUX"
+    ranked = _ranked(_copies(common, 3) + _copies(stray, 1))
+    assert ranked[0]["title"] == stray
+
+
+def test_a_pinned_group_stays_first_with_one_copy():
+    pinned = "Movie.2024.2160p.UHD.BluRay.REMUX.HDR.HEVC.TrueHD.7.1-CiNEPHiLES"
+    common = "Movie.2024.2160p.UHD.BluRay.REMUX.DV.HDR.HEVC.TrueHD.7.1-GRPA"
+    ranked = _ranked(_copies(common, 3) + _copies(pinned, 1))
+    assert ranked[0]["title"] == pinned
+
+
+def test_single_copies_keep_their_order_when_nothing_is_listed_twice():
+    better = "Movie.2024.2160p.WEB-DL.DV.DDP5.1.H.265-GRPA"
+    plain = "Movie.2024.2160p.WEB-DL.DDP5.1.H.265-GRPB"
+    assert _titles(_ranked(_copies(plain, 1) + _copies(better, 1))) == [better, plain]
+
+
+def test_a_single_copy_ranks_above_a_release_with_no_group():
+    named = "Movie.2024.2160p.WEB-DL.DDP5.1.H.265-GRPA"
+    nameless = "Movie 2024 2160p WEB-DL DV DDP5 1 H 265"
+    assert _titles(_ranked(_copies(nameless, 1) + _copies(named, 1))) == [
+        named,
+        nameless,
+    ]
+
+
+def test_copies_listed_under_two_spellings_are_not_a_single_copy():
+    dotted = "Movie.2024.2160p.WEB-DL.DDP5.1.H.265-GRPA"
+    spaced = "Movie 2024 2160p WEB-DL DDP5 1 H 265-GRPA"
+    better_single = "Movie.2024.2160p.WEB-DL.DV.DDP5.1.H.265-GRPB"
+    ranked = _ranked(
+        _copies(better_single, 1) + _copies(dotted, 1) + _copies(spaced, 1)
+    )
+    assert ranked[-1]["title"] == better_single

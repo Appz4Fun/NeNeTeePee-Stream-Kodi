@@ -97,13 +97,19 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
    are fixed, not a setting, and match without case sensitivity.
 3. **Release group:** a release with a group ranks above one without, so a
    release with no group ranks last within its resolution.
-4. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
+4. **Listed more than once:** a release with two or more NZBs in the results
+   ranks above a release with only one. A real release is listed by several
+   indexers; a single NZB from one indexer is often a stray or mislabelled
+   post, and it would otherwise lead its resolution on a better HDR or audio
+   tag. If every release of a resolution has one NZB, this step changes
+   nothing.
+5. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
    release with several tags ranks by its best.
-5. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
+6. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
    releases, then everything else.
-6. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
+7. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
-7. **Audio:** four tiers, ranked by the release's best track:
+8. **Audio:** four tiers, ranked by the release's best track:
     1. lossless: TrueHD (with or without Atmos), DTS-HD MA (with or without
        DTS:X), FLAC, PCM and ALAC;
     2. lossy with object audio: Dolby Digital Plus with Atmos, and lossy
@@ -114,12 +120,12 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 
     A release with no audio tag ranks after all four. Formats in one tier
     tie, so FLAC ranks beside TrueHD Atmos.
-8. **NZB copies:** among releases still tied, the release with more NZBs in
+9. **NZB copies:** among releases still tied, the release with more NZBs in
    the results sorts first, so a pick has more backups if one NZB fails.
    Copies are counted with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release)
    that NZBGet duplicate backups use, so a release with no group counts only
    itself.
-9. **Size:** larger files win the final tie-break.
+10. **Size:** larger files win the final tie-break.
 
 #### How audio tags are read
 

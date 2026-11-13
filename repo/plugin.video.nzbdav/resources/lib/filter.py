@@ -1125,8 +1125,37 @@ def _sort_results(results, settings):
     relevance_key = _make_relevance_key(
         settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)
     )
-    ordered = _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
+    key = _with_single_copy_last(results, relevance_key)
+    ordered = _break_ties_by_copies(sorted(results, key=key), key)
     return _demote_size_outliers(ordered)
+
+
+# Where the single-copy element goes in the relevance key: after resolution,
+# the pinned groups and "has a release group", before HDR and the rest.
+_SINGLE_COPY_KEY_INDEX = 3
+
+
+def _with_single_copy_last(rows, relevance_key):
+    """``relevance_key`` plus one element: a release listed once ranks late.
+
+    A real release is listed by several indexers; what shows up as one NZB
+    from one indexer is usually a mislabelled or stray post, and it reached
+    the top of a resolution whenever its name carried a better HDR, REMUX or
+    audio tag than the well-listed releases. A release with a single NZB in
+    ``rows`` (counted with the same-release rule, ``_nzb_copy_counts``) now
+    ranks below every release of its resolution that has two or more, and
+    above the releases with no group. CiNEPHiLES and FraMeSToR stay pinned
+    first whatever their count. When every release of a resolution has one
+    copy, nothing changes.
+    """
+    counts = _nzb_copy_counts(rows)
+
+    def _key(row):
+        base = relevance_key(row)
+        single = 0 if counts.get(id(row), 1) > 1 else 1
+        return base[:_SINGLE_COPY_KEY_INDEX] + (single,) + base[_SINGLE_COPY_KEY_INDEX:]
+
+    return _key
 
 
 # A copy this many times larger or smaller than its release's typical copy is

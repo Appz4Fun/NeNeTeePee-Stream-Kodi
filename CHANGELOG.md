@@ -88,6 +88,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A release listed only once ranks last in its resolution** under
+  Relevance, below every release with two or more NZBs and above releases with
+  no group. A single NZB from one indexer is often a stray or mislabelled
+  post, and it led its resolution whenever its name carried a better HDR,
+  REMUX or audio tag than the well-listed releases. CiNEPHiLES and FraMeSToR
+  stay pinned first whatever their count.
 - **Audio ranks in four tiers** under Relevance: lossless (TrueHD with or
   without Atmos, DTS-HD MA with or without DTS:X, FLAC, PCM, ALAC), then
   Dolby Digital Plus with Atmos and lossy DTS:X, then Dolby Digital Plus,
