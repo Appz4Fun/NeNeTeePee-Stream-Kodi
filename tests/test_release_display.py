@@ -29,6 +29,11 @@ _DIALOG_XML_PATH = os.path.join(
 )
 
 _NAME = "Movie.2023.1080p.WEB-DL.DDP5.1.H.264-GRP"
+# A WtFnZb subject with the poster's own prefix in front of the chain.
+_POSTER_PREFIX_SUBJECT = (
+    "[N3wZ] \\6aZWVk131318\\::[PRiVATE]-[WtFnZb]-[{}.mkv]-[1/2]"
+    ' - "" yEnc  4400443301 (1/6140)'
+)
 
 
 def _row(title, **extra):
@@ -113,8 +118,7 @@ def test_display_name(title, shown):
         "{} - [1/3] - yEnc 4400443301",
         '[ {} ] - [01/52] - "abc.part01.rar" yEnc',
         '[PRiVATE]-[WtFnZb]-[{}.mkv]-[1/2] - "" yEnc  4400443301 (1/6140)',
-        '[N3wZ] \\6aZWVk131318\\::[PRiVATE]-[WtFnZb]-[{}.mkv]-[1/2] - "" yEnc '
-        " 4400443301 (1/6140)",
+        _POSTER_PREFIX_SUBJECT,
         "{}.mkv",
         "{}",
     ],
