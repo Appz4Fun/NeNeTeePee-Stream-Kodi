@@ -92,18 +92,26 @@ def test_packs_and_multi_episode_files_without_the_episode_are_dropped(title):
     assert not drop_other_episodes([_row(title)], (2, 1))
 
 
+ALBUM_SUBJECT = (
+    '[2/6] - "Six_Feet_Under-Next_to_Die-CD-FLAC-2026-MOONBLOOD.part1.rar"'
+    " yEnc  104857600"
+)
+DISC_SUBJECT = (
+    'picasa benelux team + www.d4d.cc [002/167] - "six feet under seizoen4'
+    ' disk5 DVD9 cave10233.part001.rar" yEnc'
+)
+
+
 @pytest.mark.parametrize(
     "title",
     [
         # The rows a raw-subject indexer returned for the show's name alone.
         "09-six_feet_under-human_target.flac",
         "09_human8_-_six_feet_under_(original_mix)-idc.mp3",
-        '[2/6] - "Six_Feet_Under-Next_to_Die-CD-FLAC-2026-MOONBLOOD.part1.rar"'
-        " yEnc  104857600",
+        ALBUM_SUBJECT,
         '[3/3] - "Six_Feet_Under-Next_to_Die-2026-BERC.vol00-01.par2" yEnc  33555012',
         'Metallica - Six Feet Down Under - "scans and support.rar"  14.0 MBytes yEnc',
-        'picasa benelux team + www.d4d.cc [002/167] - "six feet under seizoen4'
-        ' disk5 DVD9 cave10233.part001.rar" yEnc',
+        DISC_SUBJECT,
         # No season, episode, air date or video tag: not an episode.
         "Six Feet Under Original Television Soundtrack",
         "aBcD1234eFgH5678",
