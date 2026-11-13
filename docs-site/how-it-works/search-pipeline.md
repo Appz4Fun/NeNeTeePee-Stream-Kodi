@@ -111,6 +111,23 @@ and only that night's releases stay. If no release carries that exact date,
 releases dated one day either side stay. If none of those exist either, every
 dated release stays, so a metadata mismatch never empties the list.
 
+An episode search also removes another show that was matched on something
+other than its title: an episode *titled* like the show you asked for
+(`Sweet.Magnolias.S03E05.On.This.Foundation` for *Foundation*), or a release
+group of that name. A foreign-language title of the right show is kept, since
+it has none of the requested words. Nothing is removed if the rule would take
+more than half of the results. A show whose title is the requested one plus
+more words (`The Office Movers`, `Narcos Mexico`), or another country's remake
+(`The.Office.PL`), is listed below the requested show.
+
+A movie search does the same by year. An indexer that can't search by id falls
+back to the title, so a search for *Avatar* (2009) also returned *Avatar: Fire
+and Ash* (2025). A result whose name is dated more than a year from the
+requested year is removed, unless the requested year also appears in the name
+(`2001.A.Space.Odyssey.1968`). A result with no year stays. A result that is
+an episode of a show (`The.Simpsons.S34E12`) is removed too, unless it is a
+special, which a movie entry can point at.
+
 ## Filtering and ranking
 
 Filtering applies your format, keyword, size, and excluded-group rules. Each
@@ -129,11 +146,12 @@ Under **Relevance** sort, NeNeTeePee-Stream-Kodi orders results by this priority
 ```mermaid
 flowchart LR
     A[Resolution: highest first]
-    A --> G[Has a release group > none]
+    A --> P[CiNEPHiLES > FraMeSToR > other groups]
+    P --> G[Has a release group > none]
     G --> B[HDR: DV > HDR10+ > HDR10 > HLG > SDR]
     B --> R[Hybrid REMUX > REMUX > other]
     R --> C[Preferred tier 1 > 2 > 3]
-    C --> D[Audio]
+    C --> D[Audio tier: lossless > Atmos on DD+ or lossy DTS:X > DD+/DD/DTS > other]
     D --> N[More NZB copies of the release]
     N --> E[Size: larger wins]
 ```
@@ -153,7 +171,9 @@ prepended (see
 With **Auto-select best match (skip result list)** on (**Sorting › Auto-Select**),
 the top filtered result plays straight away. There's no picker and no
 picker-wide tagging pass. Otherwise,
-`results_dialog.py` opens the full-screen picker on the filtered view.
+`results_dialog.py` opens the full-screen picker on the filtered view. Each row
+is labelled by `release_display.display_name`, which builds one normalized name
+from the row's parsed metadata instead of showing the indexer's title.
 
 The picker receives the unfiltered rows as well as the filtered ones. Pressing
 **C** (context menu) switches between the filtered view and a **show all**

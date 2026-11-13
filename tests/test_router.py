@@ -2625,15 +2625,22 @@ def test_handle_search_auto_select_passes_clean_params_to_resolver(
     mock_search.return_value = ([chosen], None)
     mock_filter.return_value = ([chosen], [chosen])
 
-    _handle_search(
-        7,
-        {
-            "type": "movie",
-            "title": "The Matrix",
-            "year": "_",
-            "tmdb_id": "603",
-        },
-    )
+    # The filter is mocked, so keep the rows as bare as it would leave them:
+    # the movie-row check upstream attaches parsed metadata, and this test is
+    # about the params handed to the resolver.
+    with patch(
+        "resources.lib.router._requested_movie_rows",
+        side_effect=lambda results, *_args, **_kwargs: results,
+    ):
+        _handle_search(
+            7,
+            {
+                "type": "movie",
+                "title": "The Matrix",
+                "year": "_",
+                "tmdb_id": "603",
+            },
+        )
 
     mock_resolve_and_play.assert_called_once()
     args, kwargs = mock_resolve_and_play.call_args
@@ -2824,15 +2831,20 @@ def test_handle_search_picker_passes_clean_params_to_resolver(
     mock_filter.return_value = ([chosen], [chosen])
     mock_dialog.return_value = chosen
 
-    _handle_search(
-        8,
-        {
-            "type": "movie",
-            "title": "The Matrix",
-            "year": "_",
-            "tmdb_id": "603",
-        },
-    )
+    # As above: the filter is mocked, so the rows stay bare.
+    with patch(
+        "resources.lib.router._requested_movie_rows",
+        side_effect=lambda results, *_args, **_kwargs: results,
+    ):
+        _handle_search(
+            8,
+            {
+                "type": "movie",
+                "title": "The Matrix",
+                "year": "_",
+                "tmdb_id": "603",
+            },
+        )
 
     mock_resolve_and_play.assert_called_once()
     args, kwargs = mock_resolve_and_play.call_args

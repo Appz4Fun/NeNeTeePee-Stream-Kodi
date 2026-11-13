@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night |
+| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, four audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -67,8 +67,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
+### Added
+
+- **Normalized release names in the picker.** Every row is shown in one
+  format, built from what the release name says:
+  `Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES`,
+  or `Six Feet Under (2001) - S02E01 [AMZN][WEB-DL-1080p][DD+ 5.1][H264]-FLUX` for
+  an episode. Raw Usenet subjects (`[1/3] - "Name.mkv" yEnc 4400443301`) no
+  longer appear as listed. Cuts, variants, parts and second audio tracks keep
+  their place in the name: `{Unrated}`, `[3D]`, `[DUBBED]`, `[HC]`,
+  `S01 Part 2`, `[TrueHD Atmos 7.1 + DD 5.1]`. In List compacted, the side panel
+  shows the name as the indexer listed it in grey under the normalized one.
+- **HYBRID is a parsed attribute** with its own cyan slot on each picker row.
+  It is part of the same-release rule, so a hybrid and its plain twin are
+  never grouped or used as each other's backup. A `Hybrid` in the title
+  (*Hybrid (2007)*) is not the tag.
+- **CiNEPHiLES and FraMeSToR are pinned.** Under Relevance, a CiNEPHiLES
+  release ranks first in its resolution and a FraMeSToR release second,
+  ahead of HDR, REMUX and the preferred group tiers.
+
+### Changed
+
+- **A release listed only once ranks last in its resolution** under
+  Relevance, below every release with two or more NZBs and above releases with
+  no group. A single NZB from one indexer is often a stray or mislabelled
+  post, and it led its resolution whenever its name carried a better HDR,
+  REMUX or audio tag than the well-listed releases. CiNEPHiLES and FraMeSToR
+  stay pinned first whatever their count.
+- **Audio ranks in four tiers** under Relevance: lossless (TrueHD with or
+  without Atmos, DTS-HD MA with or without DTS:X, FLAC, PCM, ALAC), then
+  Dolby Digital Plus with Atmos and lossy DTS:X, then Dolby Digital Plus,
+  Dolby Digital, DTS and DTS-HD HR, then everything else. FLAC now ranks
+  beside TrueHD Atmos, and Opus and MP3 below Dolby Digital.
+- **The picker's audio column shows the main track**, such as
+  `TrueHD Atmos 7.1` or `DD+ 5.1`. Its HDR column reads `DV HDR10+`, and its
+  codec column `HEVC`, `x265` or `H265` as the name spells it. The List
+  compacted columns were resized so these fit without being cut off.
+
 ### Fixed
 
+- **One release is one picker row, however its name is spelled.** Names that
+  are equal once case and punctuation are removed now share one parse, taken
+  from the spelling that reads with the most detail. Before, `English-HONE`
+  and `English.HONE`, `DD+7.1` and `DD_7.1`, `HDR10+` and `HDR10_`,
+  `Dune.Part.Two` and `Dune_Part_Two`, `br.remux` and `br remux`, and an anime
+  name with and without dots were each listed as two releases, and one of the
+  pair often ranked lower for a missing group or audio tag.
+- **A listing that ends in `;` keeps its group** (`-FraMeSToR;` read as a group
+  of its own), and `HDR10_` before another separator is read as HDR10+.
+- **Different titles from one group are never one release.** The same-release
+  rule compared titles loosely, so `The.Sopranos.S02E01` and
+  `The.Office.US.S02E01` from one group (or `House` and
+  `House.of.the.Dragon`) were grouped, and one could be sent to NZBGet as a
+  backup of the other. Parsed titles must now be equal; a dropped apostrophe
+  still matches.
+- **An oddly sized copy no longer leads its release.** Among three or more
+  copies of a release, one more than 1.35 times larger or smaller than the
+  median size (a 91 GB listing of a 10 GB episode, a 60 MB broken post) is
+  listed below the normally sized copies under Relevance. It was the largest
+  copy, so it sorted first and was the one the picker played. It is also never
+  sent as a NZBGet backup of a normal copy.
+- **A re-release marked `v2` is not a copy of the first file** (`S01E05 v2`,
+  `- 05v2`), the same as PROPER and REPACK. The normalized name shows `[v2]`.
+- **One group's releases from different streaming services stay apart.** The
+  service named before the WEB tag (`AMZN`, `NF`, `MAX`, `ATVP`, `DSNP`,
+  `PMTP` and others) is part of the same-release rule and shows in the
+  normalized name as `[AMZN]`. Before, a group's AMZN and MAX copies of one
+  episode were one release and could back each other up.
+- **An `iNTERNAL` release and a smaller `m1080p` encode are their own
+  releases**, shown as `[INTERNAL]` and `[MINI]`.
+- **`Remux` and `BluRay.Remux` from one group are one release.**
+- **A complete-series pack says so in its normalized name** (`Show - Complete`).
+- **An episode search drops another show matched outside its title.** An
+  indexer that matches text returned any post with the searched words in it:
+  `Sweet.Magnolias.S03E05.On.This.Foundation` for *Foundation*, or a release
+  group named like the show. Such rows are removed; a foreign-language title
+  of the right show is kept, and nothing is removed if that would take more
+  than half of the results.
+- **A longer title, or another country's remake, ranks below the requested
+  show.** `The.Office.PL` and `The.Office.Movers` no longer count as *The
+  Office*, and `Narcos.Mexico` no longer counts as *Narcos*.
+- **A movie search drops a show's episodes** (`The.Simpsons.S34E12` for a
+  documentary), except specials.
+- **A second audio track's channels are part of the release**, so
+  `TrueHD.7.1.Atmos.DD5.1` and `...DD2.0` are two releases, and copies listed
+  as `Remux` and `BluRay.Remux` count as one release's copies.
+- **More release groups are read**, checked against the names of 48,000
+  downloaded NZBs: a group before a poster tag written after the extension
+  (`-CiNEPHiLES.mkv-WtF`), a group of several words (`[Ben The Men]`,
+  `-BEN.THE.MEN`), a group ending a bracketed tag block
+  (`[2160p.WEB-DL...English-HONE]`), and a group that follows a tag with no
+  hyphen (`... EAC3 TSRG`, `...h264.NTb`). A group compares equal however its
+  words are joined.
+- **An anime episode number is read in a dotted name**
+  (`[Group].Show.Name-07.[1080p]`).
+- **A movie search drops films dated for another year.** *Avatar* (2009)
+  listed *Avatar: Fire and Ash* (2025) first. A result dated more than a year
+  from the requested year is removed, unless that year also appears in its
+  name; a result with no year stays.
 - **An episode search lists the requested episode only.** The add-on trusted
   each indexer to honour the season and episode it was asked for, but an
   indexer that searches raw post subjects matches the show name alone and
@@ -86,6 +182,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are removed. With no exact match, releases one day either side stay; with
   none of those, every dated release stays. An installed player file is
   upgraded automatically.
+- **Dolby Digital Plus is recognized in more spellings.** `DD_5.1`, and
+  `DD 5.1` in a dotted name, are read as `DD+5.1` (the plus sign was replaced
+  on the way from the indexer). `DDPA5.1` and `DD+A` are Dolby Digital Plus
+  with Atmos, and `DD` beside `Atmos` with no TrueHD is Dolby Digital Plus,
+  because Atmos is never carried on plain Dolby Digital.
+- **Channel counts are read after any audio tag**, so `FLAC.1.0` and
+  `Opus.5.1` keep their channels, and a release naming several tracks
+  (`TrueHD.7.1.Atmos.DD5.1`) gets the main track's count, not the first one
+  in the name.
+- **A WtFnZb subject with a poster prefix is read as the release inside
+  it** (`[N3wZ] \id\::[PRiVATE]-[WtFnZb]-[Name]-[1/2]`); the prefix used to
+  end up in the title and split the release from its other copies.
+- **Two nights of a daily show are no longer one release.** A name dated
+  instead of numbered (`The.Daily.Show.2026.11.12`) has no season or episode,
+  so the same-release rule now compares the air date. Before, another
+  night's episode from the same group could be grouped as a copy and sent to
+  NZBGet as a duplicate backup. The picker shows the date as the episode.
+- **A group at the end of a parenthesized tag block is read**, as in
+  `Movie (2023) (2160p BluRay x265 HEVC 10bit HDR AAC 7.1 Tigole)`.
 
 ## [2.0.0-rc.1][] — 2026-11-09
 

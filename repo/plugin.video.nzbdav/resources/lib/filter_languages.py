@@ -76,6 +76,11 @@ _AUDIO_TAGS = re.compile(
 )
 
 
+def is_language_word(word):
+    """Whether ``word`` is a language name, code or release-name alias."""
+    return str(word or "").lower() in _ALIASES
+
+
 def normalize_languages(values):
     """Normalize names, codes, and Latin American Spanish case-insensitively."""
     return list(dict.fromkeys(_ALIASES.get(v.lower(), v.lower()) for v in values))

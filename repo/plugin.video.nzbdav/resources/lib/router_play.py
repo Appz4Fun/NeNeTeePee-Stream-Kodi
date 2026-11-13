@@ -633,6 +633,10 @@ def _same_release_backups(selected, filtered):
             continue
         if not same_release(selected, result):
             continue
+        if result.get("_size_outlier") and not selected.get("_size_outlier"):
+            # A mislabelled pack or a broken post under the release's name
+            # (see filter._demote_size_outliers) is not a backup of it.
+            continue
         if _normalize_release_name(result.get("title")) == target:
             exact.append(result)
         else:

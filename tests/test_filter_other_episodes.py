@@ -245,7 +245,10 @@ def test_script_play_drops_other_episodes_before_filtering(mock_search, mock_tag
 def test_script_play_movie_search_keeps_every_row(mock_search, mock_tag):
     from resources.lib.router_scriptplay import _script_play_search_filter_tag
 
-    rows = [_row("Alien.1979.1080p.BluRay.DDP.5.1.x264-hallowed"), _row(OTHER)]
+    rows = [
+        _row("Alien.1979.1080p.BluRay.DDP.5.1.x264-hallowed"),
+        _row("Alien.1979.Directors.Cut.2160p.UHD.BluRay.x265-GRP"),
+    ]
     mock_search.return_value = rows
     _script_play_search_filter_tag(
         {}, "movie", "Alien", "1979", {"season": "", "episode": ""}, MagicMock()

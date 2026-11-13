@@ -1,6 +1,6 @@
 # Keyword filters
 
-Preferred groups rank releases; excluded groups remove them. The three preferred tiers affect Relevance after resolution, HDR, and REMUX status, so a preferred group does not automatically outrank a higher-resolution release. Enter group names or keywords as comma-separated lists. Required keywords must all occur in the title. Any excluded keyword removes a matching title. Size limits use the reported release size, not the eventual video-file size. Set a size limit to 0 to remove that limit.
+Preferred groups rank releases; excluded groups remove them. The three preferred tiers affect Relevance after resolution, HDR, and REMUX status, so a preferred group does not automatically outrank a higher-resolution release. Two groups are pinned above all of this and are not a setting: within a resolution, a CiNEPHiLES release always ranks first and a FraMeSToR release second. Enter group names or keywords as comma-separated lists. Required keywords must all occur in the title. Any excluded keyword removes a matching title. Size limits use the reported release size, not the eventual video-file size. Set a size limit to 0 to remove that limit.
 
 ## Kodi screenshots
 

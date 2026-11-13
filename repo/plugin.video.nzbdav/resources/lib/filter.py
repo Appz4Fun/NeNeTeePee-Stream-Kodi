@@ -5,6 +5,8 @@
 
 import datetime
 import math
+import re
+import statistics
 import time
 from copy import deepcopy
 from types import SimpleNamespace
@@ -14,6 +16,7 @@ import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kod
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
 from resources.lib import telemetry
+from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
     _fallback_audio,
     _fallback_hdr,
@@ -50,6 +53,7 @@ from resources.lib.filter_options import (
 from resources.lib.filter_remux import (
     DEFAULT_REMUX_GROUPS,
     compile_remux_tiers,
+    pinned_group_rank,
     read_remux_tiers,
     remux_group_rank,
     remux_priority,
@@ -233,13 +237,26 @@ def _get_filter_settings(settings_getter=None):
     }
 
 
+_REVISION_TAG = re.compile(
+    r"(?:s\d{1,2}e\d{1,3}|[\s._-]\d{1,4})\s?v([2-9])(?![a-z0-9])", re.IGNORECASE
+)
+
+
+_BRACKETED_EPISODE = re.compile(
+    r"(?<=[^\W\d_])[ ._]?-[ ._]?(\d{1,4})(?:v\d)?[ ._]*(?=[\[(])", re.IGNORECASE
+)
+_INTERNAL_TAG = re.compile(r"(?<![a-z0-9])internal(?![a-z0-9])", re.IGNORECASE)
+_MINI_TAG = re.compile(r"(?<![a-z0-9])m(?:720|1080|2160)p(?![a-z0-9])", re.IGNORECASE)
+
+
 def parse_title_metadata(title):
     """Parse a scene title and return normalized metadata dict.
 
     A raw Usenet subject (``[1/3] - "Name.mkv" yEnc``) is parsed as the
     release name inside it. ``meta["variant"]`` holds PTT's 3D, dub, hardsub
     and cut flags (``release_match.variant_tags``), so the same-release rule
-    never reparses the title.
+    never reparses the title. ``meta["hybrid"]`` is the HYBRID tag
+    (``filter_tags.detect_hybrid``).
     """
     from resources.lib.release_match import variant_tags
     from resources.lib.release_subject import release_name_from_subject
@@ -255,7 +272,30 @@ def parse_title_metadata(title):
             xbmc.LOGERROR,
         )
         parsed = _fallback_parse(title)
+    if (
+        title.startswith("[")
+        and not parsed.get("seasons")
+        and not parsed.get("episodes")
+        and not parsed.get("date")
+    ):
+        # "[Group].Show.Name-07.[1080p...]": the parser reads the episode in
+        # "Show Name - 07" but not when the name is written with dots.
+        numbered = _BRACKETED_EPISODE.search(title)
+        if numbered:
+            parsed = dict(parsed, episodes=[int(numbered.group(1))])
     variant = variant_tags(parsed)
+    revision = _REVISION_TAG.search(title)
+    if revision:
+        # "- 05v2" / "S01E05 v2": a re-release that replaces the first file,
+        # so not a copy of it (PROPER and REPACK are compared the same way).
+        variant = variant + ["v" + revision.group(1)]
+    if _INTERNAL_TAG.search(title):
+        # A group's iNTERNAL release is a second, separate release.
+        variant = variant + ["internal"]
+    if _MINI_TAG.search(title):
+        # "m1080p": a smaller encode posted beside the full-size one.
+        variant = variant + ["mini"]
+    variant = sorted(variant)
     identity = _ptt_identity(title, parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
@@ -502,6 +542,141 @@ def _resolve_result_meta(result, parsed_by_title):
     return meta
 
 
+# Per-row caches derived from ``_meta``; dropped when the metadata is replaced.
+_META_DERIVED_ROW_KEYS = (
+    "_release_profile",
+    "_fallback_identity",
+    "_fallback_identity_title",
+    "_fallback_title_tokens",
+    "_fallback_title_tokens_title",
+)
+
+
+def _name_form_key(title):
+    """The release name with case and punctuation removed.
+
+    Indexers list one release under several spellings: dots, spaces or
+    underscores between words, a hyphen or a dot before the group, a plus sign
+    kept or replaced (``DD+7.1`` / ``DD_7.1``, ``HDR10+`` / ``HDR10_``). Every
+    spelling of a name has the same key.
+    """
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    name = without_media_extension(release_name_from_subject(title))
+    name = name.casefold().replace("'", "").replace("\u2019", "")
+    # Every letter and digit counts, in any script: an ASCII-only key gave two
+    # Chinese titles with the same year and tags one key, and one release.
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in name).split())
+
+
+def _parse_detail(meta):
+    """How much a parse recovered; the most detailed parse of a name wins.
+
+    A known group first, then a known episode, then the tags a lost plus sign
+    hides (``HDR10+`` reads as ``HDR10``, ``DD+`` as ``DD``), then how many
+    fields are set at all.
+    """
+    identity = meta.get("ptt_identity")
+    identity = identity if isinstance(identity, dict) else {}
+    return (
+        bool(meta.get("group")),
+        bool(
+            identity.get("seasons") or identity.get("episodes") or identity.get("date")
+        ),
+        "HDR10+" in (meta.get("hdr") or ()),
+        "DD+" in (meta.get("audio") or ()),
+        sum(
+            1 for key in _FILTER_META_STR_KEYS + _FILTER_META_LIST_KEYS if meta.get(key)
+        ),
+    )
+
+
+def _meta_for_spelling(best_meta, row):
+    """``best_meta`` for another spelling of the same name.
+
+    The copy keeps this row's own container (a ``.mkv`` and a ``.mp4`` of one
+    name are different files) and the name its stored identity is keyed on.
+    """
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    meta = deepcopy(best_meta)
+    own = row.get("_meta")
+    if isinstance(own, dict):
+        meta["container"] = own.get("container", "")
+    identity = meta.get("ptt_identity")
+    if isinstance(identity, dict):
+        if not identity.get("title"):
+            # With no parsed title the identity falls back to the whole name,
+            # which differs between spellings; pin it to the winning one's.
+            identity["title"] = without_media_extension(identity.get("name") or "")
+        identity["name"] = release_name_from_subject(row.get("title"))
+    return meta
+
+
+def _parses_agree(meta, best_meta):
+    """Whether two spellings already parse the same, container and name aside."""
+
+    def comparable(value):
+        value = dict(value)
+        value.pop("container", None)
+        identity = value.get("ptt_identity")
+        if isinstance(identity, dict):
+            value["ptt_identity"] = {k: v for k, v in identity.items() if k != "name"}
+        return value
+
+    return comparable(meta) == comparable(best_meta)
+
+
+def _unify_name_forms(rows):
+    """Give every spelling of one release name the same parsed metadata.
+
+    The parser reads a name's punctuation: ``English-HONE`` has a group and
+    ``English.HONE`` has none, ``DD+7.1`` is Dolby Digital Plus and ``DD_7.1``
+    is not, ``[GbR] Show - 05 [...]`` has an episode and
+    ``[GbR].Show-05.[...]`` has not. Those are one release listed twice, so
+    they must filter, rank and group as one. Rows whose names are equal once
+    case and punctuation are removed all take the most detailed parse among
+    them (``_parse_detail``).
+    """
+    forms = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = row.get("title")
+        if not isinstance(title, str) or not isinstance(row.get("_meta"), dict):
+            continue
+        key = _name_form_key(title)
+        if key:
+            forms.setdefault(key, {}).setdefault(title, []).append(row)
+    for spellings in forms.values():
+        if len(spellings) < 2:
+            continue
+        best = max(spellings.values(), key=lambda same: _parse_detail(same[0]["_meta"]))
+        best_meta = best[0]["_meta"]
+        for same in spellings.values():
+            if same is best or _parses_agree(same[0]["_meta"], best_meta):
+                continue
+            for row in same:
+                row["_meta"] = _meta_for_spelling(best_meta, row)
+                for key in _META_DERIVED_ROW_KEYS:
+                    row.pop(key, None)
+
+
+def _attach_metadata(results):
+    """Parse every row's title into ``_meta`` and unify name spellings."""
+    parsed_by_title = {}
+    for result in results:
+        if isinstance(result, dict) and "title" in result:
+            result["_meta"] = _resolve_result_meta(result, parsed_by_title)
+    _unify_name_forms(results)
+
+
 def _log_filter_summary(total, matched_count, shown):
     """Log the filter result counts, noting truncation when it occurred."""
     if shown < matched_count:
@@ -529,21 +704,22 @@ def filter_results(results, settings_getter=None):
     started = time.monotonic()
     settings = _get_filter_settings(settings_getter=settings_getter)
 
-    parsed_by_title = {}
+    _attach_metadata(results)
 
     all_parsed = []
     filtered = []
     for result in results:
-        meta = _resolve_result_meta(result, parsed_by_title)
-        result["_meta"] = meta
+        meta = result["_meta"]
         all_parsed.append(result)
         reject = first_rejecting_filter(result, meta, settings)
         result["_filter_reject"] = reject
         if reject is None:
             filtered.append(result)
 
-    filtered = _sort_results(filtered, settings)
+    # The filtered view last: both sorts mark oddly sized copies on the same
+    # row objects, and playback and backups read the rows of the filtered view.
     all_parsed = _sort_results(all_parsed, settings)
+    filtered = _sort_results(filtered, settings)
 
     matched_count = len(filtered)
     max_results = settings["max_results"]
@@ -599,11 +775,192 @@ def partition_series_rows(rows, requested_title):
             # it), so containment would pass every row. Only exact
             # equality counts for these.
             rest.append(row)
-        elif got and (got == want or want in got or got in want):
+        elif (
+            got
+            and (got == want or got in want or _same_show_title(got, want))
+            and not _other_regional_version(raw, want)
+        ):
             matching.append(row)
         else:
+            # Includes a title that is the requested one plus more words
+            # ("The Office PL", "The Office Movers", "Narcos Mexico"): another
+            # show that shares the name, which used to count as a match.
             rest.append(row)
     return matching, rest
+
+
+# Words that never tell two titles apart, and the country a listing adds to
+# the same show ("The.Office.US", "Shameless.UK").
+_TITLE_FILLER = frozenset(("the", "a", "an", "and"))
+_ARTICLES = frozenset(("the", "a", "an"))
+_TITLE_QUALIFIERS = frozenset(("us", "uk", "au", "nz", "ca"))
+_TITLE_YEAR = re.compile(r"(?:19|20)\d{2}")
+# Past this share of a search's results, a rule that removes "other" titles is
+# more likely misreading the requested title than finding strays.
+_MAX_DROP_SHARE = 0.5
+
+
+# Country codes a local remake carries right after the title
+# ("The.Office.PL.S02E01"). The parser reads them as a language and takes them
+# out of the title, so the title alone looks like the requested show. Codes
+# that are also English words ("it", "in", "no", "be", "at") are left out.
+_REMAKE_CODES = frozenset(
+    "pl de fr es nl dk fi br pt ru jp kr tr cz hu gr il mx za ie ch ar".split()
+)
+
+
+def _other_regional_version(raw_title, want):
+    """True when the name puts another country's code right after the title.
+
+    ``want`` is the normalized requested title. "the office pl s02e01" is the
+    Polish remake; "the office us s02e01" and "the office s02e01" are not
+    judged here, and neither is a request that itself ends in the code.
+    """
+    from resources.lib.fallback_streams import _normalize_title
+    from resources.lib.release_subject import release_name_from_subject
+
+    wanted = want.split()
+    if not wanted or wanted[-1] in _REMAKE_CODES:
+        return False
+    words = _normalize_title(release_name_from_subject(raw_title)).split()
+    size = len(wanted)
+    return words[:size] == wanted and len(words) > size and words[size] in _REMAKE_CODES
+
+
+def _title_core(normalized):
+    """The distinguishing words of a normalized title, as a frozenset."""
+    return frozenset(
+        word
+        for word in normalized.split()
+        if word not in _TITLE_FILLER
+        and word not in _TITLE_QUALIFIERS
+        and not _TITLE_YEAR.fullmatch(word)
+    )
+
+
+def _same_show_title(got, want):
+    """Two normalized titles with the same distinguishing words.
+
+    "the office us" and "the office 2005" are "the office"; "the office pl"
+    and "narcos mexico" are other shows.
+    """
+    core = _title_core(want)
+    if not core or _title_core(got) != core:
+        return False
+    # "A Teacher" and "The Teacher" are two shows; a listing that drops the
+    # article ("Office" for "The Office") is still the show.
+    articles = {words[0] for words in (got.split(), want.split()) if words}
+    return len(articles & _ARTICLES) < 2
+
+
+def _matched_outside_title(row, wanted):
+    """True when the requested title is in the name but not in its title.
+
+    ``wanted`` is ``(words, compact)``: the requested title's words, and the
+    whole title with only letters and digits left. The compact form matches a
+    title an apostrophe splits differently ("It's Always Sunny" lists as
+    "Its.Always.Sunny").
+
+    An indexer that matches text returns any post with the searched words in
+    it: another show's episode titled like the requested show
+    (``Sweet.Magnolias.S03E05.On.This.Foundation`` for *Foundation*,
+    ``The.Sopranos.S02E01...Psychiatrists.Office`` for *The Office*) or a
+    release group of that name (``Site.26.09.30...-Narcos`` for *Narcos*).
+    The words leave out numbers, because the parser often takes one out of a
+    title ("Station.19", "The.100"). A foreign-language title of the right show
+    does not have the requested words anywhere, so it is not judged here.
+    """
+    from resources.lib.fallback_streams import _normalize_title, _release_identity
+    from resources.lib.release_match import title_key
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    words, compact = wanted
+    title = _release_identity(row)[0]
+    if words <= set(title.split()) or (compact and compact in title_key(title)):
+        return False
+    name = without_media_extension(release_name_from_subject(row.get("title")))
+    return words <= set(_normalize_title(name).split())
+
+
+def _without(results, is_other, what):
+    """``results`` minus the rows ``is_other`` flags, unless that is most of them."""
+    kept = [
+        row
+        for row in results
+        if not (isinstance(row, dict) and "title" in row and is_other(row))
+    ]
+    dropped = len(results) - len(kept)
+    if not dropped or dropped > len(results) * _MAX_DROP_SHARE:
+        return results
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: dropped {} result(s) {}".format(dropped, what),
+        xbmc.LOGINFO,
+    )
+    return kept
+
+
+def drop_other_shows(results, requested_title):
+    """Return episode ``results`` without rows matched outside their title.
+
+    See ``_matched_outside_title``. Nothing is removed when the requested
+    title has no usable words, or when the rule would remove more than half
+    of the results (the parser is then more likely misreading the title than
+    the indexers are returning strays). Side effect: attaches ``_meta``.
+    """
+    from resources.lib.fallback_streams import _normalize_title
+    from resources.lib.filter_languages import is_language_word
+    from resources.lib.release_match import title_key
+
+    # A country code is left out like a number: the parser reads "UK" in
+    # "The.Office.UK" as a language and takes it out of the title, so a
+    # request for "The Office UK" would find "uk" only outside the title.
+    words = {
+        word
+        for word in _normalize_title(str(requested_title or "")).split()
+        if word not in _TITLE_FILLER
+        and word not in _TITLE_QUALIFIERS
+        and word not in _REMAKE_CODES
+        and not word.isdigit()
+        # "The English": the parser reads "English" as the language and takes
+        # it out of the title, like a country code or a number.
+        and not is_language_word(word)
+    }
+    if not words or not results:
+        return results
+    wanted = (words, title_key(requested_title))
+    _attach_metadata(results)
+    return _without(
+        results,
+        lambda row: _matched_outside_title(row, wanted),
+        "that only mention '{}' outside their title".format(requested_title),
+    )
+
+
+def drop_tv_episodes(results):
+    """Return movie ``results`` without rows that are an episode of a show.
+
+    A movie search that falls back to text returns episodes named like the
+    film (``The.Simpsons.S34E12...`` for a documentary). A row that parses
+    both a season and an episode is not the movie, unless it is a special.
+    """
+    if not results:
+        return results
+    _attach_metadata(results)
+
+    def _is_episode(row):
+        identity = row["_meta"].get("ptt_identity")
+        if not isinstance(identity, dict):
+            return False
+        seasons = _int_set(identity.get("seasons"))
+        episodes = _int_set(identity.get("episodes"))
+        # A special (season 0 or episode 0) can be what a movie entry points
+        # at: "IT.Welcome.to.Derry.S01E00.A.Story.of.Derry" is listed as a film.
+        return bool(seasons and episodes) and 0 not in seasons | episodes
+
+    return _without(results, _is_episode, "that are a show's episode, not the movie")
 
 
 def prefer_series_rows(rows, requested_title):
@@ -764,15 +1121,13 @@ def drop_other_episodes(results, requested_episode, air_date=None):
     if wanted is None or not results:
         return results
     season, episode = wanted
-    parsed_by_title = {}
+    _attach_metadata(results)
     kept = []
     for result in results:
         if not isinstance(result, dict) or "title" not in result:
             kept.append(result)
             continue
-        meta = _resolve_result_meta(result, parsed_by_title)
-        result["_meta"] = meta
-        if not _names_other_episode(meta, season, episode):
+        if not _names_other_episode(result["_meta"], season, episode):
             kept.append(result)
     kept = _keep_requested_air_date(kept, air_date)
     dropped = len(results) - len(kept)
@@ -782,6 +1137,84 @@ def drop_other_episodes(results, requested_episode, air_date=None):
             "episode than S{:02d}E{:02d}".format(dropped, season, episode),
             xbmc.LOGINFO,
         )
+    return kept
+
+
+_YEAR_TOKEN = re.compile(r"(?<![0-9])(?:19|20)[0-9]{2}(?![0-9])")
+
+
+def _names_other_year(row, wanted, title_years=frozenset()):
+    """True when a movie row is clearly dated for another year than ``wanted``.
+
+    ``title_years`` are the year-like numbers in the requested title itself:
+    with no release year in the name, the parser reads the "2049" of
+    ``Blade.Runner.2049.2160p`` as the year, and that is the title, not a date.
+
+    The parsed year must be more than one year off (festival and release years
+    differ by one), and the requested year must not appear anywhere in the
+    name. The second check keeps a title that is itself a year
+    (``2001.A.Space.Odyssey.1968``, ``Blade.Runner.2049.2017``) whichever
+    number the parser took for the year.
+    """
+    from resources.lib.release_subject import release_name_from_subject
+
+    meta = row.get("_meta")
+    identity = meta.get("ptt_identity") if isinstance(meta, dict) else None
+    if not isinstance(identity, dict):
+        return False
+    if identity.get("seasons") or identity.get("episodes"):
+        return False
+    year = identity.get("year")
+    if not isinstance(year, int) or isinstance(year, bool) or year <= 0:
+        return False
+    if abs(year - wanted) <= 1 or year in title_years:
+        return False
+    named = {
+        int(token)
+        for token in _YEAR_TOKEN.findall(release_name_from_subject(row.get("title")))
+    }
+    return not named & {wanted - 1, wanted, wanted + 1}
+
+
+def drop_other_years(results, requested_year, requested_title=""):
+    """Return movie ``results`` without rows dated for another year.
+
+    A movie search by id still comes back with other films: an indexer that
+    cannot search by id falls back to the title, so *Avatar* (2009) listed
+    *Avatar: Fire and Ash* (2025) first. A row whose name is clearly dated for
+    another year is removed outright, like another episode on an episode
+    search. A row with no year, or within a year of the requested one, stays.
+    ``requested_year`` that is not a four-digit year leaves ``results``
+    untouched. A year-like number in ``requested_title`` is never a
+    conflicting date. Side effect: attaches ``_meta`` to each row.
+    """
+    try:
+        wanted = int(str(requested_year).strip())
+    except (TypeError, ValueError):
+        return results
+    if not 1900 <= wanted <= 2100 or not results:
+        return results
+    _attach_metadata(results)
+    title_years = frozenset(
+        int(token) for token in _YEAR_TOKEN.findall(str(requested_title or ""))
+    )
+    kept = [
+        row
+        for row in results
+        if not (
+            isinstance(row, dict)
+            and "title" in row
+            and _names_other_year(row, wanted, title_years)
+        )
+    ]
+    dropped = len(results) - len(kept)
+    if not dropped:
+        return results
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: dropped {} result(s) dated for another "
+        "year than {}".format(dropped, wanted),
+        xbmc.LOGINFO,
+    )
     return kept
 
 
@@ -832,23 +1265,6 @@ _HDR_RANK = {
     "HLG": 3,
 }
 
-# Audio rank: TrueHD+Atmos best, then Atmos DD+, TrueHD, DTS:X,
-# DTS-HD MA, DTS, DD+, DD, AAC, unknown
-_AUDIO_RANK = {
-    "TrueHD": 1,
-    "Atmos": 0,
-    "DTS:X": 3,
-    "DTS-HD MA": 4,
-    "DTS-HD HR": 5,
-    "FLAC": 4,
-    "PCM": 4,
-    "ALAC": 4,
-    "DTS": 5,
-    "DD+": 6,
-    "DD": 7,
-    "AAC": 8,
-}
-
 
 def _hdr_rank(hdr_list):
     """Best (lowest) HDR tier rank present, or 5 when none."""
@@ -857,20 +1273,10 @@ def _hdr_rank(hdr_list):
     return min(_HDR_RANK.get(h, 4) for h in hdr_list)
 
 
-def _audio_rank(audio_list):
-    """Best audio tier rank; Atmos + TrueHD combo is -1 (best)."""
-    if not audio_list:
-        return 10
-    ranks = [_AUDIO_RANK.get(a, 9) for a in audio_list]
-    # Atmos + TrueHD combo = rank 0 (best)
-    if 0 in ranks and 1 in ranks:
-        return -1
-    return min(ranks)
-
-
 def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
-    """Rank resolution, then named groups before none, then HDR, REMUX, group
-    tier, audio, and size."""
+    """Rank resolution, then the pinned groups (CiNEPHiLES, FraMeSToR), then
+    named groups before none, then HDR, REMUX, group tier, audio tier
+    (``filter_audio.audio_tier``), and size."""
     tier_patterns = compile_remux_tiers(remux_tiers)
 
     def _relevance_key(r):
@@ -880,11 +1286,12 @@ def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
         priority = remux_priority(r)
         return (
             res_rank,
+            pinned_group_rank(r),  # CiNEPHiLES, then FraMeSToR: first in theirs
             0 if meta.get("group") else 1,  # no release group: last in its resolution
             _hdr_rank(meta.get("hdr", [])),
             priority,
             remux_group_rank(r, tier_patterns),
-            _audio_rank(meta.get("audio", [])),
+            audio_tier(meta.get("audio", []), meta.get("quality", "")),
             size,
         )
 
@@ -925,7 +1332,168 @@ def _sort_results(results, settings):
     relevance_key = _make_relevance_key(
         settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)
     )
-    return _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
+    key = _with_single_copy_last(results, relevance_key)
+    ordered = _break_ties_by_copies(sorted(results, key=key), key)
+    return _demote_size_outliers(ordered)
+
+
+# Where the single-copy element goes in the relevance key: after resolution,
+# the pinned groups and "has a release group", before HDR and the rest.
+_SINGLE_COPY_KEY_INDEX = 3
+
+
+def _with_single_copy_last(rows, relevance_key):
+    """``relevance_key`` plus one element: a release listed once ranks late.
+
+    A real release is listed by several indexers; what shows up as one NZB
+    from one indexer is usually a mislabelled or stray post, and it reached
+    the top of a resolution whenever its name carried a better HDR, REMUX or
+    audio tag than the well-listed releases. A release with a single NZB in
+    ``rows`` (counted with the same-release rule, ``_nzb_copy_counts``) now
+    ranks below every release of its resolution that has two or more, and
+    above the releases with no group. CiNEPHiLES and FraMeSToR stay pinned
+    first whatever their count. When every release of a resolution has one
+    copy, nothing changes.
+    """
+    counts = _nzb_copy_counts(rows)
+
+    def _key(row):
+        base = relevance_key(row)
+        single = 0 if counts.get(id(row), 1) > 1 else 1
+        return base[:_SINGLE_COPY_KEY_INDEX] + (single,) + base[_SINGLE_COPY_KEY_INDEX:]
+
+    return _key
+
+
+# A copy this many times larger or smaller than its release's typical copy is
+# not a normal listing of it. NZB sizes of one release differ by the repair
+# data each poster added, which stays well inside this.
+_SIZE_OUTLIER_FACTOR = 1.35
+# With fewer copies there is no telling which size is the typical one.
+_SIZE_OUTLIER_MIN_COPIES = 3
+
+
+def _row_size(row):
+    """The row's size in bytes, or 0 when it is missing or unreadable."""
+    try:
+        return max(int(row.get("size") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _release_copies_key(row):
+    """Rows with equal keys are listings of one release, or None when unknown.
+
+    The same fields the same-release rule compares: the parsed release
+    profile (which needs a group) and what the release is of.
+    """
+    from resources.lib import fallback_streams as _fs
+    from resources.lib.release_match import release_profile, title_key
+
+    if not isinstance(row, dict) or row.get("_season_pack"):
+        return None
+    try:
+        profile = release_profile(row)
+        if not dict(profile).get("group"):
+            return None
+        title, _year, seasons, episodes, part = _fs._release_identity(row)
+    except Exception:  # pylint: disable=broad-except
+        return None
+    # The year is left out on purpose: the same-release rule lets a name
+    # without a year match one with it ("Show.S02E01" / "Show.2022.S02E01").
+    return (profile, title_key(title), tuple(seasons), tuple(episodes), part)
+
+
+def _split_where_named_apart(ordered, buckets, value_of):
+    """Yield each bucket of row indexes, split where its rows name a value apart.
+
+    A bucket whose rows name two or more different values (``value_of(row)``,
+    empty when the row names none) is split by value, the rows naming none on
+    their own; any other bucket is left whole.
+    """
+    for indexes in buckets:
+        by_value = {}
+        for index in indexes:
+            by_value.setdefault(value_of(ordered[index]), []).append(index)
+        if len([value for value in by_value if value]) < 2:
+            yield indexes
+        else:
+            yield from by_value.values()
+
+
+def _named_container(row):
+    meta = row.get("_meta")
+    container = meta.get("container") if isinstance(meta, dict) else ""
+    return str(container or "").casefold()
+
+
+def _named_year(row):
+    from resources.lib import fallback_streams as _fs
+
+    try:
+        return _fs._release_identity(row)[1] or 0
+    except Exception:  # pylint: disable=broad-except
+        return 0
+
+
+def _size_buckets(ordered, buckets):
+    """The copy buckets whose sizes may share a median.
+
+    ``_release_copies_key`` leaves out what the same-release rule lets an
+    unknown value match: the container and the year. Two *known* different
+    values are different releases, though (a ``.mkv`` and a ``.mp4``, a 1990
+    film and its 2020 remake), and an ordinary copy of one must not read as an
+    odd copy of the other, so such buckets are split.
+    """
+    buckets = _split_where_named_apart(ordered, buckets, _named_container)
+    return _split_where_named_apart(ordered, buckets, _named_year)
+
+
+def _demote_size_outliers(ordered):
+    """Move oddly sized copies of a release below its normally sized ones.
+
+    One release name can cover very different posts: a 10 GB episode listed
+    42 times and once at 91 GB (a mislabelled pack), or once at 60 MB (a
+    broken post). Relevance puts the largest copy first, so the odd one led
+    the release and was what the picker played. A copy more than
+    ``_SIZE_OUTLIER_FACTOR`` away from the median size of its release is
+    marked ``_size_outlier`` and moved to just after the release's last
+    normally sized copy; everything else keeps its order.
+    """
+    copies = {}
+    for index, row in enumerate(ordered):
+        if isinstance(row, dict):
+            row.pop("_size_outlier", None)
+        key = _release_copies_key(row)
+        if key is not None and _row_size(row):
+            copies.setdefault(key, []).append(index)
+    follow = {}
+    moved = set()
+    for indexes in _size_buckets(ordered, copies.values()):
+        if len(indexes) < _SIZE_OUTLIER_MIN_COPIES:
+            continue
+        median = statistics.median(_row_size(ordered[i]) for i in indexes)
+        low, high = median / _SIZE_OUTLIER_FACTOR, median * _SIZE_OUTLIER_FACTOR
+        normal = [i for i in indexes if low <= _row_size(ordered[i]) <= high]
+        if not normal or len(normal) == len(indexes):
+            continue
+        anchor = normal[-1]
+        for index in indexes:
+            if low <= _row_size(ordered[index]) <= high:
+                continue
+            ordered[index]["_size_outlier"] = True
+            if index < anchor:
+                follow.setdefault(anchor, []).append(index)
+                moved.add(index)
+    if not moved:
+        return ordered
+    result = []
+    for index, row in enumerate(ordered):
+        if index in moved:
+            continue
+        result.append(row)
+        result.extend(ordered[i] for i in follow.get(index, ()))
+    return result
 
 
 def _is_release_copy(target, row):
@@ -949,29 +1517,27 @@ def _fold_meta_value(value):
 
 
 def _copy_prefilter_key(row):
-    """Profile fields ``same_release`` requires equal, read from ``_meta``.
+    """What ``same_release`` requires equal before it looks at the content.
 
-    A cheap subset of ``release_match.release_profile`` (everything but the
-    variant flags). Rows with different keys can never be the same release,
-    so only rows sharing a key are compared. None for a row with no parsed
-    group, which the rule never groups.
+    The row's ``release_match.release_profile`` itself, so this can never
+    separate two rows the rule accepts (a hand-kept subset once bucketed
+    "Remux" and "BluRay.Remux" apart after the rule had learned they are one
+    source, and each copy counted as a release listed once). Rows with
+    different keys can never be the same release, so only rows sharing a key
+    are compared. None for a row with no parsed group, which the rule never
+    groups.
     """
-    meta = row.get("_meta")
-    if not isinstance(meta, dict):
+    from resources.lib.release_match import release_profile
+
+    if not isinstance(row.get("_meta"), dict):
         return None
-    group = _fold_meta_value(meta.get("group"))
-    if not group:
+    try:
+        profile = release_profile(row)
+    except Exception:  # pylint: disable=broad-except
         return None
-    fields = [bool(row.get("_season_pack")), group]
-    for name in ("resolution", "channels", "codec", "quality", "edition"):
-        fields.append(_fold_meta_value(meta.get(name)))
-    for name in ("hdr", "audio"):
-        values = meta.get(name) or []
-        if isinstance(values, str):
-            values = [values]
-        fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
-    fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
-    return tuple(fields)
+    if not dict(profile).get("group"):
+        return None
+    return (bool(row.get("_season_pack")),) + profile
 
 
 _SEASONS_CLASS = ("seasons", (), ())
@@ -1079,13 +1645,13 @@ def _break_ties_by_copies(ordered, relevance_key):
 
     ``ordered`` is already sorted by ``relevance_key``, whose last element is
     size. Each run of rows that ties on everything before size (resolution,
-    HDR, REMUX, group tier, audio) is re-sorted by copy count, most first,
-    then by size as before. A stable sort keeps the original order when both
-    tie. Copies are counted within the run. same_release requires equal
-    resolution, HDR, audio, and group, so a release's copies almost always
-    share a run; the rare split (REMUX priority reads the raw title, so a
-    "Hybrid" listing can rank apart from its plain twin) counts each side
-    within its own run.
+    pinned group, HDR, REMUX, group tier, audio tier) is re-sorted by copy
+    count, most first, then by size as before. A stable sort keeps the
+    original order when both tie. Copies are counted within the run.
+    same_release requires equal resolution, HDR, audio, HYBRID and group, so
+    a release's copies share a run except in the rare split (REMUX priority
+    reads "REMUX" from the raw title), where each side is counted within its
+    own run.
     """
     if len(ordered) < 2:
         return ordered

@@ -70,11 +70,32 @@ def compile_remux_tiers(tiers):
     ]
 
 
+# Groups ranked above every other release of the same resolution, best
+# first. They are not a setting: these two always lead.
+PINNED_GROUPS = ("CiNEPHiLES", "FraMeSToR")
+_PINNED_RANK = {name.casefold(): rank for rank, name in enumerate(PINNED_GROUPS)}
+
+
+def pinned_group_rank(result):
+    """0 for CiNEPHiLES, 1 for FraMeSToR, 2 for every other release."""
+    meta = result.get("_meta")
+    group = meta.get("group") if isinstance(meta, dict) else ""
+    return _PINNED_RANK.get(str(group or "").casefold(), len(PINNED_GROUPS))
+
+
 def remux_priority(result):
-    """Hybrid REMUX first, REMUX second, then everything else."""
+    """Hybrid REMUX first, REMUX second, then everything else.
+
+    HYBRID is the parsed ``_meta["hybrid"]`` attribute when the row has
+    been parsed (a "Hybrid" in the title is not the tag); an unparsed row
+    falls back to the word anywhere in its name.
+    """
     title = result.get("title", "")
     if not _REMUX.search(title):
         return 2
+    meta = result.get("_meta")
+    if isinstance(meta, dict) and "hybrid" in meta:
+        return 0 if meta["hybrid"] else 1
     return 0 if _HYBRID.search(title) else 1
 
 

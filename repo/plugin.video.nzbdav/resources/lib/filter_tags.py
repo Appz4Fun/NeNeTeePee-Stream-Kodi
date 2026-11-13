@@ -3,7 +3,8 @@
 
 import re
 
-from resources.lib.filter_languages import title_languages
+from resources.lib.filter_audio import main_audio
+from resources.lib.filter_languages import is_language_word, title_languages
 from resources.lib.release_subject import release_name_from_subject
 
 
@@ -11,42 +12,83 @@ def _pattern(expression):
     return re.compile(r"(?<![a-z0-9])(?:" + expression + r")(?![a-z0-9])", re.I)
 
 
-_HDR_PLUS = _pattern(r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr(?:10)?p")
+# "hdr10_" before another separator ("HDR10_.x265") is HDR10+ with the plus
+# sign replaced on the way from the indexer; in a name that separates every
+# word with underscores ("HDR10_x265") the underscore is only a separator.
+_HDR_PLUS = _pattern(
+    r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr(?:10)?p|hdr10_(?=[. \-\])]|$)"
+)
 _HDR = _pattern(r"hdr(?:10)?")
 _DV = _pattern(r"dv|dovi|dolby[. _-]?vision")
 _HLG = _pattern(r"hlg")
 _RESOLUTION = _pattern(r"\d{3,4}x\d{3,4}|\d{3,4}[pi]|[48]k|qhd")
 
+_AUDIO_EXPRESSIONS = (
+    ("Atmos", r"atmos"),
+    ("TrueHD", r"true[. _-]?hd"),
+    ("DTS:X", r"dts[. :_-]?x"),
+    ("DTS-HD MA", r"dts[. _-]?hd[. _-]?(?:ma|master(?:[. _-]?audio)?)"),
+    ("DTS-HD HR", r"dts[. _-]?hd[. _-]?(?:hra?|high[. _-]?resolution)"),
+    ("DTS", r"dts(?![. _:-]?(?:hd|x)\b)"),
+    (
+        "DD+",
+        r"e[. _-]?ac[. _-]?3(?:x\d+)?|dd2?(?:p|\+)(?:[1-9][. _]?\d)?"
+        r"|dd[. _-]?plus"
+        r"|dolby[. _-]?digital[. _-]?plus",
+    ),
+    (
+        "DD",
+        r"ac[. _-]?3(?:x\d+)?|dd(?:[1257][. _]?\d)?|dolby[. _-]?(?:digital|d)",
+    ),
+    ("AAC", r"(?:he[. _-]?|q{1,2})?aac(?:[1257][. _]?\d|2)?(?:x\d+)?"),
+    ("FLAC", r"flac(?:[1257][. _]?\d)?(?:x\d+)?"),
+    ("PCM", r"l?pcm(?:[1257][. _]?\d)?"),
+    ("OPUS", r"opus(?:[1257][. _]?\d)?"),
+    ("MP3", r"mp3"),
+    ("ALAC", r"alac"),
+    ("Vorbis", r"vorbis"),
+    ("MP2", r"mp2"),
+    ("WMA", r"wma(?:[. _-]?pro)?"),
+    ("AC-4", r"ac[. _-]?4"),
+)
 _AUDIO_PATTERNS = tuple(
-    (name, _pattern(expression))
-    for name, expression in [
-        ("Atmos", r"atmos"),
-        ("TrueHD", r"true[. _-]?hd"),
-        ("DTS:X", r"dts[. :_-]?x"),
-        ("DTS-HD MA", r"dts[. _-]?hd[. _-]?(?:ma|master(?:[. _-]?audio)?)"),
-        ("DTS-HD HR", r"dts[. _-]?hd[. _-]?(?:hra?|high[. _-]?resolution)"),
-        ("DTS", r"dts(?![. _:-]?(?:hd|x)\b)"),
-        (
-            "DD+",
-            r"e[. _-]?ac[. _-]?3(?:x\d+)?|dd2?(?:p|\+)(?:[1-9][. _]?\d)?"
-            r"|dd[. _-]?plus"
-            r"|dolby[. _-]?digital[. _-]?plus",
-        ),
-        (
-            "DD",
-            r"ac[. _-]?3(?:x\d+)?|dd(?:[1257][. _]?\d)?|dolby[. _-]?(?:digital|d)",
-        ),
-        ("AAC", r"(?:he[. _-]?|q{1,2})?aac(?:[1257][. _]?\d|2)?(?:x\d+)?"),
-        ("FLAC", r"flac(?:[1257][. _]?\d)?(?:x\d+)?"),
-        ("PCM", r"l?pcm(?:[1257][. _]?\d)?"),
-        ("OPUS", r"opus(?:[1257][. _]?\d)?"),
-        ("MP3", r"mp3"),
-        ("ALAC", r"alac"),
-        ("Vorbis", r"vorbis"),
-        ("MP2", r"mp2"),
-        ("WMA", r"wma(?:[. _-]?pro)?"),
-        ("AC-4", r"ac[. _-]?4"),
-    ]
+    (name, _pattern(expression)) for name, expression in _AUDIO_EXPRESSIONS
+)
+
+_AUDIO_ORDER = tuple(name for name, _pattern_ in _AUDIO_PATTERNS)
+# "DDPA5.1", "DD+A", "DDPAtmos5.1": Dolby Digital Plus with Atmos as one tag.
+_DDP_ATMOS = _pattern(r"dd(?:p|\+)a(?:tmos)?(?:[1-9][. _]?\d)?")
+# "DD_5.1" in a dotted name, "DD 5.1" in a dotted or underscored one: the
+# "+" of "DD+5.1" replaced by an indexer or a URL decode. Group 1 is the
+# stand-in character.
+_DD_LOST_PLUS = _pattern(r"dd([ _])[1-9][. _]?\d")
+
+
+def _channels_after(expression):
+    """A pattern for the channel count written right after an audio tag.
+
+    An "Atmos" in between at most: "FLAC.1.0", "TrueHD.Atmos.7.1", "DDP5.1",
+    "DDPA5.1", "Opus 2 0". Groups 1 and 2 are the two digits.
+    """
+    return re.compile(
+        r"(?<![a-z0-9])(?:"
+        + expression
+        + r")(?:[. _-]?atmos|(?<=[p+])a)?[. _-]?([1-9])[. _]?([0-2])(?![a-z0-9])",
+        re.I,
+    )
+
+
+_CHANNELS_AFTER = {
+    name: _channels_after(expression) for name, expression in _AUDIO_EXPRESSIONS
+}
+_CHANNELS_AFTER_ANY = _channels_after(
+    "|".join(expression for _name, expression in _AUDIO_EXPRESSIONS)
+)
+_HYBRID = _pattern(r"hybrid")
+# Where a name's title ends and its tags begin: a year, SxxEyy or a
+# resolution. A "Hybrid" before it is a title word ("Hybrid.2007.1080p").
+_TAGS_START = _pattern(
+    r"(?:19|20)\d{2}|s\d{1,2}(?:e\d{1,3})*|\d{1,2}x\d{2,3}|\d{3,4}[pi]|[48]k"
 )
 
 _CODEC_PATTERNS = tuple(
@@ -100,16 +142,20 @@ _GROUP_AT_END = re.compile(r"(?:-|\s-\s?)([a-z0-9][\w&@-]*)\)?\s*$", re.I)
 # A whole group in trailing parentheses: "x264.(D-Z0N3)", "(GROUP-NAME)".
 _PAREN_GROUP_AT_END = re.compile(r"[ ._-]\(([a-z0-9][\w&@-]*)\)\s*$", re.I)
 _LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
+# A trailing parenthesized block of space-separated tags; its last word may
+# be the group ("(1080p BluRay x265 10bit AAC 5.1 Tigole)").
+_PAREN_TAG_BLOCK = re.compile(r"\(([^()]*\s[a-z0-9][\w&@-]*)\)\s*$", re.I)
 _NOT_A_GROUP = re.compile(
     r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
     r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
-    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed|bits?|"
-    + _EDITION_TAGS,
+    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed"
+    r"|(?:\d{1,2}-?)?bits?|[a-z]{0,3}subs?|" + _EDITION_TAGS,
     re.I,
 )
 
 
 _TAG_PATTERNS = tuple(pattern for _name, pattern in _AUDIO_PATTERNS + _CODEC_PATTERNS)
+_RANGE_PATTERNS = (_HDR_PLUS, _HDR, _DV, _HLG)
 
 
 def _valid_group(value):
@@ -120,6 +166,8 @@ def _valid_group(value):
         and "/" not in value
         and not _NOT_A_GROUP.fullmatch(value)
         and not any(pattern.fullmatch(value) for pattern in _TAG_PATTERNS)
+        # "HDR10P", "HDR10Plus", "DoVi", "HLG": tags a groupless name can end in.
+        and not any(pattern.fullmatch(value) for pattern in _RANGE_PATTERNS)
     )
 
 
@@ -159,10 +207,91 @@ def _without_hyphenated_tags(name):
     return name
 
 
+# A poster or indexer tag written after the file extension:
+# "...-CiNEPHiLES.mkv-WtF", "...-seedpool.mkv-[N-Z-B]". The group is the one
+# before the extension.
+_AFTER_EXTENSION = re.compile(r"\.(?:mkv|mp4|m4v|avi|ts|m2ts)-\[?[\w-]{1,16}\]?$", re.I)
+# A group of two or three plain words joined by dots after the last hyphen:
+# "-BEN.THE.MEN", "-Pahe.in".
+_DOTTED_GROUP_AT_END = re.compile(r"-([a-z]+(?:\.[a-z]+){1,2})\s*$", re.I)
+# A trailing "[Group Name]" with nothing but the name in it.
+_BRACKET_GROUP_AT_END = re.compile(r"\[([a-z][a-z0-9 ]*[a-z0-9])\]\s*$", re.I)
+# A whole tag block in trailing brackets that ends with "-GROUP".
+_BRACKET_BLOCK_AT_END = re.compile(r"\[([^\[\]]*-([a-z0-9][\w&@-]*))\]\s*$", re.I)
+# Site and indexer tags seen in trailing brackets, never a group.
+_SITE_TAGS = frozenset(
+    "rarbg eztv ettv tgx private nzb wtfnzb pre nzbgeek abnzb usenet".split()
+)
+_HEX_TAG = re.compile(r"[0-9a-f]{8}", re.I)
+
+
 def _release_name(title):
     """The release name inside ``title`` (see ``release_subject``), no extension."""
-    name = release_name_from_subject(title)
-    return _MEDIA_EXTENSION.sub("", name.strip().rstrip("/"))
+    name = release_name_from_subject(title).strip().rstrip("/")
+    name = _AFTER_EXTENSION.sub("", name)
+    return _MEDIA_EXTENSION.sub("", name)
+
+
+def _words_group(words):
+    """``words`` when they can be a group name.
+
+    A single word must be no tag and no language ("WEB-DL", "Multi",
+    "German"). Several words are only checked for tags: a language code can be
+    part of a name ("Ben The Men"), and a lone trailing language never gets
+    here as several words.
+    """
+    if not words:
+        return []
+    if len(words) == 1:
+        word = words[0]
+        if _group_candidate(word) == word and not is_language_word(word):
+            return words
+        return []
+    return words if all(_valid_group(word) for word in words) else []
+
+
+def _spelled_out_group(name):
+    """A group the hyphen rule cannot see, read from the untrimmed name.
+
+    * ``-BEN.THE.MEN``: dotted words after the last hyphen;
+    * ``...MULTi[Ben The Men]``: a trailing bracket holding only a name;
+    * ``[2160p.WEB-DL...English-HONE]``: a tag block wrapped in brackets
+      that ends with "-GROUP";
+    * ``... H265 EAC3 TSRG`` and ``...h264.NTb``: the last word of the name,
+      when it follows the resolution and a tag, and is no tag itself.
+    """
+    dotted = _DOTTED_GROUP_AT_END.search(name)
+    if dotted and _words_group(dotted.group(1).split(".")):
+        return dotted.group(1)
+    bracket = _BRACKET_GROUP_AT_END.search(name)
+    if bracket:
+        inner = bracket.group(1).strip()
+        if (
+            inner.casefold() not in _SITE_TAGS
+            and not _HEX_TAG.fullmatch(inner)
+            and _words_group(inner.split())
+        ):
+            return inner
+    block = _BRACKET_BLOCK_AT_END.search(name)
+    if block and _RESOLUTION.search(block.group(1)):
+        return _group_candidate(block.group(2))
+    resolution = _RESOLUTION.search(name)
+    words = [word for word in re.split(r"[. _]+", name) if word]
+    if resolution and len(words) > 3:
+        last = words[-1].lstrip("@")
+        if (
+            # Two characters at least: the "H" left of "H.264" once ".264" is
+            # taken for a split-archive extension is not a group.
+            len(last) > 1
+            and last.isalnum()
+            and name.rfind(words[-1]) > resolution.end()
+            # After a tag, not after a title word: "... H265 EAC3 TSRG",
+            # "...WEBDL-1080p.EAC3.h264.NTb".
+            and not _valid_group(words[-2])
+            and _words_group([last])
+        ):
+            return last
+    return ""
 
 
 def detect_release_group(title, parsed_group=""):
@@ -178,6 +307,7 @@ def detect_release_group(title, parsed_group=""):
     """
     title = str(title or "")
     name = _release_name(title)
+    untrimmed = name
     previous = None
     while previous != name:
         previous = name
@@ -197,7 +327,22 @@ def detect_release_group(title, parsed_group=""):
         return group
     if _valid_group(parsed_group) and not _TRAILING_TAG.search("-" + str(parsed_group)):
         return str(parsed_group)
-    return leading
+    return leading or _tag_block_group(name) or _spelled_out_group(untrimmed)
+
+
+def _tag_block_group(name):
+    """The group ending a trailing parenthesized tag block, else "".
+
+    "Movie (2023) (2160p BluRay x265 HEVC 10bit HDR AAC 7.1 Tigole)": the
+    block holds a resolution and its last word is no tag and no language.
+    """
+    block = _PAREN_TAG_BLOCK.search(name)
+    if not block or not _RESOLUTION.search(block.group(1)):
+        return ""
+    last = block.group(1).split()[-1]
+    if _valid_group(last) and not is_language_word(last):
+        return last
+    return ""
 
 
 def detect_hdr(title):
@@ -219,15 +364,99 @@ def detect_hdr(title):
     return values or ["SDR"]
 
 
+def _main_separator(name):
+    """The character a name separates its words with: ".", " " or "_"."""
+    return max(". _", key=name.count)
+
+
 def detect_audio(title):
-    """Consume specific tags before broad tags, avoiding DTS/DD mislabeling."""
-    values = []
+    """Audio formats tagged in the title, in ``_AUDIO_EXPRESSIONS`` order.
+
+    Specific tags are consumed before broad ones, so "DTS-HD.MA" is not also
+    "DTS" and "DDP5.1" is not also "DD". Three Dolby spellings are read as
+    Dolby Digital Plus (E-AC-3):
+
+    * "DDPA5.1" / "DD+A": Dolby Digital Plus with Atmos;
+    * "DD_5.1" or "DD 5.1" where the name separates its words with another
+      character: the "+" of "DD+5.1" was replaced on the way here;
+    * "DD" beside "Atmos" with no TrueHD and no DD+ tag: Atmos only rides
+      on TrueHD or on Dolby Digital Plus, never on plain Dolby Digital
+      (AC-3). With one of those beds named, "DD" is a separate track.
+    """
+    found = set()
     remaining = title
+    if _DDP_ATMOS.search(remaining):
+        found.update(("Atmos", "DD+"))
+        remaining = _DDP_ATMOS.sub(" ", remaining)
+    separator = _main_separator(title)
+    for match in _DD_LOST_PLUS.finditer(remaining):
+        if match.group(1) != separator:
+            found.add("DD+")
+            remaining = remaining.replace(match.group(0), " ")
     for name, pattern in _AUDIO_PATTERNS:
         if pattern.search(remaining):
-            values.append(name)
+            found.add(name)
             remaining = pattern.sub(" ", remaining)
-    return values
+    # Only when no bed that can carry Atmos is named: beside TrueHD or an
+    # explicit DD+, a "DD" tag is a separate Dolby Digital track.
+    if "Atmos" in found and "DD" in found and not found & {"TrueHD", "DD+"}:
+        found.discard("DD")
+        found.add("DD+")
+    return [name for name in _AUDIO_ORDER if name in found]
+
+
+def _count(match):
+    return "{}.{}".format(match.group(1), match.group(2))
+
+
+def detect_channels(title):
+    """Every distinct channel count written right after an audio tag."""
+    return list(dict.fromkeys(_count(m) for m in _CHANNELS_AFTER_ANY.finditer(title)))
+
+
+def track_channels(title, tag):
+    """The channel count written right after ``tag`` ("DD" -> "5.1"), or ""."""
+    pattern = _CHANNELS_AFTER.get(tag)
+    match = pattern.search(str(title or "")) if pattern else None
+    return _count(match) if match else ""
+
+
+def main_track_channels(title, audio, quality="", parsed=""):
+    """The channel count of the release's main audio track, or "".
+
+    A name can tag several tracks ("TrueHD.7.1.Atmos.DD5.1"), so the count
+    is the one written right after the main track's own tag
+    (``filter_audio.main_audio``). A "DD" tag read as Dolby Digital Plus
+    ("DD_5.1", "DD5.1.Atmos") is looked up as written. With no count by
+    that tag, the name's only count is used; several counts and none by the
+    main track is ambiguous and gives "". ``parsed`` is PTT's value, used
+    when no count follows any audio tag ("stereo", "x264.5.1").
+    """
+    main = main_audio(audio, quality)
+    tags = [main]
+    if main == "DD+" and "DD" not in audio:
+        tags.append("DD")
+    for tag in tags:
+        pattern = _CHANNELS_AFTER.get(tag)
+        match = pattern.search(title) if pattern else None
+        if match:
+            return _count(match)
+    counts = detect_channels(title)
+    if not counts:
+        return str(parsed or "")
+    return counts[0] if len(counts) == 1 else ""
+
+
+def detect_hybrid(title):
+    """Whether the name carries the HYBRID tag.
+
+    A hybrid release combines sources: one disc's video with another's
+    audio, or HDR10+ and Dolby Vision layers from different releases. Only a
+    "Hybrid" after the year, episode or resolution counts; before it, the
+    word belongs to the title.
+    """
+    start = _TAGS_START.search(title)
+    return bool(start and _HYBRID.search(title, start.end()))
 
 
 def detect_codec(title):
@@ -253,6 +482,37 @@ def normalize_resolution(value):
     return value[:-1] + "p" if value.endswith("i") else value
 
 
+# The streaming services a WEB release names just before its source tag
+# ("2160p.AMZN.WEB-DL"). One group's AMZN and MAX copies of an episode are
+# different encodes, so the service is part of what a release is.
+_NETWORKS = frozenset(
+    (
+        "AMZN NF MAX HMAX DSNP ATVP ATV HULU PCOK PMTP IT CR CRAV STAN SHO STZ "
+        "AMC BCORE MA PLAY ROKU TUBI IP ALL4 VUDU KNPY HBO DSCP NOW SKST CRKL "
+        "RED ITVX VIKI FUNI HIDI ADN BILI IQ MUBI CRIT PLUTO VIU TVING ZEE5 "
+        "SONY NLZ VRV TVNZ SBS ABC CBS NBC FOX CW"
+    ).split()
+)
+_NETWORK_BEFORE_WEB = re.compile(
+    r"(?<![a-z0-9])([a-z0-9]{2,6})[ ._-]"
+    r"(?:web[ ._-]?dl|web[ ._-]?rip|web)(?![a-z0-9])",
+    re.I,
+)
+# German scene naming: "2160p.NetflixUHD.x264" / "1080p.NetflixHD.x264".
+_NETFLIX_MASTER = _pattern(r"netflix(u?hd)")
+
+
+def detect_network(title):
+    """The streaming service a WEB release came from ("AMZN"), or ""."""
+    title = str(title or "")
+    for match in _NETWORK_BEFORE_WEB.finditer(title):
+        token = match.group(1).upper()
+        if token in _NETWORKS:
+            return token
+    match = _NETFLIX_MASTER.search(title)
+    return "NETFLIX" + match.group(1).upper() if match else ""
+
+
 def supplement_metadata(title, meta):
     """Correct media metadata consistently without modifying vendored PTT."""
     match = _RESOLUTION.search(title)
@@ -272,6 +532,14 @@ def supplement_metadata(title, meta):
         meta["audio"] = audio + [
             value for value in meta["audio"] if value not in replaced
         ]
+    meta["channels"] = main_track_channels(
+        title, meta["audio"], meta.get("quality", ""), meta.get("channels", "")
+    )
+    meta["hybrid"] = detect_hybrid(title)
+    # Every track's channel count, not only the main one shown in the picker:
+    # "TrueHD.7.1.Atmos.DD5.1" and "...DD2.0" are different releases.
+    meta["track_channels"] = detect_channels(title)
+    meta["network"] = detect_network(title)
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])
     meta["group"] = detect_release_group(title, meta.get("group", ""))

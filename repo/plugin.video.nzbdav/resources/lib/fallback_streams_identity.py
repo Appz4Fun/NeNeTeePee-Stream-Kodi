@@ -71,9 +71,13 @@ _PART_ORDINAL_WORDS = {
 }
 
 
+# Letter and digit boundaries, not ``\b``: an underscore is a word character,
+# so ``\b`` misses the label in "Dune_Part_Two_2024" and the underscore
+# listing of a release got part 0 where its dotted twin got part 2.
 _PART_LABEL_RE = re.compile(
-    r"\b(?:part|chapter|vol(?:ume)?|book)\b[\s._-]*([0-9]{1,3}|[ivx]{1,4}|"
-    r"one|two|three|four|five|six|seven|eight|nine|ten)\b",
+    r"(?<![a-z0-9])(?:part|chapter|vol(?:ume)?|book)(?![a-z0-9])[\s._-]*"
+    r"([0-9]{1,3}|[ivx]{1,4}|"
+    r"one|two|three|four|five|six|seven|eight|nine|ten)(?![a-z0-9])",
     re.IGNORECASE,
 )
 

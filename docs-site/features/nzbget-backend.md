@@ -256,20 +256,38 @@ every parsed release field is equal:
 - resolution, HDR (Dolby Vision, HDR10, HDR10+, HLG, or SDR when none),
   audio formats and channels
 - codec and quality (source, such as WEB-DL or BluRay)
-- edition, PROPER and REPACK
+- edition, PROPER, REPACK and HYBRID
+- the streaming service a WEB release names (`AMZN`, `NF`, `MAX`, `ATVP` and
+  others), `iNTERNAL`, a `v2` re-release, and a smaller `m1080p` encode
 - 3D, dubbed or MULTi, hardcoded-subtitle, and cut tags (Extended, Unrated,
   Uncensored, Remastered)
 - release group
+- the air date, for a daily show named by date instead of season and episode
 
 A field one name states and the other leaves out counts as different. Language
-and soft-subtitle tags aren't compared, and the naming style (dots, spaces,
-brackets) never matters. A result with no release group is never grouped with
-another, even one with the same name; a literal `NOGRP` or `P2P` tag counts as
-a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`) is read as the
-release name inside it.
+and soft-subtitle tags aren't compared. A result with no release group is never
+grouped with another, even one with the same name; a literal `NOGRP` or `P2P`
+tag counts as a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`, with or
+without its quotes, size or poster wrapper) is read as the release name inside it.
 
-NeNeTeePee-Stream-Kodi never uses file size to decide whether two results are
-the same release. The backup pool reuses same-title uploads retained from the
+The parsed titles must be equal. Two shows from one group that share an episode
+number, such as `The.Sopranos.S02E01` and `The.Office.US.S02E01`, are never one
+release. An apostrophe one listing dropped doesn't make two titles.
+
+**Spelling never matters.** Indexers list one release with dots, spaces or
+underscores between words, with a hyphen or a dot before the group, and with a
+plus sign kept or replaced (`DD+7.1` and `DD_7.1`, `HDR10+` and `HDR10_`). Names
+that are equal once case and punctuation are removed are read as one name, using
+the spelling that parses with the most detail. So `English-HONE` and
+`English.HONE` are both group HONE.
+
+**Oddly sized copies.** NeNeTeePee-Stream-Kodi never uses file size to decide
+whether two results are the same release. A release name can still cover very
+different posts: a 10 GB episode listed forty times and once at 91 GB, or once at
+60 MB. Among three or more sized copies of a release, one more than 1.35 times
+larger or smaller than the median is treated as an odd copy. Under Relevance it
+is listed below the release's normally sized copies, so it never leads the
+release, and it is never sent as a backup of a normal copy. The backup pool reuses same-title uploads retained from the
 initial NZBHydra2 response before picker filtering. It does not search again
 after selection, including when no cached peers exist. Uploads hidden by Hydra
 are unavailable unless included in that response. Exact-name matches rank
