@@ -669,3 +669,29 @@ def test_a_special_stays_on_a_movie_search():
     special = "IT.Welcome.to.Derry.S01E00.A.Story.of.Derry.1080p.WEB-DL.H.264-GRP"
     rows = [_row(special), _row("A.Story.of.Derry.2025.1080p.WEB-DL.H.264-GRP")]
     assert drop_tv_episodes(rows) is rows
+
+
+def test_a_request_with_a_country_code_keeps_that_countrys_show():
+    """The parser takes "UK" out of the title, so it is not judged as a word."""
+    uk = "The.Office.UK.S01E01.1080p.WEB.H264-GRP"
+    us = "The.Office.US.S01E01.1080p.WEB.H264-GRP"
+    assert _shows([uk, us], "The Office UK") == [uk, us]
+
+
+def test_sizes_of_a_mkv_and_a_mp4_are_not_compared():
+    """They are different files, so one's size says nothing about the other."""
+    name = "Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP"
+
+    def subject(extension, size, n):
+        return _row(
+            '[1/3] - "{}.{}" yEnc 100'.format(name, extension),
+            size=size,
+            link="http://example.com/{}/{}".format(extension, n),
+        )
+
+    rows = [subject("mkv", 10 * GB, n) for n in range(3)] + [
+        subject("mp4", 13 * GB, 0),
+        subject("mp4", 15 * GB, 1),
+    ]
+    filtered, _all = flt.filter_results(rows, settings_getter=_defaults)
+    assert not any(row.get("_size_outlier") for row in filtered)

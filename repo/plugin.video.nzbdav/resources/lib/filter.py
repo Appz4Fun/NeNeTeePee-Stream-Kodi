@@ -857,7 +857,7 @@ def _matched_outside_title(row, wanted):
 
     words, compact = wanted
     title = _release_identity(row)[0]
-    if words <= set(title.split()) or compact in title_key(title):
+    if words <= set(title.split()) or (compact and compact in title_key(title)):
         return False
     name = without_media_extension(release_name_from_subject(row.get("title")))
     return words <= set(_normalize_title(name).split())
@@ -891,10 +891,16 @@ def drop_other_shows(results, requested_title):
     from resources.lib.fallback_streams import _normalize_title
     from resources.lib.release_match import title_key
 
+    # A country code is left out like a number: the parser reads "UK" in
+    # "The.Office.UK" as a language and takes it out of the title, so a
+    # request for "The Office UK" would find "uk" only outside the title.
     words = {
         word
         for word in _normalize_title(str(requested_title or "")).split()
-        if word not in _TITLE_FILLER and not word.isdigit()
+        if word not in _TITLE_FILLER
+        and word not in _TITLE_QUALIFIERS
+        and word not in _REMAKE_CODES
+        and not word.isdigit()
     }
     if not words or not results:
         return results
@@ -1362,6 +1368,27 @@ def _release_copies_key(row):
     return (profile, title_key(title), tuple(seasons), tuple(episodes), part)
 
 
+def _split_by_container(ordered, buckets):
+    """Yield each bucket of row indexes, split when its rows name containers.
+
+    The same-release rule keeps a ``.mkv`` and a ``.mp4`` of one name apart
+    (an unknown container never splits). Their sizes must not share a median
+    either, or an ordinary copy of one reads as an odd copy of the other. A
+    bucket naming two or more containers is split by container, the rows
+    naming none on their own; any other bucket is left whole.
+    """
+    for indexes in buckets:
+        by_container = {}
+        for index in indexes:
+            meta = ordered[index].get("_meta")
+            container = meta.get("container") if isinstance(meta, dict) else ""
+            by_container.setdefault(str(container or "").casefold(), []).append(index)
+        if len([name for name in by_container if name]) < 2:
+            yield indexes
+        else:
+            yield from by_container.values()
+
+
 def _demote_size_outliers(ordered):
     """Move oddly sized copies of a release below its normally sized ones.
 
@@ -1382,7 +1409,7 @@ def _demote_size_outliers(ordered):
             copies.setdefault(key, []).append(index)
     follow = {}
     moved = set()
-    for indexes in copies.values():
+    for indexes in _split_by_container(ordered, copies.values()):
         if len(indexes) < _SIZE_OUTLIER_MIN_COPIES:
             continue
         median = statistics.median(_row_size(ordered[i]) for i in indexes)
