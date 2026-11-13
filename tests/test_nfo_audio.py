@@ -687,3 +687,53 @@ def test_an_indexers_error_reply_names_no_audio():
 def test_a_sample_rate_or_bitrate_is_not_a_channel_count():
     text = "Audio: English AAC @ 48.0 kHz, 128.0 kb/s, 23.976 fps\n"
     assert nfo_audio.audio_from_nfo(text) == {"audio": ["AAC"], "channels": ""}
+
+
+def test_the_nfos_count_is_used_when_its_track_becomes_the_main_one():
+    name = "Some.Movie.2004.1080p.BluRay.DD5.1.x264-GRP"
+    (row,) = _rows(name)
+    assert row["_meta"]["channels"] == "5.1"
+    nfo_audio._remember(_key(name), ["DD", "TrueHD"], "7.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["audio"] == ["DD", "TrueHD"]
+    assert row["_meta"]["channels"] == "7.1"
+    # And it stays so when applied again.
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["channels"] == "7.1"
+
+    # The name's main track stays the main one: its own count is kept.
+    name = "Some.Movie.2004.2160p.UHD.BluRay.REMUX.TrueHD.7.1.Atmos-GRP"
+    (row,) = _rows(name)
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "5.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["channels"] == "7.1"
+
+
+def test_an_indexers_error_is_asked_about_again_but_no_such_item_is_not(indexer):
+    _Handler.replies["/nfo/badkey"] = (
+        200,
+        b'<?xml version="1.0" encoding="UTF-8"?>\n'
+        b'<error code="100" description="Incorrect user credentials"/>\n',
+    )
+    _Handler.replies["/nfo/gone"] = (
+        200,
+        b'<?xml version="1.0" encoding="UTF-8"?>\n'
+        b'<error code="300" description="No such item"/>\n',
+    )
+    rows = _rows(PLAIN, OTHER)
+    _offer(rows[0], indexer, "badkey")
+    _offer(rows[1], indexer, "gone")
+    assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert len(_Handler.requests) == 2
+    assert nfo_audio._known(_key(PLAIN))["failed"] is True
+    assert nfo_audio._known(_key(OTHER))["failed"] is False
+
+    # Neither is asked again today.
+    assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert len(_Handler.requests) == 2
+    # A day later the refused one is, and "no such item" is settled for good.
+    with patch("resources.lib.nfo_audio.time.time", return_value=10**10):
+        filter_module.learn_nfo_audio(rows, _ttl)
+    assert len(_Handler.requests) == 3
+    assert _Handler.requests[-1].startswith("/nfo/badkey")
+    assert nfo_audio._error_code('Audio: <error code="1"/> in an NFO') is None

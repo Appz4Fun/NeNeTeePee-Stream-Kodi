@@ -312,8 +312,10 @@ listings of the same posting:
       but posted together are one posting, and two uploads added in the same
       minute are two. Where an indexer sends no post time, its result date
       is used.
-    - Listings that name different posters, or that disagree on whether the
-      release has a password, are different postings whatever their dates.
+    - Listings that name different posters, or where one indexer says the
+      release certainly has a password and another says it has none, are
+      different postings whatever their dates. "Possibly passworded" decides
+      nothing.
     - The window stays at 120 seconds even for one poster. The same files
       posted again an hour later are a separate upload with its own
       articles, which is what makes it a useful backup.

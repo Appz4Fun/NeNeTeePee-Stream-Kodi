@@ -331,12 +331,21 @@ def apply_known(rows, key_of, derived_keys=()):
         audio = list(audio) if isinstance(audio, list) else []
         added = [name for name in entry["audio"] if name not in audio]
         channels = entry.get("channels", "")
-        fill_channels = bool(channels) and not meta.get("channels")
-        if not added and not fill_channels:
+        # The NFO's count is its main track's. It replaces the name's when
+        # what the NFO added becomes the release's main track ("DD5.1" in
+        # the name, "TrueHD 7.1" in the NFO), and fills in a missing one.
+        quality = meta.get("quality", "")
+        new_main = main_audio(audio + added, quality) != main_audio(audio, quality)
+        use_channels = bool(channels) and (
+            not meta.get("channels") or (bool(added) and new_main)
+        )
+        if use_channels and meta.get("channels") == channels:
+            use_channels = False
+        if not added and not use_channels:
             continue
         if added:
             meta["audio"] = audio + added
-        if fill_channels:
+        if use_channels:
             meta["channels"] = channels
         # What the NFO added, so a later pass can tell it from the name's.
         earlier = meta.get(FROM_NFO_KEY)
@@ -399,6 +408,20 @@ def _nfo_url(key, rows, key_of):
     return ""
 
 
+# A newznab error reply, sent with HTTP 200 in place of the NFO.
+_ERROR_REPLY = re.compile(
+    r"^\s*(?:<\?xml[^>]*\?>)?\s*<error\b[^>]*\bcode=\"(\d+)\"", re.I
+)
+# The codes that say the release has no NFO to give: nothing to ask for again.
+_NO_NFO_CODES = frozenset((300,))
+
+
+def _error_code(text):
+    """The code of a newznab error reply, or None when ``text`` is not one."""
+    match = _ERROR_REPLY.match(str(text or "")[:512])
+    return int(match.group(1)) if match else None
+
+
 def _fetch(key, url, title):
     """Fetch one NFO, read it and remember the answer; True when it has audio."""
     try:
@@ -408,6 +431,17 @@ def _fetch(key, url, title):
             "NeNeTeePee-Stream-Kodi: NFO for '{}' could not be read: {}".format(
                 title, redact_text(str(exc))
             ),
+            xbmc.LOGINFO,
+        )
+        _remember(key, [], "", failed=True)
+        return False
+    error = _error_code(text)
+    if error is not None and error not in _NO_NFO_CODES:
+        # The indexer answered with an error, not an NFO (a bad key, a limit
+        # reached): ask again another day instead of settling on "no audio".
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NFO for '{}' was refused by the indexer "
+            "(error {})".format(title, error),
             xbmc.LOGINFO,
         )
         _remember(key, [], "", failed=True)

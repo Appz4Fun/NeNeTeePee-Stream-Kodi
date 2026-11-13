@@ -10,8 +10,8 @@ A newznab item carries more than its title, link and size. Indexers add
   differs between indexers for one upload.
 * ``poster``: who posted it.
 * ``group``: the newsgroup.
-* ``password``: 0 for none, 1 for a passworded archive, other values for
-  "not known".
+* ``password``: 0 for none, 2 (or 10) for a passworded archive; 1 means
+  "possibly" on some indexers and "yes" on others, and -1 "not checked".
 * ``files`` and ``grabs``: how many files the release has and how often its
   NZB was fetched.
 
@@ -106,12 +106,22 @@ def poster_address(row):
     return match.group(0).lower() if match else ""
 
 
+# The values that mean a release certainly has a password. 1 is left out: on
+# some indexers it means "possibly" (nZEDb, Treasure Maps), on others "yes".
+_PASSWORDED = frozenset(("2", "10"))
+
+
 def password_flag(row):
-    """True for a passworded release, False for one without, None if unknown."""
+    """True for a passworded release, False for one without, None if unsure.
+
+    Indexers do not agree on the values: 0 is "none" everywhere, 2 and 10
+    are "yes", and 1 is "possibly" on some and "yes" on others, so it and
+    anything else (-1 for "not checked") count as unsure.
+    """
     value = row.get("password") if isinstance(row, dict) else None
     value = str(value).strip() if value is not None else ""
     if value == "0":
         return False
-    if value == "1":
+    if value in _PASSWORDED:
         return True
     return None

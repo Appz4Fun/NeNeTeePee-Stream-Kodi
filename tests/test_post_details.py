@@ -93,12 +93,13 @@ def test_the_posters_address_is_what_is_compared():
     assert address({"poster": None}) == "" and address({}) == "" and address(None) == ""
 
 
-def test_the_password_flag_is_known_only_for_0_and_1():
+def test_the_password_flag_is_known_only_for_a_definite_value():
     flag = newznab_attrs.password_flag
     assert flag({"password": "0"}) is False
-    assert flag({"password": 1}) is True
-    for unknown in ("-1", "2", "", None, "yes"):
-        assert flag({"password": unknown}) is None
+    assert flag({"password": 2}) is True and flag({"password": "10"}) is True
+    # 1 is "possibly" on some indexers and "yes" on others.
+    for unsure in ("1", 1, "-1", "", None, "yes"):
+        assert flag({"password": unsure}) is None
     assert flag({}) is None and flag(None) is None
 
 
@@ -171,20 +172,20 @@ def test_a_poster_that_is_missing_or_has_no_address_decides_nothing():
 
 def test_a_passworded_and_an_open_release_are_different_uploads():
     assert not same_listing(
-        _row(usenetdate=_POSTED, password="1"), _row(usenetdate=_POSTED, password="0")
+        _row(usenetdate=_POSTED, password="2"), _row(usenetdate=_POSTED, password="0")
     )
     assert same_listing(
-        _row(usenetdate=_POSTED, password="1"), _row(usenetdate=_POSTED, password="1")
+        _row(usenetdate=_POSTED, password="2"), _row(usenetdate=_POSTED, password="2")
     )
 
 
-def test_an_unknown_password_flag_decides_nothing():
-    for unknown in ("-1", "2", "", None):
+def test_an_unsure_password_flag_decides_nothing():
+    for unsure in ("1", "-1", "", None):
         assert same_listing(
             _row(usenetdate=_POSTED, password="0"),
-            _row(usenetdate=_POSTED, password=unknown),
+            _row(usenetdate=_POSTED, password=unsure),
         )
-    assert same_listing(_row(usenetdate=_POSTED, password="1"), _row())
+    assert same_listing(_row(usenetdate=_POSTED, password="2"), _row())
 
 
 def test_the_size_must_still_match():
