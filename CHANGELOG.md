@@ -95,6 +95,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **An indexer that refuses an NZB is skipped for the rest of that play.**
+  When the add-on collects backup NZBs for NZBGet and an indexer answers 401,
+  403 or 429 (a bad key, a used-up download allowance, a rate limit), its other
+  listings in that play are no longer requested. Each one cost a request that
+  was refused too. The release you picked is always tried. Other failures (a
+  missing NZB, a server error, a timeout) do not skip the indexer.
+- **The debug log names the indexer for every backup NZB fetch**: `ok`,
+  `failed` with the reason, `no usable NZB in the reply`, or `skipped`. Before,
+  a failed fetch was logged without saying which indexer it came from.
 - **A release listed only once ranks last in its resolution** under
   Relevance, below every release with two or more NZBs and above releases with
   no group. A single NZB from one indexer is often a stray or mislabelled

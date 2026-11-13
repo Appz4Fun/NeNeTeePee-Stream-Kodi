@@ -256,6 +256,140 @@ def test_prefetch_reports_head_when_every_listing_fails():
     assert got == [({"link": "x"}, None, None)]
 
 
+class _HttpRefusal(OSError):
+    """Stands in for ``urllib.error.HTTPError``: an OSError with a ``code``."""
+
+    def __init__(self, code):
+        super().__init__("HTTP Error {}: Forbidden".format(code))
+        self.code = code
+
+
+def _refusing(refused, calls, code=403):
+    def _fetch(url, **_kw):
+        calls.append(url)
+        if url in refused:
+            raise _HttpRefusal(code)
+        return _valid(url)
+
+    return _fetch
+
+
+def _row(link, indexer, **extra):
+    return dict({"link": link, "indexer": indexer}, **extra)
+
+
+def _fetch_logs(log):
+    return [
+        call.args[0].split("NZB fetch from ", 1)[1]
+        for call in log.call_args_list
+        if "NZB fetch from " in call.args[0]
+    ]
+
+
+@pytest.mark.parametrize("code", [401, 403, 429])
+def test_prefetch_skips_an_indexer_after_it_refuses_once(code):
+    # Square refuses its first NZB: its later listings are not requested at all.
+    calls = []
+    clusters = [
+        [_row("a1", "Square Eyed"), _row("a2", "Geek")],
+        [_row("b1", "square eyed"), _row("b2", "Slug")],
+        [_row("c1", "Square Eyed")],
+    ]
+    fetch = _refusing({"a1", "b1", "c1"}, calls, code)
+    with patch("resources.lib.nzbget_fleet_dedup.xbmc.log") as log:
+        got = list(prefetched_clusters(clusters, fetch, window=1))
+    assert calls == ["a1", "a2", "b2"]
+    assert [(m["link"], bool(body)) for m, body, _fp in got] == [
+        ("a1", True),
+        ("b1", True),
+        ("c1", False),
+    ]
+    assert _fetch_logs(log) == [
+        "Square Eyed: failed (skipping this indexer for the rest of this play), "
+        "trying the next listing: HTTP Error {}: Forbidden".format(code),
+        "Geek: ok",
+        "square eyed: skipped, this indexer refused an NZB earlier in this play",
+        "Slug: ok",
+        "Square Eyed: skipped, this indexer refused an NZB earlier in this play",
+    ]
+
+
+@pytest.mark.parametrize("code", [400, 404, 500, None])
+def test_prefetch_keeps_trying_an_indexer_after_other_failures(code):
+    # A missing NZB, a server error or a timeout says nothing about the account.
+    calls = []
+    clusters = [[_row("a1", "Finder"), _row("a2", "Geek")], [_row("b1", "Finder")]]
+
+    def _fetch(url, **_kw):
+        calls.append(url)
+        if url == "a1":
+            raise _HttpRefusal(code) if code else OSError("timed out")
+        return _valid(url)
+
+    with patch("resources.lib.nzbget_fleet_dedup.xbmc.log") as log:
+        got = list(prefetched_clusters(clusters, _fetch, window=1))
+    assert calls == ["a1", "a2", "b1"]
+    assert all(body for _m, body, _fp in got)
+    logs = _fetch_logs(log)
+    assert logs[0].startswith("Finder: failed, trying the next listing: ")
+    assert logs[1:] == ["Geek: ok", "Finder: ok"]
+
+
+def test_prefetch_never_skips_the_pick():
+    # The pick is what the user chose: it is tried even from a refused indexer.
+    calls = []
+    clusters = [
+        [_row("a1", "Square Eyed"), _row("a2", "Geek")],
+        [_row("pick", "Square Eyed", _is_pick=True)],
+    ]
+    fetch = _refusing({"a1"}, calls)
+    got = list(prefetched_clusters(clusters, fetch, window=1))
+    assert calls == ["a1", "a2", "pick"]
+    assert all(body for _m, body, _fp in got)
+
+
+def test_prefetch_does_not_skip_listings_with_no_indexer_name():
+    calls = []
+    clusters = [[{"link": "a1"}, {"link": "a2"}], [{"link": "b1"}]]
+    fetch = _refusing({"a1"}, calls)
+    with patch("resources.lib.nzbget_fleet_dedup.xbmc.log") as log:
+        list(prefetched_clusters(clusters, fetch, window=1))
+    assert calls == ["a1", "a2", "b1"]
+    assert _fetch_logs(log)[0].startswith("an unnamed indexer: failed, trying")
+
+
+def test_prefetch_logs_a_reply_that_is_not_an_nzb():
+    pages = {"x": b"<html>rate limited</html>", "y": _valid("y")}
+    clusters = [[_row("x", "Finder"), _row("y", "Geek")]]
+    with patch("resources.lib.nzbget_fleet_dedup.xbmc.log") as log:
+        list(prefetched_clusters(clusters, pages.get))
+    assert _fetch_logs(log) == ["Finder: no usable NZB in the reply", "Geek: ok"]
+
+
+def test_a_refusal_is_forgotten_by_the_next_play():
+    clusters = [[_row("a1", "Square Eyed")], [_row("b1", "Square Eyed")]]
+    first, second = [], []
+    list(prefetched_clusters(clusters, _refusing({"a1"}, first), window=1))
+    list(prefetched_clusters(clusters, _refusing(set(), second), window=1))
+    assert first == ["a1"]
+    assert second == ["a1", "b1"]
+
+
+def test_a_fetcher_that_cannot_carry_state_skips_nothing():
+    # A bound method takes no attributes: every listing is still tried.
+    class _Fetcher:  # pylint: disable=too-few-public-methods
+        calls = []
+
+        def fetch(self, url, **_kw):
+            self.calls.append(url)
+            raise _HttpRefusal(403)
+
+    fetcher = _Fetcher()
+    clusters = [[_row("a1", "Square Eyed")], [_row("b1", "Square Eyed")]]
+    list(prefetched_clusters(clusters, fetcher.fetch, window=1))
+    assert fetcher.calls == ["a1", "b1"]
+
+
 def test_prefetch_stops_on_cancel():
     cancel = threading.Event()
     clusters = [[{"link": str(i)}] for i in range(10)]
