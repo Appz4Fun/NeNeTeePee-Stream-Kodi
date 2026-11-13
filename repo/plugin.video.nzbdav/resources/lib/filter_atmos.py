@@ -22,8 +22,8 @@ It is deliberately narrow:
   dubbed, MULTi and cut flags: a dub is another track.
 * A HYBRID release neither gives nor takes: it combines sources, so its
   audio may come from somewhere else.
-* Only a tag written in a name gives. A row that took Atmos here never
-  passes it on.
+* Only a tag written in a name gives. A row that took Atmos here, or whose
+  Atmos was read from its NFO, never passes it on.
 """
 
 _WEB_DL = frozenset(("web-dl", "web"))
@@ -100,6 +100,12 @@ def _source_key(row, meta):
     )
 
 
+def _from_nfo(meta):
+    """Whether the row's Atmos came from its NFO, not from its name."""
+    added = meta.get("audio_from_nfo")
+    return isinstance(added, list) and _OBJECTS in added
+
+
 def share_atmos(rows, derived_keys=()):
     """Mark unlabelled Dolby Digital Plus WEB-DLs as Atmos; see the module.
 
@@ -117,7 +123,7 @@ def share_atmos(rows, derived_keys=()):
         if _BED not in audio:
             continue
         labelled = _OBJECTS in audio
-        if labelled and meta.get(INFERRED_KEY) is True:
+        if labelled and (meta.get(INFERRED_KEY) is True or _from_nfo(meta)):
             continue
         key = _source_key(row, meta)
         if key is None:

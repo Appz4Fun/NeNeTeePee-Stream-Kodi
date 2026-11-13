@@ -139,6 +139,34 @@ tags DTS:X without DTS-HD MA carries the lossy kind. `DD_5.1`, or `DD 5.1` in
 a name that otherwise separates its words with dots, is read as `DD+5.1`: the
 plus sign was replaced on the way from the indexer.
 
+#### Audio from the NFO
+
+A release name can leave its audio out altogether:
+`Movie.2004.MULTi.1080p.BluRay.x264-GRP`. Such a release ranks as "audio
+unknown", after every release that tags its audio. Its NFO usually says what
+it carries: `Audio.........: English DTS-HD MA 5.1 @ 3739 kb/s`.
+
+Some indexers send, with each search result, a flag that the release has an
+NFO and a link to it, and NZBHydra2 passes both through. For the first
+releases of a search that offer one, the add-on reads the NFO and adds the
+audio formats and the channel count it names to the release:
+
+- **Only the top releases** (`nfo_audio_releases`, 3 by default, 0 for
+  off). Each read is one API call on your account with that indexer.
+- **Once per release.** The answer, or that the NFO named no audio, is kept
+  in the add-on's data folder and applies to every listing of that release
+  name from then on, whichever indexer lists it. A read that failed is tried
+  again a day later.
+- **The picker waits two seconds at most.** A slower answer is stored when
+  it arrives and used the next time the search is opened.
+- **It only adds.** A name that tags `TrueHD.Atmos` keeps both when its NFO
+  writes only `TrueHD`.
+- **The link is only followed to the indexer the result came from**, and is
+  never written to the log: it carries your API key for that indexer.
+
+MediaInfo's names are understood: `E-AC-3 JOC` is Dolby Digital Plus with
+Atmos, `MLP FBA 16-ch` is TrueHD with Atmos, `DTS XLL` is DTS-HD MA.
+
 #### Atmos a name leaves out
 
 Groups name the same stream differently: one writes `DD+5.1.Atmos`, another

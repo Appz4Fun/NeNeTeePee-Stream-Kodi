@@ -69,6 +69,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The audio a release's NFO names is read for the top releases.** A name
+  such as `Movie.2004.MULTi.1080p.BluRay.x264-GRP` tags no audio and ranked
+  as "audio unknown"; its NFO says `DTS-HD MA 5.1`. When an indexer offers a
+  release's NFO with its search result, the add-on reads it for the first
+  three releases of a search (`nfo_audio_releases`, 0 for off) and adds the
+  formats and channel count it names to the release's label and ranking.
+  Each read is one API call to that indexer, done once per release and
+  remembered for every listing of that name. The picker waits two seconds at
+  most for the answers. The link is followed only to the indexer the result
+  came from and is never logged.
 - **The dialog counts the listings it does not download.** A release shown
   as 20 copies could send 10 NZBs with nothing saying why: several indexers
   list the same upload, and one NZB per upload is fetched. While the NZBs

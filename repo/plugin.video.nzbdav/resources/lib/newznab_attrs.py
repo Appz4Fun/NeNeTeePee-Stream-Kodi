@@ -18,9 +18,13 @@ A newznab item carries more than its title, link and size. Indexers add
 The add-on uses the first four to tell whether two listings are the same
 upload (``nzbget_fleet_dedup.same_listing``). Only the fields an indexer sent
 are returned, so a result from one that sends none is unchanged.
+
+Some also send ``nfo`` and ``info``: a flag that the release has an NFO and
+the link to it (``nfo_link``, read by ``nfo_audio``).
 """
 
 import re
+from urllib.parse import urlsplit
 
 # The row keys, which are the attribute names.
 POST_DETAIL_KEYS = ("usenetdate", "poster", "group", "password", "files", "grabs")
@@ -41,6 +45,48 @@ def post_details(item):
         if value:
             details[name] = value[:_MAX_LENGTH]
     return details
+
+
+def nfo_link(item):
+    """The link to the release's NFO an indexer sent with ``item``, or "".
+
+    Some indexers send ``nfo`` (1 when the release has an NFO) and ``info``
+    (the call that returns it). The link carries the user's API key for that
+    indexer, so it is only accepted when it points at the indexer the result
+    came from (``hydraIndexerHost``, which NZBHydra2 adds): a result must not
+    be able to send the add-on anywhere else.
+    """
+    values = {}
+    for attr in item.iter():
+        tag = attr.tag
+        if not isinstance(tag, str) or tag.rsplit("}", 1)[-1] != "attr":
+            continue
+        name = attr.get("name", "")
+        if name in ("nfo", "info", "hydraIndexerHost") and name not in values:
+            values[name] = str(attr.get("value", "") or "").strip()
+    link = values.get("info", "")
+    if values.get("nfo") != "1" or not link or len(link) > 2048:
+        return ""
+    try:
+        parts = urlsplit(link)
+        host = (parts.hostname or "").lower()
+    except ValueError:
+        return ""
+    if parts.scheme.lower() not in ("http", "https") or not host:
+        return ""
+    return link if _same_site(host, values.get("hydraIndexerHost", "")) else ""
+
+
+def _same_site(host, indexer_host):
+    """Whether ``host`` is the indexer's host, or one under or above it."""
+    indexer_host = str(indexer_host or "").strip().lower()
+    if not indexer_host or "." not in indexer_host:
+        return False
+    return (
+        host == indexer_host
+        or host.endswith("." + indexer_host)
+        or indexer_host.endswith("." + host)
+    )
 
 
 _ADDRESS = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")

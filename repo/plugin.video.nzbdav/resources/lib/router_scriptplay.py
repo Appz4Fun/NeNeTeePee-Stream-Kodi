@@ -377,7 +377,11 @@ def _script_play_filter_autoselect_tag(
     requested series and auto-select plays the wrong show.
     """
     import resources.lib.router as _router
-    from resources.lib.filter import filter_results, prefer_series_rows
+    from resources.lib.filter import (
+        filter_results,
+        learn_nfo_audio,
+        prefer_series_rows,
+    )
 
     total_count = len(results)
     _router._update_loading_dialog(loading, 60, _router._string(30088))
@@ -387,6 +391,12 @@ def _script_play_filter_autoselect_tag(
     filtered, all_parsed = filter_results(
         results, settings_getter=_router._get_script_setting
     )
+    if learn_nfo_audio(filtered, _router._get_script_setting):
+        # An NFO named audio a release's name leaves out: rank again with it.
+        _router._script_play_stage("nfo audio learned, filtering again")
+        filtered, all_parsed = filter_results(
+            results, settings_getter=_router._get_script_setting
+        )
     _router._script_play_stage(
         "filter done filtered={} parsed={}".format(
             len(filtered or []), len(all_parsed or [])

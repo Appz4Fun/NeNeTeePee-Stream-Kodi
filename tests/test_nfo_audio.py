@@ -1,0 +1,512 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 nzbdav contributors
+"""The audio a release's NFO names, read for the top releases of a search."""
+
+import http.server
+import json
+import threading
+from unittest.mock import patch
+
+import pytest
+from resources.lib import filter as filter_module
+from resources.lib import hydra, newznab_attrs, nfo_audio
+from resources.lib.filter_audio import AUDIO_TIER_UNKNOWN, audio_tier
+from resources.lib.xml_safety import safe_fromstring
+
+_NS = 'xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/"'
+PLAIN = "Some.Movie.2004.MULTi.1080p.BluRay.x264-GRP"
+OTHER = "Some.Movie.2004.1080p.BluRay.x264-OTHER"
+THIRD = "Some.Movie.2004.720p.BluRay.x264-THIRD"
+FOURTH = "Some.Movie.2004.720p.BluRay.x264-FOURTH"
+
+SCENE_NFO = """
+  Release.......: Some.Movie.2004.MULTi.1080p.BluRay.x264-GRP
+  Source........: BluRay @ 27885 kb/s
+  Video.........: x264 @ 15371 kb/s - 23.976 FPS
+  Audio.........: French DTS-HD MA 5.1 @ 3963 kb/s - 1152 kb/s core
+                  English DTS-HD MA 5.1 @ 3739 kb/s - 1152 kb/s core
+  Subtitles.....: French, English
+  Notes.........: Enjoy this DTS-free AC3 joke in the notes, not an audio line
+"""
+
+MEDIAINFO_NFO = """
+Video
+Format                                   : HEVC
+Bit rate                                 : 24.5 Mb/s
+
+Audio
+ID                                       : 2
+Format                                   : E-AC-3 JOC
+Commercial name                          : Dolby Digital Plus with Dolby Atmos
+Channel(s)                               : 6 channels
+Language                                 : English
+
+Text
+Format                                   : UTF-8
+"""
+
+
+def _ttl(key, default=""):
+    return default
+
+
+@pytest.fixture(name="store", autouse=True)
+def _store(tmp_path):
+    nfo_audio.forget_all()
+    path = tmp_path / "nfo_audio.json"
+    with patch.object(nfo_audio, "_store_path", return_value=str(path)):
+        yield path
+    nfo_audio.forget_all()
+
+
+def _key(title):
+    return filter_module._name_form_key(title)
+
+
+def _rows(*titles, **extra):
+    rows = [
+        dict(
+            {"title": title, "link": "http://hydra/{}".format(n), "size": str(10**10)},
+            **extra,
+        )
+        for n, title in enumerate(titles)
+    ]
+    filter_module.attach_metadata(rows)
+    return rows
+
+
+# --- reading an NFO ---------------------------------------------------------
+
+
+def test_a_scene_nfo_gives_the_formats_and_the_channels():
+    assert nfo_audio.audio_from_nfo(SCENE_NFO) == {
+        "audio": ["DTS-HD MA"],
+        "channels": "5.1",
+    }
+
+
+def test_mediainfo_names_are_understood():
+    assert nfo_audio.audio_from_nfo(MEDIAINFO_NFO) == {
+        "audio": ["Atmos", "DD+"],
+        "channels": "5.1",
+    }
+    cases = {
+        "Audio: MLP FBA 16-ch 7.1": ["Atmos", "TrueHD"],
+        "Audio: Dolby TrueHD with Dolby Atmos": ["Atmos", "TrueHD"],
+        "Audio: DTS XLL 5.1": ["DTS-HD MA"],
+        "Audio: DTS-HD Master Audio 7.1": ["DTS-HD MA"],
+        "Audio: DTS XLL X 7.1": ["DTS:X", "DTS-HD MA"],
+        "Audio: DTS-HD High Resolution Audio": ["DTS-HD HR"],
+        "Audio: Dolby Digital Plus 5.1": ["DD+"],
+        "Audio: E-AC-3 5.1 @ 640 kb/s": ["DD+"],
+        "Audio: Dolby Digital 5.1": ["DD"],
+        "AUDiO : AC-3 5.1 640kbps": ["DD"],
+        "Sound: AAC 2.0": ["AAC"],
+        "Ton: Deutsch DTS 5.1": ["DTS"],
+    }
+    for line, expected in cases.items():
+        assert nfo_audio.audio_from_nfo(line)["audio"] == expected, line
+
+
+def test_only_lines_about_the_audio_are_read():
+    text = "Video: x264 DTS-free encode\nNotes: TrueHD Atmos is on the other release\n"
+    assert nfo_audio.audio_from_nfo(text) == {"audio": [], "channels": ""}
+    # A labelled line right under the audio line ends it.
+    text = "Audio: English DTS 5.1\nSubs: TrueHD\n"
+    assert nfo_audio.audio_from_nfo(text)["audio"] == ["DTS"]
+    # A blank line ends it too.
+    text = "Audio: English DTS 5.1\n\nTrueHD Atmos elsewhere\n"
+    assert nfo_audio.audio_from_nfo(text)["audio"] == ["DTS"]
+
+
+def test_a_second_track_under_the_audio_line_is_read():
+    text = (
+        "Audio....: English TrueHD 7.1 Atmos\n           French DD 5.1\nSubs....: en\n"
+    )
+    assert nfo_audio.audio_from_nfo(text) == {
+        "audio": ["Atmos", "TrueHD", "DD"],
+        "channels": "7.1",
+    }
+
+
+def test_an_nfo_with_no_audio_and_odd_input():
+    for text in ("", None, "just a greeting\n", b"bytes".decode(), "Audio: unknown"):
+        assert nfo_audio.audio_from_nfo(text) == {"audio": [], "channels": ""}
+
+
+# --- the link an indexer sends ----------------------------------------------
+
+
+def _item(attrs):
+    extra = "".join(
+        '<newznab:attr name="{}" value="{}"/>'.format(name, value)
+        for name, value in attrs
+    )
+    return safe_fromstring("<item {}>{}</item>".format(_NS, extra))
+
+
+_LINK = "https://indexer.example/api?t=getnfo&amp;id=abc&amp;apikey=SECRET&amp;raw=1"
+
+
+def test_the_nfo_link_is_kept_when_it_points_at_the_results_indexer():
+    item = _item(
+        (("nfo", "1"), ("info", _LINK), ("hydraIndexerHost", "indexer.example"))
+    )
+    assert newznab_attrs.nfo_link(item) == _LINK.replace("&amp;", "&")
+    # The API host and the site host of one indexer are the same site.
+    for host in ("api.indexer.example", "example"):
+        item = _item((("nfo", "1"), ("info", _LINK), ("hydraIndexerHost", host)))
+        expected = "" if host == "example" else _LINK.replace("&amp;", "&")
+        assert newznab_attrs.nfo_link(item) == expected, host
+    sub = _LINK.replace("indexer.example", "api.indexer.example")
+    item = _item((("nfo", "1"), ("info", sub), ("hydraIndexerHost", "indexer.example")))
+    assert newznab_attrs.nfo_link(item) == sub.replace("&amp;", "&")
+
+
+def test_the_nfo_link_is_refused_otherwise():
+    refused = (
+        # no NFO, or no flag
+        (("nfo", "0"), ("info", _LINK), ("hydraIndexerHost", "indexer.example")),
+        (("info", _LINK), ("hydraIndexerHost", "indexer.example")),
+        # no link
+        (("nfo", "1"), ("hydraIndexerHost", "indexer.example")),
+        # another host, a look-alike host, no host to compare with
+        (("nfo", "1"), ("info", _LINK), ("hydraIndexerHost", "other.example")),
+        (("nfo", "1"), ("info", _LINK), ("hydraIndexerHost", "xindexer.example")),
+        (("nfo", "1"), ("info", _LINK)),
+        # not a web link
+        (
+            ("nfo", "1"),
+            ("info", "file:///etc/passwd"),
+            ("hydraIndexerHost", "indexer.example"),
+        ),
+        (
+            ("nfo", "1"),
+            ("info", "ftp://indexer.example/x"),
+            ("hydraIndexerHost", "indexer.example"),
+        ),
+        (
+            ("nfo", "1"),
+            ("info", "http://[bad"),
+            ("hydraIndexerHost", "indexer.example"),
+        ),
+        (
+            ("nfo", "1"),
+            ("info", "https://indexer.example/" + "x" * 3000),
+            ("hydraIndexerHost", "indexer.example"),
+        ),
+    )
+    for attrs in refused:
+        assert newznab_attrs.nfo_link(_item(attrs)) == "", attrs
+
+
+def test_a_hydra_result_carries_the_link():
+    xml = (
+        '<?xml version="1.0"?><rss version="2.0" {}><channel><item>'
+        "<title>{}</title><link>http://hydra/getnzb/api/1</link>"
+        '<newznab:attr name="size" value="1000"/>'
+        '<newznab:attr name="hydraIndexerName" value="SceneNZBs"/>'
+        '<newznab:attr name="hydraIndexerHost" value="indexer.example"/>'
+        '<newznab:attr name="nfo" value="1"/>'
+        '<newznab:attr name="info" value="{}"/>'
+        "</item></channel></rss>"
+    ).format(_NS, PLAIN, _LINK)
+    (row,) = hydra.parse_results(xml)
+    assert row["nfo_url"] == _LINK.replace("&amp;", "&")
+    (row,) = hydra.parse_results(
+        xml.replace('name="nfo" value="1"', 'name="x" value="1"')
+    )
+    assert "nfo_url" not in row
+
+
+# --- what is known is put on the rows ---------------------------------------
+
+
+def test_the_nfos_audio_is_added_to_every_listing_of_the_release():
+    rows = _rows(PLAIN, PLAIN.replace(".", " "), OTHER)
+    assert rows[0]["_meta"]["audio"] == []
+    assert audio_tier(rows[0]["_meta"]["audio"]) == AUDIO_TIER_UNKNOWN
+
+    nfo_audio._remember(_key(PLAIN), ["DTS-HD MA"], "5.1")
+    filter_module.attach_metadata(rows)
+
+    for row in rows[:2]:
+        assert row["_meta"]["audio"] == ["DTS-HD MA"]
+        assert row["_meta"]["channels"] == "5.1"
+        assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DTS-HD MA"]
+    assert audio_tier(rows[0]["_meta"]["audio"]) == 0
+    assert rows[2]["_meta"]["audio"] == []
+    assert nfo_audio.FROM_NFO_KEY not in rows[2]["_meta"]
+
+
+def test_it_only_adds_to_what_the_name_says():
+    name = "Some.Movie.2004.2160p.UHD.BluRay.REMUX.TrueHD.7.1.Atmos-GRP"
+    (row,) = _rows(name)
+    before = list(row["_meta"]["audio"])
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "5.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["audio"] == before + ["DD"]
+    # The name's own channel count stays.
+    assert row["_meta"]["channels"] == "7.1"
+    assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DD"]
+
+
+def test_applying_it_again_changes_nothing():
+    rows = _rows(PLAIN)
+    nfo_audio._remember(_key(PLAIN), ["DTS-HD MA"], "5.1")
+    filter_module.attach_metadata(rows)
+    once = json.dumps(rows[0]["_meta"], sort_keys=True)
+    filter_module.attach_metadata(rows)
+    assert json.dumps(rows[0]["_meta"], sort_keys=True) == once
+    assert nfo_audio.apply_known(rows, _key) == 0
+
+
+def test_an_nfo_that_named_nothing_changes_nothing():
+    rows = _rows(PLAIN)
+    nfo_audio._remember(_key(PLAIN), [], "")
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["audio"] == []
+    assert nfo_audio.FROM_NFO_KEY not in rows[0]["_meta"]
+
+
+def test_atmos_read_from_an_nfo_is_not_passed_on_to_other_groups():
+    show = "Some.Show.S03E02.2160p.AMZN.WEB-DL."
+    from_nfo = show + "DDP5.1.DV.H.265-GRP"
+    other = show + "DDP5.1.DV.H.265-NTb"
+    rows = _rows(from_nfo, other)
+    nfo_audio._remember(_key(from_nfo), ["Atmos"], "")
+    filter_module.attach_metadata(rows)
+    assert "Atmos" in rows[0]["_meta"]["audio"]
+    assert "Atmos" not in rows[1]["_meta"]["audio"]
+
+
+# --- the store --------------------------------------------------------------
+
+
+def test_what_was_read_is_kept_between_runs(store):
+    nfo_audio._remember("some key", ["DTS-HD MA"], "5.1")
+    nfo_audio._save()
+    data = json.loads(store.read_text(encoding="utf-8"))
+    assert data["v"] == 1
+    assert data["releases"]["some key"]["audio"] == ["DTS-HD MA"]
+
+    nfo_audio.forget_all()
+    assert nfo_audio._known("some key")["channels"] == "5.1"
+    assert nfo_audio._settled("some key")
+    assert not nfo_audio._settled("another key")
+
+
+def test_an_unreadable_store_is_an_empty_one(store):
+    for content in ("{not json", '{"v": 99, "releases": {"k": {}}}', "[]", '{"v": 1}'):
+        store.write_text(content, encoding="utf-8")
+        nfo_audio.forget_all()
+        assert nfo_audio._known("k") is None
+    # Entries of the wrong shape are left out, the rest are kept.
+    store.write_text(
+        json.dumps(
+            {
+                "v": 1,
+                "releases": {
+                    "good": {"audio": ["DD"], "channels": "5.1", "at": 5},
+                    "bad": {"audio": "DD"},
+                    "worse": ["x"],
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    nfo_audio.forget_all()
+    assert nfo_audio._known("good")["audio"] == ["DD"]
+    assert nfo_audio._known("bad") is None and nfo_audio._known("worse") is None
+
+
+def test_a_failed_read_is_tried_again_after_a_day():
+    nfo_audio._remember("k", [], "", failed=True)
+    assert nfo_audio._settled("k")
+    with patch("resources.lib.nfo_audio.time.time", return_value=10**10):
+        assert not nfo_audio._settled("k")
+
+
+def test_the_store_keeps_the_newest_entries(store):
+    with patch.object(nfo_audio, "_MAX_STORED", 3):
+        for n in range(5):
+            with patch("resources.lib.nfo_audio.time.time", return_value=1000 + n):
+                nfo_audio._remember("k{}".format(n), ["DD"], "")
+        nfo_audio._save()
+    assert sorted(json.loads(store.read_text())["releases"]) == ["k2", "k3", "k4"]
+
+
+def test_a_store_that_cannot_be_written_is_ignored(store):
+    nfo_audio._remember("k", ["DD"], "")
+    with patch("resources.lib.nfo_audio.os.replace", side_effect=OSError("ro")):
+        nfo_audio._save()
+    assert not store.exists()
+    assert [p.name for p in store.parent.iterdir()] == []
+
+
+# --- asking the indexer, against a real local server ------------------------
+
+
+class _Handler(http.server.BaseHTTPRequestHandler):
+    requests = []
+    replies = {}
+
+    def do_GET(self):  # pylint: disable=invalid-name
+        type(self).requests.append(self.path)
+        status, body = type(self).replies.get(self.path.split("?")[0], (404, b""))
+        self.send_response(status)
+        self.send_header("Content-Type", "text/x-nfo")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *_args):  # pylint: disable=arguments-differ
+        return
+
+
+@pytest.fixture(name="indexer")
+def _indexer():
+    _Handler.requests = []
+    _Handler.replies = {
+        "/nfo/plain": (200, SCENE_NFO.encode()),
+        "/nfo/atmos": (200, MEDIAINFO_NFO.encode()),
+        "/nfo/empty": (200, b"greetings to all\n"),
+        "/nfo/refused": (403, b"Forbidden"),
+    }
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield "http://127.0.0.1:{}".format(server.server_address[1])
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def _offer(row, base, name):
+    row["nfo_url"] = "{}/nfo/{}?apikey=SECRET".format(base, name)
+    return row
+
+
+def test_the_top_release_is_read_and_ranks_with_its_audio(indexer):
+    rows = _rows(PLAIN, OTHER)
+    _offer(rows[0], indexer, "plain")
+    filtered, _all = filter_module.filter_results(rows, settings_getter=_ttl)
+
+    with patch("resources.lib.nfo_audio.xbmc.log") as log:
+        assert filter_module.learn_nfo_audio(filtered, _ttl) is True
+    assert _Handler.requests == ["/nfo/plain?apikey=SECRET"]
+    # The key in the link is never logged.
+    assert not any("SECRET" in call.args[0] for call in log.call_args_list)
+    assert any("names audio: DTS-HD MA" in call.args[0] for call in log.call_args_list)
+
+    filtered, _all = filter_module.filter_results(rows, settings_getter=_ttl)
+    lead = filtered[0]
+    assert lead["title"] == PLAIN
+    assert (
+        lead["_meta"]["audio"] == ["DTS-HD MA"] and lead["_meta"]["channels"] == "5.1"
+    )
+
+    # Asked once: the answer is on disk for the next search.
+    assert filter_module.learn_nfo_audio(filtered, _ttl) is False
+    nfo_audio.forget_all()
+    assert filter_module.learn_nfo_audio(filtered, _ttl) is False
+    assert len(_Handler.requests) == 1
+
+
+def test_only_the_first_releases_are_asked_about(indexer):
+    rows = _rows(PLAIN, OTHER, THIRD, FOURTH)
+    for row, name in zip(rows, ("empty", "plain", "atmos", "plain")):
+        _offer(row, indexer, name)
+
+    def two(key, default=""):
+        return "2" if key == "nfo_audio_releases" else default
+
+    assert filter_module.learn_nfo_audio(rows, two) is True
+    assert sorted(_Handler.requests) == [
+        "/nfo/empty?apikey=SECRET",
+        "/nfo/plain?apikey=SECRET",
+    ]
+    # Opening the search again asks for nothing more: the limit is on the
+    # releases looked at, not on the fetches still to do.
+    assert filter_module.learn_nfo_audio(rows, two) is False
+    assert len(_Handler.requests) == 2
+    # The default is three; the cap is five.
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert len(_Handler.requests) == 3
+    assert nfo_audio._releases_setting(lambda k, d="": "99") == 5
+    assert nfo_audio._releases_setting(lambda k, d="": "junk") == 3
+    assert nfo_audio._releases_setting(lambda k, d="": "-4") == 0
+
+
+def test_another_listing_of_the_release_can_supply_the_link(indexer):
+    rows = _rows(PLAIN, PLAIN.replace(".", " "))
+    _offer(rows[1], indexer, "plain")
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert len(_Handler.requests) == 1
+
+
+def test_off_and_nothing_offered_ask_for_nothing(indexer):
+    rows = _rows(PLAIN, OTHER)
+    assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    _offer(rows[0], indexer, "plain")
+    assert filter_module.learn_nfo_audio(rows, lambda k, d="": "0") is False
+    assert filter_module.learn_nfo_audio([], _ttl) is False
+    assert filter_module.learn_nfo_audio([None, {"title": 5}], _ttl) is False
+    assert not _Handler.requests
+
+
+def test_a_refused_read_is_remembered_and_not_repeated(indexer):
+    rows = _rows(PLAIN)
+    _offer(rows[0], indexer, "refused")
+    with patch("resources.lib.nfo_audio.xbmc.log") as log:
+        assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert not any("SECRET" in call.args[0] for call in log.call_args_list)
+    assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert len(_Handler.requests) == 1
+    assert rows[0]["_meta"]["audio"] == []
+
+
+def test_a_slow_indexer_does_not_hold_the_picker():
+    rows = _rows(PLAIN)
+    rows[0]["nfo_url"] = "http://127.0.0.1:1/never"
+    release = threading.Event()
+
+    def slow(_url, **_kwargs):
+        release.wait(5)
+        return SCENE_NFO
+
+    with patch("resources.lib.nfo_audio.http_get", side_effect=slow):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl, wait=0.05) is False
+        # It still finishes, and the answer is there for the next search.
+        release.set()
+        for _ in range(100):
+            if nfo_audio._known(_key(PLAIN)):
+                break
+            threading.Event().wait(0.02)
+    assert nfo_audio._known(_key(PLAIN))["audio"] == ["DTS-HD MA"]
+
+
+def test_the_tmdbhelper_route_filters_again_when_an_nfo_named_audio(indexer):
+    from unittest.mock import MagicMock
+
+    from resources.lib.router_scriptplay import _script_play_filter_autoselect_tag
+
+    rows = [
+        {"title": OTHER, "link": "http://hydra/1", "size": str(10**10)},
+        _offer(
+            {"title": PLAIN, "link": "http://hydra/2", "size": str(10**10)},
+            indexer,
+            "plain",
+        ),
+    ]
+    with patch("resources.lib.router._get_script_setting", side_effect=_ttl), patch(
+        "resources.lib.router_scriptplay._script_play_completed_jobs", return_value={}
+    ):
+        filtered, _all, _count, _jobs = _script_play_filter_autoselect_tag(
+            MagicMock(), {}, rows, "Some Movie", MagicMock()
+        )
+    by_title = {row["title"]: row for row in filtered}
+    assert by_title[PLAIN]["_meta"]["audio"] == ["DTS-HD MA"]
+    assert len(_Handler.requests) == 1

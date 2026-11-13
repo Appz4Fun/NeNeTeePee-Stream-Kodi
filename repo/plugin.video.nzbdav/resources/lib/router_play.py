@@ -63,6 +63,14 @@ def _search_with_cache(search_type, title, cache_kwargs):
     )
 
 
+def _nfo_setting_getter():
+    """The add-on's settings, for the NFO reader on the plugin routes."""
+    import resources.lib.router as _router
+
+    addon = xbmcaddon.Addon("plugin.video.nzbdav")
+    return lambda key, default="": _router._get_addon_setting(addon, key, default)
+
+
 def _play_search_getter():
     """The ``/play`` and ``/search`` provider settings: NZBHydra2 always on."""
     import resources.lib.router as _router
@@ -345,9 +353,16 @@ def _prepare_picker_rows(results, title, notify, pack_result, requested_series=N
     auto-select plays the wrong show.
     """
     import resources.lib.router as _router
-    from resources.lib.filter import filter_results, prefer_series_rows
+    from resources.lib.filter import (
+        filter_results,
+        learn_nfo_audio,
+        prefer_series_rows,
+    )
 
     filtered, all_parsed = filter_results(results)
+    if learn_nfo_audio(filtered, _nfo_setting_getter()):
+        # An NFO named audio a release's name leaves out: rank again with it.
+        filtered, all_parsed = filter_results(results)
     if not filtered and not all_parsed and pack_result is None:
         notify(_router._addon_name(), _router._fmt(30087, title), 3000)
         return None

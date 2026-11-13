@@ -16,7 +16,7 @@ import xbmc
 import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kodi imports are the repo convention; tests patch <mod>.xbmcaddon and the thread-safety contract tests forbid its use on no-getter paths)
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
-from resources.lib import telemetry
+from resources.lib import nfo_audio, telemetry
 from resources.lib.filter_atmos import share_atmos
 from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
@@ -674,15 +674,29 @@ def _unify_name_forms(rows):
 def _attach_metadata(results):
     """Parse every row's title into ``_meta`` and unify name spellings.
 
-    Last, a WEB-DL whose name leaves Atmos out takes it from a labelled copy
-    of the same source in ``results`` (``filter_atmos``).
+    Then the audio a release's NFO named is added (``nfo_audio``), and last,
+    a WEB-DL whose name leaves Atmos out takes it from a labelled copy of the
+    same source in ``results`` (``filter_atmos``).
     """
     parsed_by_title = {}
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
     _unify_name_forms(results)
+    # What a release's NFO said of its audio, once it has been read.
+    nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS)
     share_atmos(results, _META_DERIVED_ROW_KEYS)
+
+
+def learn_nfo_audio(rows, settings_getter):
+    """Read the NFOs of the picker's top releases; True if the rows changed.
+
+    ``rows`` are the filtered rows in the picker's order. True when an NFO
+    named audio that was not known: the caller then runs ``filter_results``
+    again, which adds it to the rows and sorts them afresh
+    (``nfo_audio.learn_for_top``).
+    """
+    return nfo_audio.learn_for_top(rows, _name_form_key, settings_getter)
 
 
 def attach_metadata(results):
