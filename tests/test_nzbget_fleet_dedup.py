@@ -2789,18 +2789,18 @@ def test_grouping_the_same_rows_again_counts_nothing_twice():
 
     # The head reached NZBGet: a later phase is handed the same rows.
     dedup.remember_listing(rows[0])
-    assert dedup.clusters(rows) == []
+    assert not dedup.clusters(rows)
     assert dedup.report.mirrors == 2
 
     # A listing first seen in that later phase is one more.
-    assert dedup.clusters(rows + [_listed("althub", "a")]) == []
+    assert not dedup.clusters(rows + [_listed("althub", "a")])
     assert dedup.report.mirrors == 3
 
 
 def test_the_pick_is_never_counted_as_its_own_duplicate():
     pick = _listed("geek", "a")
     dedup = FleetDedup(pick=pick)
-    assert dedup.clusters([dict(pick), _listed("slug", "a")]) == []
+    assert not dedup.clusters([dict(pick), _listed("slug", "a")])
     assert dedup.report.mirrors == 1
 
 
