@@ -242,6 +242,10 @@ _REVISION_TAG = re.compile(
 )
 
 
+_INTERNAL_TAG = re.compile(r"(?<![a-z0-9])internal(?![a-z0-9])", re.IGNORECASE)
+_MINI_TAG = re.compile(r"(?<![a-z0-9])m(?:720|1080|2160)p(?![a-z0-9])", re.IGNORECASE)
+
+
 def parse_title_metadata(title):
     """Parse a scene title and return normalized metadata dict.
 
@@ -270,7 +274,14 @@ def parse_title_metadata(title):
     if revision:
         # "- 05v2" / "S01E05 v2": a re-release that replaces the first file,
         # so not a copy of it (PROPER and REPACK are compared the same way).
-        variant = sorted(variant + ["v" + revision.group(1)])
+        variant = variant + ["v" + revision.group(1)]
+    if _INTERNAL_TAG.search(title):
+        # A group's iNTERNAL release is a second, separate release.
+        variant = variant + ["internal"]
+    if _MINI_TAG.search(title):
+        # "m1080p": a smaller encode posted beside the full-size one.
+        variant = variant + ["mini"]
+    variant = sorted(variant)
     identity = _ptt_identity(title, parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
@@ -517,7 +528,6 @@ def _resolve_result_meta(result, parsed_by_title):
     return meta
 
 
-_NAME_FORM_SPLIT = re.compile(r"[^a-z0-9]+")
 # Per-row caches derived from ``_meta``; dropped when the metadata is replaced.
 _META_DERIVED_ROW_KEYS = (
     "_release_profile",
@@ -542,8 +552,10 @@ def _name_form_key(title):
     )
 
     name = without_media_extension(release_name_from_subject(title))
-    name = name.lower().replace("'", "").replace("\u2019", "")
-    return " ".join(part for part in _NAME_FORM_SPLIT.split(name) if part)
+    name = name.casefold().replace("'", "").replace("\u2019", "")
+    # Every letter and digit counts, in any script: an ASCII-only key gave two
+    # Chinese titles with the same year and tags one key, and one release.
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in name).split())
 
 
 def _parse_detail(meta):

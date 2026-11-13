@@ -257,6 +257,8 @@ every parsed release field is equal:
   audio formats and channels
 - codec and quality (source, such as WEB-DL or BluRay)
 - edition, PROPER, REPACK and HYBRID
+- the streaming service a WEB release names (`AMZN`, `NF`, `MAX`, `ATVP` and
+  others), `iNTERNAL`, a `v2` re-release, and a smaller `m1080p` encode
 - 3D, dubbed or MULTi, hardcoded-subtitle, and cut tags (Extended, Unrated,
   Uncensored, Remastered)
 - release group

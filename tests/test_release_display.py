@@ -62,12 +62,13 @@ def _row(title, **extra):
         (
             "Six.Feet.Under.2001.S02E01.1080p.AMZN.WEB-DL.H265.SDR.DDP.5.1."
             "English-HONE.REMASTERED",
-            "Six Feet Under (2001) - S02E01 {Remastered} [WEB-DL-1080p][DD+ 5.1][H265]"
+            "Six Feet Under (2001) - S02E01 {Remastered} [AMZN][WEB-DL-1080p]"
+            "[DD+ 5.1][H265]"
             "-HONE",
         ),
         (
             "Six.Feet.Under.S02E01.In.The.Game.1080p.AMZN.WEB-DL.DDP5.1.H.264-FLUX",
-            "Six Feet Under - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX",
+            "Six Feet Under - S02E01 [AMZN][WEB-DL-1080p][DD+ 5.1][H264]-FLUX",
         ),
         (
             "Show.S01E01E02.720p.HDTV.x264-GRP",
@@ -79,7 +80,7 @@ def _row(title, **extra):
         ),
         (
             "Movie.2023.REPACK.2160p.NF.WEB-DL.DDPA5.1.DV.HDR.H.265-GRP",
-            "Movie (2023) [WEB-DL-2160p REPACK][DV HDR10][DD+ Atmos 5.1][H265]-GRP",
+            "Movie (2023) [NF][WEB-DL-2160p REPACK][DV HDR10][DD+ Atmos 5.1][H265]-GRP",
         ),
         (
             "Movie.1999.1080p.BluRay.FLAC.2.0.x264-GRP",

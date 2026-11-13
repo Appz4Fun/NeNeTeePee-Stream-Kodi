@@ -72,7 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Normalized release names in the picker.** Every row is shown in one
   format, built from what the release name says:
   `Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES`,
-  or `Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX` for
+  or `Six Feet Under (2001) - S02E01 [AMZN][WEB-DL-1080p][DD+ 5.1][H264]-FLUX` for
   an episode. Raw Usenet subjects (`[1/3] - "Name.mkv" yEnc 4400443301`) no
   longer appear as listed. Cuts, variants, parts and second audio tracks keep
   their place in the name: `{Unrated}`, `[3D]`, `[DUBBED]`, `[HC]`,
@@ -122,7 +122,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   copy, so it sorted first and was the one the picker played. It is also never
   sent as a NZBGet backup of a normal copy.
 - **A re-release marked `v2` is not a copy of the first file** (`S01E05 v2`,
-  `- 05v2`), the same as PROPER and REPACK.
+  `- 05v2`), the same as PROPER and REPACK. The normalized name shows `[v2]`.
+- **One group's releases from different streaming services stay apart.** The
+  service named before the WEB tag (`AMZN`, `NF`, `MAX`, `ATVP`, `DSNP`,
+  `PMTP` and others) is part of the same-release rule and shows in the
+  normalized name as `[AMZN]`. Before, a group's AMZN and MAX copies of one
+  episode were one release and could back each other up.
+- **An `iNTERNAL` release and a smaller `m1080p` encode are their own
+  releases**, shown as `[INTERNAL]` and `[MINI]`.
+- **`Remux` and `BluRay.Remux` from one group are one release.**
+- **A complete-series pack says so in its normalized name** (`Show - Complete`).
 - **A movie search drops films dated for another year.** *Avatar* (2009)
   listed *Avatar: Fire and Ash* (2025) first. A result dated more than a year
   from the requested year is removed, unless that year also appears in its

@@ -181,7 +181,7 @@ row in one format, built from what the name itself says:
 
 ```text
 Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES
-Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX
+Six Feet Under (2001) - S02E01 [AMZN][WEB-DL-1080p][DD+ 5.1][H264]-FLUX
 ```
 
 That is the title and year, the episode for TV (the air date for a daily

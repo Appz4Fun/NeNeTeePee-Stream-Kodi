@@ -390,6 +390,37 @@ def normalize_resolution(value):
     return value[:-1] + "p" if value.endswith("i") else value
 
 
+# The streaming services a WEB release names just before its source tag
+# ("2160p.AMZN.WEB-DL"). One group's AMZN and MAX copies of an episode are
+# different encodes, so the service is part of what a release is.
+_NETWORKS = frozenset(
+    (
+        "AMZN NF MAX HMAX DSNP ATVP ATV HULU PCOK PMTP IT CR CRAV STAN SHO STZ "
+        "AMC BCORE MA PLAY ROKU TUBI IP ALL4 VUDU KNPY HBO DSCP NOW SKST CRKL "
+        "RED ITVX VIKI FUNI HIDI ADN BILI IQ MUBI CRIT PLUTO VIU TVING ZEE5 "
+        "SONY NLZ VRV TVNZ SBS ABC CBS NBC FOX CW"
+    ).split()
+)
+_NETWORK_BEFORE_WEB = re.compile(
+    r"(?<![a-z0-9])([a-z0-9]{2,6})[ ._-]"
+    r"(?:web[ ._-]?dl|web[ ._-]?rip|web)(?![a-z0-9])",
+    re.I,
+)
+# German scene naming: "2160p.NetflixUHD.x264" / "1080p.NetflixHD.x264".
+_NETFLIX_MASTER = _pattern(r"netflix(u?hd)")
+
+
+def detect_network(title):
+    """The streaming service a WEB release came from ("AMZN"), or ""."""
+    title = str(title or "")
+    for match in _NETWORK_BEFORE_WEB.finditer(title):
+        token = match.group(1).upper()
+        if token in _NETWORKS:
+            return token
+    match = _NETFLIX_MASTER.search(title)
+    return "NETFLIX" + match.group(1).upper() if match else ""
+
+
 def supplement_metadata(title, meta):
     """Correct media metadata consistently without modifying vendored PTT."""
     match = _RESOLUTION.search(title)
@@ -413,6 +444,7 @@ def supplement_metadata(title, meta):
         title, meta["audio"], meta.get("quality", ""), meta.get("channels", "")
     )
     meta["hybrid"] = detect_hybrid(title)
+    meta["network"] = detect_network(title)
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])
     meta["group"] = detect_release_group(title, meta.get("group", ""))

@@ -74,7 +74,13 @@ _PART_SEPARATORS = re.compile(r"[\s._-]+")
 # ``meta["variant"]`` flags shown as their own "[...]" block, and the cut
 # flags shown with the edition. PTT strips all of them from the title, so a
 # name that left them out would read like the plain release.
-_VARIANT_BLOCKS = (("3d", "3D"), ("dubbed", "DUBBED"), ("hardcoded", "HC"))
+_VARIANT_BLOCKS = (
+    ("3d", "3D"),
+    ("dubbed", "DUBBED"),
+    ("hardcoded", "HC"),
+    ("internal", "INTERNAL"),
+    ("mini", "MINI"),
+)
 _CUT_NAMES = (
     ("extended", "Extended"),
     ("unrated", "Unrated"),
@@ -85,6 +91,9 @@ _CUT_NAMES = (
 _MAX_LANGUAGES = 3
 
 HYBRID_LABEL = "HYBRID"
+COMPLETE_LABEL = "Complete"
+# A re-release marker ``filter.parse_title_metadata`` stores as a variant.
+_REVISION = re.compile(r"v[2-9]")
 
 
 def clean_release_name(title):
@@ -183,6 +192,10 @@ def _heading(name, title, identity, meta):
     elif _DATE.fullmatch(date):
         # A daily show: the air date is its episode.
         out += " - " + date
+    elif identity.get("complete"):
+        # A whole-series pack: PTT takes "Complete.Series" out of the title,
+        # and nothing else on the row says it is every season.
+        out += " - " + COMPLETE_LABEL
     part = _part(name, title)
     if part:
         out += (" " if code else " - ") + part
@@ -296,6 +309,9 @@ def _specs(name, meta):
     variant = _variant(meta)
     languages = _languages(name, meta)
     parts = (
+        # The streaming service: one group's AMZN and MAX copies are separate
+        # releases, and nothing else in the name tells them apart.
+        str(meta.get("network") or ""),
         _quality(meta),
         HYBRID_LABEL if meta.get("hybrid") else "",
     )
@@ -305,6 +321,8 @@ def _specs(name, meta):
         for flag, label in _VARIANT_BLOCKS
         if flag in variant and not (flag == "dubbed" and languages == "MULTi")
     )
+    # "v2": a corrected re-release, which is not a copy of the first file.
+    parts += tuple(flag for flag in variant if _REVISION.fullmatch(str(flag)))
     parts += (
         dynamic_range(meta),
         _audio(meta),

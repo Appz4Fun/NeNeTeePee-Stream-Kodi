@@ -118,6 +118,16 @@ def air_date(row, meta):
     return str(parsed.get("date") or "") if isinstance(parsed, dict) else ""
 
 
+def _network(row, meta):
+    """The streaming service of a WEB release, read from the name if unparsed."""
+    if "network" in meta:
+        return _fold(meta.get("network"))
+    from resources.lib.filter_tags import detect_network
+    from resources.lib.release_subject import release_name_from_subject
+
+    return _fold(detect_network(release_name_from_subject(row.get("title"))))
+
+
 def release_profile(row):
     """The parsed release fields of ``row`` that ``same_release`` compares.
 
@@ -133,6 +143,13 @@ def release_profile(row):
         return cached[1]
     meta = _fs._result_meta(row)
     fields = [(key, _fold(meta.get(key))) for key in _STRING_FIELDS]
+    fields = [
+        # A remux is taken from a disc, so one name saying "Remux" and another
+        # "BluRay.Remux" name the same source.
+        (key, "bluray remux" if key == "quality" and value == "remux" else value)
+        for key, value in fields
+    ]
+    fields.append(("network", _network(row, meta)))
     for key in _SET_FIELDS:
         values = meta.get(key) or []
         if isinstance(values, str):

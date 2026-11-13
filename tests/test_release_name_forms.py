@@ -363,3 +363,112 @@ def test_script_play_drops_other_years_before_filtering(mock_search, mock_tag):
     assert _titles(mock_tag.call_args.args[2]) == [
         "Avatar.2009.2160p.UHD.BluRay.REMUX-BiTOR"
     ]
+
+
+# --- review findings -----------------------------------------------------------
+
+
+def test_titles_in_another_script_are_not_one_name():
+    """An ASCII-only key gave every such title with the same tags one key."""
+    first = "满江红.2023.1080p.BluRay.x264-GRP"
+    second = "长安三万里.2023.1080p.BluRay.x264-GRP"
+    assert flt._name_form_key(first) != flt._name_form_key(second)
+    groups = _groups([first, second])
+    assert len(groups) == 2
+    assert not same_release(groups[0][0], groups[1][0])
+
+
+def test_a_complete_series_pack_says_so_in_its_name():
+    from resources.lib.release_display import display_name
+
+    title = "Show.Complete.Series.1080p.WEB.H264-GRP"
+    shown = display_name({"title": title, "_meta": parse_title_metadata(title)})
+    assert "Complete" in shown
+    season = "Show.S02.COMPLETE.1080p.WEB.H264-GRP"
+    shown = display_name({"title": season, "_meta": parse_title_metadata(season)})
+    assert "S02" in shown and "Complete" not in shown
+
+
+def test_a_v2_re_release_shows_its_revision():
+    from resources.lib.release_display import display_name
+
+    first = "[Yameii] Frieren - S01E05 [English Dub] [CR WEB-DL 1080p] [536EA39C]"
+    second = "[Yameii] Frieren - S01E05 v2 [English Dub] [CR WEB-DL 1080p] [45586A01]"
+    shown = [
+        display_name({"title": title, "_meta": parse_title_metadata(title)})
+        for title in (first, second)
+    ]
+    assert "[v2]" in shown[1] and "[v2]" not in shown[0]
+    assert shown[0] != shown[1]
+
+
+# --- found in past searches: one group, different releases ---------------------
+
+
+@pytest.mark.parametrize(
+    "first, second",
+    [
+        # the streaming service the WEB release came from
+        (
+            "MobLand.2025.S01E02.2160p.AMZN.WEB-DL.Hybrid.H265.DV.HDR10.DDP.5.1-HONE",
+            "MobLand.2025.S01E02.2160p.PMTP.WEB-DL.Hybrid.H265.DV.HDR10.DDP.5.1-HONE",
+        ),
+        (
+            "The.Town.2010.1080p.AMZN.WEB-DL.DDP5.1.H.264-GPRS",
+            "The.Town.2010.1080p.MAX.WEB-DL.DDP5.1.H.264-GPRS",
+        ),
+        (
+            "Narcos.S03E02.German.DD51.DL.1080p.NetflixHD.x264-TvS",
+            "Narcos.S03E02.German.DD51.DL.1080p.NetflixUHD.x264-TvS",
+        ),
+        # a group's iNTERNAL release beside its regular one
+        (
+            "Cube.1997.iNTERNAL.DVDRip.XviD-SChiZO",
+            "Cube.1997.DVDRip.XviD-SChiZO",
+        ),
+        # a smaller "m1080p" encode beside the full-size one
+        (
+            "Resident.Evil.2002.1080p.BluRay.x264-GENEMiGE",
+            "Resident.Evil.2002.m1080p.BluRay.x264-GENEMiGE",
+        ),
+    ],
+)
+def test_two_releases_from_one_group_stay_apart(first, second):
+    assert len(_groups([first, second])) == 2
+
+
+def test_a_remux_with_and_without_its_disc_named_is_one_release():
+    groups = _groups(
+        [
+            "The.Town.2010.1080p.BluRay.Remux.AVC.DTS-HD.MA.5.1-playBD",
+            "The.Town.2010.1080p.Remux.AVC.DTS-HD.MA.5.1-playBD",
+        ]
+    )
+    assert len(groups) == 1
+
+
+@pytest.mark.parametrize(
+    "title, network",
+    [
+        ("Show.S01E01.2160p.ATVP.WEB-DL.DDP5.1.H.265-NTb", "ATVP"),
+        ("Show.S01E01.1080p.AMZN.WEBRip.DDP5.1.x264-GRP", "AMZN"),
+        ("Show S01E01 1080p NF WEB-DL DDP5 1 H 264-GRP", "NF"),
+        ("Mad.Max.1979.1080p.BluRay.x264-GRP", ""),
+        ("Show.S01E01.1080p.WEB.h264-GRP", ""),
+        ("Show.S01E01.1080p.REPACK.WEB-DL.H.264-GRP", ""),
+    ],
+)
+def test_streaming_service_is_read_before_the_web_tag(title, network):
+    assert parse_title_metadata(title)["network"] == network
+
+
+def test_the_service_and_variant_show_in_the_normalized_name():
+    from resources.lib.release_display import display_name
+
+    def shown(title):
+        return display_name({"title": title, "_meta": parse_title_metadata(title)})
+
+    assert "[AMZN]" in shown("The.Town.2010.1080p.AMZN.WEB-DL.DDP5.1.H.264-GPRS")
+    assert "[MAX]" in shown("The.Town.2010.1080p.MAX.WEB-DL.DDP5.1.H.264-GPRS")
+    assert "[INTERNAL]" in shown("Cube.1997.iNTERNAL.1080p.WEB.H264-FLAME")
+    assert "[MINI]" in shown("Resident.Evil.2002.m1080p.BluRay.x264-GENEMiGE")
