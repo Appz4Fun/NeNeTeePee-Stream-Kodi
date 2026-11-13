@@ -144,6 +144,19 @@ def _row(title, **extra):
             "Movie.2023.French.1080p.BluRay.x264.DTS.ESubs-GRP",
             "Movie (2023) [Bluray-1080p][DTS][FR][x264]-GRP",
         ),
+        # Every season and episode the name states.
+        (
+            "Show.S01-S02.E01-E10.1080p.WEB.H264-GRP",
+            "Show - S01-S02E01-E10 [WEB-DL-1080p][H264]-GRP",
+        ),
+        (
+            "Show.S01.E01-E10.1080p.WEB.H264-GRP",
+            "Show - S01E01-E10 [WEB-DL-1080p][H264]-GRP",
+        ),
+        (
+            "Show.S01-S03.1080p.WEB.H264-GRP",
+            "Show - S01-S03 [WEB-DL-1080p][H264]-GRP",
+        ),
         # The halves of a split season pack keep their part.
         (
             "Show.S01.Part.1.1080p.WEB.H264-GRP",
@@ -292,6 +305,21 @@ def test_a_hybrid_is_a_different_release_from_its_plain_twin():
     spaced = "Movie 2023 HYBRID 2160p UHD BluRay REMUX DV HEVC TrueHD 7.1-GRP"
     assert not same_release(_row(plain), _row(hybrid))
     assert same_release(_row(hybrid), _row(spaced))
+
+
+def test_a_separate_dd_track_beside_dd_plus_atmos_is_a_different_release():
+    plain = _row("Movie.2023.1080p.WEB-DL.DDP5.1.Atmos.H.264-GRP")
+    extra = _row("Movie.2023.1080p.WEB-DL.DDP5.1.Atmos.DD2.0.H.264-GRP")
+    assert not same_release(plain, extra)
+    assert display_name(extra) == (
+        "Movie (2023) [WEB-DL-1080p][DD+ Atmos 5.1 + DD][H264]-GRP"
+    )
+
+
+def test_an_episode_run_with_a_gap_lists_each_episode():
+    row = _row(_NAME)
+    row["_meta"]["ptt_identity"].update(seasons=[1], episodes=[1, 2, 5])
+    assert display_name(row).startswith("Movie (2023) - S01E01E02E05 ")
 
 
 def test_two_air_dates_of_a_daily_show_are_different_releases():

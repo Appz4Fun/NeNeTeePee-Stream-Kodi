@@ -289,8 +289,9 @@ def detect_audio(title):
     * "DDPA5.1" / "DD+A": Dolby Digital Plus with Atmos;
     * "DD_5.1" or "DD 5.1" where the name separates its words with another
       character: the "+" of "DD+5.1" was replaced on the way here;
-    * "DD" beside "Atmos" with no TrueHD: Atmos only rides on TrueHD or on
-      Dolby Digital Plus, never on plain Dolby Digital (AC-3).
+    * "DD" beside "Atmos" with no TrueHD and no DD+ tag: Atmos only rides
+      on TrueHD or on Dolby Digital Plus, never on plain Dolby Digital
+      (AC-3). With one of those beds named, "DD" is a separate track.
     """
     found = set()
     remaining = title
@@ -306,7 +307,9 @@ def detect_audio(title):
         if pattern.search(remaining):
             found.add(name)
             remaining = pattern.sub(" ", remaining)
-    if "Atmos" in found and "DD" in found and "TrueHD" not in found:
+    # Only when no bed that can carry Atmos is named: beside TrueHD or an
+    # explicit DD+, a "DD" tag is a separate Dolby Digital track.
+    if "Atmos" in found and "DD" in found and not found & {"TrueHD", "DD+"}:
         found.discard("DD")
         found.add("DD+")
     return [name for name in _AUDIO_ORDER if name in found]

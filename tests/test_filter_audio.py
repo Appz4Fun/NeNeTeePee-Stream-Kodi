@@ -37,6 +37,8 @@ def _name(tags, group="GRP"):
         # the plain compatibility track.
         ("2160p.UHD.BluRay.REMUX.HEVC.TrueHD.7.1.Atmos", ["Atmos", "TrueHD"]),
         ("2160p.UHD.BluRay.REMUX.TrueHD.Atmos.7.1.DD5.1", ["Atmos", "TrueHD", "DD"]),
+        ("1080p.WEB-DL.DDP5.1.Atmos.DD2.0.H.264", ["Atmos", "DD+", "DD"]),
+        ("1080p.WEB-DL.DD2.0.EAC3.5.1.Atmos.H.264", ["Atmos", "DD+", "DD"]),
         # Plain Dolby Digital stays Dolby Digital.
         ("1080p.BluRay.DD5.1.x264", ["DD"]),
         ("1080p.BluRay.DD.5.1.x264", ["DD"]),

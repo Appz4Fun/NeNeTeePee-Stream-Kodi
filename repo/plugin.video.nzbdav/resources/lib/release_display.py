@@ -107,21 +107,25 @@ def _int_list(values):
 
 
 def _range(letter, numbers):
-    """ "S01", "S01-S03", "E05", "E01-E02" for a sorted number list."""
-    code = "{}{:02d}".format(letter, numbers[0])
-    if numbers[-1] > numbers[0]:
-        code += "-{}{:02d}".format(letter, numbers[-1])
+    """ "S01", "S01-S03", "E05", "E01-E02" for a sorted number list.
+
+    A run with a gap lists each number ("E01E02E05"): it is a different
+    release from the unbroken run with the same ends.
+    """
+    first, last = numbers[0], numbers[-1]
+    if len(numbers) > 1 and numbers != list(range(first, last + 1)):
+        return "".join("{}{:02d}".format(letter, number) for number in numbers)
+    code = "{}{:02d}".format(letter, first)
+    if last > first:
+        code += "-{}{:02d}".format(letter, last)
     return code
 
 
 def _episode_code(seasons, episodes):
-    """ "S02E01", "S02E01-E02", "E05" (no season), "S01-S03" (a pack), or ""."""
-    if episodes:
-        season = "S{:02d}".format(seasons[0]) if seasons else ""
-        return season + _range("E", episodes)
-    if seasons:
-        return _range("S", seasons)
-    return ""
+    """ "S02E01", "S02E01-E02", "S01-S02E01-E10", "E05" (no season),
+    "S01-S03" (a pack), or ""."""
+    season = _range("S", seasons) if seasons else ""
+    return season + (_range("E", episodes) if episodes else "")
 
 
 def _year(identity, meta):
