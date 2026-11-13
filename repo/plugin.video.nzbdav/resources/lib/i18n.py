@@ -221,6 +221,8 @@ _FALLBACK_STRINGS = {
     30693: "Repair needs {} parity blocks",
     30694: "Cancel",
     30695: "Cancelling...",
+    30696: "not downloading 1 duplicate",
+    30697: "not downloading {} duplicates",
 }
 
 

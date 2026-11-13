@@ -118,6 +118,10 @@ class FleetReport:
         self.refused = {}  # indexer name -> copies dropped after it refused
         self.failed = 0  # copies dropped for any other reason
         self.duplicates = 0  # copies that were the same posting as a kept one
+        # Listings not downloaded at all: another indexer's listing of an
+        # upload already in hand (same size, posted within two minutes).
+        self.mirrors = 0
+        self._mirror_links = set()
         self._blocked = blocked if blocked is not None else set()
 
     @staticmethod
@@ -148,6 +152,18 @@ class FleetReport:
 
     def duplicate(self):
         self.duplicates += 1
+
+    def mirror(self, row):
+        """Count ``row`` as a second listing of an upload, once per listing.
+
+        The play groups its listings more than once (a refill, a later
+        phase), so a listing is remembered by its link.
+        """
+        link = (row or {}).get("link") if isinstance(row, dict) else None
+        key = link if isinstance(link, str) and link else id(row)
+        if key not in self._mirror_links:
+            self._mirror_links.add(key)
+            self.mirrors += 1
 
     def dropped(self, row):
         name = self._indexer(row)
@@ -190,28 +206,44 @@ def indexers_line(report):
     return ", ".join(shown)
 
 
-def not_sent_line(report):
-    """ "Not sent: Digital Carnage refused 1, 1 duplicate upload", or ""."""
-    if not isinstance(report, FleetReport) or not report.not_sent():
+def not_sent_line(report, mirrors=True):
+    """ "Not sent: Digital Carnage refused 1, 11 duplicate uploads", or "".
+
+    The duplicate count is every listing that was the same upload as a copy
+    kept: the ones never downloaded (another indexer's listing of it, unless
+    ``mirrors`` is False) and the ones downloaded and then found to be the
+    same posting.
+    """
+    if not isinstance(report, FleetReport):
         return ""
+    duplicates = report.duplicates + (report.mirrors if mirrors else 0)
     parts = [
         fmt(30669, name, count)
         for name, count in sorted(report.refused.items(), key=lambda i: i[0].lower())
     ]
     if report.failed:
         parts.append(fmt(30670, report.failed))
-    if report.duplicates:
-        parts.append(_counted(report.duplicates, 30671, 30672))
-    return fmt(30668, ", ".join(parts))
+    if duplicates:
+        parts.append(_counted(duplicates, 30671, 30672))
+    return fmt(30668, ", ".join(parts)) if parts else ""
 
 
 def collecting_message(report, done, total):
     """The dialog text while the copies' NZBs are downloaded.
 
-    Under the count: the indexers that have delivered so far, and anything
-    already refused, not downloaded or found to be a duplicate.
+    The count is of uploads. Beside it, how many more listings are not being
+    downloaded because another indexer lists the same upload ("Downloading
+    NZBs 3 of 10 - not downloading 10 duplicates"); one of those is still
+    tried if its upload's first listing fails. Under it: the indexers that
+    have delivered so far, and anything already refused, not downloaded or
+    found to be a duplicate.
     """
-    lines = [fmt(30616, done, total), indexers_line(report), not_sent_line(report)]
+    count = fmt(30616, done, total)
+    mirrors = getattr(report, "mirrors", 0) if isinstance(report, FleetReport) else 0
+    if mirrors:
+        # Listings of uploads already being fetched from another indexer.
+        count = "{} - {}".format(count, _counted(mirrors, 30696, 30697))
+    lines = [count, indexers_line(report), not_sent_line(report, mirrors=False)]
     return "[CR]".join(line for line in lines if line)
 
 

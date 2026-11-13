@@ -2740,3 +2740,105 @@ def test_only_one_in_memory_backup_body_is_held_unconsumed(tmp_path):
         fetch.release_memory()
         assert fetch("b1")[0] == _valid("b1")
     spool.close()
+
+
+# --- second listings of one upload are counted, once each -------------------
+
+
+def _listed(indexer, name, size="100", pubdate=None):
+    return {
+        "title": "Movie",
+        "indexer": indexer,
+        "link": "http://hydra/{}/{}".format(indexer, name),
+        "size": size,
+        "pubdate": _PUB if pubdate is None else pubdate,
+    }
+
+
+def test_clusters_report_the_listings_that_are_not_downloaded():
+    from resources.lib import nzbget_progress
+
+    dedup = FleetDedup()
+    rows = [
+        _listed("geek", "a"),
+        _listed("slug", "a", pubdate=_PUB_90S),  # the same upload
+        _listed("finder", "a"),  # and again
+        _listed("geek", "b", size="200"),  # another upload
+        _listed("slug", "b", size="200"),  # listed twice
+    ]
+    clusters = dedup.clusters(rows)
+
+    assert [len(cluster) for cluster in clusters] == [3, 2]
+    assert dedup.report.mirrors == 3
+    # The mirrors stay in their upload's cluster, as its fallbacks.
+    assert [row["indexer"] for row in clusters[0]] == ["geek", "slug", "finder"]
+    assert nzbget_progress.collecting_message(dedup.report, 1, 2) == (
+        "Downloading NZBs 1 of 2 - not downloading 3 duplicates"
+    )
+    assert nzbget_progress.sending_message(dedup.report, 2) == (
+        "Sending 2 NZBs to NZBGet...[CR]Not sent: 3 duplicate uploads"
+    )
+
+
+def test_grouping_the_same_rows_again_counts_nothing_twice():
+    dedup = FleetDedup()
+    rows = [_listed("geek", "a"), _listed("slug", "a"), _listed("finder", "a")]
+    dedup.clusters(rows)
+    dedup.clusters(rows)
+    assert dedup.report.mirrors == 2
+
+    # The head reached NZBGet: a later phase is handed the same rows.
+    dedup.remember_listing(rows[0])
+    assert dedup.clusters(rows) == []
+    assert dedup.report.mirrors == 2
+
+    # A listing first seen in that later phase is one more.
+    assert dedup.clusters(rows + [_listed("althub", "a")]) == []
+    assert dedup.report.mirrors == 3
+
+
+def test_the_pick_is_never_counted_as_its_own_duplicate():
+    pick = _listed("geek", "a")
+    dedup = FleetDedup(pick=pick)
+    assert dedup.clusters([dict(pick), _listed("slug", "a")]) == []
+    assert dedup.report.mirrors == 1
+
+
+def test_one_listing_per_upload_reports_no_duplicates():
+    from resources.lib import nzbget_progress
+
+    dedup = FleetDedup()
+    dedup.clusters([_listed("geek", "a"), _listed("slug", "b", size="200")])
+    assert dedup.report.mirrors == 0
+    assert nzbget_progress.collecting_message(dedup.report, 1, 2) == (
+        "Downloading NZBs 1 of 2"
+    )
+    assert nzbget_progress.not_sent_line(dedup.report) == ""
+
+
+def test_the_not_sent_line_adds_both_kinds_of_duplicate():
+    from resources.lib import nzbget_progress
+
+    report = nzbget_progress.FleetReport({"square"})
+    report.mirror({"link": "a"})
+    assert nzbget_progress.not_sent_line(report) == "Not sent: 1 duplicate upload"
+    assert nzbget_progress.collecting_message(report, 0, 3) == (
+        "Downloading NZBs 0 of 3 - not downloading 1 duplicate"
+    )
+    report.mirror({"link": "b"})
+    report.mirror({"link": "b"})  # the same listing again
+    report.mirror({})  # a row with no link still counts, by identity
+    report.duplicate()  # downloaded, then found to be the same posting
+    report.dropped({"indexer": "square"})
+    assert report.mirrors == 3
+    assert nzbget_progress.not_sent_line(report) == (
+        "Not sent: square refused 1, 4 duplicate uploads"
+    )
+    # While collecting, the listings not downloaded are on the first line
+    # and the line below counts only what was downloaded.
+    assert nzbget_progress.collecting_message(report, 2, 3) == (
+        "Downloading NZBs 2 of 3 - not downloading 3 duplicates"
+        "[CR]Not sent: square refused 1, 1 duplicate upload"
+    )
+    # The toast counts uploads, as before.
+    assert report.found() == 2

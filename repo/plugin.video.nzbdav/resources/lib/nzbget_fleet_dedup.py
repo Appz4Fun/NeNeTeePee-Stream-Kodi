@@ -279,7 +279,11 @@ class FleetDedup:
         """
         clusters = []
         for candidate in candidates:
-            if any(same_listing(candidate, known) for known in self._listings):
+            covered = [
+                known for known in self._listings if same_listing(candidate, known)
+            ]
+            if covered:
+                self._note_mirror(candidate, covered)
                 continue
             home = None
             for cluster in clusters:
@@ -289,8 +293,22 @@ class FleetDedup:
             if home is None:
                 clusters.append([candidate])
             else:
+                self._note_mirror(candidate, home)
                 home.append(candidate)
         return clusters
+
+    def _note_mirror(self, candidate, same):
+        """Report ``candidate`` as another listing of an upload in ``same``.
+
+        Not when it is one of those listings itself: a later phase is handed
+        the rows an earlier one already sent.
+        """
+        link = candidate.get("link") if isinstance(candidate, dict) else None
+        if link and any(
+            isinstance(row, dict) and row.get("link") == link for row in same
+        ):
+            return
+        self.report.mirror(candidate)
 
     def remember_listing(self, row):
         """Mark ``row``'s posting covered (call once its NZB reached NZBGet).

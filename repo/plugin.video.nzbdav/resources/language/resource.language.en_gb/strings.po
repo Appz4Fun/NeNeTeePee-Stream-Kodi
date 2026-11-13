@@ -2537,3 +2537,11 @@ msgstr ""
 msgctxt "#30695"
 msgid "Cancelling..."
 msgstr ""
+
+msgctxt "#30696"
+msgid "not downloading 1 duplicate"
+msgstr ""
+
+msgctxt "#30697"
+msgid "not downloading {} duplicates"
+msgstr ""

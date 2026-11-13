@@ -69,6 +69,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The dialog counts the listings it does not download.** A release shown
+  as 20 copies could send 10 NZBs with nothing saying why: several indexers
+  list the same upload, and one NZB per upload is fetched. While the NZBs
+  download the first line now reads `Downloading NZBs 6 of 9 - not
+  downloading 5 duplicates`, and the `Not sent` line counts them with the
+  copies found to be the same posting after download: `Not sent: Square Eyed
+  refused 2, 5 duplicate uploads`. A listing left aside is still asked for
+  if its upload's first listing fails, as before.
 - **The NZBGet download dialog is the add-on's own window, without the
   progress bar.** The first line already carries the percent, and the window
   has room for eight lines where Kodi's dialog had four: the copy and its

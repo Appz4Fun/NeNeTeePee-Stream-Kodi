@@ -319,12 +319,27 @@ left out:
 ```text
 Sending 6 NZBs to NZBGet...
 abNZB, altHUB, Ninjacentral, Square Eyed, Zurg x2
-Not sent: Digital Carnage refused 1, 1 duplicate upload
+Not sent: Digital Carnage refused 1, 11 duplicate uploads
 ```
 
 A copy is left out when its indexer refused the download, when its NZB could
-not be downloaded for another reason, or when it turned out to be the same
-Usenet posting as a copy already kept (a duplicate upload).
+not be downloaded for another reason, or when it is a duplicate upload. The
+duplicate count is every listing that was the same upload as a copy kept: the
+listings never downloaded because another indexer lists the same posting, and
+the NZBs that were downloaded and turned out to share their articles with one
+already kept. So a release the picker shows as 20 copies can send 8: the
+other 12 are listed here.
+
+While the NZBs are being downloaded, the first line counts uploads and says
+how many more listings are not being fetched:
+
+```text
+Downloading NZBs 6 of 9 - not downloading 5 duplicates
+altHUB, Geek, miatrix, Slug, Zurg
+```
+
+One of those is still used if its upload's first listing fails: the add-on
+then asks the next indexer that lists the same upload.
 
 The download dialog is the add-on's own window. It has no progress bar, since
 the first line carries the percent, and room for eight lines. Cancel, Back
