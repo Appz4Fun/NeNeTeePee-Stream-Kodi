@@ -111,6 +111,12 @@ and only that night's releases stay. If no release carries that exact date,
 releases dated one day either side stay. If none of those exist either, every
 dated release stays, so a metadata mismatch never empties the list.
 
+A movie search does the same by year. An indexer that can't search by id falls
+back to the title, so a search for *Avatar* (2009) also returned *Avatar: Fire
+and Ash* (2025). A result whose name is dated more than a year from the
+requested year is removed, unless the requested year also appears in the name
+(`2001.A.Space.Odyssey.1968`). A result with no year stays.
+
 ## Filtering and ranking
 
 Filtering applies your format, keyword, size, and excluded-group rules. Each

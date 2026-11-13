@@ -50,6 +50,16 @@ def _fold(value):
     return str(value or "").strip().casefold()
 
 
+def title_key(title):
+    """A parsed title with everything but letters and digits removed.
+
+    ``Journey's End`` normalizes to "journey s end" and ``Journeys End`` to
+    "journeys end"; both are "journeysend" here, so an apostrophe an indexer
+    dropped does not make two titles.
+    """
+    return "".join(ch for ch in str(title or "").casefold() if ch.isalnum())
+
+
 def variant_tags(parsed):
     """The 3D, dub, hardsub and cut flags set in a PTT result, as sorted names.
 
@@ -166,6 +176,24 @@ def _containers_conflict(pick, row):
     return bool(left and right and left != right)
 
 
+def _titles_differ(pick, row):
+    """The two names carry different parsed titles.
+
+    ``_same_content`` compares titles loosely, because the stream proxy checks
+    a switch byte for byte: one extra word on either side passes when the
+    episode numbers agree. Here nothing checks afterwards, and that let one
+    group's ``The.Sopranos.S02E01`` and ``The.Office.US.S02E01`` (or ``House``
+    and ``House.of.the.Dragon``) count as one release, so one show could be
+    listed as, or sent to NZBGet as a backup of, the other. A group names its
+    own release one way, so the titles must be equal.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    return title_key(_fs._release_identity(pick)[0]) != title_key(
+        _fs._release_identity(row)[0]
+    )
+
+
 def same_release(pick, row):
     """Whether ``row`` is the same release as ``pick``. Fail-closed."""
     from resources.lib import fallback_streams as _fs
@@ -176,7 +204,7 @@ def same_release(pick, row):
         profile = release_profile(pick)
         if not dict(profile)["group"] or profile != release_profile(row):
             return False
-        if _containers_conflict(pick, row):
+        if _containers_conflict(pick, row) or _titles_differ(pick, row):
             return False
         return bool(_fs._same_content(pick, row) and _movie_years_match(pick, row))
     except Exception:  # pylint: disable=broad-except

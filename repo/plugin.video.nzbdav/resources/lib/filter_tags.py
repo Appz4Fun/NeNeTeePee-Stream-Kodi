@@ -12,7 +12,12 @@ def _pattern(expression):
     return re.compile(r"(?<![a-z0-9])(?:" + expression + r")(?![a-z0-9])", re.I)
 
 
-_HDR_PLUS = _pattern(r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr(?:10)?p")
+# "hdr10_" before another separator ("HDR10_.x265") is HDR10+ with the plus
+# sign replaced on the way from the indexer; in a name that separates every
+# word with underscores ("HDR10_x265") the underscore is only a separator.
+_HDR_PLUS = _pattern(
+    r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr(?:10)?p|hdr10_(?=[. \-\])]|$)"
+)
 _HDR = _pattern(r"hdr(?:10)?")
 _DV = _pattern(r"dv|dovi|dolby[. _-]?vision")
 _HLG = _pattern(r"hlg")

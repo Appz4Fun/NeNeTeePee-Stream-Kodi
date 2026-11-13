@@ -5,6 +5,8 @@
 
 import datetime
 import math
+import re
+import statistics
 import time
 from copy import deepcopy
 from types import SimpleNamespace
@@ -235,6 +237,11 @@ def _get_filter_settings(settings_getter=None):
     }
 
 
+_REVISION_TAG = re.compile(
+    r"(?:s\d{1,2}e\d{1,3}|[\s._-]\d{1,4})\s?v([2-9])(?![a-z0-9])", re.IGNORECASE
+)
+
+
 def parse_title_metadata(title):
     """Parse a scene title and return normalized metadata dict.
 
@@ -259,6 +266,11 @@ def parse_title_metadata(title):
         )
         parsed = _fallback_parse(title)
     variant = variant_tags(parsed)
+    revision = _REVISION_TAG.search(title)
+    if revision:
+        # "- 05v2" / "S01E05 v2": a re-release that replaces the first file,
+        # so not a copy of it (PROPER and REPACK are compared the same way).
+        variant = sorted(variant + ["v" + revision.group(1)])
     identity = _ptt_identity(title, parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
@@ -505,6 +517,140 @@ def _resolve_result_meta(result, parsed_by_title):
     return meta
 
 
+_NAME_FORM_SPLIT = re.compile(r"[^a-z0-9]+")
+# Per-row caches derived from ``_meta``; dropped when the metadata is replaced.
+_META_DERIVED_ROW_KEYS = (
+    "_release_profile",
+    "_fallback_identity",
+    "_fallback_identity_title",
+    "_fallback_title_tokens",
+    "_fallback_title_tokens_title",
+)
+
+
+def _name_form_key(title):
+    """The release name with case and punctuation removed.
+
+    Indexers list one release under several spellings: dots, spaces or
+    underscores between words, a hyphen or a dot before the group, a plus sign
+    kept or replaced (``DD+7.1`` / ``DD_7.1``, ``HDR10+`` / ``HDR10_``). Every
+    spelling of a name has the same key.
+    """
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    name = without_media_extension(release_name_from_subject(title))
+    name = name.lower().replace("'", "").replace("\u2019", "")
+    return " ".join(part for part in _NAME_FORM_SPLIT.split(name) if part)
+
+
+def _parse_detail(meta):
+    """How much a parse recovered; the most detailed parse of a name wins.
+
+    A known group first, then a known episode, then the tags a lost plus sign
+    hides (``HDR10+`` reads as ``HDR10``, ``DD+`` as ``DD``), then how many
+    fields are set at all.
+    """
+    identity = meta.get("ptt_identity")
+    identity = identity if isinstance(identity, dict) else {}
+    return (
+        bool(meta.get("group")),
+        bool(
+            identity.get("seasons") or identity.get("episodes") or identity.get("date")
+        ),
+        "HDR10+" in (meta.get("hdr") or ()),
+        "DD+" in (meta.get("audio") or ()),
+        sum(
+            1 for key in _FILTER_META_STR_KEYS + _FILTER_META_LIST_KEYS if meta.get(key)
+        ),
+    )
+
+
+def _meta_for_spelling(best_meta, row):
+    """``best_meta`` for another spelling of the same name.
+
+    The copy keeps this row's own container (a ``.mkv`` and a ``.mp4`` of one
+    name are different files) and the name its stored identity is keyed on.
+    """
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    meta = deepcopy(best_meta)
+    own = row.get("_meta")
+    if isinstance(own, dict):
+        meta["container"] = own.get("container", "")
+    identity = meta.get("ptt_identity")
+    if isinstance(identity, dict):
+        if not identity.get("title"):
+            # With no parsed title the identity falls back to the whole name,
+            # which differs between spellings; pin it to the winning one's.
+            identity["title"] = without_media_extension(identity.get("name") or "")
+        identity["name"] = release_name_from_subject(row.get("title"))
+    return meta
+
+
+def _parses_agree(meta, best_meta):
+    """Whether two spellings already parse the same, container and name aside."""
+
+    def comparable(value):
+        value = dict(value)
+        value.pop("container", None)
+        identity = value.get("ptt_identity")
+        if isinstance(identity, dict):
+            value["ptt_identity"] = {k: v for k, v in identity.items() if k != "name"}
+        return value
+
+    return comparable(meta) == comparable(best_meta)
+
+
+def _unify_name_forms(rows):
+    """Give every spelling of one release name the same parsed metadata.
+
+    The parser reads a name's punctuation: ``English-HONE`` has a group and
+    ``English.HONE`` has none, ``DD+7.1`` is Dolby Digital Plus and ``DD_7.1``
+    is not, ``[GbR] Show - 05 [...]`` has an episode and
+    ``[GbR].Show-05.[...]`` has not. Those are one release listed twice, so
+    they must filter, rank and group as one. Rows whose names are equal once
+    case and punctuation are removed all take the most detailed parse among
+    them (``_parse_detail``).
+    """
+    forms = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        title = row.get("title")
+        if not isinstance(title, str) or not isinstance(row.get("_meta"), dict):
+            continue
+        key = _name_form_key(title)
+        if key:
+            forms.setdefault(key, {}).setdefault(title, []).append(row)
+    for spellings in forms.values():
+        if len(spellings) < 2:
+            continue
+        best = max(spellings.values(), key=lambda same: _parse_detail(same[0]["_meta"]))
+        best_meta = best[0]["_meta"]
+        for same in spellings.values():
+            if same is best or _parses_agree(same[0]["_meta"], best_meta):
+                continue
+            for row in same:
+                row["_meta"] = _meta_for_spelling(best_meta, row)
+                for key in _META_DERIVED_ROW_KEYS:
+                    row.pop(key, None)
+
+
+def _attach_metadata(results):
+    """Parse every row's title into ``_meta`` and unify name spellings."""
+    parsed_by_title = {}
+    for result in results:
+        if isinstance(result, dict) and "title" in result:
+            result["_meta"] = _resolve_result_meta(result, parsed_by_title)
+    _unify_name_forms(results)
+
+
 def _log_filter_summary(total, matched_count, shown):
     """Log the filter result counts, noting truncation when it occurred."""
     if shown < matched_count:
@@ -532,13 +678,12 @@ def filter_results(results, settings_getter=None):
     started = time.monotonic()
     settings = _get_filter_settings(settings_getter=settings_getter)
 
-    parsed_by_title = {}
+    _attach_metadata(results)
 
     all_parsed = []
     filtered = []
     for result in results:
-        meta = _resolve_result_meta(result, parsed_by_title)
-        result["_meta"] = meta
+        meta = result["_meta"]
         all_parsed.append(result)
         reject = first_rejecting_filter(result, meta, settings)
         result["_filter_reject"] = reject
@@ -767,15 +912,13 @@ def drop_other_episodes(results, requested_episode, air_date=None):
     if wanted is None or not results:
         return results
     season, episode = wanted
-    parsed_by_title = {}
+    _attach_metadata(results)
     kept = []
     for result in results:
         if not isinstance(result, dict) or "title" not in result:
             kept.append(result)
             continue
-        meta = _resolve_result_meta(result, parsed_by_title)
-        result["_meta"] = meta
-        if not _names_other_episode(meta, season, episode):
+        if not _names_other_episode(result["_meta"], season, episode):
             kept.append(result)
     kept = _keep_requested_air_date(kept, air_date)
     dropped = len(results) - len(kept)
@@ -785,6 +928,74 @@ def drop_other_episodes(results, requested_episode, air_date=None):
             "episode than S{:02d}E{:02d}".format(dropped, season, episode),
             xbmc.LOGINFO,
         )
+    return kept
+
+
+_YEAR_TOKEN = re.compile(r"(?<![0-9])(?:19|20)[0-9]{2}(?![0-9])")
+
+
+def _names_other_year(row, wanted):
+    """True when a movie row is clearly dated for another year than ``wanted``.
+
+    The parsed year must be more than one year off (festival and release years
+    differ by one), and the requested year must not appear anywhere in the
+    name. The second check keeps a title that is itself a year
+    (``2001.A.Space.Odyssey.1968``, ``Blade.Runner.2049.2017``) whichever
+    number the parser took for the year.
+    """
+    from resources.lib.release_subject import release_name_from_subject
+
+    meta = row.get("_meta")
+    identity = meta.get("ptt_identity") if isinstance(meta, dict) else None
+    if not isinstance(identity, dict):
+        return False
+    if identity.get("seasons") or identity.get("episodes"):
+        return False
+    year = identity.get("year")
+    if not isinstance(year, int) or isinstance(year, bool) or year <= 0:
+        return False
+    if abs(year - wanted) <= 1:
+        return False
+    named = {
+        int(token)
+        for token in _YEAR_TOKEN.findall(release_name_from_subject(row.get("title")))
+    }
+    return not named & {wanted - 1, wanted, wanted + 1}
+
+
+def drop_other_years(results, requested_year):
+    """Return movie ``results`` without rows dated for another year.
+
+    A movie search by id still comes back with other films: an indexer that
+    cannot search by id falls back to the title, so *Avatar* (2009) listed
+    *Avatar: Fire and Ash* (2025) first. A row whose name is clearly dated for
+    another year is removed outright, like another episode on an episode
+    search. A row with no year, or within a year of the requested one, stays.
+    ``requested_year`` that is not a four-digit year leaves ``results``
+    untouched. Side effect: attaches ``_meta`` to each row.
+    """
+    try:
+        wanted = int(str(requested_year).strip())
+    except (TypeError, ValueError):
+        return results
+    if not 1900 <= wanted <= 2100 or not results:
+        return results
+    _attach_metadata(results)
+    kept = [
+        row
+        for row in results
+        if not (
+            isinstance(row, dict) and "title" in row and _names_other_year(row, wanted)
+        )
+    ]
+    dropped = len(results) - len(kept)
+    if not dropped:
+        return results
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: dropped {} result(s) dated for another "
+        "year than {}".format(dropped, wanted),
+        xbmc.LOGINFO,
+    )
     return kept
 
 
@@ -902,7 +1113,94 @@ def _sort_results(results, settings):
     relevance_key = _make_relevance_key(
         settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)
     )
-    return _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
+    ordered = _break_ties_by_copies(sorted(results, key=relevance_key), relevance_key)
+    return _demote_size_outliers(ordered)
+
+
+# A copy this many times larger or smaller than its release's typical copy is
+# not a normal listing of it. NZB sizes of one release differ by the repair
+# data each poster added, which stays well inside this.
+_SIZE_OUTLIER_FACTOR = 1.35
+# With fewer copies there is no telling which size is the typical one.
+_SIZE_OUTLIER_MIN_COPIES = 3
+
+
+def _row_size(row):
+    """The row's size in bytes, or 0 when it is missing or unreadable."""
+    try:
+        return max(int(row.get("size") or 0), 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _release_copies_key(row):
+    """Rows with equal keys are listings of one release, or None when unknown.
+
+    The same fields the same-release rule compares: the parsed release
+    profile (which needs a group) and what the release is of.
+    """
+    from resources.lib import fallback_streams as _fs
+    from resources.lib.release_match import release_profile, title_key
+
+    if not isinstance(row, dict) or row.get("_season_pack"):
+        return None
+    try:
+        profile = release_profile(row)
+        if not dict(profile).get("group"):
+            return None
+        title, _year, seasons, episodes, part = _fs._release_identity(row)
+    except Exception:  # pylint: disable=broad-except
+        return None
+    # The year is left out on purpose: the same-release rule lets a name
+    # without a year match one with it ("Show.S02E01" / "Show.2022.S02E01").
+    return (profile, title_key(title), tuple(seasons), tuple(episodes), part)
+
+
+def _demote_size_outliers(ordered):
+    """Move oddly sized copies of a release below its normally sized ones.
+
+    One release name can cover very different posts: a 10 GB episode listed
+    42 times and once at 91 GB (a mislabelled pack), or once at 60 MB (a
+    broken post). Relevance puts the largest copy first, so the odd one led
+    the release and was what the picker played. A copy more than
+    ``_SIZE_OUTLIER_FACTOR`` away from the median size of its release is
+    marked ``_size_outlier`` and moved to just after the release's last
+    normally sized copy; everything else keeps its order.
+    """
+    copies = {}
+    for index, row in enumerate(ordered):
+        if isinstance(row, dict):
+            row.pop("_size_outlier", None)
+        key = _release_copies_key(row)
+        if key is not None and _row_size(row):
+            copies.setdefault(key, []).append(index)
+    follow = {}
+    moved = set()
+    for indexes in copies.values():
+        if len(indexes) < _SIZE_OUTLIER_MIN_COPIES:
+            continue
+        median = statistics.median(_row_size(ordered[i]) for i in indexes)
+        low, high = median / _SIZE_OUTLIER_FACTOR, median * _SIZE_OUTLIER_FACTOR
+        normal = [i for i in indexes if low <= _row_size(ordered[i]) <= high]
+        if not normal or len(normal) == len(indexes):
+            continue
+        anchor = normal[-1]
+        for index in indexes:
+            if low <= _row_size(ordered[index]) <= high:
+                continue
+            ordered[index]["_size_outlier"] = True
+            if index < anchor:
+                follow.setdefault(anchor, []).append(index)
+                moved.add(index)
+    if not moved:
+        return ordered
+    result = []
+    for index, row in enumerate(ordered):
+        if index in moved:
+            continue
+        result.append(row)
+        result.extend(ordered[i] for i in follow.get(index, ()))
+    return result
 
 
 def _is_release_copy(target, row):

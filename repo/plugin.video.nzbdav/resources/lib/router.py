@@ -776,6 +776,19 @@ def _requested_episode_rows(results, search_type, season, episode, air_date=""):
     return drop_other_episodes(results, (season, episode), air_date=air_date)
 
 
+def _requested_movie_rows(results, search_type, year):
+    """On a movie search, drop rows clearly dated for another year.
+
+    Runs on every read of the cached provider answer, like
+    ``_requested_episode_rows`` (see ``filter.drop_other_years``).
+    """
+    if search_type != "movie":
+        return results
+    from resources.lib.filter import drop_other_years
+
+    return drop_other_years(results, year)
+
+
 def _handle_play(handle, params):
     """
     Handle a play request from TMDBHelper by searching configured providers
@@ -821,6 +834,7 @@ def _handle_play(handle, params):
     results = _requested_episode_rows(
         results, search_type, season, episode, air_date=params.get("premiered", "")
     )
+    results = _requested_movie_rows(results, search_type, year)
 
     if not results and pack_result is None:
         xbmc.log(
@@ -891,6 +905,7 @@ def _handle_search(handle, params):
     results = _requested_episode_rows(
         results, search_type, season, episode, air_date=params.get("premiered", "")
     )
+    results = _requested_movie_rows(results, search_type, year)
 
     if not results and pack_result is None:
         xbmc.log(

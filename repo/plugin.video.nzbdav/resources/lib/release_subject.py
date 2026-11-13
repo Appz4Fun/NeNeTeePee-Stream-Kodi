@@ -214,7 +214,9 @@ def release_name_from_subject(title):
     quoted filename never wins. Ties keep that order. A title that is not a
     subject comes back unchanged.
     """
-    title = str(title or "")
+    # Some indexers end a listing with ";", which read as part of the group
+    # ("-FraMeSToR;") and kept the row out of its release.
+    title = str(title or "").rstrip("; ")
     if not is_usenet_subject(title):
         return title
     candidates = [_strip_file_suffix(q) for q in _QUOTED.findall(title)]

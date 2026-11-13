@@ -100,6 +100,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **One release is one picker row, however its name is spelled.** Names that
+  are equal once case and punctuation are removed now share one parse, taken
+  from the spelling that reads with the most detail. Before, `English-HONE`
+  and `English.HONE`, `DD+7.1` and `DD_7.1`, `HDR10+` and `HDR10_`,
+  `Dune.Part.Two` and `Dune_Part_Two`, `br.remux` and `br remux`, and an anime
+  name with and without dots were each listed as two releases, and one of the
+  pair often ranked lower for a missing group or audio tag.
+- **A listing that ends in `;` keeps its group** (`-FraMeSToR;` read as a group
+  of its own), and `HDR10_` before another separator is read as HDR10+.
+- **Different titles from one group are never one release.** The same-release
+  rule compared titles loosely, so `The.Sopranos.S02E01` and
+  `The.Office.US.S02E01` from one group (or `House` and
+  `House.of.the.Dragon`) were grouped, and one could be sent to NZBGet as a
+  backup of the other. Parsed titles must now be equal; a dropped apostrophe
+  still matches.
+- **An oddly sized copy no longer leads its release.** Among three or more
+  copies of a release, one more than 1.35 times larger or smaller than the
+  median size (a 91 GB listing of a 10 GB episode, a 60 MB broken post) is
+  listed below the normally sized copies under Relevance. It was the largest
+  copy, so it sorted first and was the one the picker played. It is also never
+  sent as a NZBGet backup of a normal copy.
+- **A re-release marked `v2` is not a copy of the first file** (`S01E05 v2`,
+  `- 05v2`), the same as PROPER and REPACK.
+- **A movie search drops films dated for another year.** *Avatar* (2009)
+  listed *Avatar: Fire and Ash* (2025) first. A result dated more than a year
+  from the requested year is removed, unless that year also appears in its
+  name; a result with no year stays.
 - **An episode search lists the requested episode only.** The add-on trusted
   each indexer to honour the season and episode it was asked for, but an
   indexer that searches raw post subjects matches the show name alone and

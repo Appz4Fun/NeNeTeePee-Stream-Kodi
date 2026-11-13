@@ -166,7 +166,12 @@ Copies are grouped with the [same-release rule](nzbget-backend.md#what-counts-as
 the same title and year or episode, and equal resolution, HDR, audio,
 channels, codec, quality (source), edition, PROPER/REPACK, HYBRID, 3D, dubbed,
 hardcoded-subtitle and cut tags, release group, and a daily show's air date. Language and soft-subtitle tags don't split a release, and a
-result with no release group is never grouped with another.
+result with no release group is never grouped with another. How a name is
+spelled (dots, spaces, underscores, a replaced plus sign) never splits one.
+
+A copy whose size is far from the release's typical size, such as a 91 GB
+listing of a 10 GB episode, is listed last among the release's copies, so
+++enter++ plays a normally sized one.
 
 ### How a release is named in the picker
 
