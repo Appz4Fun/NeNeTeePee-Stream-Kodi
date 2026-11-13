@@ -380,16 +380,26 @@ def group_status(nzbid, settings_getter=None):
 
 
 def _post_stage(group):
-    """How far along and how long the group's post-processing stage is.
+    """What ``listgroups`` says beyond the download percent, for the dialog.
 
-    ``listgroups`` reports both for every queued job (zero while it still
-    downloads): ``PostStageProgress`` in tenths of a percent and
-    ``PostStageTimeSec``. The progress dialog shows them, so a long unpack,
-    move or script run no longer looks frozen at 100%.
+    The post-processing stage's progress (``PostStageProgress``, tenths of a
+    percent) and running time (``PostStageTimeSec``), both zero while the job
+    still downloads, so a long unpack, move or script run no longer looks
+    frozen at 100%; and the missing-article and recovery counts.
     """
+    recovered_bytes = _as_number(group.get("DupeRecoveredBytesLo")) + (
+        _as_number(group.get("DupeRecoveredBytesHi")) * 4294967296
+    )
     return {
         "post_percent": int(_as_number(group.get("PostStageProgress")) // 10),
         "post_seconds": int(_as_number(group.get("PostStageTimeSec"))),
+        # Articles no server had, and what the server got back for them from
+        # this release's other copies (the last three are RustyGet's; stock
+        # NZBGet sends none and they read as zero).
+        "failed_articles": int(_as_number(group.get("FailedArticles"))),
+        "recovered_articles": int(_as_number(group.get("DupeRecoveredArticles"))),
+        "recovered_mb": int(recovered_bytes // 1048576),
+        "live_repairing": group.get("LiveRepairing") is True,
     }
 
 

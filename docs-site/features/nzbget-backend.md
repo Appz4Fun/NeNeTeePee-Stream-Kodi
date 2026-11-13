@@ -329,34 +329,41 @@ Usenet posting as a copy already kept (a duplicate upload).
 Once NZBGet has the copies, the progress dialog shows up to four lines:
 
 ```text
-Copy 2 of 12 - downloading 43%
+Copy 2 of 12 (abNZB, 4 days) - downloading 43%
 4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
-Backups: 2 twins, 3 alts
 Copy 1 failed: too many missing articles
+155 articles missing - 155 recovered from backups
 ```
 
-- **Line 1** is the copy being followed and what NZBGet is doing with it. The
-  copy NZBGet starts with is copy 1, and the number goes up each time NZBGet
-  switches to a backup. The stage is the download percent, or `waiting in the
-  queue`, `checking the files`, `repairing`, `unpacking`, `moving into place`,
+- **Line 1** is the copy being followed, the indexer that supplied it and how
+  long ago it was posted, and what NZBGet is doing with it. The copy NZBGet
+  starts with is copy 1, and the number goes up each time NZBGet switches to a
+  backup. The stage is the download percent, or `waiting in the queue`,
+  `checking the files`, `repairing`, `unpacking`, `moving into place`,
   `running NZBGet's scripts`, `repairing from backups` (RustyGet), or
-  `finishing up`. After the download, a stage shows its own progress when
-  NZBGet reports one and how long it has run, such as `unpacking 43% - 25s` or
-  `moving into place - 51s`, and the bar follows the stage. A long move or
+  `finishing up`. A repair or unpack shows its own percent, and the bar
+  follows it.
+- **Line 2**, while it downloads, is how much has arrived, the speed over the
+  last half minute, and the time left at that speed. After the download it is
+  how long the current stage has run and, for a stage with a percent, an
+  estimate of the time left: `25s so far - about 33s left`. A long move or
   script run is then not mistaken for a hang.
-- **Line 2** is how much has arrived, the speed over the last half minute,
-  and the time left at that speed. The speed and time appear after the second
-  progress check.
-- **Line 3** says what the backups are, on a server that reports it
-  (RustyGet). A **twin** is a byte-identical copy the server can borrow
-  missing articles from. An **alt** is a different upload kept as a fallback.
-  Stock NZBGet doesn't report this, so the line is left out.
-- **Line 4** appears once a copy has failed and stays for the rest of the
-  download, so a switch to a backup is never silent. Until then it repeats
-  what was not sent, if anything was. It gives the reason in
-  plain words, such as `too many missing articles`, `it could not be repaired`,
-  `it could not be unpacked`, or `it needs a password`. After a second failure
-  it reads `2 copies failed. Last one: ...`.
+- **Up to two more lines** follow, the most important first:
+    - a copy that failed, with the reason in plain words, such as `too many
+      missing articles`, `it could not be repaired`, `it could not be
+      unpacked` or `it needs a password`. After a second failure it reads
+      `2 copies failed. Last one: ...`;
+    - the articles no server had, and what the server got back for them:
+      `155 articles missing - 155 recovered from backups`, or
+      `106 MB rebuilt by stream repair` (RustyGet);
+    - what the backups are, on a server that reports it (RustyGet):
+      `Backups: 2 twins, 3 alts`. A **twin** is a byte-identical copy the
+      server can borrow missing articles from. An **alt** is a different
+      upload kept as a fallback;
+    - what was not sent, if anything was.
+
+NZBGet doesn't report how many par2 blocks a repair needs while it runs, so
+the dialog shows the missing-article count and the repair's percent.
 
 While the add-on waits for NZBGet to start the next copy, the dialog shows the
 failure and `Waiting for the next copy...`.

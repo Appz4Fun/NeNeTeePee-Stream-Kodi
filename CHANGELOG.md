@@ -79,9 +79,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ready - health 100%` when some of the copies found could not be used.
 - **Stages after the download show their progress and running time.** The
   dialog rested at 100% with one label through unpacking, moving and
-  NZBGet's scripts. It now reads `unpacking 43% - 25s`, `moving into place -
-  51s` or `running NZBGet's scripts - 2m 10s`, and the bar follows the
-  stage when NZBGet reports its progress.
+  NZBGet's scripts. It now reads `repairing 43%` with `25s so far - about 33s
+  left` under it, or `moving into place` with `51s so far`, and the bar
+  follows the stage when NZBGet reports its progress.
+- **The dialog names the copy being downloaded and what was missing.** The
+  first line adds the indexer that supplied the copy and its age: `Copy 1 of 6
+  (abNZB, 4 days) - downloading 43%`. A new line reports articles no server
+  had and what the server got back for them: `155 articles missing - 155
+  recovered from backups`, or the megabytes rebuilt by stream repair
+  (RustyGet). The dialog keeps to four lines; a failed copy and missing
+  articles come before the backups and not-sent lines.
 - **Normalized release names in the picker.** Every row is shown in one
   format, built from what the release name says:
   `Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES`,
