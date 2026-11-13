@@ -178,7 +178,10 @@ audio formats and the channel count it names to the release:
 - **The picker waits two seconds at most.** A slower answer is stored when
   it arrives and used the next time the search is opened.
 - **It only adds.** A name that tags `TrueHD.Atmos` keeps both when its NFO
-  writes only `TrueHD`.
+  writes only `TrueHD`. One exception: a name tagged `DDP.5.1.Atmos` whose
+  NFO lists a plain TrueHD 7.1 track beside the Dolby Digital Plus one now
+  leads with TrueHD 7.1, and the name's Atmos is dropped so that it does not
+  read as "TrueHD Atmos".
 - **The link is only followed to the indexer the result came from**, and is
   never written to the log: it carries your API key for that indexer.
 

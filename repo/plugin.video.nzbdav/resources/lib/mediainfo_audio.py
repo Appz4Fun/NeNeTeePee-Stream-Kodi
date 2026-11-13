@@ -49,7 +49,7 @@ MEDIAINFO_NAMES = (
 CHANNEL_COUNT = {"1": "1.0", "2": "2.0", "6": "5.1", "7": "6.1", "8": "7.1"}
 
 # Object audio rides on a bed track: Atmos on TrueHD or DD+, DTS:X on DTS.
-_OBJECT_FORMATS = ("Atmos", "DTS:X")
+OBJECT_FORMATS = ("Atmos", "DTS:X")
 
 
 def _without_stray_objects(entries, formats, main):
@@ -63,7 +63,7 @@ def _without_stray_objects(entries, formats, main):
     """
     kept = []
     for name in formats:
-        if name in _OBJECT_FORMATS and name != main:
+        if name in OBJECT_FORMATS and name != main:
             if not any(
                 name in entry["audio"] and main in entry["audio"] for entry in entries
             ):
@@ -108,7 +108,7 @@ def _main_channels(entries, formats, main):
     the object audio that was kept leads, then the one with the most
     channels, then the first.
     """
-    objects = [name for name in formats if name in _OBJECT_FORMATS and name != main]
+    objects = [name for name in formats if name in OBJECT_FORMATS and name != main]
     best, best_rank = "", None
     for entry in entries:
         if main not in entry["audio"] or not entry["channels"]:

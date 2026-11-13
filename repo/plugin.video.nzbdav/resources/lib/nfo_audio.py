@@ -45,6 +45,7 @@ from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
 from resources.lib.mediainfo_audio import (
     CHANNEL_COUNT,
+    OBJECT_FORMATS,
     merge_tracks,
     readable_formats,
 )
@@ -335,6 +336,32 @@ def forget_all():
 # --- putting it on the rows -------------------------------------------------
 
 
+def _without_moved_objects(audio, added, known, quality, new_main):
+    """The name's formats and the added ones, object audio on its own track.
+
+    The picker reads "Atmos" beside "TrueHD" as TrueHD with Atmos. A name
+    tagged ``DDP.5.1.Atmos`` whose NFO lists a plain TrueHD 7.1 track and
+    the Dolby Digital Plus one now leads with TrueHD, and the name's Atmos
+    must not move onto it: what was read names no object audio on that
+    track, or it would be in ``known``. This is the one case where a tag
+    from the name is dropped. A name's ``TrueHD.Atmos`` with an NFO that
+    writes only ``TrueHD`` keeps both: the main track did not change. So
+    does a name that tags the object audio alone (``DTS-X.7.1``): with no
+    track named beside it, the tag is all that says the track is there.
+    """
+    merged = audio + added
+    if not new_main or all(name in OBJECT_FORMATS for name in audio):
+        return merged
+    main = main_audio(
+        [name for name in merged if name not in OBJECT_FORMATS] or merged, quality
+    )
+    return [
+        name
+        for name in merged
+        if name not in OBJECT_FORMATS or name == main or name in known
+    ]
+
+
 def apply_known(rows, key_of, derived_keys=()):
     """Add the audio a stored NFO names to every listing of its release.
 
@@ -369,7 +396,9 @@ def apply_known(rows, key_of, derived_keys=()):
         if not added and not use_channels:
             continue
         if added:
-            meta["audio"] = audio + added
+            meta["audio"] = _without_moved_objects(
+                audio, added, entry["audio"], quality, new_main
+            )
         if use_channels:
             meta["channels"] = channels
         # What the NFO added, so a later pass can tell it from the name's.
