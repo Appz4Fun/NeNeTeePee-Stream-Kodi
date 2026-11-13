@@ -1363,3 +1363,58 @@ def test_an_unconfirmed_nfo_leaves_a_guessed_atmos_alone():
     once = json.dumps(rows[1]["_meta"], sort_keys=True)
     filter_module.attach_metadata(rows)
     assert json.dumps(rows[1]["_meta"], sort_keys=True) == once
+
+
+def test_a_guess_is_taken_back_when_its_labelled_copy_was_read_and_has_none():
+    from resources.lib.filter_atmos import INFERRED_KEY
+
+    show = "Some.Show.S03E02.2160p.AMZN.WEB-DL."
+    labelled = show + "DD+5.1.Atmos.DoVi.H.265-playWEB"
+    plain = show + "DDP5.1.DV.H.265-NTb"
+    rows = _rows(labelled, plain)
+    assert rows[1]["_meta"].get(INFERRED_KEY) is True
+    # MediaInfo for the copy labelled Atmos: Dolby Digital Plus, no Atmos.
+    nfo_audio._remember(_key(labelled), ["DD+"], "5.1", exact=True)
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["audio"] == ["DD+"]
+    assert rows[1]["_meta"]["audio"] == ["DD+"]
+    assert INFERRED_KEY not in rows[1]["_meta"]
+    # Stable, and the same on a fresh parse.
+    once = json.dumps([row["_meta"] for row in rows], sort_keys=True)
+    filter_module.attach_metadata(rows)
+    assert json.dumps([row["_meta"] for row in rows], sort_keys=True) == once
+    fresh = _rows(labelled, plain)
+    assert [row["_meta"]["audio"] for row in fresh] == [["DD+"], ["DD+"]]
+
+    # Another copy labelled by its name still gives.
+    third = show + "DDP5.1.Atmos.DV.H.265-FLUX"
+    rows = _rows(labelled, plain, third)
+    assert rows[1]["_meta"].get(INFERRED_KEY) is True
+    assert rows[0]["_meta"]["audio"] == ["DD+"]
+
+
+def test_a_bare_dts_x_names_no_lossless_bed():
+    assert nfo_audio.audio_from_nfo("Audio: English DTS:X 7.1\n") == {
+        "audio": ["DTS:X"],
+        "channels": "7.1",
+    }
+    assert nfo_audio.audio_from_nfo("Audio: DTS-X 7.1\n")["audio"] == ["DTS:X"]
+    # The lossless bed is named when the report identifies it.
+    block = "Audio\nFormat : DTS XLL X\nChannel(s) : 8 channels\n\n"
+    assert sorted(nfo_audio.audio_from_nfo(block)["audio"]) == ["DTS-HD MA", "DTS:X"]
+    lines = "Audio: English DTS-HD MA 7.1 DTS:X\n"
+    assert sorted(nfo_audio.audio_from_nfo(lines)["audio"]) == ["DTS-HD MA", "DTS:X"]
+    tracks = mediainfo_audio.audio_tracks(
+        _report(
+            _track(
+                "Audio",
+                Format="DTS",
+                Format_AdditionalFeatures="XLL X",
+                Format_Commercial_IfAny="DTS-HD MA + DTS:X",
+                Channels="8",
+            ),
+            _track("Audio", Format="DTS", Format_AdditionalFeatures="X", Channels="6"),
+        )
+    )
+    assert sorted(tracks[0]["audio"]) == ["DTS-HD MA", "DTS:X"]
+    assert "DTS-HD MA" not in tracks[1]["audio"]

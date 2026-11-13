@@ -196,7 +196,9 @@ audio formats and the channel count it names for the release:
   made from the release's own file and needs no such check.
 - **No Atmos guess for a release that was read.** The rule under
   [Atmos a name leaves out](#atmos-a-name-leaves-out) does not add Atmos to
-  a release whose MediaInfo or NFO was read and names none.
+  a release whose MediaInfo or NFO was read and names none. When the copy
+  labelled Atmos turns out to have none, a copy that took the guess from it
+  gives it back, unless another copy is still labelled Atmos by its name.
 - **The link is only followed to the indexer the result came from**, and is
   never written to the log: it carries your API key for that indexer.
 

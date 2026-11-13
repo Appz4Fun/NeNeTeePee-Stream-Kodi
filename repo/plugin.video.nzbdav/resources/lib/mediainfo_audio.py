@@ -38,7 +38,10 @@ MEDIAINFO_NAMES = (
         "DDP Atmos",
     ),
     (re.compile(r"dolby truehd with dolby atmos|mlp fba 16-ch", re.I), "TrueHD Atmos"),
-    (re.compile(r"dts[ :-]?x\b|dts xll x", re.I), "DTS-X DTS-HD MA"),
+    # "DTS XLL X" is DTS:X on a lossless DTS-HD MA bed. A bare "DTS:X" names
+    # no bed: on a WEB release it is the lossy kind, and none is made up.
+    (re.compile(r"dts xll x", re.I), "DTS-X DTS-HD MA"),
+    (re.compile(r"dts[ :-]?x\b", re.I), "DTS-X"),
     (re.compile(r"dts-hd master audio|dts xll", re.I), "DTS-HD MA"),
     (re.compile(r"dts-hd high resolution(?: audio)?|dts xbr", re.I), "DTS-HD HR"),
     (re.compile(r"dolby digital plus|enhanced ac-?3|e-?ac-?3", re.I), "DDP"),
