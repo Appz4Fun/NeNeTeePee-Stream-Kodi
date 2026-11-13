@@ -2301,3 +2301,123 @@ msgstr ""
 msgctxt "#30636"
 msgid "It still isn't mounted."
 msgstr ""
+
+msgctxt "#30637"
+msgid "Copy {} of {}"
+msgstr ""
+
+msgctxt "#30638"
+msgid "Copy {}"
+msgstr ""
+
+msgctxt "#30639"
+msgid "downloading {}%"
+msgstr ""
+
+msgctxt "#30640"
+msgid "waiting in the queue"
+msgstr ""
+
+msgctxt "#30641"
+msgid "checking the files"
+msgstr ""
+
+msgctxt "#30642"
+msgid "repairing"
+msgstr ""
+
+msgctxt "#30643"
+msgid "unpacking"
+msgstr ""
+
+msgctxt "#30644"
+msgid "moving into place"
+msgstr ""
+
+msgctxt "#30645"
+msgid "finishing up"
+msgstr ""
+
+msgctxt "#30646"
+msgid "{} of {} GB"
+msgstr ""
+
+msgctxt "#30647"
+msgid "{} MB/s"
+msgstr ""
+
+msgctxt "#30648"
+msgid "about {} left"
+msgstr ""
+
+msgctxt "#30649"
+msgid "Copy {} failed: {}"
+msgstr ""
+
+msgctxt "#30650"
+msgid "{} copies failed. Last one: {}"
+msgstr ""
+
+msgctxt "#30651"
+msgid "Waiting for the next copy..."
+msgstr ""
+
+msgctxt "#30652"
+msgid "{} copies ready"
+msgstr ""
+
+msgctxt "#30653"
+msgid "1 copy ready"
+msgstr ""
+
+msgctxt "#30654"
+msgid "too many missing articles"
+msgstr ""
+
+msgctxt "#30655"
+msgid "it could not be repaired"
+msgstr ""
+
+msgctxt "#30656"
+msgid "it could not be unpacked"
+msgstr ""
+
+msgctxt "#30657"
+msgid "it needs a password"
+msgstr ""
+
+msgctxt "#30658"
+msgid "the download disk is full"
+msgstr ""
+
+msgctxt "#30659"
+msgid "NZBGet skipped it as a duplicate"
+msgstr ""
+
+msgctxt "#30660"
+msgid "the files are damaged"
+msgstr ""
+
+msgctxt "#30661"
+msgid "NZBGet reported {}"
+msgstr ""
+
+msgctxt "#30662"
+msgid "the files could not be moved"
+msgstr ""
+
+msgctxt "#30663"
+msgid "NZBGet could not read the NZB"
+msgstr ""
+
+msgctxt "#30664"
+msgid "it was removed from NZBGet"
+msgstr ""
+
+msgctxt "#30665"
+msgid "{} - health {}%"
+msgstr ""
+
+msgctxt "#30666"
+msgid "Download started"
+msgstr ""

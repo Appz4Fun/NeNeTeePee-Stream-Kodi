@@ -6,7 +6,7 @@ import base64
 import threading
 import time
 
-from resources.lib import nzbget_api, nzbget_submit_ledger
+from resources.lib import nzbget_api, nzbget_progress, nzbget_submit_ledger
 from resources.lib.nzbget_fleet_dedup import (
     FleetDedup,
     NzbSpool,
@@ -463,8 +463,9 @@ def _health_message(progress, reply):
     progress._update(0, message)
     # Polling immediately replaces progress text; the toast keeps the API's
     # primary-copy health visible for eight seconds without blocking playback.
+    # The toast is narrow, so it gets a short text of its own.
     try:
-        core._notify(core._addon_name(), message, 8000)
+        core._notify(core._addon_name(), nzbget_progress.ready_toast(good, alive), 8000)
     except Exception:  # pylint: disable=broad-except
         # Kodi tearing down its GUI must not interrupt an accepted download.
         pass

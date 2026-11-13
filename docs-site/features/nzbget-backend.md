@@ -174,8 +174,8 @@ flowchart LR
   username and password travel unencrypted, so use an `https://` **NZBGet
   URL** unless NZBGet runs on the same machine or a network you trust.
 - **Post-processing:** NZBGet handles this itself, with par2 repair and
-  unpack. The progress dialog shows a `Post-processing...` stage while it
-  runs.
+  unpack. The progress dialog names each stage while it runs: checking the
+  files, repairing, unpacking, moving into place.
 - **Strict success:** a job counts as successful only when NZBGet reports a
   `SUCCESS` status. A `WARNING` result counts as a failure, so you're never
   handed a corrupt file. That includes repairable or damaged downloads where
@@ -218,7 +218,9 @@ Members are sent in preferred order, without scores. NZBGet health-checks them u
 servers for up to 45 seconds, starts the best working copy, and keeps backups
 for automatic failover. The HTTP request has a 75-second timeout (45 seconds plus 30 seconds). The progress
 dialog shows the number of good candidates and the chosen copy's health when
-known. Your initial pick can differ from the copy NZBGet chooses.
+known, and a short notification repeats it, for example
+`12 copies ready - health 100%`. Your initial pick can differ from the copy
+NZBGet chooses.
 
 The add-on tracks the returned `Chosen` NZBID and follows NZBGet's automatic
 failover to another member. An incomplete ranking response needs no extra
@@ -307,6 +309,33 @@ listings of the same posting:
 - Re-uploads of the same file with different article IDs are kept. They live
   on different articles, so they're the best backups.
 
+### What the dialog shows while downloading
+
+Once NZBGet has the copies, the progress dialog shows up to three lines:
+
+```text
+Copy 2 of 12 - downloading 43%
+4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
+Copy 1 failed: too many missing articles
+```
+
+- **Line 1** is the copy being followed and what NZBGet is doing with it. The
+  copy NZBGet starts with is copy 1, and the number goes up each time NZBGet
+  switches to a backup. The stage is the download percent, or `waiting in the
+  queue`, `checking the files`, `repairing`, `unpacking`, `moving into place`,
+  or `finishing up`.
+- **Line 2** is how much has arrived, the speed over the last half minute,
+  and the time left at that speed. The speed and time appear after the second
+  progress check.
+- **Line 3** appears once a copy has failed and stays for the rest of the
+  download, so a switch to a backup is never silent. It gives the reason in
+  plain words, such as `too many missing articles`, `it could not be repaired`,
+  `it could not be unpacked`, or `it needs a password`. After a second failure
+  it reads `2 copies failed. Last one: ...`.
+
+While the add-on waits for NZBGet to start the next copy, the dialog shows the
+failure and `Waiting for the next copy...`.
+
 ### Speed and indexer limits
 
 When you pick a release, the progress dialog walks through every NZB before
@@ -323,7 +352,8 @@ NZBGet starts downloading:
 3. **Sending 25 NZBs to NZBGet...**: it sends one fleet request, waits for
    NZBGet's health ranking, then deletes the temp folder. Collection stops
    once 50 unique members (or your lower configured limit) are ready.
-4. **Downloading... 0%**: the usual download progress for NZBGet's chosen copy.
+4. **Copy 1 of 12 - downloading 43%**: the download progress for NZBGet's
+   chosen copy. See [What the dialog shows while downloading](#what-the-dialog-shows-while-downloading).
 
 Cancel before upload: nothing is sent. A bulk fleet accepted after user
 cancellation is removed; Kodi shutdown leaves accepted work running. A later

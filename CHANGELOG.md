@@ -85,6 +85,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CiNEPHiLES and FraMeSToR are pinned.** Under Relevance, a CiNEPHiLES
   release ranks first in its resolution and a FraMeSToR release second,
   ahead of HDR, REMUX and the preferred group tiers.
+- **The NZBGet download dialog says which copy it is on and what failed.**
+  Line one is the copy and its stage, for example `Copy 2 of 12 - downloading
+  43%`, with `checking the files`, `repairing`, `unpacking` and `moving into
+  place` in place of one `Post-processing...` label. Line two is the size, the
+  speed over the last half minute and the time left: `4.5 of 10.4 GB - 62 MB/s
+  - about 1m 35s left`. Once a copy fails, a third line keeps the reason on
+  screen, such as `Copy 1 failed: too many missing articles`.
 
 ### Changed
 
@@ -106,6 +113,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The "copies ready" notification is no longer cut off.** After NZBGet
+  accepted the copies, the notification read `...the primary copy (10` with an
+  odd character in place of the bracket when the health was 100%: the sentence
+  was too long for the notification, and its brackets are replaced with
+  look-alike characters most skin fonts cannot draw. It now reads
+  `12 copies ready - health 100%`.
 - **One release is one picker row, however its name is spelled.** Names that
   are equal once case and punctuation are removed now share one parse, taken
   from the spelling that reads with the most detail. Before, `English-HONE`

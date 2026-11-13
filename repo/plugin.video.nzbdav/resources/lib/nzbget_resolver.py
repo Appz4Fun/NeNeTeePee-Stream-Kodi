@@ -20,12 +20,12 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import nzb_cache, nzbget_api, nzbget_submit_ledger
+from resources.lib import nzb_cache, nzbget_api, nzbget_progress, nzbget_submit_ledger
 from resources.lib.download_ledger import record_download
 from resources.lib.http_util import notify as _notify
 from resources.lib.http_util import redact_text as _redact_text
 from resources.lib.i18n import addon_name as _addon_name
-from resources.lib.i18n import fmt as _fmt
+from resources.lib.i18n import fmt as _fmt  # noqa: F401  (nzbget_bulk uses it)
 from resources.lib.i18n import string as _string
 from resources.lib.nzbget_resolver_dupes import (  # noqa: E402,F401
     _HEALTHCHECK_LOCK,
@@ -82,14 +82,6 @@ from resources.lib.season_pack import requested_episode as _requested_episode
 
 # Same extensions the WebDAV path uses (webdav.py VIDEO_EXTENSIONS).
 _POLL_INTERVAL = 2.0
-
-# listgroups Status values that mean the job is still actively downloading
-# (as opposed to a post-processing stage like UNPACKING / REPAIRING /
-# MOVING / EXECUTING_SCRIPT, which NZBGet reports as bare in-queue status
-# strings while the group is still present). Anything not in this set while
-# the job is present is treated as post-processing for the dialog label.
-_DOWNLOAD_STATUSES = frozenset({"DOWNLOADING", "FETCHING"})
-
 
 # After a tracked member fails, wait up to this long for NZBGet to promote a
 # duplicate backup into the queue before declaring the whole group failed (#372
@@ -203,19 +195,23 @@ def _stale_successes(dupe_key, settings_getter, fleet):
     )
 
 
-def _update_active_dialog(dialog, group):
+def _update_active_dialog(dialog, group, state=None, fleet=None):
     """Update the progress dialog for an in-queue (still-present) job.
 
-    Shows the download percent while actively downloading, else a
-    "Post-processing..." message for every non-download in-queue stage
-    (LOADING_PARS, REPAIRING, UNPACKING, MOVING, EXECUTING_SCRIPT,
-    QUEUED/PAUSED, and so on) instead of a frozen "Downloading... 100%."
+    Names the copy being followed and its stage (the download percent, or
+    checking / repairing / unpacking / moving instead of a frozen
+    "Downloading... 100%"), the size, speed and time left while it
+    downloads, and any earlier copy that failed. See ``nzbget_progress``.
     """
-    status = (group["status"] or "").upper()
-    if status in _DOWNLOAD_STATUSES:
-        dialog.update(group["percent"], _fmt(30105, group["percent"]))
-    else:
-        dialog.update(group["percent"], _string(30219))
+    message = nzbget_progress.progress_message(
+        state if state is not None else {}, group, fleet
+    )
+    dialog.update(group["percent"], message)
+
+
+def _update_waiting_dialog(dialog, state):
+    """The dialog between copies: the last failure, or "Post-processing..."."""
+    dialog.update(100, nzbget_progress.waiting_message(state) or _string(30219))
 
 
 def _poll_tick(state, dialog, settings_getter, dupe_key, fleet=None):
@@ -250,13 +246,13 @@ def _tick_tracked_member(state, dialog, settings_getter, dupe_key, fleet=None):
     current = state["current"]
     group = nzbget_api.group_status(current, settings_getter=settings_getter)
     if group["present"]:
-        _update_active_dialog(dialog, group)
+        _update_active_dialog(dialog, group, state, fleet)
         state["promotion_deadline"] = None
         return None
     hist = nzbget_api.history_status(current, settings_getter=settings_getter)
     if not hist["present"]:
         # Not in queue, not yet in history—brief hand-off gap; keep waiting.
-        dialog.update(100, _string(30219))
+        _update_waiting_dialog(dialog, state)
         return None
     return _tick_tracked_member_terminal(state, hist, current, dupe_key, fleet)
 
@@ -277,6 +273,9 @@ def _tick_tracked_member_terminal(state, hist, current, dupe_key, fleet):
             "nzbid": hist.get("nzbid", current),
             "job_name": hist.get("job_name", ""),
         }
+    # The dialog names this failure from here on, so a switch to a backup (or
+    # a re-submit of the pick) is never silent.
+    nzbget_progress.record_failure(state, hist["status"])
     if not dupe_key:
         # Plain submit: a DELETED/COPY veto (content already in history, never
         # queued) is recoverable by a one-shot FORCE re-submit (#372 r6);
@@ -355,7 +354,7 @@ def _tick_group_follow(state, dialog, settings_getter, dupe_key, fleet):
                 return terminal
             # Rescued: state["current"] now tracks the FORCE re-submit; fall
             # through to the dialog update and keep polling.
-    dialog.update(100, _string(30219))
+    _update_waiting_dialog(dialog, state)
     return None
 
 
@@ -371,7 +370,8 @@ def _adopt_owned_promotion(state, dialog, promoted, fleet):
     state["current"] = promoted["nzbid"]
     state["promotion_deadline"] = None
     state["paused_nzbids"] = ()
-    _update_active_dialog(dialog, promoted)
+    nzbget_progress.next_copy(state)
+    _update_active_dialog(dialog, promoted, state, fleet)
     return True
 
 

@@ -1295,8 +1295,8 @@ def test_poll_timeout_is_wall_clock_not_per_tick_accumulation():
 
 def test_poll_post_processing_status_shows_pp_label():
     # An in-queue post-processing stage (for example, UNPACKING) is reported by
-    # NZBGet as a bare status while the group is still present; it must show
-    # the "Post-processing" message (30219), not a frozen "Downloading 100%" message.
+    # NZBGet as a bare status while the group is still present; it must name
+    # the stage, not show a frozen "downloading 100%" message.
     def getter(k, d=""):
         return {"nzbget_url": "http://box"}.get(k, d)
 
@@ -1321,11 +1321,9 @@ def test_poll_post_processing_status_shows_pp_label():
             42, dialog, _Monitor(), timeout=60, settings_getter=getter
         )
     assert result["outcome"] == "success"
-    # The UNPACKING tick must have used the post-processing string (30219),
-    # not the "Downloading {}%" template (30105).
     pp_messages = [msg for _pct, msg in dialog.lines if msg]
-    assert any("30219" in m or "Post-processing" in m for m in pp_messages)
-    assert not any("30105" in m or "Downloading" in m for m in pp_messages)
+    assert any("unpacking" in m for m in pp_messages)
+    assert not any("ownloading" in m for m in pp_messages)
 
 
 def test_poll_honors_custom_interval():
