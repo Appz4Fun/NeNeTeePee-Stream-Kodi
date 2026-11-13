@@ -111,11 +111,22 @@ and only that night's releases stay. If no release carries that exact date,
 releases dated one day either side stay. If none of those exist either, every
 dated release stays, so a metadata mismatch never empties the list.
 
+An episode search also removes another show that was matched on something
+other than its title: an episode *titled* like the show you asked for
+(`Sweet.Magnolias.S03E05.On.This.Foundation` for *Foundation*), or a release
+group of that name. A foreign-language title of the right show is kept, since
+it has none of the requested words. Nothing is removed if the rule would take
+more than half of the results. A show whose title is the requested one plus
+more words (`The Office Movers`, `Narcos Mexico`), or another country's remake
+(`The.Office.PL`), is listed below the requested show.
+
 A movie search does the same by year. An indexer that can't search by id falls
 back to the title, so a search for *Avatar* (2009) also returned *Avatar: Fire
 and Ash* (2025). A result whose name is dated more than a year from the
 requested year is removed, unless the requested year also appears in the name
-(`2001.A.Space.Odyssey.1968`). A result with no year stays.
+(`2001.A.Space.Odyssey.1968`). A result with no year stays. A result that is
+an episode of a show (`The.Simpsons.S34E12`) is removed too, unless it is a
+special, which a movie entry can point at.
 
 ## Filtering and ranking
 

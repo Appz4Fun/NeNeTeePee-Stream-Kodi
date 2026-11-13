@@ -760,7 +760,9 @@ def _handle_direct_play(handle, params):
     )
 
 
-def _requested_episode_rows(results, search_type, season, episode, air_date=""):
+def _requested_episode_rows(  # pylint: disable=too-many-arguments
+    results, search_type, season, episode, air_date="", title=""
+):
     """On an episode search, drop rows that name a different episode.
 
     The cache keeps the provider's full answer; this runs on every read, so
@@ -771,9 +773,10 @@ def _requested_episode_rows(results, search_type, season, episode, air_date=""):
     """
     if search_type != "episode":
         return results
-    from resources.lib.filter import drop_other_episodes
+    from resources.lib.filter import drop_other_episodes, drop_other_shows
 
-    return drop_other_episodes(results, (season, episode), air_date=air_date)
+    results = drop_other_episodes(results, (season, episode), air_date=air_date)
+    return drop_other_shows(results, title)
 
 
 def _requested_movie_rows(results, search_type, year):
@@ -784,9 +787,9 @@ def _requested_movie_rows(results, search_type, year):
     """
     if search_type != "movie":
         return results
-    from resources.lib.filter import drop_other_years
+    from resources.lib.filter import drop_other_years, drop_tv_episodes
 
-    return drop_other_years(results, year)
+    return drop_tv_episodes(drop_other_years(results, year))
 
 
 def _handle_play(handle, params):
@@ -832,7 +835,12 @@ def _handle_play(handle, params):
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
     results = _requested_episode_rows(
-        results, search_type, season, episode, air_date=params.get("premiered", "")
+        results,
+        search_type,
+        season,
+        episode,
+        air_date=params.get("premiered", ""),
+        title=title,
     )
     results = _requested_movie_rows(results, search_type, year)
 
@@ -903,7 +911,12 @@ def _handle_search(handle, params):
         xbmcplugin.endOfDirectory(handle, succeeded=False)
         return
     results = _requested_episode_rows(
-        results, search_type, season, episode, air_date=params.get("premiered", "")
+        results,
+        search_type,
+        season,
+        episode,
+        air_date=params.get("premiered", ""),
+        title=title,
     )
     results = _requested_movie_rows(results, search_type, year)
 

@@ -534,3 +534,138 @@ def test_copies_listed_under_two_spellings_are_not_a_single_copy():
         _copies(better_single, 1) + _copies(dotted, 1) + _copies(spaced, 1)
     )
     assert ranked[-1]["title"] == better_single
+
+
+def test_a_second_track_with_other_channels_is_another_release():
+    groups = _groups(
+        [
+            "Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD5.1-GRP",
+            "Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD2.0-GRP",
+        ]
+    )
+    assert len(groups) == 2
+
+
+def test_remux_spelled_two_ways_is_not_a_single_copy():
+    """Both spellings count toward one release's copies, so it is not demoted."""
+    remux = "Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.HEVC-GRPA"
+    bare = "Movie.2023.2160p.REMUX.TrueHD.7.1.HEVC-GRPA"
+    encode = "Movie.2023.2160p.BluRay.x265.AAC-GRPB"
+    ranked = _ranked(_copies(encode, 2) + _copies(remux, 1) + _copies(bare, 1))
+    assert {row["title"] for row in ranked[:2]} == {remux, bare}
+    counts = flt._nzb_copy_counts(ranked)
+    assert counts[id(ranked[0])] == counts[id(ranked[1])] == 2
+
+
+# --- another show, matched outside its title -----------------------------------
+
+
+def _shows(titles, requested):
+    from resources.lib.filter import drop_other_shows
+
+    return _titles(drop_other_shows([_row(title) for title in titles], requested))
+
+
+RIGHT = [
+    "Foundation.S03E05.Where.Tyrants.Spend.Eternity.2160p.ATVp.WEB-DL.H.265-NTb",
+    "Foundation.2021.S03E05.1080p.WEB.H264-SuccessfulCrab",
+    "Foundation S03E05 1080p ATVP WEB-DL DDP5 1 H 264-FLUX",
+]
+
+
+def test_another_shows_episode_named_like_the_show_is_dropped():
+    """An indexer that matches text returned it for the words in its name."""
+    stray = "Sweet.Magnolias.S03E05.On.This.Foundation.1080p.NF.WEB-DL.H.264-NTb"
+    assert _shows(RIGHT + [stray], "Foundation") == RIGHT
+
+
+def test_a_release_group_named_like_the_show_is_dropped():
+    right = ["Narcos.S03E05.MRO.2160p.NF.WEB-DL.DTS-HD.MA.5.1.HEVC-PABLO"] * 2
+    stray = "SomeSite.26.09.30.Some.Scene.XXX.1080p.MP4-Narcos"
+    assert _shows(right + [stray], "Narcos") == right
+
+
+@pytest.mark.parametrize(
+    "requested, title",
+    [
+        # a foreign title of the right show has none of the requested words
+        ("Six Feet Under", "A.Sete.Palmos.S02E01.1080p.HMAX.WEB-DL.DD2.0.x264-PiA"),
+        # an apostrophe an indexer dropped
+        (
+            "It's Always Sunny in Philadelphia",
+            "Its.Always.Sunny.in.Philadelphia.S17E01.1080p.WEB.H264-GRP",
+        ),
+        # a number the parser takes out of the title
+        ("Station 19", "Station.19.S07E01.1080p.WEB.H264-GRP"),
+        # a name with no parsed title at all
+        ("One Piece", "[SubsPlease] One Piece - 1100 (1080p) [ABCD1234].mkv"),
+    ],
+)
+def test_rows_of_the_requested_show_are_kept(requested, title):
+    rows = RIGHT + [title]
+    assert _shows(rows, requested) == rows
+
+
+def test_nothing_is_dropped_when_most_results_would_go():
+    """Then the title is being misread, not the indexers returning strays."""
+    strays = [
+        "Sweet.Magnolias.S03E05.On.This.Foundation.1080p.NF.WEB-DL.H.264-NTb",
+        "In.The.Cut.S01E02.Solid.Foundation.1080p.WEB.H264-GRP",
+    ]
+    rows = strays + RIGHT[:1]
+    assert _shows(rows, "Foundation") == rows
+
+
+@pytest.mark.parametrize("requested", ["", None, "The", "24"])
+def test_a_title_with_no_usable_words_leaves_results_untouched(requested):
+    from resources.lib.filter import drop_other_shows
+
+    rows = [_row(title) for title in RIGHT]
+    assert drop_other_shows(rows, requested) is rows
+
+
+def test_router_applies_the_show_rule_to_episode_searches():
+    from resources.lib.router import _requested_episode_rows
+
+    stray = "Sweet.Magnolias.S03E05.On.This.Foundation.1080p.NF.WEB-DL.H.264-NTb"
+    rows = [_row(title) for title in RIGHT + [stray]]
+    kept = _requested_episode_rows(rows, "episode", "3", "5", title="Foundation")
+    assert _titles(kept) == RIGHT
+
+
+# --- a title that is the requested one plus more words --------------------------
+
+
+def test_a_longer_title_is_another_show_and_is_demoted():
+    from resources.lib.filter import partition_series_rows
+
+    office = _row("The.Office.US.S02E01.The.Dundies.1080p.WEB-DL.H.264-GRP")
+    dated = _row("The.Office.2005.S02E01.1080p.WEB-DL.H.264-GRP")
+    polish = _row("The.Office.PL.S02E01.POLISH.2160p.WEB.H265-FLAME")
+    movers = _row("The.Office.Movers.S02E01.MULTI.2160p.WEB.H265-BAWLS")
+    matching, rest = partition_series_rows(
+        [polish, movers, office, dated], "The Office"
+    )
+    assert matching == [office, dated]
+    assert rest == [polish, movers]
+
+
+# --- movie searches: a show's episode -------------------------------------------
+
+
+def test_a_shows_episode_is_dropped_from_a_movie_search():
+    from resources.lib.filter import drop_tv_episodes
+
+    movie = ["Ebenezer.2026.1080p.WEB-DL.DDP5.1.H.264-GRP"] * 2
+    episode = "Little.House.on.the.Prairie.S02E10.Ebenezer.1080p.WEB.H264-GRP"
+    rows = [_row(title) for title in movie + [episode]]
+    assert _titles(drop_tv_episodes(rows)) == movie
+
+
+def test_a_special_stays_on_a_movie_search():
+    """A special can be what a movie entry points at."""
+    from resources.lib.filter import drop_tv_episodes
+
+    special = "IT.Welcome.to.Derry.S01E00.A.Story.of.Derry.1080p.WEB-DL.H.264-GRP"
+    rows = [_row(special), _row("A.Story.of.Derry.2025.1080p.WEB-DL.H.264-GRP")]
+    assert drop_tv_episodes(rows) is rows

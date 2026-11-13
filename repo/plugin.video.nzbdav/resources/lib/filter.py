@@ -759,11 +759,176 @@ def partition_series_rows(rows, requested_title):
             # it), so containment would pass every row. Only exact
             # equality counts for these.
             rest.append(row)
-        elif got and (got == want or want in got or got in want):
+        elif (
+            got
+            and (got == want or got in want or _same_show_title(got, want))
+            and not _other_regional_version(raw, want)
+        ):
             matching.append(row)
         else:
+            # Includes a title that is the requested one plus more words
+            # ("The Office PL", "The Office Movers", "Narcos Mexico"): another
+            # show that shares the name, which used to count as a match.
             rest.append(row)
     return matching, rest
+
+
+# Words that never tell two titles apart, and the country a listing adds to
+# the same show ("The.Office.US", "Shameless.UK").
+_TITLE_FILLER = frozenset(("the", "a", "an", "and"))
+_TITLE_QUALIFIERS = frozenset(("us", "uk", "au", "nz", "ca"))
+_TITLE_YEAR = re.compile(r"(?:19|20)\d{2}")
+# Past this share of a search's results, a rule that removes "other" titles is
+# more likely misreading the requested title than finding strays.
+_MAX_DROP_SHARE = 0.5
+
+
+# Country codes a local remake carries right after the title
+# ("The.Office.PL.S02E01"). The parser reads them as a language and takes them
+# out of the title, so the title alone looks like the requested show. Codes
+# that are also English words ("it", "in", "no", "be", "at") are left out.
+_REMAKE_CODES = frozenset(
+    "pl de fr es nl dk fi br pt ru jp kr tr cz hu gr il mx za ie ch ar".split()
+)
+
+
+def _other_regional_version(raw_title, want):
+    """True when the name puts another country's code right after the title.
+
+    ``want`` is the normalized requested title. "the office pl s02e01" is the
+    Polish remake; "the office us s02e01" and "the office s02e01" are not
+    judged here, and neither is a request that itself ends in the code.
+    """
+    from resources.lib.fallback_streams import _normalize_title
+    from resources.lib.release_subject import release_name_from_subject
+
+    wanted = want.split()
+    if not wanted or wanted[-1] in _REMAKE_CODES:
+        return False
+    words = _normalize_title(release_name_from_subject(raw_title)).split()
+    size = len(wanted)
+    return words[:size] == wanted and len(words) > size and words[size] in _REMAKE_CODES
+
+
+def _title_core(normalized):
+    """The distinguishing words of a normalized title, as a frozenset."""
+    return frozenset(
+        word
+        for word in normalized.split()
+        if word not in _TITLE_FILLER
+        and word not in _TITLE_QUALIFIERS
+        and not _TITLE_YEAR.fullmatch(word)
+    )
+
+
+def _same_show_title(got, want):
+    """Two normalized titles with the same distinguishing words.
+
+    "the office us" and "the office 2005" are "the office"; "the office pl"
+    and "narcos mexico" are other shows.
+    """
+    core = _title_core(want)
+    return bool(core) and _title_core(got) == core
+
+
+def _matched_outside_title(row, wanted):
+    """True when the requested title is in the name but not in its title.
+
+    ``wanted`` is ``(words, compact)``: the requested title's words, and the
+    whole title with only letters and digits left. The compact form matches a
+    title an apostrophe splits differently ("It's Always Sunny" lists as
+    "Its.Always.Sunny").
+
+    An indexer that matches text returns any post with the searched words in
+    it: another show's episode titled like the requested show
+    (``Sweet.Magnolias.S03E05.On.This.Foundation`` for *Foundation*,
+    ``The.Sopranos.S02E01...Psychiatrists.Office`` for *The Office*) or a
+    release group of that name (``Site.26.09.30...-Narcos`` for *Narcos*).
+    The words leave out numbers, because the parser often takes one out of a
+    title ("Station.19", "The.100"). A foreign-language title of the right show
+    does not have the requested words anywhere, so it is not judged here.
+    """
+    from resources.lib.fallback_streams import _normalize_title, _release_identity
+    from resources.lib.release_match import title_key
+    from resources.lib.release_subject import (
+        release_name_from_subject,
+        without_media_extension,
+    )
+
+    words, compact = wanted
+    title = _release_identity(row)[0]
+    if words <= set(title.split()) or compact in title_key(title):
+        return False
+    name = without_media_extension(release_name_from_subject(row.get("title")))
+    return words <= set(_normalize_title(name).split())
+
+
+def _without(results, is_other, what):
+    """``results`` minus the rows ``is_other`` flags, unless that is most of them."""
+    kept = [
+        row
+        for row in results
+        if not (isinstance(row, dict) and "title" in row and is_other(row))
+    ]
+    dropped = len(results) - len(kept)
+    if not dropped or dropped > len(results) * _MAX_DROP_SHARE:
+        return results
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: dropped {} result(s) {}".format(dropped, what),
+        xbmc.LOGINFO,
+    )
+    return kept
+
+
+def drop_other_shows(results, requested_title):
+    """Return episode ``results`` without rows matched outside their title.
+
+    See ``_matched_outside_title``. Nothing is removed when the requested
+    title has no usable words, or when the rule would remove more than half
+    of the results (the parser is then more likely misreading the title than
+    the indexers are returning strays). Side effect: attaches ``_meta``.
+    """
+    from resources.lib.fallback_streams import _normalize_title
+    from resources.lib.release_match import title_key
+
+    words = {
+        word
+        for word in _normalize_title(str(requested_title or "")).split()
+        if word not in _TITLE_FILLER and not word.isdigit()
+    }
+    if not words or not results:
+        return results
+    wanted = (words, title_key(requested_title))
+    _attach_metadata(results)
+    return _without(
+        results,
+        lambda row: _matched_outside_title(row, wanted),
+        "that only mention '{}' outside their title".format(requested_title),
+    )
+
+
+def drop_tv_episodes(results):
+    """Return movie ``results`` without rows that are an episode of a show.
+
+    A movie search that falls back to text returns episodes named like the
+    film (``The.Simpsons.S34E12...`` for a documentary). A row that parses
+    both a season and an episode is not the movie, unless it is a special.
+    """
+    if not results:
+        return results
+    _attach_metadata(results)
+
+    def _is_episode(row):
+        identity = row["_meta"].get("ptt_identity")
+        if not isinstance(identity, dict):
+            return False
+        seasons = _int_set(identity.get("seasons"))
+        episodes = _int_set(identity.get("episodes"))
+        # A special (season 0 or episode 0) can be what a movie entry points
+        # at: "IT.Welcome.to.Derry.S01E00.A.Story.of.Derry" is listed as a film.
+        return bool(seasons and episodes) and 0 not in seasons | episodes
+
+    return _without(results, _is_episode, "that are a show's episode, not the movie")
 
 
 def prefer_series_rows(rows, requested_title):
@@ -1265,32 +1430,27 @@ def _fold_meta_value(value):
 
 
 def _copy_prefilter_key(row):
-    """Profile fields ``same_release`` requires equal, read from ``_meta``.
+    """What ``same_release`` requires equal before it looks at the content.
 
-    A cheap subset of ``release_match.release_profile`` (everything but the
-    variant flags). Rows with different keys can never be the same release,
-    so only rows sharing a key are compared. None for a row with no parsed
-    group, which the rule never groups.
+    The row's ``release_match.release_profile`` itself, so this can never
+    separate two rows the rule accepts (a hand-kept subset once bucketed
+    "Remux" and "BluRay.Remux" apart after the rule had learned they are one
+    source, and each copy counted as a release listed once). Rows with
+    different keys can never be the same release, so only rows sharing a key
+    are compared. None for a row with no parsed group, which the rule never
+    groups.
     """
-    from resources.lib.release_match import is_hybrid
+    from resources.lib.release_match import release_profile
 
-    meta = row.get("_meta")
-    if not isinstance(meta, dict):
+    if not isinstance(row.get("_meta"), dict):
         return None
-    group = _fold_meta_value(meta.get("group"))
-    if not group:
+    try:
+        profile = release_profile(row)
+    except Exception:  # pylint: disable=broad-except
         return None
-    fields = [bool(row.get("_season_pack")), group]
-    for name in ("resolution", "channels", "codec", "quality", "edition"):
-        fields.append(_fold_meta_value(meta.get(name)))
-    for name in ("hdr", "audio"):
-        values = meta.get(name) or []
-        if isinstance(values, str):
-            values = [values]
-        fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
-    fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
-    fields.append(is_hybrid(row, meta))
-    return tuple(fields)
+    if not dict(profile).get("group"):
+        return None
+    return (bool(row.get("_season_pack")),) + profile
 
 
 _SEASONS_CLASS = ("seasons", (), ())

@@ -340,6 +340,7 @@ def _script_play_search_filter_tag(
             search_kwargs.get("season"),
             search_kwargs.get("episode"),
             air_date=params.get("premiered", ""),
+            title=title,
         )
         results = _router._requested_movie_rows(results, search_type, year)
         return _script_play_filter_autoselect_tag(

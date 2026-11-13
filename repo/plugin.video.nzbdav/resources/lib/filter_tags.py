@@ -444,6 +444,9 @@ def supplement_metadata(title, meta):
         title, meta["audio"], meta.get("quality", ""), meta.get("channels", "")
     )
     meta["hybrid"] = detect_hybrid(title)
+    # Every track's channel count, not only the main one shown in the picker:
+    # "TrueHD.7.1.Atmos.DD5.1" and "...DD2.0" are different releases.
+    meta["track_channels"] = detect_channels(title)
     meta["network"] = detect_network(title)
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])

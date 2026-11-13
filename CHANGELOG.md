@@ -138,6 +138,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   releases**, shown as `[INTERNAL]` and `[MINI]`.
 - **`Remux` and `BluRay.Remux` from one group are one release.**
 - **A complete-series pack says so in its normalized name** (`Show - Complete`).
+- **An episode search drops another show matched outside its title.** An
+  indexer that matches text returned any post with the searched words in it:
+  `Sweet.Magnolias.S03E05.On.This.Foundation` for *Foundation*, or a release
+  group named like the show. Such rows are removed; a foreign-language title
+  of the right show is kept, and nothing is removed if that would take more
+  than half of the results.
+- **A longer title, or another country's remake, ranks below the requested
+  show.** `The.Office.PL` and `The.Office.Movers` no longer count as *The
+  Office*, and `Narcos.Mexico` no longer counts as *Narcos*.
+- **A movie search drops a show's episodes** (`The.Simpsons.S34E12` for a
+  documentary), except specials.
+- **A second audio track's channels are part of the release**, so
+  `TrueHD.7.1.Atmos.DD5.1` and `...DD2.0` are two releases, and copies listed
+  as `Remux` and `BluRay.Remux` count as one release's copies.
 - **A movie search drops films dated for another year.** *Avatar* (2009)
   listed *Avatar: Fire and Ash* (2025) first. A result dated more than a year
   from the requested year is removed, unless that year also appears in its

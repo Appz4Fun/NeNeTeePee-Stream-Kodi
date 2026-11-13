@@ -128,6 +128,22 @@ def _network(row, meta):
     return _fold(detect_network(release_name_from_subject(row.get("title"))))
 
 
+def _track_channels(row, meta):
+    """The channel count of every audio track the name tags, sorted.
+
+    ``meta["channels"]`` is the main track's count alone, so two releases
+    that differ only in a second track ("...TrueHD.7.1.Atmos.DD5.1" and
+    "...DD2.0") would otherwise compare equal.
+    """
+    stored = meta.get("track_channels")
+    if not isinstance(stored, (list, tuple)):
+        from resources.lib.filter_tags import detect_channels
+        from resources.lib.release_subject import release_name_from_subject
+
+        stored = detect_channels(release_name_from_subject(row.get("title")))
+    return tuple(sorted(str(value) for value in stored))
+
+
 def release_profile(row):
     """The parsed release fields of ``row`` that ``same_release`` compares.
 
@@ -150,6 +166,7 @@ def release_profile(row):
         for key, value in fields
     ]
     fields.append(("network", _network(row, meta)))
+    fields.append(("tracks", _track_channels(row, meta)))
     for key in _SET_FIELDS:
         values = meta.get(key) or []
         if isinstance(values, str):
