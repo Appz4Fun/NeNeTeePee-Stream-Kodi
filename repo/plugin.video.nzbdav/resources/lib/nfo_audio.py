@@ -33,14 +33,21 @@ import os
 import re
 import threading
 import time
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
 import xbmc
 import xbmcvfs
 
+from resources.lib import mediainfo_audio
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
+from resources.lib.mediainfo_audio import (
+    CHANNEL_COUNT,
+    merge_tracks,
+    readable_formats,
+)
 
 SETTING = "nfo_audio_releases"
 DEFAULT_RELEASES = 3
@@ -57,28 +64,12 @@ _MAX_STORED = 3000
 _RETRY_AFTER_SECONDS = 24 * 3600
 _FETCH_TIMEOUT = 6
 _MAX_NFO_BYTES = 262144
+_MAX_MEDIAINFO_BYTES = 2097152
+# An indexer found to have no MediaInfo call is not asked again for this long.
+_NO_API_SECONDS = 30 * 24 * 3600
 # How long the picker waits for the answers before opening without them.
 _WAIT_SECONDS = 2.0
 
-# MediaInfo's names for formats, as release names write them. The longer
-# names come first: "Enhanced AC-3" must not be read as its last word.
-_MEDIAINFO_NAMES = (
-    (
-        re.compile(
-            r"dolby digital plus with dolby atmos"
-            r"|enhanced ac-?3 with joint object coding|e-?ac-?3[ /+]*joc",
-            re.I,
-        ),
-        "DDP Atmos",
-    ),
-    (re.compile(r"dolby truehd with dolby atmos|mlp fba 16-ch", re.I), "TrueHD Atmos"),
-    (re.compile(r"dts[ :-]?x\b|dts xll x", re.I), "DTS-X DTS-HD MA"),
-    (re.compile(r"dts-hd master audio|dts xll", re.I), "DTS-HD MA"),
-    (re.compile(r"dts-hd high resolution(?: audio)?|dts xbr", re.I), "DTS-HD HR"),
-    (re.compile(r"dolby digital plus|enhanced ac-?3|e-?ac-?3", re.I), "DDP"),
-    (re.compile(r"mlp fba|dolby truehd", re.I), "TrueHD"),
-    (re.compile(r"dolby digital|audio coding 3|\bac-?3\b", re.I), "DD"),
-)
 # A line labelled as the audio ("Audio.........:", "AUDiO #1 :", "Ton:"), in
 # the languages NFOs are written in. The word must be the label, ended by a
 # colon, an equals sign or a row of dots ("AUDiO 1........ German EAC3 5.1"):
@@ -102,7 +93,6 @@ _PADDING = re.compile(r"[._]{2,}")
 # A channel count that stands by itself on an audio line ("AUDiO CHANNEL: 2.0").
 _BARE_COUNT = re.compile(r"(?<![\d.])([1-9]\.[01])(?![\d.])")
 _CHANNEL_WORDS = re.compile(r"\b([1-9])\s*(?:ch\b|channels?\b)", re.I)
-_CHANNEL_COUNT = {"1": "1.0", "2": "2.0", "6": "5.1", "8": "7.1"}
 
 _LOCK = threading.Lock()
 # Held for a whole save, so saves land in the order they were taken.
@@ -110,6 +100,8 @@ _SAVE_LOCK = threading.Lock()
 _STORE = {}
 # host -> when it last refused a read: it is left alone for a while.
 _PAUSED_HOSTS = {}
+# host -> whether it answers the MediaInfo call, and when that was learned.
+_REST_HOSTS = {}
 _LOADED = []
 
 
@@ -155,33 +147,9 @@ def _line_channels(readable):
         return counts[0]
     words = _CHANNEL_WORDS.search(readable)
     if words:
-        return _CHANNEL_COUNT.get(words.group(1), "")
+        return CHANNEL_COUNT.get(words.group(1), "")
     bare = _BARE_COUNT.search(readable)
     return bare.group(1) if bare else ""
-
-
-# Object audio rides on a bed track: Atmos on TrueHD or DD+, DTS:X on DTS.
-_OBJECT_FORMATS = ("Atmos", "DTS:X")
-
-
-def _without_stray_objects(entries, formats, main):
-    """``formats`` without object audio that belongs to another track.
-
-    The formats of every track are kept in one list, and the picker reads
-    "Atmos" beside "TrueHD" as TrueHD with Atmos. An NFO with a plain TrueHD
-    7.1 track and a separate Dolby Digital Plus Atmos track must not say
-    that: the object format is kept only when a track carries it together
-    with the main track's format, or when it is the main format itself.
-    """
-    kept = []
-    for name in formats:
-        if name in _OBJECT_FORMATS and name != main:
-            if not any(
-                name in entry["audio"] and main in entry["audio"] for entry in entries
-            ):
-                continue
-        kept.append(name)
-    return kept
 
 
 def _join_bare_counts(entries):
@@ -202,43 +170,26 @@ def _join_bare_counts(entries):
 def audio_from_nfo(text):
     """``{"audio": [...], "channels": "5.1"}`` read from an NFO's text.
 
-    The audio list holds the formats of every track, in the order named
-    (object audio only when it is on the main track, see
-    ``_without_stray_objects``), and is empty when the NFO names no format
-    the add-on knows. The channel
-    count is the main track's own (the track with the format the picker
-    leads with, ``filter_audio.main_audio``): "French DD 5.1" beside
-    "English TrueHD 7.1" is 7.1. Only the lines that describe the audio
-    tracks are read (``_audio_tracks``).
+    Only the lines that describe the audio tracks are read
+    (``_audio_tracks``); the tracks are put together by
+    ``mediainfo_audio.merge_tracks``. The audio list is empty when the NFO
+    names no format the add-on knows.
     """
     tracks = {}
     for track, line in _audio_tracks(text):
         # A label's row of dots is padding. Left in, the tag reader takes the
         # dot for the name's word separator and reads "DD 5.1" as a "DD+5.1"
         # whose plus was lost, which only happens in release names.
-        readable = _PADDING.sub(" ", line)
-        for pattern, name in _MEDIAINFO_NAMES:
-            readable = pattern.sub(name, readable)
+        readable = readable_formats(_PADDING.sub(" ", line))
         entry = tracks.setdefault(track, {"audio": [], "channels": ""})
         for name in detect_audio(readable):
             if name not in entry["audio"]:
                 entry["audio"].append(name)
         if not entry["channels"]:
             entry["channels"] = _line_channels(readable)
-    _join_bare_counts(list(tracks.values()))
-    formats = []
-    for entry in tracks.values():
-        formats.extend(name for name in entry["audio"] if name not in formats)
-    if not formats:
-        return {"audio": [], "channels": ""}
-    main = main_audio(formats)
-    formats = _without_stray_objects(list(tracks.values()), formats, main)
-    channels = ""
-    for entry in tracks.values():
-        if main in entry["audio"] and entry["channels"]:
-            channels = entry["channels"]
-            break
-    return {"audio": formats, "channels": channels}
+    entries = list(tracks.values())
+    _join_bare_counts(entries)
+    return merge_tracks(entries)
 
 
 # --- what is known, on disk -------------------------------------------------
@@ -266,6 +217,15 @@ def _load():
                 for host, when in (hosts if isinstance(hosts, dict) else {}).items():
                     if isinstance(host, str) and isinstance(when, (int, float)):
                         _PAUSED_HOSTS[host] = when
+                rest = data.get("rest")
+                for host, state in (rest if isinstance(rest, dict) else {}).items():
+                    if (
+                        isinstance(host, str)
+                        and isinstance(state, dict)
+                        and isinstance(state.get("ok"), bool)
+                        and isinstance(state.get("at"), (int, float))
+                    ):
+                        _REST_HOSTS[host] = {"ok": state["ok"], "at": state["at"]}
         except (OSError, TypeError, ValueError):
             return
 
@@ -295,6 +255,7 @@ def _save():
                 "v": _STORE_VERSION,
                 "releases": dict(_STORE),
                 "hosts": dict(_PAUSED_HOSTS),
+                "rest": dict(_REST_HOSTS),
             }
         tmp_path = ""
         try:
@@ -367,6 +328,7 @@ def forget_all():
     with _LOCK:
         _STORE.clear()
         _PAUSED_HOSTS.clear()
+        _REST_HOSTS.clear()
         del _LOADED[:]
 
 
@@ -495,7 +457,114 @@ def _error_code(text):
     return int(match.group(1)) if match else None
 
 
+def _may_ask_mediainfo(host):
+    """Whether ``host`` is worth asking for MediaInfo: it has the call, or might."""
+    _load()
+    with _LOCK:
+        state = _REST_HOSTS.get(host)
+    if state is None or state["ok"]:
+        return True
+    return time.time() - state["at"] >= _NO_API_SECONDS
+
+
+def _has_mediainfo_call(host):
+    """Whether ``host`` has been seen to answer the MediaInfo call."""
+    _load()
+    with _LOCK:
+        state = _REST_HOSTS.get(host)
+    return bool(state and state["ok"])
+
+
+def _note_rest(host, has_call):
+    _load()
+    with _LOCK:
+        _REST_HOSTS[host] = {"ok": bool(has_call), "at": int(time.time())}
+
+
+def _get_with_status(url, headers):
+    """``(status, body)`` of a GET; the status is None when nothing answered."""
+    try:
+        body = http_get(
+            url,
+            timeout=_FETCH_TIMEOUT,
+            headers=headers,
+            max_bytes=_MAX_MEDIAINFO_BYTES,
+        )
+        return 200, body
+    except HTTPError as exc:
+        try:
+            body = exc.read(4096).decode("utf-8", "replace")
+        except Exception:  # pylint: disable=broad-except
+            body = ""
+        return exc.code, body
+    except Exception:  # pylint: disable=broad-except
+        return None, ""
+
+
+def _fetch_mediainfo(key, url, title):
+    """Ask the indexer for the release's MediaInfo, where it may have the call.
+
+    True or False when that settled the release (audio found, or the indexer
+    refused), None when the NFO should be read: no such call there, no
+    MediaInfo for this release, none of its tracks recognised, or no answer.
+    """
+    host = _host(url)
+    request = mediainfo_audio.request_for(url)
+    if request is None or not _may_ask_mediainfo(host):
+        return None
+    status, body = _get_with_status(*request)
+    what, tracks = mediainfo_audio.read_reply(status, body)
+    if (
+        what == mediainfo_audio.REFUSED
+        and status != 429
+        and not _has_mediainfo_call(host)
+    ):
+        # An indexer never seen to answer this call, refusing the path: that
+        # is how one without the call may answer. Its NFO is still read.
+        what = mediainfo_audio.NO_API
+    if what == mediainfo_audio.REFUSED:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' was refused by the "
+            "indexer".format(title),
+            xbmc.LOGINFO,
+        )
+        _remember(key, [], "", failed=True)
+        _pause_host(host)
+        return False
+    if what == mediainfo_audio.NO_API:
+        _note_rest(host, False)
+        return None
+    if what == mediainfo_audio.FAILED:
+        return None
+    _note_rest(host, True)
+    if what != mediainfo_audio.TRACKS:
+        return None
+    found = mediainfo_audio.merge_tracks(tracks)
+    if not found["audio"]:
+        return None
+    _remember(key, found["audio"], found["channels"])
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' names audio: {}".format(
+            title, ", ".join(found["audio"])
+        ),
+        xbmc.LOGINFO,
+    )
+    return True
+
+
 def _fetch(key, url, title):
+    """Learn one release's audio: MediaInfo first, then its NFO.
+
+    True when audio was found. The answer, or that there was none, is
+    remembered either way.
+    """
+    answer = _fetch_mediainfo(key, url, title)
+    if answer is not None:
+        return answer
+    return _fetch_nfo(key, url, title)
+
+
+def _fetch_nfo(key, url, title):
     """Fetch one NFO, read it and remember the answer; True when it has audio."""
     try:
         text = http_get(url, timeout=_FETCH_TIMEOUT, max_bytes=_MAX_NFO_BYTES)

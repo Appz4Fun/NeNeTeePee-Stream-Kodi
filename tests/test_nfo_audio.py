@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import pytest
 from resources.lib import filter as filter_module
-from resources.lib import hydra, newznab_attrs, nfo_audio
+from resources.lib import hydra, mediainfo_audio, newznab_attrs, nfo_audio
 from resources.lib.filter_audio import AUDIO_TIER_UNKNOWN, audio_tier
 from resources.lib.xml_safety import safe_fromstring
 
@@ -349,10 +349,12 @@ def test_a_store_that_cannot_be_written_is_ignored(store):
 
 class _Handler(http.server.BaseHTTPRequestHandler):
     requests = []
+    keys = []
     replies = {}
 
     def do_GET(self):  # pylint: disable=invalid-name
         type(self).requests.append(self.path)
+        type(self).keys.append(self.headers.get("X-API-Key"))
         status, body = type(self).replies.get(self.path.split("?")[0], (404, b""))
         self.send_response(status)
         self.send_header("Content-Type", "text/x-nfo")
@@ -367,6 +369,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
 @pytest.fixture(name="indexer")
 def _indexer():
     _Handler.requests = []
+    _Handler.keys = []
     _Handler.replies = {
         "/nfo/plain": (200, SCENE_NFO.encode()),
         "/nfo/atmos": (200, MEDIAINFO_NFO.encode()),
@@ -825,3 +828,307 @@ def test_atmos_on_a_second_track_does_not_label_the_main_one():
         "Atmos",
         "DD+",
     ]
+
+
+# --- MediaInfo first --------------------------------------------------------
+
+_GUID = "0a1b2c3d-4e5f-6789-abcd-ef0123456789"
+_MEDIAINFO_PATH = "/api/v1/releases/{}/mediainfo".format(_GUID)
+_NOT_FOUND = json.dumps(
+    {"error": {"code": "mediainfo_missing", "message": "No MediaInfo"}}
+).encode()
+
+
+def _track(kind, **fields):
+    return '<track type="{}">{}</track>'.format(
+        kind,
+        "".join("<{0}>{1}</{0}>".format(name, value) for name, value in fields.items()),
+    )
+
+
+def _report(*tracks):
+    """A MediaInfo XML report, laid out as an indexer returned real ones."""
+    return (
+        '\ufeff<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<MediaInfo xmlns="https://mediaarea.net/mediainfo" version="2.0">\n'
+        '<creatingLibrary version="26.01">MediaInfoLib</creatingLibrary>\n'
+        '<media ref="Some.Movie.mkv">\n'
+        + _track("General", AudioCount=len(tracks), Format="Matroska")
+        + _track("Video", Format="HEVC", Channels="8")
+        + "".join(tracks)
+        + _track("Text", Format="UTF-8")
+        + "</media></MediaInfo>\n"
+    )
+
+
+_ATMOS_TRACK = _track(
+    "Audio",
+    Format="E-AC-3",
+    Format_Commercial_IfAny="Dolby Digital Plus with Dolby Atmos",
+    Format_AdditionalFeatures="JOC",
+    Channels="6",
+    Language="en",
+)
+_STEREO_TRACK = _track(
+    "Audio",
+    Format="E-AC-3",
+    Format_Commercial_IfAny="Dolby Digital Plus",
+    Channels="2",
+)
+
+
+def _mediainfo_reply(*tracks):
+    report = _report(*tracks)
+    return json.dumps(
+        {"guid": _GUID, "mediainfo": {"raw": report, "utf8": report}}
+    ).encode()
+
+
+def _offer_api(row, base, guid=_GUID):
+    row["nfo_url"] = "{}/api?t=getnfo&id={}&apikey=SECRET&raw=1".format(base, guid)
+    return row
+
+
+def test_the_tracks_of_a_mediainfo_report():
+    tracks = mediainfo_audio.audio_tracks(_report(_STEREO_TRACK, _ATMOS_TRACK))
+    assert tracks == [
+        {"audio": ["DD+"], "channels": "2.0"},
+        {"audio": ["Atmos", "DD+"], "channels": "5.1"},
+    ]
+    assert mediainfo_audio.merge_tracks(tracks) == {
+        "audio": ["DD+", "Atmos"],
+        "channels": "5.1",
+    }
+    truehd = _track(
+        "Audio",
+        Format="MLP FBA",
+        Format_AdditionalFeatures="16-ch",
+        Format_Commercial_IfAny="Dolby TrueHD with Dolby Atmos",
+        Channels="8",
+    )
+    dts = _track(
+        "Audio",
+        Format="DTS",
+        Format_AdditionalFeatures="XLL",
+        Format_Commercial_IfAny="DTS-HD Master Audio",
+        Channels="6",
+    )
+    assert mediainfo_audio.audio_tracks(_report(truehd, dts)) == [
+        {"audio": ["Atmos", "TrueHD"], "channels": "7.1"},
+        {"audio": ["DTS-HD MA"], "channels": "5.1"},
+    ]
+    # A report with no audio track is a report: an empty list.
+    assert mediainfo_audio.audio_tracks(_report()) == []
+    # A track this add-on has no name for is a track with no formats.
+    opus = _track("Audio", Format="MPEG Audio", Channels="2")
+    assert mediainfo_audio.audio_tracks(_report(opus)) == [
+        {"audio": [], "channels": "2.0"}
+    ]
+
+
+def test_an_unreadable_or_unsafe_report_is_no_report():
+    unsafe = (
+        '<?xml version="1.0"?><!DOCTYPE m [<!ENTITY a "aaaa">]>'
+        '<MediaInfo><media><track type="Audio"><Format>&a;</Format></track>'
+        "</media></MediaInfo>"
+    )
+    for bad in (unsafe, "", "not xml", "<MediaInfo><media>", None, 7):
+        assert mediainfo_audio.audio_tracks(bad) is None
+
+
+def test_the_request_is_built_from_the_nfo_link():
+    request = mediainfo_audio.request_for
+    url, headers = request(
+        "https://indexer.example/api?t=getnfo&id={}&apikey=SECRET&raw=1".format(_GUID)
+    )
+    assert url == "https://indexer.example" + _MEDIAINFO_PATH
+    assert headers["X-API-Key"] == "SECRET" and "SECRET" not in url
+    for bad in (
+        "https://indexer.example/api?t=getnfo&apikey=SECRET",
+        "https://indexer.example/api?t=getnfo&id={}".format(_GUID),
+        "https://indexer.example/api?id=../../user&apikey=SECRET",
+        "https://indexer.example/api?id=a%2Fb%3Fc%3Dd1234&apikey=SECRET",
+        "https://indexer.example/api?id=short&apikey=SECRET",
+        "ftp://indexer.example/api?id={}&apikey=SECRET".format(_GUID),
+        "https:///api?id={}&apikey=SECRET".format(_GUID),
+        "https://indexer.example/api?id={}&apikey={}".format(_GUID, "k" * 200),
+        "",
+        None,
+        5,
+    ):
+        assert request(bad) is None, bad
+
+
+def test_what_a_reply_means():
+    read = mediainfo_audio.read_reply
+    what, tracks = read(200, _mediainfo_reply(_ATMOS_TRACK).decode())
+    assert what == mediainfo_audio.TRACKS and tracks[0]["audio"] == ["Atmos", "DD+"]
+    assert read(404, _NOT_FOUND.decode()) == (mediainfo_audio.MISSING, None)
+    empty = json.dumps({"guid": _GUID, "mediainfo": {"raw": "", "utf8": ""}})
+    assert read(200, empty) == (mediainfo_audio.MISSING, None)
+    for status, body in (
+        (404, "<html>Not Found</html>"),
+        (404, ""),
+        (200, "<html>Welcome</html>"),
+        (200, "{}"),
+        (200, json.dumps({"mediainfo": "text"})),
+        (200, "[1, 2]"),
+        (400, json.dumps({"error": {"code": "bad_request"}})),
+        (301, ""),
+    ):
+        assert read(status, body) == (mediainfo_audio.NO_API, None), (status, body)
+    for status in (401, 403, 429):
+        assert read(status, "") == (mediainfo_audio.REFUSED, None)
+    for status in (None, 500, 503):
+        assert read(status, "") == (mediainfo_audio.FAILED, None)
+
+
+def test_mediainfo_is_asked_for_first_and_the_nfo_is_not_read(indexer, store):
+    _Handler.replies[_MEDIAINFO_PATH] = (
+        200,
+        _mediainfo_reply(_ATMOS_TRACK, _STEREO_TRACK),
+    )
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    name = "Some.Show.S01E01.2160p.AMZN.WEB-DL.DDP5.1.H.265-GRP"
+    rows = _rows(name)
+    _offer_api(rows[0], indexer)
+
+    with patch("resources.lib.nfo_audio.xbmc.log") as log:
+        assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    # One request: the key went in the header and is not in the path.
+    assert _Handler.requests == [_MEDIAINFO_PATH]
+    assert _Handler.keys == ["SECRET"]
+    assert not any("SECRET" in call.args[0] for call in log.call_args_list)
+    assert any("MediaInfo for" in call.args[0] for call in log.call_args_list)
+
+    filter_module.attach_metadata(rows)
+    assert sorted(rows[0]["_meta"]["audio"]) == ["Atmos", "DD+"]
+    assert rows[0]["_meta"]["channels"] == "5.1"
+    saved = json.loads(store.read_text())
+    assert saved["rest"]["127.0.0.1"]["ok"] is True
+    assert "SECRET" not in store.read_text()
+
+
+def test_a_release_with_no_mediainfo_has_its_nfo_read(indexer):
+    _Handler.replies[_MEDIAINFO_PATH] = (404, _NOT_FOUND)
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    rows = _rows(PLAIN)
+    _offer_api(rows[0], indexer)
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert [path.split("?")[0] for path in _Handler.requests] == [
+        _MEDIAINFO_PATH,
+        "/api",
+    ]
+    assert nfo_audio._known(_key(PLAIN))["audio"] == ["DTS-HD MA"]
+    # The indexer has the call: the next release is asked the same way.
+    assert nfo_audio._has_mediainfo_call("127.0.0.1")
+
+
+def test_a_report_that_names_no_known_audio_falls_back_to_the_nfo(indexer):
+    _Handler.replies[_MEDIAINFO_PATH] = (
+        200,
+        _mediainfo_reply(_track("Audio", Format="MPEG Audio", Channels="2")),
+    )
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    rows = _rows(PLAIN)
+    _offer_api(rows[0], indexer)
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert len(_Handler.requests) == 2
+    assert nfo_audio._known(_key(PLAIN))["audio"] == ["DTS-HD MA"]
+
+
+def test_an_indexer_without_the_call_is_not_asked_for_it_again(indexer, store):
+    # No reply set for the MediaInfo path: the stand-in answers a bare 404.
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    rows = _rows(PLAIN, OTHER)
+    _offer_api(rows[0], indexer)
+    _offer_api(rows[1], indexer, guid="ffffffff-0000-1111-2222-333333333333")
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    paths = [path.split("?")[0] for path in _Handler.requests]
+    # Asked once for MediaInfo, then only for NFOs.
+    assert paths == [_MEDIAINFO_PATH, "/api", "/api"]
+    assert json.loads(store.read_text())["rest"]["127.0.0.1"]["ok"] is False
+
+    # The next run remembers, and a month later it asks again.
+    nfo_audio.forget_all()
+    more = _rows(THIRD)
+    _offer_api(more[0], indexer)
+    assert filter_module.learn_nfo_audio(more, _ttl) is True
+    assert len(_Handler.requests) == 4 and _Handler.requests[-1].startswith("/api?")
+    another = _rows(FOURTH)
+    _offer_api(another[0], indexer)
+    with patch("resources.lib.nfo_audio.time.time", return_value=10**10):
+        filter_module.learn_nfo_audio(another, _ttl)
+    assert _Handler.requests[4] == _MEDIAINFO_PATH
+
+
+def test_a_refusal_from_an_indexer_never_seen_to_have_the_call_reads_the_nfo(
+    indexer,
+):
+    _Handler.replies[_MEDIAINFO_PATH] = (403, b"Forbidden")
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    rows = _rows(PLAIN)
+    _offer_api(rows[0], indexer)
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert not nfo_audio._host_paused("127.0.0.1")
+    assert not nfo_audio._may_ask_mediainfo("127.0.0.1")
+
+
+def test_a_refusal_from_an_indexer_with_the_call_pauses_it(indexer):
+    _Handler.replies[_MEDIAINFO_PATH] = (403, b"Forbidden")
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    nfo_audio._note_rest("127.0.0.1", True)
+    rows = _rows(PLAIN, OTHER)
+    _offer_api(rows[0], indexer)
+    _offer_api(rows[1], indexer, guid="ffffffff-0000-1111-2222-333333333333")
+    with patch("resources.lib.nfo_audio.xbmc.log") as log:
+        assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    # One request: no NFO read, and the second release was not asked about.
+    assert _Handler.requests == [_MEDIAINFO_PATH]
+    assert nfo_audio._host_paused("127.0.0.1")
+    assert nfo_audio._known(_key(PLAIN))["failed"] is True
+    assert not any("SECRET" in call.args[0] for call in log.call_args_list)
+
+
+def test_too_many_requests_pauses_any_indexer(indexer):
+    _Handler.replies[_MEDIAINFO_PATH] = (429, b"slow down")
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    rows = _rows(PLAIN)
+    _offer_api(rows[0], indexer)
+    with patch("resources.lib.nfo_audio.xbmc.log"):
+        assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert _Handler.requests == [_MEDIAINFO_PATH]
+    assert nfo_audio._host_paused("127.0.0.1")
+
+
+def test_a_server_error_on_the_call_reads_the_nfo_and_decides_nothing(indexer):
+    _Handler.replies[_MEDIAINFO_PATH] = (503, b"busy")
+    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    rows = _rows(PLAIN)
+    _offer_api(rows[0], indexer)
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert len(_Handler.requests) == 2
+    assert nfo_audio._may_ask_mediainfo("127.0.0.1")
+    assert not nfo_audio._has_mediainfo_call("127.0.0.1")
+
+
+def test_an_odd_rest_record_in_the_store_is_ignored(store):
+    store.write_text(
+        json.dumps(
+            {
+                "v": 1,
+                "releases": {},
+                "hosts": {},
+                "rest": {
+                    "good.example": {"ok": False, "at": 10**10},
+                    "bad.example": {"ok": "no", "at": 1},
+                    "worse.example": "junk",
+                    "5": {"ok": True},
+                },
+            }
+        )
+    )
+    nfo_audio.forget_all()
+    assert not nfo_audio._may_ask_mediainfo("good.example")
+    for host in ("bad.example", "worse.example", "5", "new.example"):
+        assert nfo_audio._may_ask_mediainfo(host)

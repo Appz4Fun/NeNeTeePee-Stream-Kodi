@@ -75,10 +75,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   release's NFO with its search result, the add-on reads it for the first
   three releases of a search (`nfo_audio_releases`, 0 for off) and adds the
   formats and channel count it names to the release's label and ranking.
-  Each read is one API call to that indexer, done once per release and
-  remembered for every listing of that name. The picker waits two seconds at
-  most for the answers. The link is followed only to the indexer the result
-  came from and is never logged.
+  Where the indexer also serves MediaInfo (Treasure Maps does, from
+  `/api/v1/releases/<id>/mediainfo`), that is asked for first: it lists
+  every audio track with its format, Atmos or DTS:X marker and channel
+  count, so a WEB-DL named `DDP5.1` whose file carries Atmos is labelled
+  `DD+ Atmos 5.1`. The NFO is read when the release has no MediaInfo. One or
+  two API calls to that indexer per release, done once and remembered for
+  every listing of that name. The picker waits two seconds at most for the
+  answers. The link is followed only to the indexer the result came from
+  and is never logged.
 - **The dialog counts the listings it does not download.** A release shown
   as 20 copies could send 10 NZBs with nothing saying why: several indexers
   list the same upload, and one NZB per upload is fetched. While the NZBs

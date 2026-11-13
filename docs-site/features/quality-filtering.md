@@ -151,15 +151,27 @@ NFO and a link to it, and NZBHydra2 passes both through. For the first
 releases of a search that offer one, the add-on reads the NFO and adds the
 audio formats and the channel count it names to the release:
 
+- **MediaInfo first, where the indexer serves it.** An NFO is free text.
+  MediaInfo is the tool's own report of the file and lists every audio
+  track with its format, its Atmos or DTS:X marker and its channel count.
+  Treasure Maps serves it from a second API on the same site
+  (`/api/v1/releases/<id>/mediainfo`), so the add-on asks there first, with
+  the key the NFO link carries sent in a header, and reads the NFO when the
+  release has no MediaInfo. An indexer without that call is asked once and
+  then not again for a month.
 - **Only the top releases** (`nfo_audio_releases`, 3 by default, 0 for
-  off). Each read is one API call on your account with that indexer.
+  off). Each release costs one API call on your account with that indexer,
+  or two when it has no MediaInfo and its NFO is read instead.
 - **Once per release.** The answer, or that the NFO named no audio, is kept
   in the add-on's data folder and applies to every listing of that release
   name from then on, whichever indexer lists it. A read that failed is tried
   again a day later.
 - **An indexer that refuses is left alone for a day.** If one answers that
   the client is not allowed, the key is wrong or a limit is reached, the
-  add-on sends it no more NFO requests until the next day.
+  add-on sends it no more MediaInfo or NFO requests until the next day.
+- **With several tracks of the main format, the fullest one counts.** A
+  stereo Dolby Digital Plus track listed before the 5.1 one with Atmos does
+  not make the release 2.0.
 - **Atmos is only taken from the main track.** An NFO that lists a plain
   TrueHD track and a separate Dolby Digital Plus Atmos track does not make
   the release "TrueHD Atmos".

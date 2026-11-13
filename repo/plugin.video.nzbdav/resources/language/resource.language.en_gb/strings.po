@@ -2551,5 +2551,5 @@ msgid "Read the NFO of the top releases"
 msgstr ""
 
 msgctxt "#30699"
-msgid "When an indexer offers a release's NFO, the add-on reads it for the first few releases of a search and adds the audio it names (for example DTS-HD MA 5.1) to the release. Each read is one API call to that indexer and is done once per release. 0 turns it off."
+msgid "When an indexer offers a release's NFO, the add-on reads it for the first few releases of a search and adds the audio it names (for example DTS-HD MA 5.1) to the release. Where the indexer also serves MediaInfo, that is asked for first. One or two API calls to that indexer per release, done once. 0 turns it off."
 msgstr ""
