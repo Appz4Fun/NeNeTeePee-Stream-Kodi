@@ -107,9 +107,7 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
    release with several tags ranks by its best.
 6. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
    releases, then everything else.
-7. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
-   groups in no tier. Group names match exactly, without case sensitivity.
-8. **Audio:** four tiers, ranked by the release's best track:
+7. **Audio:** four tiers, ranked by the release's best track:
     1. lossless: TrueHD (with or without Atmos), DTS-HD MA (with or without
        DTS:X), FLAC, PCM and ALAC;
     2. lossy with object audio: Dolby Digital Plus with Atmos, and lossy
@@ -120,6 +118,10 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 
     A release with no audio tag ranks after all four. Formats in one tier
     tie, so FLAC ranks beside TrueHD Atmos.
+8. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
+   groups in no tier. Group names match exactly, without case sensitivity.
+   Audio is compared first, so Dolby Digital Plus with Atmos from a group in
+   no tier ranks above plain Dolby Digital Plus from a preferred group.
 9. **NZB copies:** among releases still tied, the release with more NZBs in
    the results sorts first, so a pick has more backups if one NZB fails.
    Copies are counted with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release)
