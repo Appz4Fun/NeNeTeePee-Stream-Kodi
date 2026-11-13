@@ -23,6 +23,8 @@ video. An unknown value only equals another unknown: a row that names a codec
 is a different release from one that names none.
 """
 
+import functools
+
 _VARIANT_FLAGS = (
     "3d",
     "dubbed",
@@ -57,7 +59,14 @@ def title_key(title):
     "journeys end"; both are "journeysend" here, so an apostrophe an indexer
     dropped does not make two titles.
     """
-    return "".join(ch for ch in str(title or "").casefold() if ch.isalnum())
+    return _title_key(str(title or ""))
+
+
+@functools.lru_cache(maxsize=4096)
+def _title_key(title):
+    # Sorting and grouping ask for the same few titles and groups thousands
+    # of times in one picker open.
+    return "".join(ch for ch in title.casefold() if ch.isalnum())
 
 
 def variant_tags(parsed):

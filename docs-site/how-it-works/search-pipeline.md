@@ -202,7 +202,11 @@ the search type, title, year, season/episode, IDs, and the enabled provider set.
 - A search made with different providers enabled never reuses another's entry.
 - Changing filter or sort settings takes effect immediately. No new search
   needed, because filtering runs fresh on every read.
-- The cache self-limits to 50 MB and 1000 entries, evicting the oldest first,
+- Each entry also keeps the parsed details of every release name, so a
+  repeat open skips the name parsing, the slowest step on a low-power box.
+  Those details are reused only by the build that stored them: after an
+  update, an entry is parsed once more and stored again.
+- The cache self-limits to 70 MB and 1000 entries, evicting the oldest first,
   and writes atomically.
 
 The `plugin://` play and search routes and the TMDBHelper RunScript path all

@@ -118,6 +118,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Reopening a cached search is two to three times faster.** A repeat open
+  read the search from the cache and then parsed every release name again,
+  which was most of the wait on a CoreELEC box: about 1.2 seconds of a
+  2-second open for 475 results. The cache now keeps each name's parsed
+  details beside the results, once per name, and a repeat open reads them
+  back. The list is also sorted once instead of twice when no result is
+  filtered out. With the box's own Python, the parse and sort work of that
+  open fell from 1.1 seconds to 0.5; in Kodi on a test machine a cached
+  588-result open went from 0.35 seconds to 0.11. 132 real cached searches
+  (82,933 results) give the identical list either way. Stored details are
+  reused only by the build that wrote them: after an add-on update each
+  cached search is parsed once more and stored again. An entry is about 40%
+  larger, so the cache limit is 70 MB instead of 50.
 - **Collecting a large release's NZBs is about four times faster.** To tell
   whether two copies are the same upload, the add-on reads every article ID in
   each NZB: 130,000 of them in a 12 MB NZB for a remux. On a CoreELEC box that

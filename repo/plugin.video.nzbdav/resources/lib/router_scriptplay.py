@@ -252,7 +252,8 @@ def _script_play_search_results(
     ``None`` so the caller stops, exactly as the prior inline block did.
     """
     import resources.lib.router as _router
-    from resources.lib.cache import get_cached, set_cached
+    from resources.lib.cache import get_cached, keep_parsed, set_cached
+    from resources.lib.filter import attach_metadata
     from resources.lib.search_planner import SearchQuery
 
     getter = _router._get_script_setting
@@ -262,6 +263,8 @@ def _script_play_search_results(
         _router._script_play_stage(
             "loaded {} results from cache for '{}'".format(len(results), title)
         )
+        # An entry stored without its rows' parsed details gets them now.
+        keep_parsed(search_type, title, results, settings_getter=getter, **cache_kwargs)
         search_error = None
     else:
         _router._script_play_stage("provider search start for '{}'".format(title))
@@ -276,6 +279,9 @@ def _script_play_search_results(
         # A provider that failed while others answered would be missing from
         # the cached rows for the whole window: cache complete searches only.
         if results and not search_error and outcome.get("complete", True):
+            # Parsed here so the entry holds each name's details: the next
+            # open of this search skips the parsing.
+            attach_metadata(results)
             set_cached(
                 search_type, title, results, settings_getter=getter, **cache_kwargs
             )

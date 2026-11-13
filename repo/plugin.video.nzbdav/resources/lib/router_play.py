@@ -35,7 +35,7 @@ def _search_with_cache(search_type, title, cache_kwargs):
     failure; a clean empty result returns ``([], None)``.
     """
     import resources.lib.router as _router
-    from resources.lib.cache import get_cached, set_cached
+    from resources.lib.cache import get_cached, keep_parsed, set_cached
 
     getter = _play_search_getter()
     providers = _router._provider_cache_tag(getter)
@@ -54,6 +54,8 @@ def _search_with_cache(search_type, title, cache_kwargs):
             ).format(len(results), title),
             xbmc.LOGDEBUG,
         )
+        # An entry stored without its rows' parsed details gets them now.
+        keep_parsed(search_type, title, results, providers=providers, **cache_kwargs)
         return results, None
 
     return _query_and_cache_providers(
@@ -112,6 +114,11 @@ def _query_and_cache_providers(  # pylint: disable=too-many-arguments
             ),
             xbmc.LOGDEBUG,
         )
+        # Parsed here so the entry holds each name's details: the next open
+        # of this search skips the parsing.
+        from resources.lib.filter import attach_metadata
+
+        attach_metadata(results)
         set_cached(search_type, title, results, providers=providers, **cache_kwargs)
     return results, None
 

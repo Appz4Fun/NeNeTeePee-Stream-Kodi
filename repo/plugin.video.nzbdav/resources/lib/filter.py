@@ -4,6 +4,7 @@
 """Result filtering and sorting using PTT for title parsing."""
 
 import datetime
+import functools
 import math
 import re
 import statistics
@@ -552,6 +553,7 @@ _META_DERIVED_ROW_KEYS = (
 )
 
 
+@functools.lru_cache(maxsize=4096)
 def _name_form_key(title):
     """The release name with case and punctuation removed.
 
@@ -677,6 +679,16 @@ def _attach_metadata(results):
     _unify_name_forms(results)
 
 
+def attach_metadata(results):
+    """Parse the provider's rows before they are cached.
+
+    The search cache stores each row's ``_meta`` so a repeat open of the
+    picker skips the parsing (see ``cache``). Call this on the provider's
+    whole answer: spellings of one name are unified across all of it.
+    """
+    _attach_metadata(results)
+
+
 def _log_filter_summary(total, matched_count, shown):
     """Log the filter result counts, noting truncation when it occurred."""
     if shown < matched_count:
@@ -719,7 +731,12 @@ def filter_results(results, settings_getter=None):
     # The filtered view last: both sorts mark oddly sized copies on the same
     # row objects, and playback and backups read the rows of the filtered view.
     all_parsed = _sort_results(all_parsed, settings)
-    filtered = _sort_results(filtered, settings)
+    if len(filtered) == len(all_parsed):
+        # Nothing was rejected: the two views are the same rows in the same
+        # starting order, so the second sort would repeat the first.
+        filtered = list(all_parsed)
+    else:
+        filtered = _sort_results(filtered, settings)
 
     matched_count = len(filtered)
     max_results = settings["max_results"]
