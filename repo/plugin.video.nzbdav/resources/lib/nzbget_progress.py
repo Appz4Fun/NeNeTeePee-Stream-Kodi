@@ -120,6 +120,9 @@ class FleetReport:
         return len(self.sent) + self.not_sent()
 
 
+# A backup NZBGet holds in history and can still promote on a failover.
+_PARKED_STATUS = "DELETED/DUPE"
+
 # The indexer line stops adding names past this many characters.
 _INDEXER_LINE_WIDTH = 64
 
@@ -168,13 +171,17 @@ def backup_kinds(rows, owned, current):
     """Count the owned backups NZBGet marked as twins or alts.
 
     ``rows`` are history rows; a server that sets no ``DupeKind`` parameter
-    (stock NZBGet) yields ``{}``. ``current`` (the copy being downloaded) is
-    not a backup and is left out.
+    (stock NZBGet) yields ``{}``. Only a parked backup counts: a
+    ``DELETED/DUPE`` row the server can still promote. ``current`` (the copy
+    being downloaded) is not a backup, and a copy that was promoted and failed
+    keeps its mark but is no longer one.
     """
     wanted = {str(nzbid) for nzbid in owned or [] if str(nzbid) != str(current)}
     kinds = {}
     for row in rows or []:
         if not isinstance(row, dict) or str(row.get("NZBID")) not in wanted:
+            continue
+        if str(row.get("Status") or "").upper() != _PARKED_STATUS:
             continue
         for parameter in row.get("Parameters") or []:
             if isinstance(parameter, dict) and parameter.get("Name") == "DupeKind":

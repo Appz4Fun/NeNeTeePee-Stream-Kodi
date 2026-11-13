@@ -402,11 +402,27 @@ def test_a_dropped_copy_is_only_called_refused_when_its_indexer_refused():
     assert report.failed == 2
 
 
-def _history_row(nzbid, kind=None):
+def _history_row(nzbid, kind=None, status="DELETED/DUPE"):
     parameters = [{"Name": "DupeAlive", "Value": "100"}]
     if kind:
         parameters.append({"Name": "DupeKind", "Value": kind})
-    return {"NZBID": nzbid, "Parameters": parameters}
+    return {"NZBID": nzbid, "Status": status, "Parameters": parameters}
+
+
+def test_a_backup_that_was_promoted_and_failed_is_no_longer_counted():
+    # Copy 2 took over and failed; its history row keeps DupeKind=alt. Only
+    # the copies still parked are backups.
+    rows = [
+        _history_row(1, None, "FAILURE/HEALTH"),
+        _history_row(2, "alt", "FAILURE/PAR"),
+        _history_row(3, "alt"),
+        _history_row(4, "twin", "WARNING/DAMAGED"),
+        _history_row(5, "twin", "SUCCESS/ALL"),
+        _history_row(6, "twin", "deleted/dupe"),
+    ]
+    kinds = nzbget_progress.backup_kinds(rows, [1, 2, 3, 4, 5, 6, 7], 7)
+    assert kinds == {"alt": 1, "twin": 1}
+    assert nzbget_progress.kinds_line(kinds) == "Backups: 1 twin, 1 alt"
 
 
 def test_backups_are_counted_as_twins_and_alts():
