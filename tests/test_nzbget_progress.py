@@ -795,3 +795,48 @@ def test_the_collecting_stage_fills_in_as_copies_arrive():
         "[CR]Not sent: Digital Carnage refused 1, 1 duplicate upload"
     )
     assert nzbget_progress.collecting_message(None, 2, 3) == "Downloading NZBs 2 of 3"
+
+
+def test_the_poll_keeps_reading_until_every_backup_is_marked():
+    # The server marks its backups a couple at a time after the submit: the
+    # fourth read is the first to find all three marked.
+    dialog = _Dialog()
+    groups = [_group(percent=n % 100) for n in range(1, 200)]
+    groups.append({"present": False, "status": "", "percent": 0})
+    reads = []
+
+    def _history_rows(_getter=None):
+        reads.append(1)
+        marked = min(len(reads) - 1, 3)
+        return [_history_row(2 + n, "alt") for n in range(marked)] + [
+            _history_row(2 + n) for n in range(marked, 3)
+        ]
+
+    with patch(_GS, side_effect=groups), patch(_HS, return_value=dict(_DONE)), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows",
+        side_effect=_history_rows,
+    ):
+        poll_nzbget_job(
+            1, dialog, _Monitor(), 6000, interval=0, fleet=_fleet(1, 2, 3, 4)
+        )
+    assert len(reads) == 4
+    messages = [message for _percent, message in dialog.lines]
+    assert "Backups" not in messages[0]
+    assert "Backups: 1 alt" in messages[10]
+    assert "Backups: 3 alts" in messages[30]
+    assert "Backups: 3 alts" in messages[-1]
+
+
+def test_the_poll_gives_up_reading_marks_a_server_never_sets():
+    from resources.lib import nzbget_resolver
+
+    dialog = _Dialog()
+    groups = [_group(percent=n % 100) for n in range(1, 400)]
+    groups.append({"present": False, "status": "", "percent": 0})
+    with patch(_GS, side_effect=groups), patch(_HS, return_value=dict(_DONE)), patch(
+        "resources.lib.nzbget_resolver.nzbget_api.history_rows",
+        return_value=[_history_row(2), _history_row(3)],
+    ) as read:
+        poll_nzbget_job(1, dialog, _Monitor(), 6000, interval=0, fleet=_fleet(1, 2, 3))
+    assert read.call_count == nzbget_resolver._KIND_READS
+    assert all("Backups" not in message for _percent, message in dialog.lines)

@@ -359,7 +359,9 @@ Copy 1 failed: too many missing articles
     - what the backups are, on a server that reports it (RustyGet):
       `Backups: 2 twins, 3 alts`. A **twin** is a byte-identical copy the
       server can borrow missing articles from. An **alt** is a different
-      upload kept as a fallback;
+      upload kept as a fallback. The server works these out after it accepts
+      the copies, a couple at a time, so the counts fill in over the first
+      minutes;
     - what was not sent, if anything was.
 
 NZBGet doesn't report how many par2 blocks a repair needs while it runs, so
