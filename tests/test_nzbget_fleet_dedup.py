@@ -511,6 +511,26 @@ def test_parse_max_backups(raw, expected):
     assert _parse_max_backups(raw) == expected
 
 
+def test_backup_rows_carry_the_indexer_name():
+    # Found on a real Kodi run: the rows handed to the worker had no indexer,
+    # so every fetch was logged as unnamed and no refusing indexer was skipped.
+    from resources.lib.router_play import _backup_row, _same_release_backups
+
+    name = "Movie.2024.1080p.WEB-DL.x264-GRP"
+    pick = {"title": name, "link": "u0", "indexer": "Geek", "size": 100}
+    rows = [
+        pick,
+        {"title": name, "link": "u1", "indexer": "Square Eyed", "size": 100},
+        {"title": name, "link": "u2", "size": 100},
+    ]
+    assert _backup_row(pick)["indexer"] == "Geek"
+    got = _same_release_backups(pick, rows)
+    assert [(row["link"], row["indexer"]) for row in got] == [
+        ("u1", "Square Eyed"),
+        ("u2", ""),
+    ]
+
+
 def test_same_release_backups_exact_first_then_other_names():
     from resources.lib.router_play import _same_release_backups
 
