@@ -3,7 +3,7 @@
 
 import re
 
-from resources.lib.filter_languages import title_languages
+from resources.lib.filter_languages import is_language_word, title_languages
 from resources.lib.release_subject import release_name_from_subject
 
 
@@ -17,36 +17,58 @@ _DV = _pattern(r"dv|dovi|dolby[. _-]?vision")
 _HLG = _pattern(r"hlg")
 _RESOLUTION = _pattern(r"\d{3,4}x\d{3,4}|\d{3,4}[pi]|[48]k|qhd")
 
+_AUDIO_EXPRESSIONS = (
+    ("Atmos", r"atmos"),
+    ("TrueHD", r"true[. _-]?hd"),
+    ("DTS:X", r"dts[. :_-]?x"),
+    ("DTS-HD MA", r"dts[. _-]?hd[. _-]?(?:ma|master(?:[. _-]?audio)?)"),
+    ("DTS-HD HR", r"dts[. _-]?hd[. _-]?(?:hra?|high[. _-]?resolution)"),
+    ("DTS", r"dts(?![. _:-]?(?:hd|x)\b)"),
+    (
+        "DD+",
+        r"e[. _-]?ac[. _-]?3(?:x\d+)?|dd2?(?:p|\+)(?:[1-9][. _]?\d)?"
+        r"|dd[. _-]?plus"
+        r"|dolby[. _-]?digital[. _-]?plus",
+    ),
+    (
+        "DD",
+        r"ac[. _-]?3(?:x\d+)?|dd(?:[1257][. _]?\d)?|dolby[. _-]?(?:digital|d)",
+    ),
+    ("AAC", r"(?:he[. _-]?|q{1,2})?aac(?:[1257][. _]?\d|2)?(?:x\d+)?"),
+    ("FLAC", r"flac(?:[1257][. _]?\d)?(?:x\d+)?"),
+    ("PCM", r"l?pcm(?:[1257][. _]?\d)?"),
+    ("OPUS", r"opus(?:[1257][. _]?\d)?"),
+    ("MP3", r"mp3"),
+    ("ALAC", r"alac"),
+    ("Vorbis", r"vorbis"),
+    ("MP2", r"mp2"),
+    ("WMA", r"wma(?:[. _-]?pro)?"),
+    ("AC-4", r"ac[. _-]?4"),
+)
 _AUDIO_PATTERNS = tuple(
-    (name, _pattern(expression))
-    for name, expression in [
-        ("Atmos", r"atmos"),
-        ("TrueHD", r"true[. _-]?hd"),
-        ("DTS:X", r"dts[. :_-]?x"),
-        ("DTS-HD MA", r"dts[. _-]?hd[. _-]?(?:ma|master(?:[. _-]?audio)?)"),
-        ("DTS-HD HR", r"dts[. _-]?hd[. _-]?(?:hra?|high[. _-]?resolution)"),
-        ("DTS", r"dts(?![. _:-]?(?:hd|x)\b)"),
-        (
-            "DD+",
-            r"e[. _-]?ac[. _-]?3(?:x\d+)?|dd2?(?:p|\+)(?:[1-9][. _]?\d)?"
-            r"|dd[. _-]?plus"
-            r"|dolby[. _-]?digital[. _-]?plus",
-        ),
-        (
-            "DD",
-            r"ac[. _-]?3(?:x\d+)?|dd(?:[1257][. _]?\d)?|dolby[. _-]?(?:digital|d)",
-        ),
-        ("AAC", r"(?:he[. _-]?|q{1,2})?aac(?:[1257][. _]?\d|2)?(?:x\d+)?"),
-        ("FLAC", r"flac(?:[1257][. _]?\d)?(?:x\d+)?"),
-        ("PCM", r"l?pcm(?:[1257][. _]?\d)?"),
-        ("OPUS", r"opus(?:[1257][. _]?\d)?"),
-        ("MP3", r"mp3"),
-        ("ALAC", r"alac"),
-        ("Vorbis", r"vorbis"),
-        ("MP2", r"mp2"),
-        ("WMA", r"wma(?:[. _-]?pro)?"),
-        ("AC-4", r"ac[. _-]?4"),
-    ]
+    (name, _pattern(expression)) for name, expression in _AUDIO_EXPRESSIONS
+)
+
+_AUDIO_ORDER = tuple(name for name, _pattern_ in _AUDIO_PATTERNS)
+# "DDPA5.1", "DD+A", "DDPAtmos5.1": Dolby Digital Plus with Atmos as one tag.
+_DDP_ATMOS = _pattern(r"dd(?:p|\+)a(?:tmos)?(?:[1-9][. _]?\d)?")
+# "DD_5.1" in a dotted name, "DD 5.1" in a dotted or underscored one: the
+# "+" of "DD+5.1" replaced by an indexer or a URL decode. Group 1 is the
+# stand-in character.
+_DD_LOST_PLUS = _pattern(r"dd([ _])[1-9][. _]?\d")
+# The channel count written right after an audio tag, an "Atmos" in between
+# at most: "FLAC.1.0", "TrueHD.Atmos.7.1", "DDP5.1", "Opus 2 0".
+_CHANNELS_AFTER_AUDIO = re.compile(
+    r"(?<![a-z0-9])(?:"
+    + "|".join(expression for _name, expression in _AUDIO_EXPRESSIONS)
+    + r")(?:[. _-]?atmos)?[. _-]?([1-9])[. _]?([0-2])(?![a-z0-9])",
+    re.I,
+)
+_HYBRID = _pattern(r"hybrid")
+# Where a name's title ends and its tags begin: a year, SxxEyy or a
+# resolution. A "Hybrid" before it is a title word ("Hybrid.2007.1080p").
+_TAGS_START = _pattern(
+    r"(?:19|20)\d{2}|s\d{1,2}(?:e\d{1,3})*|\d{1,2}x\d{2,3}|\d{3,4}[pi]|[48]k"
 )
 
 _CODEC_PATTERNS = tuple(
@@ -100,6 +122,9 @@ _GROUP_AT_END = re.compile(r"(?:-|\s-\s?)([a-z0-9][\w&@-]*)\)?\s*$", re.I)
 # A whole group in trailing parentheses: "x264.(D-Z0N3)", "(GROUP-NAME)".
 _PAREN_GROUP_AT_END = re.compile(r"[ ._-]\(([a-z0-9][\w&@-]*)\)\s*$", re.I)
 _LEADING_GROUP = re.compile(r"^\[([^\[\]]+)\]")
+# A trailing parenthesized block of space-separated tags; its last word may
+# be the group ("(1080p BluRay x265 10bit AAC 5.1 Tigole)").
+_PAREN_TAG_BLOCK = re.compile(r"\(([^()]*\s[a-z0-9][\w&@-]*)\)\s*$", re.I)
 _NOT_A_GROUP = re.compile(
     r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
     r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
@@ -197,7 +222,22 @@ def detect_release_group(title, parsed_group=""):
         return group
     if _valid_group(parsed_group) and not _TRAILING_TAG.search("-" + str(parsed_group)):
         return str(parsed_group)
-    return leading
+    return leading or _tag_block_group(name)
+
+
+def _tag_block_group(name):
+    """The group ending a trailing parenthesized tag block, else "".
+
+    "Movie (2023) (2160p BluRay x265 HEVC 10bit HDR AAC 7.1 Tigole)": the
+    block holds a resolution and its last word is no tag and no language.
+    """
+    block = _PAREN_TAG_BLOCK.search(name)
+    if not block or not _RESOLUTION.search(block.group(1)):
+        return ""
+    last = block.group(1).split()[-1]
+    if _valid_group(last) and not is_language_word(last):
+        return last
+    return ""
 
 
 def detect_hdr(title):
@@ -219,15 +259,60 @@ def detect_hdr(title):
     return values or ["SDR"]
 
 
+def _main_separator(name):
+    """The character a name separates its words with: ".", " " or "_"."""
+    return max(". _", key=name.count)
+
+
 def detect_audio(title):
-    """Consume specific tags before broad tags, avoiding DTS/DD mislabeling."""
-    values = []
+    """Audio formats tagged in the title, in ``_AUDIO_EXPRESSIONS`` order.
+
+    Specific tags are consumed before broad ones, so "DTS-HD.MA" is not also
+    "DTS" and "DDP5.1" is not also "DD". Three Dolby spellings are read as
+    Dolby Digital Plus (E-AC-3):
+
+    * "DDPA5.1" / "DD+A": Dolby Digital Plus with Atmos;
+    * "DD_5.1" or "DD 5.1" where the name separates its words with another
+      character: the "+" of "DD+5.1" was replaced on the way here;
+    * "DD" beside "Atmos" with no TrueHD: Atmos only rides on TrueHD or on
+      Dolby Digital Plus, never on plain Dolby Digital (AC-3).
+    """
+    found = set()
     remaining = title
+    if _DDP_ATMOS.search(remaining):
+        found.update(("Atmos", "DD+"))
+        remaining = _DDP_ATMOS.sub(" ", remaining)
+    separator = _main_separator(title)
+    for match in _DD_LOST_PLUS.finditer(remaining):
+        if match.group(1) != separator:
+            found.add("DD+")
+            remaining = remaining.replace(match.group(0), " ")
     for name, pattern in _AUDIO_PATTERNS:
         if pattern.search(remaining):
-            values.append(name)
+            found.add(name)
             remaining = pattern.sub(" ", remaining)
-    return values
+    if "Atmos" in found and "DD" in found and "TrueHD" not in found:
+        found.discard("DD")
+        found.add("DD+")
+    return [name for name in _AUDIO_ORDER if name in found]
+
+
+def detect_channels(title):
+    """The channel count written right after an audio tag ("5.1"), or ""."""
+    match = _CHANNELS_AFTER_AUDIO.search(title)
+    return "{}.{}".format(match.group(1), match.group(2)) if match else ""
+
+
+def detect_hybrid(title):
+    """Whether the name carries the HYBRID tag.
+
+    A hybrid release combines sources: one disc's video with another's
+    audio, or HDR10+ and Dolby Vision layers from different releases. Only a
+    "Hybrid" after the year, episode or resolution counts; before it, the
+    word belongs to the title.
+    """
+    start = _TAGS_START.search(title)
+    return bool(start and _HYBRID.search(title, start.end()))
 
 
 def detect_codec(title):
@@ -272,6 +357,8 @@ def supplement_metadata(title, meta):
         meta["audio"] = audio + [
             value for value in meta["audio"] if value not in replaced
         ]
+    meta["channels"] = meta.get("channels") or detect_channels(title)
+    meta["hybrid"] = detect_hybrid(title)
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])
     meta["group"] = detect_release_group(title, meta.get("group", ""))

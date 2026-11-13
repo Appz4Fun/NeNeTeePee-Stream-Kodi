@@ -256,7 +256,7 @@ every parsed release field is equal:
 - resolution, HDR (Dolby Vision, HDR10, HDR10+, HLG, or SDR when none),
   audio formats and channels
 - codec and quality (source, such as WEB-DL or BluRay)
-- edition, PROPER and REPACK
+- edition, PROPER, REPACK and HYBRID
 - 3D, dubbed or MULTi, hardcoded-subtitle, and cut tags (Extended, Unrated,
   Uncensored, Remastered)
 - release group
@@ -265,8 +265,8 @@ A field one name states and the other leaves out counts as different. Language
 and soft-subtitle tags aren't compared, and the naming style (dots, spaces,
 brackets) never matters. A result with no release group is never grouped with
 another, even one with the same name; a literal `NOGRP` or `P2P` tag counts as
-a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`) is read as the
-release name inside it.
+a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`, with or without
+its quotes, size or poster wrapper) is read as the release name inside it.
 
 NeNeTeePee-Stream-Kodi never uses file size to decide whether two results are
 the same release. The backup pool reuses same-title uploads retained from the

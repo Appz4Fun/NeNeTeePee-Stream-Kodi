@@ -153,13 +153,16 @@ Full walkthrough:
 - **Quality filtering and ranking** by resolution, HDR, audio, codec, language,
   release group, size, and keywords. Default-enabled Other / Unknown options
   prevent unrecognized formats from disappearing. Relevance ranks resolution
-  first, then releases with a group, HDR, Hybrid REMUX / REMUX, three editable
-  TRaSH remux group tiers and audio, and among ties prefers the release with
-  more NZB copies.
+  first, then CiNEPHiLES and FraMeSToR, releases with a group, HDR, Hybrid
+  REMUX / REMUX, three editable TRaSH remux group tiers and four audio tiers
+  (lossless first), and among ties prefers the release with more NZB copies.
 - **A compact release picker**: each release appears once, however many
   indexers carry it, with a side panel listing its copies. One same-release
   rule drives the picker, the copies tiebreak and NZBGet duplicate backups.
-  **Sorting › Results view › List** restores one row per copy.
+  **Sorting › Results view › List** restores one row per copy. Every row is
+  shown under one normalized name, such as
+  `Movie (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-GROUP`,
+  whatever the indexer sent, and HYBRID releases get their own colored tag.
 - **Exact season-pack playback and reuse**: completed multi-episode downloads
   play the requested episode instead of the largest file, then appear as an
   already-downloaded pack for later episodes from that same backend job.

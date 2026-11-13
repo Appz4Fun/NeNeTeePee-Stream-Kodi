@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Nothing yet |
+| [Unreleased](#unreleased--main) | on `main` | Normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, four audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -67,7 +67,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased][] — main
 
-Nothing yet.
+### Added
+
+- **Normalized release names in the picker.** Every row is shown in one
+  format, built from what the release name says:
+  `Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES`,
+  or `Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX` for
+  an episode. Raw Usenet subjects (`[1/3] - "Name.mkv" yEnc 4400443301`) no
+  longer appear as listed. In List compacted, the side panel shows the name
+  as the indexer listed it in grey under the normalized one.
+- **HYBRID is a parsed attribute** with its own cyan slot on each picker row.
+  It is part of the same-release rule, so a hybrid and its plain twin are
+  never grouped or used as each other's backup. A `Hybrid` in the title
+  (*Hybrid (2007)*) is not the tag.
+- **CiNEPHiLES and FraMeSToR are pinned.** Under Relevance, a CiNEPHiLES
+  release ranks first in its resolution and a FraMeSToR release second,
+  ahead of HDR, REMUX and the preferred group tiers.
+
+### Changed
+
+- **Audio ranks in four tiers** under Relevance: lossless (TrueHD with or
+  without Atmos, DTS-HD MA with or without DTS:X, FLAC, PCM, ALAC), then
+  Dolby Digital Plus with Atmos and lossy DTS:X, then Dolby Digital Plus,
+  Dolby Digital, DTS and DTS-HD HR, then everything else. FLAC now ranks
+  beside TrueHD Atmos, and Opus and MP3 below Dolby Digital.
+- **The picker's audio column shows the main track**, such as
+  `TrueHD Atmos 7.1` or `DD+ 5.1`. Its HDR column reads `DV HDR10+`, and its
+  codec column `HEVC`, `x265` or `H265` as the name spells it. The List
+  compacted columns were resized so these fit without being cut off.
+
+### Fixed
+
+- **Dolby Digital Plus is recognized in more spellings.** `DD_5.1`, and
+  `DD 5.1` in a dotted name, are read as `DD+5.1` (the plus sign was replaced
+  on the way from the indexer). `DDPA5.1` and `DD+A` are Dolby Digital Plus
+  with Atmos, and `DD` beside `Atmos` with no TrueHD is Dolby Digital Plus,
+  because Atmos is never carried on plain Dolby Digital.
+- **Channel counts are read after any audio tag**, so `FLAC.1.0` and
+  `Opus.5.1` keep their channels.
+- **A WtFnZb subject with a poster prefix is read as the release inside
+  it** (`[N3wZ] \id\::[PRiVATE]-[WtFnZb]-[Name]-[1/2]`); the prefix used to
+  end up in the title and split the release from its other copies.
+- **A group at the end of a parenthesized tag block is read**, as in
+  `Movie (2023) (2160p BluRay x265 HEVC 10bit HDR AAC 7.1 Tigole)`.
 
 ## [2.0.0-rc.1][] — 2026-11-09
 

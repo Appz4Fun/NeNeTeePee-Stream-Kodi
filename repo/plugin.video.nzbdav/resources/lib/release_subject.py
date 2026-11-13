@@ -18,10 +18,12 @@ import re
 
 _QUOTED = re.compile(r'"([^"]*)"')
 _BRACKETED = re.compile(r"\[([^\[\]]*)\]")
-# The WtFnZb style: "[PRiVATE]-[WtFnZb]-[Real.Name.mkv]-[1/7] - "" yEnc". The
-# name may hold brackets of its own, so take everything up to "]-[n/m]".
+# The WtFnZb style: "[PRiVATE]-[WtFnZb]-[Real.Name.mkv]-[1/7] - "" yEnc",
+# with or without a poster prefix ("[N3wZ] \\id\\::[PRiVATE]-..."). The name
+# is the chain bracket right before the "[n/m]" counter. It may hold brackets
+# of its own, but never a "]-[" chain link.
 _BRACKET_NAME = re.compile(
-    r"^\s*(?:\[[^\[\]]*\]\s*-\s*)*\[(.+?)\]\s*-\s*\[\s*\d+\s*(?:/|of)\s*\d+\s*\]",
+    r"\[((?:(?!\]\s*-\s*\[).)+)\]\s*-\s*\[\s*\d+\s*(?:/|of)\s*\d+\s*\]",
     re.I,
 )
 _CHAIN_BRACKET = re.compile(
@@ -216,12 +218,15 @@ def release_name_from_subject(title):
     if not is_usenet_subject(title):
         return title
     candidates = [_strip_file_suffix(q) for q in _QUOTED.findall(title)]
-    named = _BRACKET_NAME.match(title)
-    if named:
-        candidates.append(_strip_file_suffix(named.group(1)))
+    named = _BRACKET_NAME.search(title)
+    chain_name = _strip_file_suffix(named.group(1)) if named else ""
+    if chain_name:
+        candidates.append(chain_name)
     candidates += [_strip_file_suffix(b) for b in _BRACKETED.findall(title)]
     remainder = _subject_remainder(title)
-    if not named:  # a WtFnZb chain already names the release
+    # A WtFnZb chain that names the release needs no remainder; a chain
+    # bracket holding anything else ("[foo]-[1/5]") leaves it in play.
+    if not (chain_name and _looks_like_release(chain_name)):
         candidates.append(remainder)
     best = None
     for candidate in candidates:

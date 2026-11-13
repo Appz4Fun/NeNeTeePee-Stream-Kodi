@@ -3,12 +3,22 @@
 
 """Custom full-screen dialog for NZB search results selection."""
 
+import re
+
 import xbmcaddon
 import xbmcgui
 
+from resources.lib.filter_audio import audio_label
 from resources.lib.http_util import format_size as _format_size
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
+from resources.lib.release_display import (
+    HYBRID_LABEL,
+    clean_release_name,
+    codec_label,
+    display_name,
+    dynamic_range,
+)
 from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
 
@@ -69,6 +79,9 @@ _VIEW_SETTING = {"0": VIEW_COMPACT, "1": VIEW_LIST}
 _PANEL_MAX_COPIES = 14
 # Characters per line when the panel breaks a release name at its dots.
 _PANEL_NAME_WIDTH = 46
+_PANEL_RAW_COLOR = "FF6B7280"
+# HYBRID has a slot and a color of its own, used by nothing else in the row.
+_HYBRID_COLOR = "FF22D3EE"
 _COPY_LEAD_COLOR = "FFFFFFFF"
 _COPY_COLOR = "FF4A9EFF"
 _COPIES_CHIP_COLOR = "FFA8CCFF"
@@ -78,10 +91,15 @@ def _available_text():
     return _c(_AVAILABLE_LABEL, "FF22C55E")
 
 
+def _row_label(result):
+    """A row's name: the internal label of a synthetic row, else the
+    normalized release name (``release_display.display_name``)."""
+    return result.get("_display_title") or display_name(result)
+
+
 def _build_result_item(result, row_index):
     """Build a styled ListItem for a single search result row."""
-    label = result.get("_display_title") or result.get("title", "")
-    li = xbmcgui.ListItem(label=label)
+    li = xbmcgui.ListItem(label=_row_label(result))
     _set_result_properties(li, result)
     # Alternating row background
     li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
@@ -98,21 +116,29 @@ def _set_result_properties(li, result):
 
     hdr_list = meta.get("hdr", [])
     if hdr_list:
-        li.setProperty("hdr", _c(" ".join(hdr_list), "FFFBBF24"))
+        # "DV HDR10+" as in the row's name; "SDR" and unlisted values as is.
+        hdr_text = dynamic_range(meta) or " ".join(hdr_list)
+        li.setProperty("hdr", _c(hdr_text, "FFFBBF24"))
     elif not is_pack:
         li.setProperty("hdr", _c(_string(30400), "FF6B7280"))
     else:
         li.setProperty("hdr", "")
 
-    li.setProperty("codec", _c(meta.get("codec", ""), "FF94A3B8"))
+    # "HEVC", "x265" or "H265" as the name spells it, as in the row's name.
+    codec = codec_label(clean_release_name(result.get("title")), meta)
+    li.setProperty("codec", _c(codec, "FF94A3B8"))
 
-    audio_list = meta.get("audio", [])
-    audio_str = " ".join(audio_list) if audio_list else ""
+    audio_str = audio_label(
+        meta.get("audio"), meta.get("channels"), meta.get("quality")
+    )
     li.setProperty("audio", _c(audio_str, "FFE879A8"))
 
     quality = meta.get("quality", "")
     src_display = _SRC_SHORT.get(quality, quality)
     li.setProperty("quality", _c(src_display, _SRC_COLORS.get(quality, "FFAAAAAA")))
+    li.setProperty(
+        "hybrid", _c(HYBRID_LABEL, _HYBRID_COLOR) if meta.get("hybrid") else ""
+    )
 
     # Container (MKV, MP4, etc.)—default to MKV since most scene releases
     # are MKV and only MP4 releases tag the title.
@@ -166,9 +192,61 @@ def _wrap_release_name(name, width=_PANEL_NAME_WIDTH):
     return "[CR]".join(lines)
 
 
+_NAME_PIECE = re.compile(r"\[[^\[\]]*\]\s*|\S+\s*")
+
+
+def _wrap_display_name(name, width=_PANEL_NAME_WIDTH):
+    """Break a normalized name into ``[CR]``-joined lines for the panel.
+
+    Lines break between words and between "[...]" blocks, never inside a
+    block: Kodi alone would cut "[TrueHD Atmos 7.1]" at a space, and would
+    not break the unspaced "][" run at all. A word longer than a line (a
+    dotted name shown as listed) breaks at its dots.
+    """
+    lines = []
+    line = ""
+    for piece in _NAME_PIECE.findall(str(name or "")):
+        if line and len(line) + len(piece.rstrip()) > width:
+            lines.append(line.rstrip())
+            line = ""
+        if len(piece.rstrip()) > width:
+            # A dotted name with no spaces (a row shown as listed): break
+            # it at its dots, and let the next piece continue its last line.
+            dotted = _wrap_release_name(piece, width).split("[CR]")
+            lines.extend(dotted[:-1])
+            piece = dotted[-1]
+        line += piece
+    if line.strip():
+        lines.append(line.rstrip())
+    return "[CR]".join(lines)
+
+
+def _panel_raw_name(lead, label):
+    """The lead copy's release name as its indexer listed it, in grey.
+
+    Shown under the normalized name so a misparse is visible. Empty for a
+    synthetic row and when the normalized name is the listed name already.
+    """
+    if lead.get("_display_title"):
+        return ""
+    raw = clean_release_name(lead.get("title"))
+    if not raw or raw == label:
+        return ""
+    return _c(_wrap_release_name(raw), _PANEL_RAW_COLOR)
+
+
 def _tech_summary(item_props):
     """The panel's one-line tech summary from a row's colored properties."""
-    keys = ("resolution", "hdr", "codec", "audio", "quality", "container", "group")
+    keys = (
+        "resolution",
+        "hdr",
+        "codec",
+        "audio",
+        "quality",
+        "hybrid",
+        "container",
+        "group",
+    )
     return "   ".join(item_props[key] for key in keys if item_props.get(key))
 
 
@@ -215,7 +293,7 @@ def _build_group_item(group, row_index):
     reads from the focused item (``Container(51).ListItem.Property(...)``).
     """
     lead = group[0]
-    label = lead.get("_display_title") or lead.get("title", "")
+    label = _row_label(lead)
     item = xbmcgui.ListItem(label=label)
     recorder = _PropertyRecorder(item)
     _set_result_properties(recorder, lead)
@@ -236,7 +314,8 @@ def _build_group_item(group, row_index):
         item.setProperty("copies", _c(lead.get("indexer", ""), "FF4A9EFF"))
         kicker = _fmt(30480, lead.get("indexer", "") or "?")
     item.setProperty("panel_kicker", kicker)
-    item.setProperty("panel_title", _wrap_release_name(label))
+    item.setProperty("panel_title", _wrap_display_name(label))
+    item.setProperty("panel_raw", _panel_raw_name(lead, label))
     item.setProperty("panel_tech", _tech_summary(recorder.props))
     marks, names, sizes, ages = _panel_copy_lines(group)
     item.setProperty("panel_marks", marks)

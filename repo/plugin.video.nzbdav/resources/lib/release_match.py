@@ -9,8 +9,8 @@ extras in ``nzbget_resolver_dupes``) and the picker's copy grouping all ask
   or SxxEyy, part, edition, PROPER/REPACK), with a movie's year equal on both
   sides, absent included; and
 * every parsed release field is equal (``release_profile``): resolution,
-  HDR set, audio set, channels, codec, quality, edition, PROPER, REPACK, the
-  3D / dubbed / hardcoded-subs / cut flags, and the group; and
+  HDR set, audio set, channels, codec, quality, edition, PROPER, REPACK,
+  HYBRID, the 3D / dubbed / hardcoded-subs / cut flags, and the group; and
 * the group is known. A row with no group is never grouped with another
   (a literal ``NOGRP`` or ``P2P`` tag is a group like any other).
 
@@ -68,12 +68,27 @@ def _variant_flags(row, meta):
     return tuple(variant_tags(parse_title(release_name_from_subject(row.get("title")))))
 
 
+def is_hybrid(row, meta):
+    """``meta["hybrid"]`` when the parse stored it, else read from the title.
+
+    Metadata built before HYBRID was parsed (or by hand) has no such key;
+    reading the title keeps both sides of a comparison on the same answer.
+    """
+    stored = meta.get("hybrid")
+    if isinstance(stored, bool):
+        return stored
+    from resources.lib.filter_tags import detect_hybrid
+    from resources.lib.release_subject import release_name_from_subject
+
+    return detect_hybrid(release_name_from_subject(row.get("title")))
+
+
 def release_profile(row):
     """The parsed release fields of ``row`` that ``same_release`` compares.
 
     A hashable tuple of ``(name, value)`` pairs; equal profiles mean equal
     resolution, HDR, audio, channels, codec, quality, edition, PROPER/REPACK,
-    variant flags and group.
+    HYBRID, variant flags and group.
     """
     from resources.lib import fallback_streams as _fs
 
@@ -89,6 +104,7 @@ def release_profile(row):
             values = [values]
         fields.append((key, tuple(sorted({_fold(v) for v in values if v}))))
     fields.extend((key, bool(meta.get(key))) for key in _FLAG_FIELDS)
+    fields.append(("hybrid", is_hybrid(row, meta)))
     fields.append(("variant", _variant_flags(row, meta)))
     profile = tuple(fields)
     row[_PROFILE_CACHE_KEY] = (title, profile)

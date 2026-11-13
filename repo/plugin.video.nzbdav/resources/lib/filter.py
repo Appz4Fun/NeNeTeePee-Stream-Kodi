@@ -13,6 +13,7 @@ import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kod
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
 from resources.lib import telemetry
+from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
     _fallback_audio,
     _fallback_hdr,
@@ -49,6 +50,7 @@ from resources.lib.filter_options import (
 from resources.lib.filter_remux import (
     DEFAULT_REMUX_GROUPS,
     compile_remux_tiers,
+    pinned_group_rank,
     read_remux_tiers,
     remux_group_rank,
     remux_priority,
@@ -238,7 +240,8 @@ def parse_title_metadata(title):
     A raw Usenet subject (``[1/3] - "Name.mkv" yEnc``) is parsed as the
     release name inside it. ``meta["variant"]`` holds PTT's 3D, dub, hardsub
     and cut flags (``release_match.variant_tags``), so the same-release rule
-    never reparses the title.
+    never reparses the title. ``meta["hybrid"]`` is the HYBRID tag
+    (``filter_tags.detect_hybrid``).
     """
     from resources.lib.release_match import variant_tags
     from resources.lib.release_subject import release_name_from_subject
@@ -666,23 +669,6 @@ _HDR_RANK = {
     "HLG": 3,
 }
 
-# Audio rank: TrueHD+Atmos best, then Atmos DD+, TrueHD, DTS:X,
-# DTS-HD MA, DTS, DD+, DD, AAC, unknown
-_AUDIO_RANK = {
-    "TrueHD": 1,
-    "Atmos": 0,
-    "DTS:X": 3,
-    "DTS-HD MA": 4,
-    "DTS-HD HR": 5,
-    "FLAC": 4,
-    "PCM": 4,
-    "ALAC": 4,
-    "DTS": 5,
-    "DD+": 6,
-    "DD": 7,
-    "AAC": 8,
-}
-
 
 def _hdr_rank(hdr_list):
     """Best (lowest) HDR tier rank present, or 5 when none."""
@@ -691,20 +677,10 @@ def _hdr_rank(hdr_list):
     return min(_HDR_RANK.get(h, 4) for h in hdr_list)
 
 
-def _audio_rank(audio_list):
-    """Best audio tier rank; Atmos + TrueHD combo is -1 (best)."""
-    if not audio_list:
-        return 10
-    ranks = [_AUDIO_RANK.get(a, 9) for a in audio_list]
-    # Atmos + TrueHD combo = rank 0 (best)
-    if 0 in ranks and 1 in ranks:
-        return -1
-    return min(ranks)
-
-
 def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
-    """Rank resolution, then named groups before none, then HDR, REMUX, group
-    tier, audio, and size."""
+    """Rank resolution, then the pinned groups (CiNEPHiLES, FraMeSToR), then
+    named groups before none, then HDR, REMUX, group tier, audio tier
+    (``filter_audio.audio_tier``), and size."""
     tier_patterns = compile_remux_tiers(remux_tiers)
 
     def _relevance_key(r):
@@ -714,11 +690,12 @@ def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
         priority = remux_priority(r)
         return (
             res_rank,
+            pinned_group_rank(r),  # CiNEPHiLES, then FraMeSToR: first in theirs
             0 if meta.get("group") else 1,  # no release group: last in its resolution
             _hdr_rank(meta.get("hdr", [])),
             priority,
             remux_group_rank(r, tier_patterns),
-            _audio_rank(meta.get("audio", [])),
+            audio_tier(meta.get("audio", []), meta.get("quality", "")),
             size,
         )
 
@@ -790,6 +767,8 @@ def _copy_prefilter_key(row):
     so only rows sharing a key are compared. None for a row with no parsed
     group, which the rule never groups.
     """
+    from resources.lib.release_match import is_hybrid
+
     meta = row.get("_meta")
     if not isinstance(meta, dict):
         return None
@@ -805,6 +784,7 @@ def _copy_prefilter_key(row):
             values = [values]
         fields.append(tuple(sorted({_fold_meta_value(v) for v in values if v})))
     fields.extend(bool(meta.get(name)) for name in ("proper", "repack"))
+    fields.append(is_hybrid(row, meta))
     return tuple(fields)
 
 
@@ -913,13 +893,13 @@ def _break_ties_by_copies(ordered, relevance_key):
 
     ``ordered`` is already sorted by ``relevance_key``, whose last element is
     size. Each run of rows that ties on everything before size (resolution,
-    HDR, REMUX, group tier, audio) is re-sorted by copy count, most first,
-    then by size as before. A stable sort keeps the original order when both
-    tie. Copies are counted within the run. same_release requires equal
-    resolution, HDR, audio, and group, so a release's copies almost always
-    share a run; the rare split (REMUX priority reads the raw title, so a
-    "Hybrid" listing can rank apart from its plain twin) counts each side
-    within its own run.
+    pinned group, HDR, REMUX, group tier, audio tier) is re-sorted by copy
+    count, most first, then by size as before. A stable sort keeps the
+    original order when both tie. Copies are counted within the run.
+    same_release requires equal resolution, HDR, audio, HYBRID and group, so
+    a release's copies share a run except in the rare split (REMUX priority
+    reads "REMUX" from the raw title), where each side is counted within its
+    own run.
     """
     if len(ordered) < 2:
         return ordered

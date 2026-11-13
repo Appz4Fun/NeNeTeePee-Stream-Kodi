@@ -248,7 +248,7 @@ def test_custom_remux_tiers_override_defaults_and_allow_an_empty_tier():
     )
     titles = [
         "Movie.2024.2160p.REMUX.HEVC.FLAC-" + group
-        for group in ["CiNEPHiLES", "NCmt", "MyGroup"]
+        for group in ["BMF", "NCmt", "MyGroup"]
     ]
     assert _sorted_titles(titles, settings) == list(reversed(titles))
 
@@ -320,9 +320,9 @@ def test_higher_resolution_sdr_beats_1080p_dv_hybrid_remux(resolution):
 
 def test_hdr_precedes_remux_and_group_preferences_at_equal_resolution():
     titles = [
-        "Movie.2024.2160p.HYBRID.REMUX.SDR.HEVC.TrueHD.Atmos-CiNEPHiLES",
-        "Movie.2024.2160p.REMUX.HLG.HEVC.TrueHD.Atmos-CiNEPHiLES",
-        "Movie.2024.2160p.HYBRID.REMUX.HDR.HEVC.TrueHD.Atmos-CiNEPHiLES",
+        "Movie.2024.2160p.HYBRID.REMUX.SDR.HEVC.TrueHD.Atmos-BMF",
+        "Movie.2024.2160p.REMUX.HLG.HEVC.TrueHD.Atmos-BMF",
+        "Movie.2024.2160p.HYBRID.REMUX.HDR.HEVC.TrueHD.Atmos-BMF",
         "Movie.2024.2160p.REMUX.HDR10Plus.HEVC.FLAC-NCmt",
         "Movie.2024.2160p.WEB-DL.DV.HEVC.AAC-TEST",
     ]
@@ -331,8 +331,8 @@ def test_hdr_precedes_remux_and_group_preferences_at_equal_resolution():
 
 def test_hybrid_remux_then_remux_win_when_resolution_and_hdr_match():
     titles = [
-        "Movie.2024.2160p.WEB-DL.DV.HEVC.TrueHD.Atmos-CiNEPHiLES",
-        "Movie.2024.2160p.REMUX.DV.HEVC.TrueHD.Atmos-CiNEPHiLES",
+        "Movie.2024.2160p.WEB-DL.DV.HEVC.TrueHD.Atmos-BMF",
+        "Movie.2024.2160p.REMUX.DV.HEVC.TrueHD.Atmos-BMF",
         "Movie.2024.2160p.HYBRID.REMUX.DV.HEVC.FLAC-TEST",
     ]
     assert _sorted_titles(titles) == list(reversed(titles))

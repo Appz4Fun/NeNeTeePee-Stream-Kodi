@@ -92,23 +92,44 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 1. **Resolution:** highest resolution first, from 8K down to 240p; unknown
    resolution last. A 2160p release always ranks higher than a 1080p release,
    regardless of HDR or REMUX.
-2. **Release group:** a release with a group ranks above one without, so a
+2. **Pinned groups:** a CiNEPHiLES release ranks first in its resolution and
+   a FraMeSToR release second, ahead of HDR and everything below. These two
+   are fixed, not a setting, and match without case sensitivity.
+3. **Release group:** a release with a group ranks above one without, so a
    release with no group ranks last within its resolution.
-3. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
+4. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
    release with several tags ranks by its best.
-4. **Release type:** filenames containing both REMUX and HYBRID first,
-   then other REMUX releases, then everything else.
-5. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
+5. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
+   releases, then everything else.
+6. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
-6. **Audio:** TrueHD with Atmos first, then Atmos, TrueHD, DTS:X, then
-   DTS-HD MA/FLAC/PCM/ALAC, then DTS-HD High Resolution/DTS, DD+, DD, AAC,
-   other formats, and finally no audio tag.
-7. **NZB copies:** among releases still tied, the release with more NZBs in
+7. **Audio:** four tiers, ranked by the release's best track:
+    1. lossless: TrueHD (with or without Atmos), DTS-HD MA (with or without
+       DTS:X), FLAC, PCM and ALAC;
+    2. lossy with object audio: Dolby Digital Plus with Atmos, and lossy
+       DTS:X;
+    3. lossy surround: Dolby Digital Plus, Dolby Digital, DTS and DTS-HD High
+       Resolution;
+    4. everything else, such as AAC, Opus and MP3.
+
+    A release with no audio tag ranks after all four. Formats in one tier
+    tie, so FLAC ranks beside TrueHD Atmos.
+8. **NZB copies:** among releases still tied, the release with more NZBs in
    the results sorts first, so a pick has more backups if one NZB fails.
    Copies are counted with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release)
    that NZBGet duplicate backups use, so a release with no group counts only
    itself.
-8. **Size:** larger files win the final tie-break.
+9. **Size:** larger files win the final tie-break.
+
+#### How audio tags are read
+
+Atmos and DTS:X are object audio carried on top of another track. Atmos rides
+on TrueHD (lossless) or on Dolby Digital Plus (lossy), so a name with `DD` and
+`Atmos` but no TrueHD is read as Dolby Digital Plus with Atmos, as is `DDPA5.1`.
+DTS:X on a disc sits on DTS-HD MA and counts as lossless; a WEB release that
+tags DTS:X without DTS-HD MA carries the lossy kind. `DD_5.1`, or `DD 5.1` in
+a name that otherwise separates its words with dots, is read as `DD+5.1`: the
+plus sign was replaced on the way from the indexer.
 
 The three editable, comma-separated preferred group lists default to the
 [TRaSH tier 1](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-01.json),
@@ -143,9 +164,35 @@ your filters, the picker opens instead.
 
 Copies are grouped with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release):
 the same title and year or episode, and equal resolution, HDR, audio,
-channels, codec, quality (source), edition, PROPER/REPACK, 3D, dubbed,
+channels, codec, quality (source), edition, PROPER/REPACK, HYBRID, 3D, dubbed,
 hardcoded-subtitle and cut tags, and release group. Language and soft-subtitle tags don't split a release, and a
 result with no release group is never grouped with another.
+
+### How a release is named in the picker
+
+Indexers list the same release as a dotted name, a spaced one, or a raw Usenet
+subject such as `[1/3] - "Name.mkv" yEnc 4400443301`. The picker shows every
+row in one format, built from what the name itself says:
+
+```text
+Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES
+Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX
+```
+
+That is the title and year, the episode for TV, then source and resolution,
+HYBRID, HDR, the main audio track with its channels, MULTi or dubbed
+languages, the video codec, and the release group. A part the name doesn't
+state is left out. File counters, `yEnc`, sizes, file extensions and posting
+wrappers are never shown and never affect grouping. In **List compacted**, the
+side panel shows the release name as the indexer listed it in grey under the
+normalized one, so you can check how it was read. A name with no readable
+title, source or resolution is shown as listed.
+
+**HYBRID** has its own cyan slot on each row's second line, between the source
+and the container. A hybrid release combines sources, such as one disc's video
+with another's audio or Dolby Vision added to an HDR10+ encode. Only a
+`Hybrid` tag after the year, episode or resolution counts; a title such as
+*Hybrid (2007)* isn't one.
 
 ## Filtered and all results in the picker
 

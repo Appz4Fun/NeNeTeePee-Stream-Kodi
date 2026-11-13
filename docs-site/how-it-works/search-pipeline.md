@@ -105,11 +105,12 @@ Under **Relevance** sort, NeNeTeePee-Stream-Kodi orders results by this priority
 ```mermaid
 flowchart LR
     A[Resolution: highest first]
-    A --> G[Has a release group > none]
+    A --> P[CiNEPHiLES > FraMeSToR > other groups]
+    P --> G[Has a release group > none]
     G --> B[HDR: DV > HDR10+ > HDR10 > HLG > SDR]
     B --> R[Hybrid REMUX > REMUX > other]
     R --> C[Preferred tier 1 > 2 > 3]
-    C --> D[Audio]
+    C --> D[Audio tier: lossless > Atmos on DD+ or lossy DTS:X > DD+/DD/DTS > other]
     D --> N[More NZB copies of the release]
     N --> E[Size: larger wins]
 ```
@@ -129,7 +130,9 @@ prepended (see
 With **Auto-select best match (skip result list)** on (**Sorting › Auto-Select**),
 the top filtered result plays straight away. There's no picker and no
 picker-wide tagging pass. Otherwise,
-`results_dialog.py` opens the full-screen picker on the filtered view.
+`results_dialog.py` opens the full-screen picker on the filtered view. Each row
+is labelled by `release_display.display_name`, which builds one normalized name
+from the row's parsed metadata instead of showing the indexer's title.
 
 The picker receives the unfiltered rows as well as the filtered ones. Pressing
 **C** (context menu) switches between the filtered view and a **show all**
