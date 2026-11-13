@@ -187,8 +187,13 @@ _PARKED_STATUS = "DELETED/DUPE"
 _INDEXER_LINE_WIDTH = 64
 
 
-def indexers_line(report):
-    """ "abNZB, altHUB, Zurg x2": where the kept copies came from, or ""."""
+def indexers_line(report, wide=False):
+    """ "abNZB, altHUB, Zurg x2": where the kept copies came from, or "".
+
+    Kodi's progress dialog has one narrow line for it, so the names stop at
+    ``_INDEXER_LINE_WIDTH`` characters with "+2 more". The add-on's own
+    dialog wraps its text (``wide``), so every indexer is named.
+    """
     counts = {}
     for name in getattr(report, "sent", None) or []:
         if name:
@@ -199,7 +204,7 @@ def indexers_line(report):
     ]
     shown = []
     for index, label in enumerate(labels):
-        if shown and len(", ".join(shown + [label])) > _INDEXER_LINE_WIDTH:
+        if not wide and shown and len(", ".join(shown + [label])) > _INDEXER_LINE_WIDTH:
             shown.append(fmt(30489, len(labels) - index))
             break
         shown.append(label)
@@ -228,7 +233,7 @@ def not_sent_line(report, mirrors=True):
     return fmt(30668, ", ".join(parts)) if parts else ""
 
 
-def collecting_message(report, done, total):
+def collecting_message(report, done, total, wide=False):
     """The dialog text while the copies' NZBs are downloaded.
 
     The count is of uploads. Beside it, how many more listings are not being
@@ -243,13 +248,17 @@ def collecting_message(report, done, total):
     if mirrors:
         # Listings of uploads already being fetched from another indexer.
         count = "{} - {}".format(count, _counted(mirrors, 30696, 30697))
-    lines = [count, indexers_line(report), not_sent_line(report, mirrors=False)]
+    lines = [
+        count,
+        indexers_line(report, wide),
+        not_sent_line(report, mirrors=False),
+    ]
     return "[CR]".join(line for line in lines if line)
 
 
-def sending_message(report, total):
+def sending_message(report, total, wide=False):
     """The dialog text while the copies are handed to NZBGet."""
-    lines = [fmt(30617, total), indexers_line(report), not_sent_line(report)]
+    lines = [fmt(30617, total), indexers_line(report, wide), not_sent_line(report)]
     return "[CR]".join(line for line in lines if line)
 
 

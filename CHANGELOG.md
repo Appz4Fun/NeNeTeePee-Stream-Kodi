@@ -139,6 +139,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The download dialog names every indexer.** The line of indexers stopped
+  at 64 characters with `+2 more`, a limit made for Kodi's narrow progress
+  dialog. The add-on's own dialog wraps its text, so it lists them all.
 - **"Same upload" is decided from the real post time, the poster and the
   password flag.** Indexers send more than a title and a size with each
   result, and NZBHydra2 passes all of it through; the add-on kept six fields
