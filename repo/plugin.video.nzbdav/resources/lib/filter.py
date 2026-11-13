@@ -696,7 +696,28 @@ def learn_nfo_audio(rows, settings_getter):
     again, which adds it to the rows and sorts them afresh
     (``nfo_audio.learn_for_top``).
     """
-    return nfo_audio.learn_for_top(rows, _name_form_key, settings_getter)
+    return nfo_audio.learn_for_top(
+        rows, _name_form_key, settings_getter, describe=release_identity
+    )
+
+
+def release_identity(name):
+    """Which film or episode a release name is, and whose release.
+
+    For telling whether an NFO is about a release (``nfo_audio.whose_nfo``).
+    """
+    from resources.lib.release_match import title_key
+
+    meta = parse_title_metadata(name)
+    identity = meta.get("ptt_identity")
+    identity = identity if isinstance(identity, dict) else {}
+    return {
+        "title": title_key(identity.get("title")),
+        "year": identity.get("year") or 0,
+        "seasons": tuple(identity.get("seasons") or ()),
+        "episodes": tuple(identity.get("episodes") or ()),
+        "group": str(meta.get("group") or "").casefold(),
+    }
 
 
 def attach_metadata(results):

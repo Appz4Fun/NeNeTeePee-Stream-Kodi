@@ -30,6 +30,11 @@ formats and channel count (``apply_known``). The one thing kept from the
 name is an Atmos or DTS:X tag on the track a hand-written NFO leads with,
 since such NFOs often leave the word out; MediaInfo is used as it is.
 
+That holds for an NFO that is this release's. Indexers attach NFOs by
+matching, so each one is checked against the release's name (``whose_nfo``):
+one that names another release is not used, and one that names no release
+only adds to what the name says.
+
 The link carries the user's API key for that indexer, so it is never logged.
 """
 
@@ -63,7 +68,8 @@ MAX_RELEASES = 5
 FROM_NFO_KEY = "audio_from_nfo"
 # what the name itself tags ({"audio": [...], "channels": "5.1"}),
 NAME_AUDIO_KEY = "audio_in_name"
-# and where the answer came from: "mediainfo" or "nfo".
+# and where the answer came from: "mediainfo", "nfo", or ``UNCONFIRMED`` for
+# an NFO that does not name the release.
 SOURCE_KEY = "audio_source"
 # ``filter_atmos.INFERRED_KEY``: Atmos a row took from a labelled copy.
 _INFERRED_KEY = "atmos_inferred"
@@ -292,8 +298,12 @@ def _known(key):
         return _STORE.get(key)
 
 
-def _remember(key, audio, channels, failed=False, exact=False):
-    """Keep one release's answer; ``exact`` when MediaInfo gave it."""
+def _remember(key, audio, channels, failed=False, exact=False, sure=False):
+    """Keep one release's answer.
+
+    ``exact`` when MediaInfo gave it; ``sure`` when it is known to be about
+    this release (MediaInfo, or an NFO that names the release).
+    """
     _load()
     with _LOCK:
         _STORE[key] = {
@@ -302,6 +312,7 @@ def _remember(key, audio, channels, failed=False, exact=False):
             "at": int(time.time()),
             "failed": bool(failed),
             "exact": bool(exact),
+            "sure": bool(exact or sure),
         }
 
 
@@ -395,15 +406,47 @@ def _preferred(name_audio, entry, quality):
     return audio
 
 
+def _added(name_audio, name_channels, entry, quality):
+    """``(formats, channels)`` with what was read added to the name's.
+
+    For an NFO that does not say which release it is about. The NFO's
+    channel count is its main track's: it replaces the name's when what the
+    NFO added becomes the release's main track ("DD5.1" in the name,
+    "TrueHD 7.1" in the NFO), and fills in a missing one. The name's Atmos
+    or DTS:X tag does not move onto a new main track the NFO names no
+    object audio on; a name that tags the object audio alone keeps it.
+    """
+    added = [name for name in entry["audio"] if name not in name_audio]
+    merged = name_audio + added
+    new_main = main_audio(merged, quality) != main_audio(name_audio, quality)
+    channels = name_channels
+    if entry.get("channels") and (not name_channels or (added and new_main)):
+        channels = entry["channels"]
+    if not new_main or all(name in OBJECT_FORMATS for name in name_audio):
+        return merged, channels
+    main = main_audio(
+        [name for name in merged if name not in OBJECT_FORMATS] or merged, quality
+    )
+    kept = [
+        name
+        for name in merged
+        if name not in OBJECT_FORMATS or name == main or name in entry["audio"]
+    ]
+    return kept, channels
+
+
 def apply_known(rows, key_of, derived_keys=()):
     """Give every listing of a release the audio that was read for it.
 
     ``key_of`` gives a release name's key (``filter._name_form_key``): every
-    spelling of a name, from any indexer, takes the same answer. What was
-    read replaces what the name tags (``_preferred``); the name's own stay
-    on the row under ``NAME_AUDIO_KEY``. A row whose audio or channel count
-    changes loses its ``derived_keys`` (per-row caches built from them).
-    Returns how many rows changed.
+    spelling of a name, from any indexer, takes the same answer.
+
+    An answer known to be about this release (MediaInfo, or an NFO that
+    names the release) replaces what the name tags (``_preferred``). An NFO
+    that does not say which release it is about only adds to the name
+    (``_added``). The name's own stay on the row under ``NAME_AUDIO_KEY``.
+    A row whose audio or channel count changes loses its ``derived_keys``
+    (per-row caches built from them). Returns how many rows changed.
     """
     changed = 0
     for row in rows:
@@ -415,9 +458,20 @@ def apply_known(rows, key_of, derived_keys=()):
         if not entry or not entry["audio"]:
             continue
         name_audio, name_channels = _name_audio(meta)
-        audio = _preferred(name_audio, entry, meta.get("quality", ""))
-        channels = entry.get("channels") or name_channels
-        source = "mediainfo" if entry.get("exact") else "nfo"
+        quality = meta.get("quality", "")
+        guessed = meta.get(_INFERRED_KEY) is True
+        if entry.get("exact") or entry.get("sure"):
+            source = "mediainfo" if entry.get("exact") else "nfo"
+            audio = _preferred(name_audio, entry, quality)
+            channels = entry.get("channels") or name_channels
+            guessed = False
+        else:
+            source = UNCONFIRMED
+            audio, channels = _added(name_audio, name_channels, entry, quality)
+        named = [name for name in audio if name not in name_audio]
+        if guessed and "Atmos" not in audio:
+            # Atmos taken from a labelled copy stays beside what was added.
+            audio = ["Atmos"] + audio
         same = meta.get("audio") == audio and (
             not channels or meta.get("channels") == channels
         )
@@ -426,8 +480,9 @@ def apply_known(rows, key_of, derived_keys=()):
         meta[NAME_AUDIO_KEY] = {"audio": name_audio, "channels": name_channels}
         meta[SOURCE_KEY] = source
         # What the name did not tag, so a later pass can tell the two apart.
-        meta[FROM_NFO_KEY] = [name for name in audio if name not in name_audio]
-        meta.pop(_INFERRED_KEY, None)
+        meta[FROM_NFO_KEY] = named
+        if not guessed:
+            meta.pop(_INFERRED_KEY, None)
         if same:
             continue
         meta["audio"] = audio
@@ -437,6 +492,88 @@ def apply_known(rows, key_of, derived_keys=()):
             row.pop(name, None)
         changed += 1
     return changed
+
+
+# --- is this NFO about this release? ----------------------------------------
+
+CONFIRMED = "confirmed"
+UNCONFIRMED = "unconfirmed"
+WRONG = "wrong"
+
+# A release name inside an NFO: dotted, with a year, an episode or a
+# resolution in it ("Some.Movie.2004.1080p.BluRay.x264-GRP").
+_NAME_IN_NFO = re.compile(r"[A-Za-z0-9][A-Za-z0-9+\-]*(?:[._][A-Za-z0-9+\-]+){3,}")
+_NAME_MARK = re.compile(r"(?:19|20)\d\d|s\d{1,2}e\d{1,3}|\d{3,4}p", re.I)
+_CONTAINER = re.compile(r"\.(?:mkv|mp4|avi|m2ts|ts|nzb|nfo)$", re.I)
+_MAX_NAMES_CHECKED = 12
+_MIN_NAME_LENGTH = 12
+
+
+def _words(text):
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", text.lower()).split())
+
+
+def _same_work(ours, theirs):
+    """Whether two parsed names are the same film or the same episode."""
+    if not ours.get("title") or ours.get("title") != theirs.get("title"):
+        return False
+    if ours.get("seasons") or ours.get("episodes"):
+        return ours.get("seasons") == theirs.get("seasons") and ours.get(
+            "episodes"
+        ) == theirs.get("episodes")
+    if theirs.get("seasons") or theirs.get("episodes"):
+        return False
+    return (
+        not ours.get("year")
+        or not theirs.get("year")
+        or (ours["year"] == theirs["year"])
+    )
+
+
+def whose_nfo(text, title, describe):
+    """Whether an NFO is about the release named ``title``.
+
+    Indexers attach NFOs by matching, and a release can carry another
+    release's NFO. ``CONFIRMED`` when the NFO holds the release's name, or
+    a name that parses to the same film or episode from the same group.
+    ``WRONG`` when it names releases and none of them is this film or
+    episode, or the one that is comes from another group: its audio is
+    another encode's. ``UNCONFIRMED`` when it names no release at all (a
+    bare MediaInfo dump, a greeting).
+
+    ``describe`` parses a release name into ``{"title", "year", "seasons",
+    "episodes", "group"}`` (``filter.release_identity``); without it nothing
+    can be compared and the NFO is unconfirmed.
+    """
+    name = _CONTAINER.sub("", str(title or "").strip())
+    wanted = _words(name)
+    if len(wanted) >= _MIN_NAME_LENGTH and wanted in _words(text):
+        return CONFIRMED
+    if describe is None:
+        return UNCONFIRMED
+    names = []
+    for found in _NAME_IN_NFO.findall(text):
+        found = _CONTAINER.sub("", found)
+        if _NAME_MARK.search(found) and found not in names:
+            names.append(found)
+        if len(names) >= _MAX_NAMES_CHECKED:
+            break
+    if not names:
+        return UNCONFIRMED
+    try:
+        ours = describe(name)
+        verdict = WRONG
+        for found in names:
+            theirs = describe(found)
+            if not _same_work(ours, theirs):
+                continue
+            if not theirs.get("group"):
+                verdict = UNCONFIRMED
+            elif theirs["group"] == ours.get("group"):
+                return CONFIRMED
+        return verdict
+    except Exception:  # pylint: disable=broad-except
+        return UNCONFIRMED
 
 
 # --- asking the indexers ----------------------------------------------------
@@ -609,7 +746,7 @@ def _fetch_mediainfo(key, url, title):
     return True
 
 
-def _fetch(key, url, title):
+def _fetch(key, url, title, describe=None):
     """Learn one release's audio: MediaInfo first, then its NFO.
 
     True when audio was found. The answer, or that there was none, is
@@ -618,10 +755,10 @@ def _fetch(key, url, title):
     answer = _fetch_mediainfo(key, url, title)
     if answer is not None:
         return answer
-    return _fetch_nfo(key, url, title)
+    return _fetch_nfo(key, url, title, describe)
 
 
-def _fetch_nfo(key, url, title):
+def _fetch_nfo(key, url, title, describe=None):
     """Fetch one NFO, read it and remember the answer; True when it has audio."""
     try:
         text = http_get(url, timeout=_FETCH_TIMEOUT, max_bytes=_MAX_NFO_BYTES)
@@ -649,24 +786,37 @@ def _fetch_nfo(key, url, title):
         if _is_refusal_code(error):
             _pause_host(_host(url))
         return False
+    whose = whose_nfo(text, title, describe)
+    if whose == WRONG:
+        # Another release's NFO: what it says of the audio is not ours.
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NFO for '{}' is about another release: "
+            "not used".format(title),
+            xbmc.LOGINFO,
+        )
+        _remember(key, [], "")
+        return False
     found = audio_from_nfo(text)
-    _remember(key, found["audio"], found["channels"])
+    _remember(key, found["audio"], found["channels"], sure=whose == CONFIRMED)
     xbmc.log(
-        "NeNeTeePee-Stream-Kodi: NFO for '{}' names audio: {}".format(
-            title, ", ".join(found["audio"]) or "none"
+        "NeNeTeePee-Stream-Kodi: NFO for '{}' names audio: {}{}".format(
+            title,
+            ", ".join(found["audio"]) or "none",
+            "" if whose == CONFIRMED else " (the NFO does not name the release)",
         ),
         xbmc.LOGINFO,
     )
     return bool(found["audio"])
 
 
-def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS):
+def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=None):
     """Read the NFOs of the top releases of ``rows``; True if any named audio.
 
     ``rows`` are the picker's rows in its order. The fetches run on daemon
     threads, one per indexer, and this waits ``wait`` seconds for them. One
     that is slower still finishes and is stored for the next search. True
     means the rows should be parsed again to take the new facts.
+    ``describe`` parses a release name (see ``whose_nfo``).
     """
     try:
         limit = _releases_setting(settings_getter)
@@ -686,7 +836,7 @@ def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS):
             for key, url, title in batch:
                 if _host_paused(_host(url)):
                     break
-                results.append(_fetch(key, url, title))
+                results.append(_fetch(key, url, title, describe))
         finally:
             _save()
 

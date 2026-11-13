@@ -78,6 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   What was read wins over the name: `DTS.5.1` in a name whose NFO says
   `DTS-HD MA 7.1` is DTS-HD MA 7.1. A name's Atmos or DTS:X tag is kept when
   a hand-written NFO leads with the same track and leaves the word out.
+  An NFO is checked against the release's name first: one about another
+  film, episode or group is not used, and one that names no release only
+  adds to what the name tags.
   Where the indexer also serves MediaInfo (Treasure Maps does, from
   `/api/v1/releases/<id>/mediainfo`), that is asked for first: it lists
   every audio track with its format, Atmos or DTS:X marker and channel

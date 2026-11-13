@@ -29,6 +29,11 @@ SCENE_NFO = """
   Notes.........: Enjoy this DTS-free AC3 joke in the notes, not an audio line
 """
 
+# The same NFO without the line that says which release it is about.
+NAMELESS_NFO = "\n".join(
+    line for line in SCENE_NFO.splitlines() if "Release" not in line
+)
+
 MEDIAINFO_NFO = """
 Video
 Format                                   : HEVC
@@ -244,7 +249,7 @@ def test_what_was_read_replaces_what_the_name_says():
     name = "Some.Movie.2004.1080p.BluRay.DTS.5.1.x264-GRP"
     (row,) = _rows(name)
     assert row["_meta"]["audio"] == ["DTS"] and row["_meta"]["channels"] == "5.1"
-    nfo_audio._remember(_key(name), ["DTS-HD MA", "DD"], "7.1")
+    nfo_audio._remember(_key(name), ["DTS-HD MA", "DD"], "7.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["audio"] == ["DTS-HD MA", "DD"]
     assert row["_meta"]["channels"] == "7.1"
@@ -259,7 +264,7 @@ def test_what_was_read_replaces_what_the_name_says():
     # And the other way: the name oversells, the NFO says plain DD 5.1.
     name = "Some.Movie.2005.1080p.BluRay.DTS-HD.MA.7.1.x264-GRP"
     (row,) = _rows(name)
-    nfo_audio._remember(_key(name), ["DD"], "5.1")
+    nfo_audio._remember(_key(name), ["DD"], "5.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["audio"] == ["DD"] and row["_meta"]["channels"] == "5.1"
     assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DD"]
@@ -269,7 +274,7 @@ def test_a_hand_written_nfo_keeps_the_names_atmos_on_the_same_track():
     # "Audio: English TrueHD 7.1" for an Atmos track is how NFOs are written.
     name = "Some.Movie.2004.2160p.UHD.BluRay.REMUX.TrueHD.7.1.Atmos-GRP"
     (row,) = _rows(name)
-    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "7.1")
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "7.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["audio"] == ["TrueHD", "DD", "Atmos"]
     assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DD"]
@@ -279,7 +284,7 @@ def test_a_hand_written_nfo_keeps_the_names_atmos_on_the_same_track():
     assert row["_meta"]["audio"] == ["TrueHD", "DD"]
     assert row["_meta"][nfo_audio.SOURCE_KEY] == "mediainfo"
     # A row already given the NFO's answer takes the newer one.
-    nfo_audio._remember(_key(name), ["TrueHD"], "7.1")
+    nfo_audio._remember(_key(name), ["TrueHD"], "7.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["audio"] == ["TrueHD", "Atmos"]
     assert row["_meta"][nfo_audio.SOURCE_KEY] == "nfo"
@@ -288,16 +293,16 @@ def test_a_hand_written_nfo_keeps_the_names_atmos_on_the_same_track():
     alone = "Some.Movie.2007.2160p.UHD.BluRay.Atmos.7.1.x265-GRP"
     (row,) = _rows(alone)
     assert row["_meta"]["audio"] == ["Atmos"]
-    nfo_audio._remember(_key(alone), ["TrueHD"], "7.1")
+    nfo_audio._remember(_key(alone), ["TrueHD"], "7.1", sure=True)
     filter_module.attach_metadata([row])
     assert sorted(row["_meta"]["audio"]) == ["Atmos", "TrueHD"]
     # DTS:X does not ride on TrueHD.
     dtsx = "Some.Movie.2008.2160p.UHD.BluRay.DTS-X.7.1.x265-GRP"
     (row,) = _rows(dtsx)
-    nfo_audio._remember(_key(dtsx), ["TrueHD"], "7.1")
+    nfo_audio._remember(_key(dtsx), ["TrueHD"], "7.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["audio"] == ["TrueHD"]
-    nfo_audio._remember(_key(dtsx), ["DTS-HD MA"], "7.1")
+    nfo_audio._remember(_key(dtsx), ["DTS-HD MA"], "7.1", sure=True)
     (row,) = _rows(dtsx)
     assert sorted(row["_meta"]["audio"]) == ["DTS-HD MA", "DTS:X"]
 
@@ -445,7 +450,8 @@ def _indexer():
     _Handler.requests = []
     _Handler.keys = []
     _Handler.replies = {
-        "/nfo/plain": (200, SCENE_NFO.encode()),
+        "/nfo/plain": (200, NAMELESS_NFO.encode()),
+        "/nfo/named": (200, SCENE_NFO.encode()),
         "/nfo/atmos": (200, MEDIAINFO_NFO.encode()),
         "/nfo/empty": (200, b"greetings to all\n"),
         "/nfo/refused": (403, b"Forbidden"),
@@ -770,7 +776,7 @@ def test_the_nfos_count_is_used_when_its_track_becomes_the_main_one():
     name = "Some.Movie.2004.1080p.BluRay.DD5.1.x264-GRP"
     (row,) = _rows(name)
     assert row["_meta"]["channels"] == "5.1"
-    nfo_audio._remember(_key(name), ["DD", "TrueHD"], "7.1")
+    nfo_audio._remember(_key(name), ["DD", "TrueHD"], "7.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["audio"] == ["DD", "TrueHD"]
     assert row["_meta"]["channels"] == "7.1"
@@ -781,11 +787,11 @@ def test_the_nfos_count_is_used_when_its_track_becomes_the_main_one():
     # What was read gives the count, also for the name's own main track.
     name = "Some.Movie.2004.2160p.UHD.BluRay.REMUX.TrueHD.7.1.Atmos-GRP"
     (row,) = _rows(name)
-    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "5.1")
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "5.1", sure=True)
     filter_module.attach_metadata([row])
     assert row["_meta"]["channels"] == "5.1"
     # With no count read, the name's stays.
-    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "")
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "", sure=True)
     (row,) = _rows(name)
     assert row["_meta"]["channels"] == "7.1"
 
@@ -1066,7 +1072,7 @@ def test_mediainfo_is_asked_for_first_and_the_nfo_is_not_read(indexer, store):
         200,
         _mediainfo_reply(_ATMOS_TRACK, _STEREO_TRACK),
     )
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     name = "Some.Show.S01E01.2160p.AMZN.WEB-DL.DDP5.1.H.265-GRP"
     rows = _rows(name)
     _offer_api(rows[0], indexer)
@@ -1089,7 +1095,7 @@ def test_mediainfo_is_asked_for_first_and_the_nfo_is_not_read(indexer, store):
 
 def test_a_release_with_no_mediainfo_has_its_nfo_read(indexer):
     _Handler.replies[_MEDIAINFO_PATH] = (404, _NOT_FOUND)
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     rows = _rows(PLAIN)
     _offer_api(rows[0], indexer)
     assert filter_module.learn_nfo_audio(rows, _ttl) is True
@@ -1107,7 +1113,7 @@ def test_a_report_that_names_no_known_audio_falls_back_to_the_nfo(indexer):
         200,
         _mediainfo_reply(_track("Audio", Format="MPEG Audio", Channels="2")),
     )
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     rows = _rows(PLAIN)
     _offer_api(rows[0], indexer)
     assert filter_module.learn_nfo_audio(rows, _ttl) is True
@@ -1117,7 +1123,7 @@ def test_a_report_that_names_no_known_audio_falls_back_to_the_nfo(indexer):
 
 def test_an_indexer_without_the_call_is_not_asked_for_it_again(indexer, store):
     # No reply set for the MediaInfo path: the stand-in answers a bare 404.
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     rows = _rows(PLAIN, OTHER)
     _offer_api(rows[0], indexer)
     _offer_api(rows[1], indexer, guid="ffffffff-0000-1111-2222-333333333333")
@@ -1144,7 +1150,7 @@ def test_a_refusal_from_an_indexer_never_seen_to_have_the_call_reads_the_nfo(
     indexer,
 ):
     _Handler.replies[_MEDIAINFO_PATH] = (403, b"Forbidden")
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     rows = _rows(PLAIN)
     _offer_api(rows[0], indexer)
     assert filter_module.learn_nfo_audio(rows, _ttl) is True
@@ -1154,7 +1160,7 @@ def test_a_refusal_from_an_indexer_never_seen_to_have_the_call_reads_the_nfo(
 
 def test_a_refusal_from_an_indexer_with_the_call_pauses_it(indexer):
     _Handler.replies[_MEDIAINFO_PATH] = (403, b"Forbidden")
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     nfo_audio._note_rest("127.0.0.1", True)
     rows = _rows(PLAIN, OTHER)
     _offer_api(rows[0], indexer)
@@ -1170,7 +1176,7 @@ def test_a_refusal_from_an_indexer_with_the_call_pauses_it(indexer):
 
 def test_too_many_requests_pauses_any_indexer(indexer):
     _Handler.replies[_MEDIAINFO_PATH] = (429, b"slow down")
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     rows = _rows(PLAIN)
     _offer_api(rows[0], indexer)
     with patch("resources.lib.nfo_audio.xbmc.log"):
@@ -1181,7 +1187,7 @@ def test_too_many_requests_pauses_any_indexer(indexer):
 
 def test_a_server_error_on_the_call_reads_the_nfo_and_decides_nothing(indexer):
     _Handler.replies[_MEDIAINFO_PATH] = (503, b"busy")
-    _Handler.replies["/api"] = (200, SCENE_NFO.encode())
+    _Handler.replies["/api"] = (200, NAMELESS_NFO.encode())
     rows = _rows(PLAIN)
     _offer_api(rows[0], indexer)
     assert filter_module.learn_nfo_audio(rows, _ttl) is True
@@ -1225,7 +1231,7 @@ def test_the_names_atmos_does_not_move_onto_a_new_main_track():
         "Audio #2\nFormat : E-AC-3 JOC\nChannel(s) : 6 channels\n\n"
     )
     assert found == {"audio": ["TrueHD", "DD+"], "channels": "7.1"}
-    nfo_audio._remember(_key(name), found["audio"], found["channels"])
+    nfo_audio._remember(_key(name), found["audio"], found["channels"], sure=True)
     filter_module.attach_metadata([row])
     assert sorted(row["_meta"]["audio"]) == ["DD+", "TrueHD"]
     assert row["_meta"]["channels"] == "7.1"
@@ -1238,6 +1244,122 @@ def test_the_names_atmos_does_not_move_onto_a_new_main_track():
 
     # When the new main track carries the Atmos, it stays.
     other = "Some.Movie.2005.2160p.UHD.BluRay.DDP.5.1.Atmos.x265-GRP"
-    nfo_audio._remember(_key(other), ["Atmos", "TrueHD", "DD+"], "7.1")
+    nfo_audio._remember(_key(other), ["Atmos", "TrueHD", "DD+"], "7.1", sure=True)
     (row,) = _rows(other)
     assert sorted(row["_meta"]["audio"]) == ["Atmos", "DD+", "TrueHD"]
+
+
+# --- is the NFO about this release? -----------------------------------------
+
+
+def _whose(text, title):
+    return nfo_audio.whose_nfo(text, title, filter_module.release_identity)
+
+
+def test_an_nfo_that_names_the_release_is_confirmed():
+    assert _whose(SCENE_NFO, PLAIN) == nfo_audio.CONFIRMED
+    # Written with spaces, in other case, or as the file inside the release.
+    spaced = "Some Movie 2004 MULTi 1080p BluRay x264-GRP\nAudio: DTS-HD MA 5.1\n"
+    assert _whose(spaced, PLAIN) == nfo_audio.CONFIRMED
+    assert _whose(SCENE_NFO.lower(), PLAIN + ".mkv") == nfo_audio.CONFIRMED
+    # Another spelling of the same film from the same group.
+    other = "Complete name : Some.Movie.2004.FRENCH.1080p.BluRay.x264-GRP.mkv\n"
+    assert _whose(other, PLAIN) == nfo_audio.CONFIRMED
+
+
+def test_an_nfo_about_another_release_is_wrong():
+    wrong = nfo_audio.WRONG
+    # Another film.
+    assert _whose(SCENE_NFO, "Other.Film.2011.1080p.BluRay.x264-GRP") == wrong
+    # The same film from another group: another encode, other audio.
+    assert _whose(SCENE_NFO, OTHER) == wrong
+    # Another year, another episode.
+    assert _whose(SCENE_NFO, PLAIN.replace("2004", "1975")) == wrong
+    episode = "Release: Some.Show.S01E02.1080p.WEB-DL.DDP5.1.H.264-GRP\n"
+    assert _whose(episode, "Some.Show.S01E03.1080p.WEB-DL.H.264-GRP") == wrong
+    assert _whose(episode, "Some.Show.2019.1080p.WEB-DL.H.264-GRP") == wrong
+    same = "Some.Show.S01E02.1080p.WEB-DL.DDP5.1.H.264-GRP"
+    assert _whose(episode, same) == nfo_audio.CONFIRMED
+
+
+def test_an_nfo_that_names_no_release_is_unconfirmed():
+    unconfirmed = nfo_audio.UNCONFIRMED
+    assert _whose(NAMELESS_NFO, PLAIN) == unconfirmed
+    assert _whose(MEDIAINFO_NFO, PLAIN) == unconfirmed
+    assert _whose("", PLAIN) == unconfirmed
+    # A site address or a version number is not a release name.
+    assert _whose("visit www.some.site.example\nv1.2.3.4\n", PLAIN) == unconfirmed
+    # The same film named without a group decides nothing.
+    assert _whose("File: Some.Movie.2004.1080p.mkv\n", PLAIN) == unconfirmed
+    # Nothing to compare with, or a parser that fails.
+    assert nfo_audio.whose_nfo(SCENE_NFO, OTHER, None) == unconfirmed
+
+    def broken(_name):
+        raise ValueError("no")
+
+    assert nfo_audio.whose_nfo(SCENE_NFO, OTHER, broken) == unconfirmed
+    # A very short name is not looked for inside the text.
+    assert _whose("x 2004 y", "X.2004") == unconfirmed
+
+
+def test_a_confirmed_nfo_replaces_and_an_unconfirmed_one_only_adds(indexer):
+    name = "Some.Movie.2004.MULTi.1080p.BluRay.DTS.5.1.x264-GRP"
+    _Handler.replies["/nfo/own"] = (
+        200,
+        ("Release: " + name + "\nAudio: English DTS-HD MA 7.1\n").encode(),
+    )
+    rows = _rows(name)
+    _offer(rows[0], indexer, "own")
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert nfo_audio._known(_key(name))["sure"] is True
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["audio"] == ["DTS-HD MA"]
+    assert rows[0]["_meta"]["channels"] == "7.1"
+    assert rows[0]["_meta"][nfo_audio.SOURCE_KEY] == "nfo"
+
+    # The same text without the name: the name's DTS stays, the rest is added.
+    nfo_audio.forget_all()
+    _Handler.replies["/nfo/bare"] = (200, b"Audio: English DTS-HD MA 7.1\n")
+    other = name.replace("-GRP", "-OTHER")
+    rows = _rows(other)
+    _offer(rows[0], indexer, "bare")
+    with patch("resources.lib.nfo_audio.xbmc.log") as log:
+        assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert any("does not name the release" in c.args[0] for c in log.call_args_list)
+    assert nfo_audio._known(_key(other))["sure"] is False
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["audio"] == ["DTS", "DTS-HD MA"]
+    assert rows[0]["_meta"][nfo_audio.SOURCE_KEY] == nfo_audio.UNCONFIRMED
+    assert rows[0]["_meta"][nfo_audio.FROM_NFO_KEY] == ["DTS-HD MA"]
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["audio"] == ["DTS", "DTS-HD MA"]
+
+
+def test_another_releases_nfo_is_not_used(indexer):
+    # The indexer attached the NFO of another group's release.
+    rows = _rows(OTHER)
+    _offer(rows[0], indexer, "named")
+    with patch("resources.lib.nfo_audio.xbmc.log") as log:
+        assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert any("about another release" in c.args[0] for c in log.call_args_list)
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["audio"] == []
+    assert nfo_audio.SOURCE_KEY not in rows[0]["_meta"]
+    # It is settled: not asked for again.
+    assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    assert len(_Handler.requests) == 1
+
+
+def test_an_unconfirmed_nfo_leaves_a_guessed_atmos_alone():
+    from resources.lib.filter_atmos import INFERRED_KEY
+
+    show = "Some.Show.S03E02.2160p.AMZN.WEB-DL."
+    labelled = show + "DD+5.1.Atmos.DoVi.H.265-playWEB"
+    plain = show + "DDP5.1.DV.H.265-NTb"
+    nfo_audio._remember(_key(plain), ["DD+", "AAC"], "5.1")
+    rows = _rows(labelled, plain)
+    assert rows[1]["_meta"].get(INFERRED_KEY) is True
+    assert sorted(rows[1]["_meta"]["audio"]) == ["AAC", "Atmos", "DD+"]
+    once = json.dumps(rows[1]["_meta"], sort_keys=True)
+    filter_module.attach_metadata(rows)
+    assert json.dumps(rows[1]["_meta"], sort_keys=True) == once

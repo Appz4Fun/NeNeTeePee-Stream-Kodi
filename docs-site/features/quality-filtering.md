@@ -186,6 +186,14 @@ audio formats and the channel count it names for the release:
   with the track the name put it on. `Audio: English TrueHD 7.1` is how many
   NFOs describe an Atmos track. MediaInfo marks Atmos on the track itself,
   so it is used exactly as it reads.
+- **Only when the NFO is this release's.** Indexers attach NFOs by matching,
+  and a release can carry another release's NFO. Each NFO is checked
+  against the release's name. One that names the release (or the same film
+  or episode from the same group) is used as above. One that names another
+  film, another episode or another group's release is not used at all. One
+  that names no release, such as a bare MediaInfo dump, only adds to what
+  the name tags and replaces nothing. MediaInfo from the indexer's API is
+  made from the release's own file and needs no such check.
 - **No Atmos guess for a release that was read.** The rule under
   [Atmos a name leaves out](#atmos-a-name-leaves-out) does not add Atmos to
   a release whose MediaInfo or NFO was read and names none.
