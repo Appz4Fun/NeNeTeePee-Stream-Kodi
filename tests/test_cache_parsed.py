@@ -14,7 +14,10 @@ from unittest.mock import MagicMock, patch
 import pytest
 import resources.lib.cache as cache_module
 from resources.lib import filter as filter_module
-from resources.lib.cache import get_cached, keep_parsed, set_cached
+
+get_cached = cache_module.get_cached
+keep_parsed = cache_module.keep_parsed
+set_cached = cache_module.set_cached
 
 _TITLES = (
     "Some.Movie.2024.2160p.UHD.BluRay.REMUX.DV.HDR.TrueHD.7.1.Atmos-FraMeSToR",

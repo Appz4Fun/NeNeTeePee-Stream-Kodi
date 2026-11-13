@@ -213,6 +213,14 @@ _FALLBACK_STRINGS = {
     30685: "{} MB rebuilt by stream repair",
     30686: "repairing live from backups",
     30687: "{} so far",
+    30688: "Parity: {} on hold - not needed so far",
+    30689: "Parity: {} of {} taken off hold for repair",
+    30690: "Repair needs {} parity blocks - {} requested",
+    30691: "{} GB",
+    30692: "{} MB",
+    30693: "Repair needs {} parity blocks",
+    30694: "Cancel",
+    30695: "Cancelling...",
 }
 
 

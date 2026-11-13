@@ -2505,3 +2505,35 @@ msgstr ""
 msgctxt "#30687"
 msgid "{} so far"
 msgstr ""
+
+msgctxt "#30688"
+msgid "Parity: {} on hold - not needed so far"
+msgstr ""
+
+msgctxt "#30689"
+msgid "Parity: {} of {} taken off hold for repair"
+msgstr ""
+
+msgctxt "#30690"
+msgid "Repair needs {} parity blocks - {} requested"
+msgstr ""
+
+msgctxt "#30691"
+msgid "{} GB"
+msgstr ""
+
+msgctxt "#30692"
+msgid "{} MB"
+msgstr ""
+
+msgctxt "#30693"
+msgid "Repair needs {} parity blocks"
+msgstr ""
+
+msgctxt "#30694"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "#30695"
+msgid "Cancelling..."
+msgstr ""

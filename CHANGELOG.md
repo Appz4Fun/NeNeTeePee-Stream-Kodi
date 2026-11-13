@@ -69,6 +69,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The NZBGet download dialog is the add-on's own window, without the
+  progress bar.** The first line already carries the percent, and the window
+  has room for eight lines where Kodi's dialog had four: the copy and its
+  stage, size and speed, a failed copy, missing articles, parity, the backups
+  and what was not sent can all show at once. Cancel, Back and Escape stop
+  the play, and a cancel is seen at once. Kodi's own dialog is used if the
+  window cannot be opened.
+- **The dialog says what the parity is doing.** NZBGet queues a release's
+  extra par2 volumes paused and fetches only what a repair asks for. A new
+  line reads `Parity: 3.7 GB on hold - not needed so far`; when a repair
+  asks, `Parity: 1.2 GB of 3.7 GB taken off hold for repair`, with the block
+  counts NZBGet logged under it: `Repair needs 112 parity blocks - 128
+  requested`.
 - **The NZBGet dialog says what was sent, what was left out, and what the
   backups are.** While the copies are handed to NZBGet it lists the indexers
   they came from and anything not sent: `Not sent: Digital Carnage refused 1,
@@ -118,6 +131,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The download's size and percent leave out the parity on hold.** A clean
+  89 GB download ended at `85.3 of 89 GB`, 95%, because the 3.7 GB of par2
+  volumes NZBGet never needed were counted in. It now ends at `85.3 of 85.3
+  GB`, 100%, as on NZBGet's own page.
 - **Reopening a cached search is two to three times faster.** A repeat open
   read the search from the cache and then parsed every release name again,
   which was most of the wait on a CoreELEC box: about 1.2 seconds of a

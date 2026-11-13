@@ -828,6 +828,8 @@ def test_nzbget_native_failure_rolls_back_and_completes_failure(
     )
     notified = MagicMock()
     monkeypatch.setattr(nzbget_resolver, "_notify", notified)
+    open_dialog = MagicMock()
+    monkeypatch.setattr(nzbget_resolver.nzbget_dialog, "open_dialog", open_dialog)
     player.play.side_effect = RuntimeError("Native play failure")
 
     def resolve_result(_handle, success, _item):
@@ -860,7 +862,7 @@ def test_nzbget_native_failure_rolls_back_and_completes_failure(
         "nzbdav.pending_playback_session",
     ):
         assert not properties.get(key), key
-    nzbget_resolver.xbmcgui.DialogProgress.return_value.close.assert_called_once()
+    open_dialog.return_value.close.assert_called_once()
 
 
 def test_retry_native_failure_clears_context_without_stopping_service(playback_kodi):

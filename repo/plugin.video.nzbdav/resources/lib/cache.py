@@ -390,6 +390,8 @@ def _write_entry(path, title, results, timestamp):
         try:
             os.remove(tmp_path)
         except OSError:
+            # Nothing was left behind, or it cannot be removed: either way
+            # the next write replaces it.
             pass
 
 
