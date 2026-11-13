@@ -33,7 +33,7 @@ from array import array
 
 import xbmc
 
-from resources.lib import release_match
+from resources.lib import nzbget_progress, release_match
 from resources.lib.http_util import pubdate_to_epoch, redact_text
 
 # The one "same release" rule, shared with the picker's copy grouping; kept
@@ -209,6 +209,9 @@ class FleetDedup:
         # Every fetcher the play creates shares this set, so a refusal in one
         # collection phase also spares the later ones (loader extras, refills).
         self.blocked_indexers = set()
+        # What happened to each copy this play found (kept, refused, not
+        # downloaded, duplicate): the progress dialog and the toast read it.
+        self.report = nzbget_progress.FleetReport(self.blocked_indexers)
         # Optional zero-arg callable: True once Kodi is shutting down (vs a
         # user cancel) -- late appends are then left to finish, not deleted.
         self.aborted = None

@@ -343,6 +343,7 @@ def _collect_unique(stream, state, cancel_event, need):
                 ),
                 _core.xbmc.LOGINFO,
             )
+            dedup.report.duplicate()
             continue
         handle = _keep_handle(spool, payload, is_pick)
         if handle is None and not is_pick:
@@ -355,6 +356,7 @@ def _collect_unique(stream, state, cancel_event, need):
                 ),
                 _core.xbmc.LOGINFO,
             )
+            dedup.report.dropped(candidate)
             continue
         # Unique: held for this round so later downloads compare against it;
         # committed once its append reaches NZBGet. The round keeps only the
@@ -362,6 +364,7 @@ def _collect_unique(stream, state, cancel_event, need):
         token = dedup.remember_posting(fingerprint)
         del fingerprint
         kept.append((candidate, handle, token))
+        dedup.report.kept(candidate)
         if need is not None:
             tally["wanted"] = need - len(kept)
             if len(kept) >= need:

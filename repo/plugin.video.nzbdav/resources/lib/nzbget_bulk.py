@@ -79,6 +79,7 @@ def submit_bulk(ctx, nzb_url, title, dupe_key):
     dedup = FleetDedup(spool_base=core._fleet_spool_base(), progress=progress.update)
     dedup.aborted = lambda: progress.aborted
     dedup.attempts_used = len(adopted)
+    progress.report = ctx.fleet_report = dedup.report
     try:
         result = _collect_send(
             ctx, candidates, count, (dupe_key, getter, progress, dedup)
@@ -465,7 +466,10 @@ def _health_message(progress, reply):
     # primary-copy health visible for eight seconds without blocking playback.
     # The toast is narrow, so it gets a short text of its own.
     try:
-        core._notify(core._addon_name(), nzbget_progress.ready_toast(good, alive), 8000)
+        toast = nzbget_progress.ready_toast(
+            good, alive, getattr(progress, "report", None)
+        )
+        core._notify(core._addon_name(), toast, 8000)
     except Exception:  # pylint: disable=broad-except
         # Kodi tearing down its GUI must not interrupt an accepted download.
         pass

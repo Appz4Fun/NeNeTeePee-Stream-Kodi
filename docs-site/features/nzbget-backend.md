@@ -219,7 +219,8 @@ servers for up to 45 seconds, starts the best working copy, and keeps backups
 for automatic failover. The HTTP request has a 75-second timeout (45 seconds plus 30 seconds). The progress
 dialog shows the number of good candidates and the chosen copy's health when
 known, and a short notification repeats it, for example
-`12 copies ready - health 100%`. Your initial pick can differ from the copy
+`12 copies ready - health 100%`, or `6 of 8 copies ready - health 100%` when
+some of the copies found could not be used. Your initial pick can differ from the copy
 NZBGet chooses.
 
 The add-on tracks the returned `Chosen` NZBID and follows NZBGet's automatic
@@ -311,11 +312,26 @@ listings of the same posting:
 
 ### What the dialog shows while downloading
 
-Once NZBGet has the copies, the progress dialog shows up to three lines:
+While the copies are handed to NZBGet, which can take most of a minute when
+NZBGet health-checks them, the dialog says where they came from and what was
+left out:
+
+```text
+Sending 6 NZBs to NZBGet...
+abNZB, altHUB, Ninjacentral, Square Eyed, Zurg x2
+Not sent: Digital Carnage refused 1, 1 duplicate upload
+```
+
+A copy is left out when its indexer refused the download, when its NZB could
+not be downloaded for another reason, or when it turned out to be the same
+Usenet posting as a copy already kept (a duplicate upload).
+
+Once NZBGet has the copies, the progress dialog shows up to four lines:
 
 ```text
 Copy 2 of 12 - downloading 43%
 4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
+Backups: 2 twins, 3 alts
 Copy 1 failed: too many missing articles
 ```
 
@@ -327,8 +343,13 @@ Copy 1 failed: too many missing articles
 - **Line 2** is how much has arrived, the speed over the last half minute,
   and the time left at that speed. The speed and time appear after the second
   progress check.
-- **Line 3** appears once a copy has failed and stays for the rest of the
-  download, so a switch to a backup is never silent. It gives the reason in
+- **Line 3** says what the backups are, on a server that reports it
+  (RustyGet). A **twin** is a byte-identical copy the server can borrow
+  missing articles from. An **alt** is a different upload kept as a fallback.
+  Stock NZBGet doesn't report this, so the line is left out.
+- **Line 4** appears once a copy has failed and stays for the rest of the
+  download, so a switch to a backup is never silent. Until then it repeats
+  what was not sent, if anything was. It gives the reason in
   plain words, such as `too many missing articles`, `it could not be repaired`,
   `it could not be unpacked`, or `it needs a password`. After a second failure
   it reads `2 copies failed. Last one: ...`.
