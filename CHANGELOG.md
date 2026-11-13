@@ -131,6 +131,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A WEB-DL whose name leaves Atmos out takes it from a labelled copy of
+  the same stream.** Groups name one stream differently: `DD+5.1.Atmos` from
+  one, `DDP5.1` from another, for the same Amazon download, and the second
+  ranked a whole audio tier lower. A WEB-DL tagged Dolby Digital Plus without
+  Atmos now shows and ranks as Atmos when another result of the search is the
+  same movie or episode from the same service, at the same resolution, video
+  codec and channel count, and is tagged with Atmos. WEBRips and disc
+  releases are left alone, and a HYBRID release neither gives nor takes.
 - **The download's size and percent leave out the parity on hold.** A clean
   89 GB download ended at `85.3 of 89 GB`, 95%, because the 3.7 GB of par2
   volumes NZBGet never needed were counted in. It now ends at `85.3 of 85.3

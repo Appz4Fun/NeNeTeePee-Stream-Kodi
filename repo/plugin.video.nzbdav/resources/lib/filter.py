@@ -17,6 +17,7 @@ import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kod
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
 from resources.lib import telemetry
+from resources.lib.filter_atmos import share_atmos
 from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
     _fallback_audio,
@@ -671,12 +672,17 @@ def _unify_name_forms(rows):
 
 
 def _attach_metadata(results):
-    """Parse every row's title into ``_meta`` and unify name spellings."""
+    """Parse every row's title into ``_meta`` and unify name spellings.
+
+    Last, a WEB-DL whose name leaves Atmos out takes it from a labelled copy
+    of the same source in ``results`` (``filter_atmos``).
+    """
     parsed_by_title = {}
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
     _unify_name_forms(results)
+    share_atmos(results, _META_DERIVED_ROW_KEYS)
 
 
 def attach_metadata(results):

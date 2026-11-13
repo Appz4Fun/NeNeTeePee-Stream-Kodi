@@ -139,6 +139,24 @@ tags DTS:X without DTS-HD MA carries the lossy kind. `DD_5.1`, or `DD 5.1` in
 a name that otherwise separates its words with dots, is read as `DD+5.1`: the
 plus sign was replaced on the way from the indexer.
 
+#### Atmos a name leaves out
+
+Groups name the same stream differently: one writes `DD+5.1.Atmos`, another
+`DDP5.1` for the same Amazon download. A WEB-DL tagged Dolby Digital Plus
+without Atmos is treated as Atmos, in the picker and in the ranking, when
+another result of the same search is tagged Dolby Digital Plus with Atmos and
+is:
+
+- the same movie (same year and cut) or the same episode;
+- from the same streaming service (`AMZN`, `ATVP`, ...);
+- the same resolution, video codec and channel count.
+
+It applies to WEB-DL only, since a WEBRip or a disc encode carries whatever
+audio its encoder chose. A row that names no service takes nothing. A
+**HYBRID** release neither gives nor takes: it combines sources, so its audio
+may come from somewhere else. Only a tag written in a name counts as the
+source; a row that took Atmos this way never passes it on.
+
 The three editable, comma-separated preferred group lists default to the
 [TRaSH tier 1](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-01.json),
 [tier 2](https://github.com/TRaSH-Guides/Guides/blob/master/docs/json/radarr/cf/remux-tier-02.json), and
