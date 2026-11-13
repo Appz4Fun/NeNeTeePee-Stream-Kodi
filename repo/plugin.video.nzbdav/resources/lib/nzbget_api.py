@@ -352,9 +352,11 @@ def _same_nzbid(left, right):
 def group_status(nzbid, settings_getter=None):
     """Look up an active job by NZBID via listgroups.
 
-    Returns a dict: {"present": bool, "status": str, "percent": int}.
-    "present" is False once the job leaves the active queue (moved to
-    history). On RPC error, returns status="ERROR" with present=False.
+    Returns a dict: {"present": bool, "status": str, "percent": int}, plus
+    "downloaded_mb" and "total_mb" for a job that is present (the progress
+    dialog shows them). "present" is False once the job leaves the active
+    queue (moved to history). On RPC error, returns status="ERROR" with
+    present=False.
     """
     groups, error = _rpc_call("listgroups", [0], settings_getter=settings_getter)
     if error is not None or not isinstance(groups, list):
@@ -370,6 +372,8 @@ def group_status(nzbid, settings_getter=None):
                 "present": True,
                 "status": str(group.get("Status") or ""),
                 "percent": percent,
+                "downloaded_mb": downloaded,
+                "total_mb": total,
             }
     return {"present": False, "status": "", "percent": 0}
 
@@ -744,6 +748,8 @@ def _promoted_group_entry(group, dupe_key, exclude_nzbid):
         "nzbid": group.get("NZBID"),
         "status": status,
         "percent": percent,
+        "downloaded_mb": downloaded,
+        "total_mb": total,
     }
 
 

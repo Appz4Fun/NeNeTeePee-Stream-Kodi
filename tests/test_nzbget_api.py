@@ -202,6 +202,9 @@ def test_group_status_returns_progress_for_matching_nzbid():
     assert status["present"] is True
     assert status["status"] == "DOWNLOADING"
     assert status["percent"] == 25
+    # The progress dialog shows the sizes and works the speed out from them.
+    assert status["downloaded_mb"] == 250
+    assert status["total_mb"] == 1000
 
 
 def test_group_status_absent_when_nzbid_not_in_queue():
