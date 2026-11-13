@@ -760,6 +760,22 @@ def _handle_direct_play(handle, params):
     )
 
 
+def _requested_episode_rows(results, search_type, season, episode, air_date=""):
+    """On an episode search, drop rows that name a different episode.
+
+    The cache keeps the provider's full answer; this runs on every read, so
+    the no-results check, both picker views and the result count all see the
+    requested episode only (see ``filter.drop_other_episodes``). ``air_date``
+    is the player's ``premiered`` token; it picks the right night of a show
+    whose releases are named by date.
+    """
+    if search_type != "episode":
+        return results
+    from resources.lib.filter import drop_other_episodes
+
+    return drop_other_episodes(results, (season, episode), air_date=air_date)
+
+
 def _handle_play(handle, params):
     """
     Handle a play request from TMDBHelper by searching configured providers
@@ -802,6 +818,9 @@ def _handle_play(handle, params):
         _show_error_dialog(search_error)
         xbmcplugin.setResolvedUrl(handle, False, xbmcgui.ListItem())
         return
+    results = _requested_episode_rows(
+        results, search_type, season, episode, air_date=params.get("premiered", "")
+    )
 
     if not results and pack_result is None:
         xbmc.log(
@@ -869,6 +888,9 @@ def _handle_search(handle, params):
         _show_error_dialog(search_error)
         xbmcplugin.endOfDirectory(handle, succeeded=False)
         return
+    results = _requested_episode_rows(
+        results, search_type, season, episode, air_date=params.get("premiered", "")
+    )
 
     if not results and pack_result is None:
         xbmc.log(

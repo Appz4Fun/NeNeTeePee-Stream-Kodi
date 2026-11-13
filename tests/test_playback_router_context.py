@@ -31,9 +31,11 @@ def test_profile_uses_explicit_ids_and_keeps_runscript(route):
         "eptmdb": "424242",
         "ep_showseason": "1",
         "ep_showepisode": "6",
+        "premiered": "2023-02-24",
     }
     params = parse_script_args(command.format(**values)[:-1].split(",")[2:])
     if route == "play_episode":
+        assert params["premiered"] == "2023-02-24"
         assert params["tvshow_tmdb_id"] == "136311"
         assert params["episode_tmdb_id"] == "424242"
         assert params["episode_title"] == "Imposter Syndrome"

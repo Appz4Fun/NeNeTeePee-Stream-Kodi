@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, four audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
+| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, four audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -100,6 +100,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An episode search lists the requested episode only.** The add-on trusted
+  each indexer to honour the season and episode it was asked for, but an
+  indexer that searches raw post subjects matches the show name alone and
+  returned every episode it had. Results whose name clearly gives a different
+  season or episode are now removed before filtering, so they appear in
+  neither picker view. So are results that are not an episode at all, such as
+  a soundtrack or disc image that only shares the show's name. What stays is
+  the episode itself, a multi-episode file that includes it, a pack for the
+  season or the whole series, a daily show named by its air date, and a video
+  release whose name carries no readable episode number.
+- **A daily-show search lists the requested night only.** Releases named by
+  air date have no season or episode, so every night the indexer returned was
+  listed. The TMDBHelper player now passes the episode's air date
+  (`premiered={premiered}`, player schema 11) and releases dated another day
+  are removed. With no exact match, releases one day either side stay; with
+  none of those, every dated release stays. An installed player file is
+  upgraded automatically.
 - **Dolby Digital Plus is recognized in more spellings.** `DD_5.1`, and
   `DD 5.1` in a dotted name, are read as `DD+5.1` (the plus sign was replaced
   on the way from the indexer). `DDPA5.1` and `DD+A` are Dolby Digital Plus
