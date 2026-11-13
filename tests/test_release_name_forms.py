@@ -821,3 +821,60 @@ def test_an_anime_episode_number_is_read_in_a_dotted_name():
     assert parse_title_metadata(dotted)["ptt_identity"]["episodes"] == [7]
     spaced = "[Erai-raws] Sousou no Frieren - 05 [1080p][165931CD]"
     assert parse_title_metadata(spaced)["ptt_identity"]["episodes"] == [5]
+
+
+# --- later review findings ------------------------------------------------------
+
+
+def test_a_title_word_that_is_a_language_is_not_judged():
+    """The parser reads "English" as the language and takes it out of the title."""
+    right = "The.English.S01E01.1080p.WEB.H264-GRP"
+    other = "Some.Other.Show.S01E01.1080p.WEB.H264-GRP"
+    assert _shows([right, other], "The English") == [right, other]
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "Movie.2023.1080p.BluRay.x265.HDR10P",
+        "Movie.2023.1080p.BluRay.x265.HDR10Plus",
+        "Movie 2023 1080p BluRay x265 DoVi",
+        "Movie (2023) (1080p BluRay x265 HDR10Plus)",
+    ],
+)
+def test_an_hdr_tag_is_never_the_group(title):
+    assert parse_title_metadata(title)["group"] == ""
+
+
+def test_an_article_that_differs_is_another_show():
+    from resources.lib.filter import partition_series_rows
+
+    wanted = _row("A.Teacher.2020.S01E01.1080p.WEB.H264-GRP")
+    other = _row("The.Teacher.2022.S01E01.1080p.WEB.H264-GRP")
+    matching, rest = partition_series_rows([other, wanted], "A Teacher")
+    assert matching == [wanted] and rest == [other]
+    bare = _row("Office.S02E01.1080p.WEB.H264-GRP")
+    matching, _rest = partition_series_rows([bare], "The Office")
+    assert matching == [bare]
+
+
+def test_the_filtered_views_odd_size_verdict_is_the_one_kept():
+    """Both views sort the same rows; backups read the filtered one."""
+    from resources.lib.router_play import _same_release_backups
+
+    sizes = [10 * GB, 10 * GB, 10 * GB, 3 * GB] + [GB] * 5
+
+    def minimum_two_gb(key, default=""):
+        return "2048" if key == "filter_min_size" else default
+
+    rows = _sized(sizes)
+    filtered, _all = flt.filter_results(rows, settings_getter=minimum_two_gb)
+    assert [int(row["size"]) // GB for row in filtered] == [10, 10, 10, 3]
+    assert [bool(row.get("_size_outlier")) for row in filtered] == [
+        False,
+        False,
+        False,
+        True,
+    ]
+    backups = _same_release_backups(filtered[0], filtered)
+    assert len(backups) == 2

@@ -155,6 +155,7 @@ _NOT_A_GROUP = re.compile(
 
 
 _TAG_PATTERNS = tuple(pattern for _name, pattern in _AUDIO_PATTERNS + _CODEC_PATTERNS)
+_RANGE_PATTERNS = (_HDR_PLUS, _HDR, _DV, _HLG)
 
 
 def _valid_group(value):
@@ -165,6 +166,8 @@ def _valid_group(value):
         and "/" not in value
         and not _NOT_A_GROUP.fullmatch(value)
         and not any(pattern.fullmatch(value) for pattern in _TAG_PATTERNS)
+        # "HDR10P", "HDR10Plus", "DoVi", "HLG": tags a groupless name can end in.
+        and not any(pattern.fullmatch(value) for pattern in _RANGE_PATTERNS)
     )
 
 

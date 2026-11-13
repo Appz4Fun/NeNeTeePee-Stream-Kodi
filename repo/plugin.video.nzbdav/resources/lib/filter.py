@@ -716,8 +716,10 @@ def filter_results(results, settings_getter=None):
         if reject is None:
             filtered.append(result)
 
-    filtered = _sort_results(filtered, settings)
+    # The filtered view last: both sorts mark oddly sized copies on the same
+    # row objects, and playback and backups read the rows of the filtered view.
     all_parsed = _sort_results(all_parsed, settings)
+    filtered = _sort_results(filtered, settings)
 
     matched_count = len(filtered)
     max_results = settings["max_results"]
@@ -790,6 +792,7 @@ def partition_series_rows(rows, requested_title):
 # Words that never tell two titles apart, and the country a listing adds to
 # the same show ("The.Office.US", "Shameless.UK").
 _TITLE_FILLER = frozenset(("the", "a", "an", "and"))
+_ARTICLES = frozenset(("the", "a", "an"))
 _TITLE_QUALIFIERS = frozenset(("us", "uk", "au", "nz", "ca"))
 _TITLE_YEAR = re.compile(r"(?:19|20)\d{2}")
 # Past this share of a search's results, a rule that removes "other" titles is
@@ -842,7 +845,12 @@ def _same_show_title(got, want):
     and "narcos mexico" are other shows.
     """
     core = _title_core(want)
-    return bool(core) and _title_core(got) == core
+    if not core or _title_core(got) != core:
+        return False
+    # "A Teacher" and "The Teacher" are two shows; a listing that drops the
+    # article ("Office" for "The Office") is still the show.
+    articles = {words[0] for words in (got.split(), want.split()) if words}
+    return len(articles & _ARTICLES) < 2
 
 
 def _matched_outside_title(row, wanted):
@@ -903,6 +911,7 @@ def drop_other_shows(results, requested_title):
     the indexers are returning strays). Side effect: attaches ``_meta``.
     """
     from resources.lib.fallback_streams import _normalize_title
+    from resources.lib.filter_languages import is_language_word
     from resources.lib.release_match import title_key
 
     # A country code is left out like a number: the parser reads "UK" in
@@ -915,6 +924,9 @@ def drop_other_shows(results, requested_title):
         and word not in _TITLE_QUALIFIERS
         and word not in _REMAKE_CODES
         and not word.isdigit()
+        # "The English": the parser reads "English" as the language and takes
+        # it out of the title, like a country code or a number.
+        and not is_language_word(word)
     }
     if not words or not results:
         return results
