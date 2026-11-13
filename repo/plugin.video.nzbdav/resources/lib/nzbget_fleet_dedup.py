@@ -33,7 +33,7 @@ from array import array
 
 import xbmc
 
-from resources.lib import nzbget_progress, release_match
+from resources.lib import nzb_fingerprint_scan, nzbget_progress, release_match
 from resources.lib.http_util import pubdate_to_epoch, redact_text
 
 # The one "same release" rule, shared with the picker's copy grouping; kept
@@ -94,6 +94,36 @@ def posting_fingerprint(nzb_bytes):
     return posting_fingerprint_file(io.BytesIO(bytes(nzb_bytes)))
 
 
+def _fast_fingerprint(path):
+    """The fast read's fingerprint for ``path``, None, or ``UNUSUAL``.
+
+    ``path`` is a file path or a seekable binary stream. ``UNUSUAL`` sends the
+    caller to the XML walk. A fingerprint is only returned for a document the
+    safe XML reader also finds well-formed and safe: the scan says where the
+    Message-IDs are, ``xml_safety`` says whether the document is valid, and a
+    document it refuses has no fingerprint (None), exactly as when walked.
+    """
+    from resources.lib.xml_safety import ParseError, UnsafeXmlError, check_well_formed
+
+    try:
+        if hasattr(path, "read"):
+            try:
+                found = nzb_fingerprint_scan.scan_fingerprint(path)
+            finally:
+                path.seek(0)
+        else:
+            with open(path, "rb") as stream:
+                found = nzb_fingerprint_scan.scan_fingerprint(stream)
+        if found is nzb_fingerprint_scan.UNUSUAL:
+            return found
+        check_well_formed(path)
+        return found
+    except (ParseError, UnsafeXmlError):
+        return None
+    except (OSError, ValueError):
+        return nzb_fingerprint_scan.UNUSUAL
+
+
 def posting_fingerprint_file(path):
     """The posting fingerprint of an NZB file (a path or a binary stream).
 
@@ -110,7 +140,28 @@ def posting_fingerprint_file(path):
     files, and ``<head>``/``<meta>`` alike), so memory is the fingerprint (4
     bytes per article) plus the open path, never the document. None for
     unparseable or unsafe XML or an NZB without segment Message-IDs.
+
+    A plainly written NZB (every indexer's) is read by
+    ``nzb_fingerprint_scan`` first: the same fingerprint from one pass over
+    the bytes, about five times faster. Anything it finds unusual is walked
+    here with the XML parser, which stays the authority.
     """
+    # One fingerprint at a time. The work holds the interpreter, so four
+    # running together on four fetch threads only take turns at it and each
+    # ends up slower than it would alone (measured on a CoreELEC box: 4.2 s
+    # each instead of 1.5 s). The downloads themselves still overlap.
+    with _FINGERPRINT_LOCK:
+        fast = _fast_fingerprint(path)
+        if fast is not nzb_fingerprint_scan.UNUSUAL:
+            return fast
+        return _walked_fingerprint(path)
+
+
+_FINGERPRINT_LOCK = threading.Lock()
+
+
+def _walked_fingerprint(path):
+    """``posting_fingerprint_file`` by the XML parser (see there)."""
     from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
 
     hashes = array("I")

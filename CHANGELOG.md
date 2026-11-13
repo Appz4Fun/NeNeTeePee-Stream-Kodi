@@ -82,6 +82,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   NZBGet's scripts. It now reads `repairing 43%` with `25s so far - about 33s
   left` under it, or `moving into place` with `51s so far`, and the bar
   follows the stage when NZBGet reports its progress.
+- **The dialog shows what is arriving while it downloads the NZBs.** Under
+  `Downloading NZBs 5 of 8` it lists the indexers that have delivered so far
+  and anything refused or found to be a duplicate.
 - **The dialog names the copy being downloaded and what was missing.** The
   first line adds the indexer that supplied the copy and its age: `Copy 1 of 6
   (abNZB, 4 days) - downloading 43%`. A new line reports articles no server
@@ -115,6 +118,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Collecting a large release's NZBs is about four times faster.** To tell
+  whether two copies are the same upload, the add-on reads every article ID in
+  each NZB: 130,000 of them in a 12 MB NZB for a remux. On a CoreELEC box that
+  took 1.5 seconds per NZB, and 4.2 seconds each with four being read at once,
+  since that work cannot run in parallel; one play's seven copies took 37
+  seconds. A plainly written NZB is now read in one pass over its bytes, in
+  about half a second, with the same result, and NZBs are read one at a time
+  while their downloads still overlap. Anything unusual in an NZB is still
+  read by the XML parser.
 - **The picker's side panel lists every indexer once.** In List compacted,
   the panel showed one line per copy, so an indexer that listed a release
   three times took three lines and the rest were cut off as `+5 more`. It now

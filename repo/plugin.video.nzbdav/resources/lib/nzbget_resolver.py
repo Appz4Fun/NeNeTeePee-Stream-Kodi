@@ -212,10 +212,13 @@ def _update_active_dialog(dialog, group, state=None, fleet=None):
     dialog.update(group["percent"] if stage is None else stage, message)
 
 
-# The backups' twin/alt marks are read from NZBGet's history at most this many
-# times per followed copy (the server may still be working them out on the
-# first read), this many polls apart: history can be large on a busy server.
-_KIND_READS = 3
+# The backups' twin/alt marks are read from NZBGet's history until every
+# backup has one, at most this many times per followed copy and this many
+# polls apart (about four minutes at the default interval). The server works
+# the marks out after the submit, a couple of copies at a time, so a large
+# fleet's arrive over a while; history can be large on a busy server, so the
+# reads are spaced out and stop once nothing is missing.
+_KIND_READS = 12
 _KIND_READ_EVERY = 10
 
 

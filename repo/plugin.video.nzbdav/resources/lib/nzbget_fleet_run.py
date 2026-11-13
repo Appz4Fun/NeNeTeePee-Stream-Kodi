@@ -659,7 +659,10 @@ class _FleetProgress:
     def update(self, phase, done, total):
         if phase == "download":
             percent = int(done * 100 / total) if total else 0
-            self._update(percent, _core._fmt(30616, done, total))
+            self._update(
+                percent,
+                _core.nzbget_progress.collecting_message(self.report, done, total),
+            )
         elif phase == "send":
             percent = int(done * 100 / total) if total else 100
             self._update(

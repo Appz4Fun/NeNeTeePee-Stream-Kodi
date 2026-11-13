@@ -359,7 +359,9 @@ Copy 1 failed: too many missing articles
     - what the backups are, on a server that reports it (RustyGet):
       `Backups: 2 twins, 3 alts`. A **twin** is a byte-identical copy the
       server can borrow missing articles from. An **alt** is a different
-      upload kept as a fallback;
+      upload kept as a fallback. The server works these out after it accepts
+      the copies, a couple at a time, so the counts fill in over the first
+      minutes;
     - what was not sent, if anything was.
 
 NZBGet doesn't report how many par2 blocks a repair needs while it runs, so
@@ -378,7 +380,8 @@ NZBGet starts downloading:
    from the search it already ran, so this step downloads nothing.
 2. **Downloading NZBs 1 of 25** ... **25 of 25**: it downloads every NZB file
    itself, your pick included, and checks each one against the NZBs it already
-   kept. Each unique NZB is saved to a folder in Kodi's temp directory as soon
+   kept. Under the count, the dialog lists the indexers that have delivered so
+   far and anything refused or found to be a duplicate. Each unique NZB is saved to a folder in Kodi's temp directory as soon
    as it passes; duplicates are discarded. If your pick's indexer fails,
    another indexer's copy of the same posting is used.
    An indexer that refuses an NZB (HTTP 401, 403 or 429) is skipped for the

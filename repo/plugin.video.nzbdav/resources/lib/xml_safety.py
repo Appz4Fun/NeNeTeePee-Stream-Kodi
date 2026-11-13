@@ -218,6 +218,57 @@ def _scan_prolog(parser, handle, expat):
     raise _UnsafeXmlError("XML prolog is too long")
 
 
+_CHECK_CHUNK_BYTES = 1024 * 1024
+
+
+def check_well_formed(path):
+    """Read a whole XML file with expat and build nothing; raise if it is bad.
+
+    ``path`` is a file path or a seekable binary stream, read from its start
+    and left where it was.
+    Raises ``ParseError`` for XML that is not well-formed and
+    ``UnsafeXmlError`` for an entity declaration or a DOCTYPE with an internal
+    subset, the same documents ``safe_iterparse`` refuses. With no element
+    handlers set, expat checks the document at its own speed and in constant
+    memory, so a caller that locates data some other way (the NZB fingerprint
+    scan) can still have this module decide whether the document is valid.
+    """
+    # nosemgrep
+    from xml.parsers import expat  # nosec B407 - validates only, expands nothing
+
+    def _doctype(_name, _sysid, _pubid, has_internal_subset):
+        if has_internal_subset:
+            raise _UnsafeXmlError("XML internal DTD subsets are not allowed")
+
+    def _entity(*_args):
+        raise _UnsafeXmlError("XML entity declarations are not allowed")
+
+    parser = expat.ParserCreate()
+    parser.StartDoctypeDeclHandler = _doctype
+    parser.EntityDeclHandler = _entity
+
+    def _feed(handle):
+        try:
+            while True:
+                chunk = handle.read(_CHECK_CHUNK_BYTES)
+                parser.Parse(chunk, not chunk)
+                if not chunk:
+                    return
+        except expat.ExpatError as exc:
+            raise ParseError("malformed XML: {}".format(exc)) from exc
+
+    if hasattr(path, "read"):
+        start = path.tell()
+        try:
+            path.seek(0)
+            _feed(path)
+        finally:
+            path.seek(start)
+        return
+    with open(path, "rb") as handle:
+        _feed(handle)
+
+
 def safe_iterparse(path, events=("end",)):
     """Stream-parse an XML file (a path or a seekable binary stream), refusing
     entity declarations.
