@@ -2630,7 +2630,7 @@ def test_handle_search_auto_select_passes_clean_params_to_resolver(
     # about the params handed to the resolver.
     with patch(
         "resources.lib.router._requested_movie_rows",
-        side_effect=lambda results, *_args: results,
+        side_effect=lambda results, *_args, **_kwargs: results,
     ):
         _handle_search(
             7,
@@ -2834,7 +2834,7 @@ def test_handle_search_picker_passes_clean_params_to_resolver(
     # As above: the filter is mocked, so the rows stay bare.
     with patch(
         "resources.lib.router._requested_movie_rows",
-        side_effect=lambda results, *_args: results,
+        side_effect=lambda results, *_args, **_kwargs: results,
     ):
         _handle_search(
             8,

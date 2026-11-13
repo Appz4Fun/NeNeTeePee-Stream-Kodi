@@ -329,6 +329,13 @@ def detect_channels(title):
     return list(dict.fromkeys(_count(m) for m in _CHANNELS_AFTER_ANY.finditer(title)))
 
 
+def track_channels(title, tag):
+    """The channel count written right after ``tag`` ("DD" -> "5.1"), or ""."""
+    pattern = _CHANNELS_AFTER.get(tag)
+    match = pattern.search(str(title or "")) if pattern else None
+    return _count(match) if match else ""
+
+
 def main_track_channels(title, audio, quality="", parsed=""):
     """The channel count of the release's main audio track, or "".
 

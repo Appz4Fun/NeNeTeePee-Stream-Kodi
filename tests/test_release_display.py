@@ -196,11 +196,11 @@ def _row(title, **extra):
         # A second track is named after the main one.
         (
             "Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD5.1-GRP",
-            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1 + DD]-GRP",
+            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1 + DD 5.1]-GRP",
         ),
         (
             "Movie.2023.2160p.BluRay.REMUX.DD5.1.TrueHD.7.1.Atmos-GRP",
-            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1 + DD]-GRP",
+            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1 + DD 5.1]-GRP",
         ),
         (
             "Movie.2023.2160p.BluRay.REMUX.DTS-HD.MA.7.1.DTS-X-GRP",
@@ -313,7 +313,7 @@ def test_a_separate_dd_track_beside_dd_plus_atmos_is_a_different_release():
     extra = _row("Movie.2023.1080p.WEB-DL.DDP5.1.Atmos.DD2.0.H.264-GRP")
     assert not same_release(plain, extra)
     assert display_name(extra) == (
-        "Movie (2023) [WEB-DL-1080p][DD+ Atmos 5.1 + DD][H264]-GRP"
+        "Movie (2023) [WEB-DL-1080p][DD+ Atmos 5.1 + DD 2.0][H264]-GRP"
     )
 
 

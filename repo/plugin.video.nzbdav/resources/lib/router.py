@@ -779,7 +779,7 @@ def _requested_episode_rows(  # pylint: disable=too-many-arguments
     return drop_other_shows(results, title)
 
 
-def _requested_movie_rows(results, search_type, year):
+def _requested_movie_rows(results, search_type, year, title=""):
     """On a movie search, drop rows clearly dated for another year.
 
     Runs on every read of the cached provider answer, like
@@ -789,7 +789,7 @@ def _requested_movie_rows(results, search_type, year):
         return results
     from resources.lib.filter import drop_other_years, drop_tv_episodes
 
-    return drop_tv_episodes(drop_other_years(results, year))
+    return drop_tv_episodes(drop_other_years(results, year, title))
 
 
 def _handle_play(handle, params):
@@ -842,7 +842,7 @@ def _handle_play(handle, params):
         air_date=params.get("premiered", ""),
         title=title,
     )
-    results = _requested_movie_rows(results, search_type, year)
+    results = _requested_movie_rows(results, search_type, year, title)
 
     if not results and pack_result is None:
         xbmc.log(
@@ -918,7 +918,7 @@ def _handle_search(handle, params):
         air_date=params.get("premiered", ""),
         title=title,
     )
-    results = _requested_movie_rows(results, search_type, year)
+    results = _requested_movie_rows(results, search_type, year, title)
 
     if not results and pack_result is None:
         xbmc.log(

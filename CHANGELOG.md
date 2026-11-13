@@ -76,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an episode. Raw Usenet subjects (`[1/3] - "Name.mkv" yEnc 4400443301`) no
   longer appear as listed. Cuts, variants, parts and second audio tracks keep
   their place in the name: `{Unrated}`, `[3D]`, `[DUBBED]`, `[HC]`,
-  `S01 Part 2`, `[TrueHD Atmos 7.1 + DD]`. In List compacted, the side panel
+  `S01 Part 2`, `[TrueHD Atmos 7.1 + DD 5.1]`. In List compacted, the side panel
   shows the name as the indexer listed it in grey under the normalized one.
 - **HYBRID is a parsed attribute** with its own cyan slot on each picker row.
   It is part of the same-release rule, so a hybrid and its plain twin are

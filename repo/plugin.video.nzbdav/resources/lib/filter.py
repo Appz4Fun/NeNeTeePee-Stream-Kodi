@@ -1117,8 +1117,12 @@ def drop_other_episodes(results, requested_episode, air_date=None):
 _YEAR_TOKEN = re.compile(r"(?<![0-9])(?:19|20)[0-9]{2}(?![0-9])")
 
 
-def _names_other_year(row, wanted):
+def _names_other_year(row, wanted, title_years=frozenset()):
     """True when a movie row is clearly dated for another year than ``wanted``.
+
+    ``title_years`` are the year-like numbers in the requested title itself:
+    with no release year in the name, the parser reads the "2049" of
+    ``Blade.Runner.2049.2160p`` as the year, and that is the title, not a date.
 
     The parsed year must be more than one year off (festival and release years
     differ by one), and the requested year must not appear anywhere in the
@@ -1137,7 +1141,7 @@ def _names_other_year(row, wanted):
     year = identity.get("year")
     if not isinstance(year, int) or isinstance(year, bool) or year <= 0:
         return False
-    if abs(year - wanted) <= 1:
+    if abs(year - wanted) <= 1 or year in title_years:
         return False
     named = {
         int(token)
@@ -1146,7 +1150,7 @@ def _names_other_year(row, wanted):
     return not named & {wanted - 1, wanted, wanted + 1}
 
 
-def drop_other_years(results, requested_year):
+def drop_other_years(results, requested_year, requested_title=""):
     """Return movie ``results`` without rows dated for another year.
 
     A movie search by id still comes back with other films: an indexer that
@@ -1155,7 +1159,8 @@ def drop_other_years(results, requested_year):
     another year is removed outright, like another episode on an episode
     search. A row with no year, or within a year of the requested one, stays.
     ``requested_year`` that is not a four-digit year leaves ``results``
-    untouched. Side effect: attaches ``_meta`` to each row.
+    untouched. A year-like number in ``requested_title`` is never a
+    conflicting date. Side effect: attaches ``_meta`` to each row.
     """
     try:
         wanted = int(str(requested_year).strip())
@@ -1164,11 +1169,16 @@ def drop_other_years(results, requested_year):
     if not 1900 <= wanted <= 2100 or not results:
         return results
     _attach_metadata(results)
+    title_years = frozenset(
+        int(token) for token in _YEAR_TOKEN.findall(str(requested_title or ""))
+    )
     kept = [
         row
         for row in results
         if not (
-            isinstance(row, dict) and "title" in row and _names_other_year(row, wanted)
+            isinstance(row, dict)
+            and "title" in row
+            and _names_other_year(row, wanted, title_years)
         )
     ]
     dropped = len(results) - len(kept)

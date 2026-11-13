@@ -19,6 +19,7 @@ import re
 
 from resources.lib.filter_audio import audio_label, main_audio
 from resources.lib.filter_languages import title_languages
+from resources.lib.filter_tags import track_channels
 from resources.lib.release_subject import (
     release_name_from_subject,
     without_media_extension,
@@ -234,9 +235,13 @@ def _quality(meta):
 _ATMOS_BEDS = ("TrueHD", "DD+", "DD")
 
 
-def _audio(meta):
+def _audio(name, meta):
     """The main track, then any other track the name tags: "TrueHD Atmos
-    7.1 + DD". With no audio tag, the channel count alone ("5.1").
+    7.1 + DD 5.1". With no audio tag, the channel count alone ("5.1").
+
+    A second track carries the count written by its own tag: two releases
+    that differ only there ("...DD5.1" and "...DD2.0") are different
+    releases and must not read alike.
 
     Every tagged format is part of the same-release rule, so a name that
     left the second track out would read like the release without it.
@@ -253,7 +258,11 @@ def _audio(meta):
         # One track: DTS:X objects on the DTS-HD MA bed the name also tags.
         label = "DTS-HD MA " + label
         shown.add("DTS-HD MA")
-    others = [name for name in names if name not in shown]
+    others = [
+        " ".join(part for part in (other, track_channels(name, other)) if part)
+        for other in names
+        if other not in shown
+    ]
     return " + ".join([label] + others)
 
 
@@ -325,7 +334,7 @@ def _specs(name, meta):
     parts += tuple(flag for flag in variant if _REVISION.fullmatch(str(flag)))
     parts += (
         dynamic_range(meta),
-        _audio(meta),
+        _audio(name, meta),
         languages,
         codec_label(name, meta),
     )

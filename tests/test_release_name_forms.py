@@ -707,3 +707,33 @@ def test_sizes_of_two_known_years_are_not_compared():
     ]
     filtered, _all = flt.filter_results(rows, settings_getter=_defaults)
     assert not any(row.get("_size_outlier") for row in filtered)
+
+
+@pytest.mark.parametrize(
+    "title, requested, year",
+    [
+        ("Blade.Runner.2049.2160p.BluRay.x265-GRP", "Blade Runner 2049", "2017"),
+        ("2001.A.Space.Odyssey.1080p.BluRay.x264-GRP", "2001: A Space Odyssey", "1968"),
+    ],
+)
+def test_a_year_in_the_requested_title_is_not_a_release_year(title, requested, year):
+    """With no release year in the name, the parser takes the title's number."""
+    rows = [_row(title)]
+    assert drop_other_years(rows, year, requested) is rows
+
+
+def test_a_title_number_does_not_excuse_another_film():
+    rows = [_row("Blade.Runner.2049.2160p.BluRay.x265-GRP")]
+    assert drop_other_years(rows, "1982", "Blade Runner") == []
+
+
+def test_a_second_tracks_channels_show_in_the_normalized_name():
+    from resources.lib.release_display import display_name
+
+    def shown(title):
+        return display_name({"title": title, "_meta": parse_title_metadata(title)})
+
+    surround = shown("Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD5.1-GRP")
+    stereo = shown("Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD2.0-GRP")
+    assert "DD 5.1" in surround and "DD 2.0" in stereo
+    assert surround != stereo
