@@ -205,6 +205,10 @@ class FleetDedup:
         self._spill_dir = None
         self.spool_base = spool_base
         self.progress = progress
+        # Indexers (lower-cased names) that refused an NZB during this play.
+        # Every fetcher the play creates shares this set, so a refusal in one
+        # collection phase also spares the later ones (loader extras, refills).
+        self.blocked_indexers = set()
         # Optional zero-arg callable: True once Kodi is shutting down (vs a
         # user cancel) -- late appends are then left to finish, not deleted.
         self.aborted = None
@@ -524,9 +528,10 @@ _FAILED = object()
 def _try_fetch(fetch, member):
     """One listing's fetch result, or ``_FAILED`` (logged) when it raises.
 
-    A refusal (``_BLOCK_STATUSES``) is remembered on ``fetch`` -- one play's
-    fetcher -- so this play's later listings from that indexer are skipped
-    instead of each costing a request that will be refused too.
+    A refusal (``_BLOCK_STATUSES``) is remembered on ``fetch`` -- in the set
+    its play's ``FleetDedup`` shares with every fetcher of that play -- so the
+    play's later listings from that indexer are skipped instead of each
+    costing a request that will be refused too.
     """
     try:
         return fetch(member["link"])

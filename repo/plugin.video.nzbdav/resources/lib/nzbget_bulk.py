@@ -216,7 +216,7 @@ def _collect_rows(rows, count, state):
 
     ctx, dedup, spool, progress = state
     clusters = dedup.clusters(rows)
-    fetch = engine._fleet_fetcher(clusters, spool)
+    fetch = engine._fleet_fetcher(clusters, spool, blocked=dedup.blocked_indexers)
     tally = {"wanted": count, "seen": 0, "total": len(clusters)}
     stream = prefetched_clusters(
         clusters,

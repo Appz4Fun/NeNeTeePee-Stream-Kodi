@@ -375,6 +375,43 @@ def test_a_refusal_is_forgotten_by_the_next_play():
     assert second == ["a1", "b1"]
 
 
+def test_a_refusal_carries_over_to_the_plays_later_collection_phases(tmp_path):
+    # One play builds a new fetcher per phase (first candidates, loader
+    # extras, refills). They share the play's FleetDedup, so an indexer that
+    # refused in the first phase is not asked again in the next.
+    import importlib
+
+    # The resolver must load before its _dupes half (they import each other).
+    importlib.import_module("resources.lib.nzbget_resolver")
+    from resources.lib.nzbget_resolver_dupes import _fleet_fetcher
+
+    calls = []
+
+    def _indexer_fetch(url, **_kw):
+        calls.append(url)
+        if url.startswith("sq"):
+            raise _HttpRefusal(403)
+        return _valid(url)
+
+    dedup = FleetDedup(spool_base=str(tmp_path))
+    spool = NzbSpool(str(tmp_path))
+    first = [[_row("sq1", "Square Eyed"), _row("g1", "Geek")]]
+    extras = [
+        [_row("sq2", "Square Eyed"), _row("g2", "Geek")],
+        [_row("sq3", "Square Eyed")],
+    ]
+    with patch(_FETCH, side_effect=_indexer_fetch):
+        for clusters in (first, extras):
+            fetch = _fleet_fetcher(clusters, spool, blocked=dedup.blocked_indexers)
+            got = list(prefetched_clusters(clusters, fetch, window=1))
+            assert got[0][2]
+    spool.close()
+    assert calls == ["sq1", "g1", "g2"]
+    assert dedup.blocked_indexers == {"square eyed"}
+    # Another play has its own FleetDedup, so it starts clean.
+    assert FleetDedup().blocked_indexers == set()
+
+
 def test_a_fetcher_that_cannot_carry_state_skips_nothing():
     # A bound method takes no attributes: every listing is still tried.
     class _Fetcher:  # pylint: disable=too-few-public-methods
