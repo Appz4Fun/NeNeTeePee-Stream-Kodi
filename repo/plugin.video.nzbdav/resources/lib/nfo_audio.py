@@ -35,6 +35,7 @@ import time
 import xbmc
 import xbmcvfs
 
+from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
 
@@ -56,25 +57,33 @@ _MAX_NFO_BYTES = 262144
 # How long the picker waits for the answers before opening without them.
 _WAIT_SECONDS = 2.0
 
-# MediaInfo's names for formats, as release names write them.
+# MediaInfo's names for formats, as release names write them. The longer
+# names come first: "Enhanced AC-3" must not be read as its last word.
 _MEDIAINFO_NAMES = (
     (
-        re.compile(r"dolby digital plus with dolby atmos|e-?ac-?3[ /+]*joc", re.I),
+        re.compile(
+            r"dolby digital plus with dolby atmos"
+            r"|enhanced ac-?3 with joint object coding|e-?ac-?3[ /+]*joc",
+            re.I,
+        ),
         "DDP Atmos",
     ),
     (re.compile(r"dolby truehd with dolby atmos|mlp fba 16-ch", re.I), "TrueHD Atmos"),
     (re.compile(r"dts[ :-]?x\b|dts xll x", re.I), "DTS-X DTS-HD MA"),
     (re.compile(r"dts-hd master audio|dts xll", re.I), "DTS-HD MA"),
     (re.compile(r"dts-hd high resolution(?: audio)?|dts xbr", re.I), "DTS-HD HR"),
-    (re.compile(r"dolby digital plus|e-?ac-?3", re.I), "DDP"),
+    (re.compile(r"dolby digital plus|enhanced ac-?3|e-?ac-?3", re.I), "DDP"),
     (re.compile(r"mlp fba|dolby truehd", re.I), "TrueHD"),
-    (re.compile(r"dolby digital|\bac-?3\b", re.I), "DD"),
+    (re.compile(r"dolby digital|audio coding 3|\bac-?3\b", re.I), "DD"),
 )
 # A line labelled as the audio ("Audio.........:", "AUDiO #1 :", "Ton:"), in
-# the languages NFOs are written in. The word must be the label: a sentence
-# that merely mentions audio is not read.
+# the languages NFOs are written in. The word must be the label, ended by a
+# colon, an equals sign or a row of dots ("AUDiO 1........ German EAC3 5.1"):
+# a sentence that merely mentions audio is not read. Box-drawing art before
+# the label is skipped.
 _AUDIO_LABEL = re.compile(
-    r"^\W*(?:audio|sound|tonspur|ton|son|lyd|ljud|geluid)\b[\w #./-]{0,20}?[:=]",
+    r"^\W*(?:audio|sound|tonspur|ton|son|lyd|ljud|geluid)\b[\w #/-]{0,20}?"
+    r"\s*(?:[:=]|\.{3,})",
     re.I,
 )
 # MediaInfo's layout: a line that is just "Audio" or "Audio #2" heads a block
@@ -86,65 +95,118 @@ _SECTION_FIELD = re.compile(
 # A line with a label of its own: an audio line's continuation ends here.
 _LABELLED = re.compile(r"^\W*[A-Za-z][\w #/()-]{0,24}?[ .]*[:=]")
 _CONTINUATION_LINES = 3
+_PADDING = re.compile(r"[._]{2,}")
+# A channel count that stands by itself on an audio line ("AUDiO CHANNEL: 2.0").
+_BARE_COUNT = re.compile(r"(?<![\d.])([1-9]\.[01])(?![\d.])")
 _CHANNEL_WORDS = re.compile(r"\b([1-9])\s*(?:ch\b|channels?\b)", re.I)
 _CHANNEL_COUNT = {"1": "1.0", "2": "2.0", "6": "5.1", "8": "7.1"}
 
 _LOCK = threading.Lock()
+# Held for a whole save, so saves land in the order they were taken.
+_SAVE_LOCK = threading.Lock()
 _STORE = {}
 _LOADED = []
 
 
-def _audio_lines(text):
-    """The lines of an NFO that describe its audio tracks.
+def _audio_tracks(text):
+    """``(track, line)`` for the lines of an NFO that describe its audio.
 
-    A line labelled as the audio and the unlabelled lines right under it (a
-    second track), or the format lines of a MediaInfo "Audio" block.
+    A line labelled as the audio is a track, and so is each unlabelled line
+    right under it (a second track). The format lines of a MediaInfo "Audio"
+    block are one track together. ``track`` numbers them in order.
     """
     continuation = 0
     in_section = False
-    for line in str(text or "").replace("\r", "\n").split("\n"):
+    track = 0
+    # splitlines: a CRLF is one line ending, not a line and a blank line.
+    for line in str(text or "").splitlines():
         if not line.strip():
             continuation = 0
             in_section = False
         elif _AUDIO_SECTION.match(line):
             continuation = 0
             in_section = True
+            track += 1
         elif _AUDIO_LABEL.match(line):
             continuation = _CONTINUATION_LINES
-            yield line
+            in_section = False
+            track += 1
+            yield track, line
         elif in_section:
             if _SECTION_FIELD.match(line):
-                yield line
+                yield track, line
         elif continuation and not _LABELLED.match(line):
             continuation -= 1
-            yield line
+            track += 1
+            yield track, line
         else:
             continuation = 0
+
+
+def _line_channels(readable):
+    """The channel count on an audio line: by a format, in words, or bare."""
+    counts = detect_channels(readable)
+    if counts:
+        return counts[0]
+    words = _CHANNEL_WORDS.search(readable)
+    if words:
+        return _CHANNEL_COUNT.get(words.group(1), "")
+    bare = _BARE_COUNT.search(readable)
+    return bare.group(1) if bare else ""
+
+
+def _join_bare_counts(entries):
+    """Give a count that stands alone to the track named before it.
+
+    "AUDiO CHANNEL....: 2.0" on its own line belongs to the track on the
+    line above, when that one named a format and no count.
+    """
+    named = [entry for entry in entries if entry["audio"]]
+    for index, entry in enumerate(entries):
+        if entry["audio"] or not entry["channels"]:
+            continue
+        before = [e for e in entries[:index] if e["audio"]]
+        if before and before[-1] in named and not before[-1]["channels"]:
+            before[-1]["channels"] = entry["channels"]
 
 
 def audio_from_nfo(text):
     """``{"audio": [...], "channels": "5.1"}`` read from an NFO's text.
 
-    The audio list is empty when the NFO names no format the add-on knows.
-    Only the lines that describe the audio tracks are read (``_audio_lines``).
+    The audio list holds the formats of every track, in the order named, and
+    is empty when the NFO names no format the add-on knows. The channel
+    count is the main track's own (the track with the format the picker
+    leads with, ``filter_audio.main_audio``): "French DD 5.1" beside
+    "English TrueHD 7.1" is 7.1. Only the lines that describe the audio
+    tracks are read (``_audio_tracks``).
     """
-    formats = []
-    channels = ""
-    for line in _audio_lines(text):
-        readable = line
+    tracks = {}
+    for track, line in _audio_tracks(text):
+        # A label's row of dots is padding. Left in, the tag reader takes the
+        # dot for the name's word separator and reads "DD 5.1" as a "DD+5.1"
+        # whose plus was lost, which only happens in release names.
+        readable = _PADDING.sub(" ", line)
         for pattern, name in _MEDIAINFO_NAMES:
-            readable = pattern.sub(" {} ".format(name), readable)
+            readable = pattern.sub(name, readable)
+        entry = tracks.setdefault(track, {"audio": [], "channels": ""})
         for name in detect_audio(readable):
-            if name not in formats:
-                formats.append(name)
-        if not channels:
-            counts = detect_channels(readable)
-            words = _CHANNEL_WORDS.search(readable)
-            if counts:
-                channels = counts[0]
-            elif words:
-                channels = _CHANNEL_COUNT.get(words.group(1), "")
-    return {"audio": formats, "channels": channels if formats else ""}
+            if name not in entry["audio"]:
+                entry["audio"].append(name)
+        if not entry["channels"]:
+            entry["channels"] = _line_channels(readable)
+    _join_bare_counts(list(tracks.values()))
+    formats = []
+    for entry in tracks.values():
+        formats.extend(name for name in entry["audio"] if name not in formats)
+    if not formats:
+        return {"audio": [], "channels": ""}
+    main = main_audio(formats)
+    channels = ""
+    for entry in tracks.values():
+        if main in entry["audio"] and entry["channels"]:
+            channels = entry["channels"]
+            break
+    return {"audio": formats, "channels": channels}
 
 
 # --- what is known, on disk -------------------------------------------------
@@ -183,27 +245,32 @@ def _valid_entry(entry):
 
 
 def _save():
-    """Write the store; a failed write only costs the next run a fetch."""
-    with _LOCK:
-        entries = sorted(_STORE.items(), key=lambda item: item[1].get("at", 0))
-        for key, _entry in entries[: max(0, len(entries) - _MAX_STORED)]:
-            del _STORE[key]
-        data = {"v": _STORE_VERSION, "releases": dict(_STORE)}
-    tmp_path = ""
-    try:
-        path = _store_path()
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        tmp_path = "{}.{}.tmp".format(path, threading.get_ident())
-        with open(tmp_path, "w", encoding="utf-8") as handle:
-            json.dump(data, handle)
-        os.replace(tmp_path, path)
-    except (OSError, TypeError, ValueError, RuntimeError):
+    """Write the store; a failed write only costs the next run a fetch.
+
+    One writer at a time, from the snapshot to the replace: two fetches that
+    finish together must not let the older snapshot land on the newer one.
+    """
+    with _SAVE_LOCK:
+        with _LOCK:
+            entries = sorted(_STORE.items(), key=lambda item: item[1].get("at", 0))
+            for key, _entry in entries[: max(0, len(entries) - _MAX_STORED)]:
+                del _STORE[key]
+            data = {"v": _STORE_VERSION, "releases": dict(_STORE)}
+        tmp_path = ""
         try:
-            if tmp_path:
-                os.remove(tmp_path)
-        except OSError:
-            # Nothing was left behind, or it cannot be removed.
-            pass
+            path = _store_path()
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            tmp_path = "{}.{}.tmp".format(path, threading.get_ident())
+            with open(tmp_path, "w", encoding="utf-8") as handle:
+                json.dump(data, handle)
+            os.replace(tmp_path, path)
+        except (OSError, TypeError, ValueError, RuntimeError):
+            try:
+                if tmp_path:
+                    os.remove(tmp_path)
+            except OSError:
+                # Nothing was left behind, or it cannot be removed.
+                pass
 
 
 def _known(key):

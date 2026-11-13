@@ -510,3 +510,180 @@ def test_the_tmdbhelper_route_filters_again_when_an_nfo_named_audio(indexer):
     by_title = {row["title"]: row for row in filtered}
     assert by_title[PLAIN]["_meta"]["audio"] == ["DTS-HD MA"]
     assert len(_Handler.requests) == 1
+
+
+def test_windows_line_endings_read_the_same():
+    for text in (SCENE_NFO, MEDIAINFO_NFO):
+        expected = nfo_audio.audio_from_nfo(text)
+        assert expected["audio"]
+        assert nfo_audio.audio_from_nfo(text.replace("\n", "\r\n")) == expected
+        assert nfo_audio.audio_from_nfo(text.replace("\n", "\r")) == expected
+    crlf = "Audio\r\nFormat : E-AC-3 JOC\r\nChannel(s) : 6 channels\r\n"
+    assert nfo_audio.audio_from_nfo(crlf) == {
+        "audio": ["Atmos", "DD+"],
+        "channels": "5.1",
+    }
+
+
+def test_the_channel_count_is_the_main_tracks_own():
+    text = "Audio....: French DD 5.1\n           English TrueHD 7.1\nSubs....: en\n"
+    assert nfo_audio.audio_from_nfo(text) == {
+        "audio": ["DD", "TrueHD"],
+        "channels": "7.1",
+    }
+    blocks = (
+        "Audio #1\nFormat : AC-3\nChannel(s) : 6 channels\n\n"
+        "Audio #2\nFormat : MLP FBA 16-ch\nChannel(s) : 8 channels\n\n"
+    )
+    assert nfo_audio.audio_from_nfo(blocks) == {
+        "audio": ["DD", "Atmos", "TrueHD"],
+        "channels": "7.1",
+    }
+    # The main track names no count: none is borrowed from another track.
+    text = "Audio....: French DD 5.1\n           English TrueHD\n"
+    assert nfo_audio.audio_from_nfo(text)["channels"] == ""
+
+
+def test_two_saves_at_once_keep_both_answers(store):
+    # The first save is held just before it replaces the file while a second
+    # release is remembered and saved: the second must not be lost.
+    gate = threading.Event()
+    entered = threading.Event()
+    real_replace = nfo_audio.os.replace
+    calls = []
+
+    def slow_replace(src, dst):
+        calls.append(src)
+        if len(calls) == 1:
+            entered.set()
+            gate.wait(5)
+        return real_replace(src, dst)
+
+    nfo_audio._remember("first", ["DD"], "")
+    with patch("resources.lib.nfo_audio.os.replace", side_effect=slow_replace):
+        one = threading.Thread(target=nfo_audio._save)
+        one.start()
+        assert entered.wait(5)
+        nfo_audio._remember("second", ["DTS"], "")
+        two = threading.Thread(target=nfo_audio._save)
+        two.start()
+        gate.set()
+        one.join(5)
+        two.join(5)
+    assert sorted(json.loads(store.read_text())["releases"]) == ["first", "second"]
+
+
+def _mi(*fields):
+    """A MediaInfo audio block: each label padded to its column."""
+    lines = ["{:<41}: {}".format(label, value) for label, value in fields]
+    return "\n".join(["Audio"] + lines) + "\n"
+
+
+_ART = "\u258c\u2591\u2590\u2590\u2588\u2588 \u2590   \u2584\u2580\u2588  "
+_BOX = "\u25a0\u2588\u25a0\u2588\u25a0         "
+
+# The audio part of real NFOs, as their groups wrote it.
+_REAL_LAYOUTS = (
+    # MediaInfo: "Enhanced AC-3" is Dolby Digital Plus, not Dolby Digital.
+    (
+        _mi(
+            ("Format", "E-AC-3"),
+            ("Format/Info", "Enhanced AC-3"),
+            ("Commercial name", "Dolby Digital Plus"),
+            ("Codec ID", "A_EAC3"),
+            ("Channel(s)", "6 channels"),
+        ),
+        ["DD+"],
+        "5.1",
+    ),
+    (
+        _mi(
+            ("Format", "E-AC-3 JOC"),
+            ("Format/Info", "Enhanced AC-3 with Joint Object Coding"),
+            ("Commercial name", "Dolby Digital Plus with Dolby Atmos"),
+            ("Channel(s)", "6 channels"),
+        ),
+        ["Atmos", "DD+"],
+        "5.1",
+    ),
+    (
+        _mi(
+            ("Format", "AC-3"),
+            ("Format/Info", "Audio Coding 3"),
+            ("Commercial name", "Dolby Digital"),
+            ("Channel(s)", "6 channels"),
+        ),
+        ["DD"],
+        "5.1",
+    ),
+    (
+        _mi(
+            ("Format", "AAC LC"),
+            ("Format/Info", "Advanced Audio Codec Low Complexity"),
+            ("Channel(s)", "6 channels"),
+        ),
+        ["AAC"],
+        "5.1",
+    ),
+    # A row of dots for a colon, behind box-drawing art.
+    (_ART + "AUDiO 1............... German EAC3 5.1\n", ["DD+"], "5.1"),
+    (
+        _BOX
+        + "Audio 1...............: DE, E-AC3 5.1 @ 640kb/s\n"
+        + _BOX
+        + "Audio 2...............: ES, E-AC3 5.1 @ 640kb/s\n",
+        ["DD+"],
+        "5.1",
+    ),
+    # The codec and the channels on separate audio lines, in two columns.
+    (
+        "AUDiO BiTRATE....: 224 kb/s       CODEC............: E-AC-3\n"
+        "AUDiO CHANNEL....: 2.0            LANGUAGE.........: VFF\n",
+        ["DD+"],
+        "2.0",
+    ),
+    ("Audio Language...: Spanish\nAudio Codec......: E-AC-3 5.1\n", ["DD+"], "5.1"),
+    (
+        "Audio        : English (GB) E-AC-3 640 kb/s @ 6 channels "
+        "(Dolby Digital Plus)\n",
+        ["DD+"],
+        "5.1",
+    ),
+    ("audio: en AAC 2.0 120.44kb/s\n", ["AAC"], "2.0"),
+    ("Audio     : AAC 5.1 @ 384 kbps\n", ["AAC"], "5.1"),
+    (
+        "  Audio.........: French DTS-HD MA 5.1 @ 3963 kb/s - 1152 kb/s core\n"
+        "                  English DTS-HD MA 5.1 @ 3739 kb/s - 1152 kb/s core\n",
+        ["DTS-HD MA"],
+        "5.1",
+    ),
+)
+
+
+def test_layouts_seen_in_real_nfos():
+    for text, audio, channels in _REAL_LAYOUTS:
+        assert nfo_audio.audio_from_nfo(text) == {
+            "audio": audio,
+            "channels": channels,
+        }, text
+
+
+def test_an_indexers_error_reply_names_no_audio():
+    # Some results are flagged as having an NFO and the call then answers this.
+    reply = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<error code="300" description="No such item"/>\n'
+    )
+    assert nfo_audio.audio_from_nfo(reply) == {"audio": [], "channels": ""}
+    # Bytes that are not text (a compressed NFO sent as it is stored).
+    assert nfo_audio.audio_from_nfo(
+        "; x\u00a3\u03c6W\u2588n\u250c@}G\u0393\u00aao"
+    ) == {
+        "audio": [],
+        "channels": "",
+    }
+
+
+def test_a_sample_rate_or_bitrate_is_not_a_channel_count():
+    text = "Audio: English AAC @ 48.0 kHz, 128.0 kb/s, 23.976 fps\n"
+    assert nfo_audio.audio_from_nfo(text) == {"audio": ["AAC"], "channels": ""}
