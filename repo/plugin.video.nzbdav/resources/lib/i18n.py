@@ -205,6 +205,13 @@ _FALLBACK_STRINGS = {
     30678: "{} of {} copies ready",
     30679: "running NZBGet's scripts",
     30680: "repairing from backups",
+    30681: "{} ({})",
+    30682: "1 article missing",
+    30683: "{} articles missing",
+    30684: "{} recovered from backups",
+    30685: "{} MB rebuilt by stream repair",
+    30686: "repairing live from backups",
+    30687: "{} so far",
 }
 
 

@@ -2477,3 +2477,31 @@ msgstr ""
 msgctxt "#30680"
 msgid "repairing from backups"
 msgstr ""
+
+msgctxt "#30681"
+msgid "{} ({})"
+msgstr ""
+
+msgctxt "#30682"
+msgid "1 article missing"
+msgstr ""
+
+msgctxt "#30683"
+msgid "{} articles missing"
+msgstr ""
+
+msgctxt "#30684"
+msgid "{} recovered from backups"
+msgstr ""
+
+msgctxt "#30685"
+msgid "{} MB rebuilt by stream repair"
+msgstr ""
+
+msgctxt "#30686"
+msgid "repairing live from backups"
+msgstr ""
+
+msgctxt "#30687"
+msgid "{} so far"
+msgstr ""

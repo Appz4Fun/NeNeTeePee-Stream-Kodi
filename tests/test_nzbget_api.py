@@ -205,6 +205,37 @@ def test_group_status_returns_progress_for_matching_nzbid():
     # The progress dialog shows the sizes and works the speed out from them.
     assert status["downloaded_mb"] == 250
     assert status["total_mb"] == 1000
+    # Nothing is known about a stage or missing articles yet: all zero.
+    assert status["post_percent"] == 0 and status["post_seconds"] == 0
+    assert status["failed_articles"] == 0 and status["recovered_articles"] == 0
+    assert status["recovered_mb"] == 0 and status["live_repairing"] is False
+
+
+def test_group_status_reads_stage_progress_and_recovery_counts():
+    getter = _getter({"nzbget_url": "http://box:6789"})
+    groups = [
+        {
+            "NZBID": 42,
+            "Status": "REPAIRING",
+            "DownloadedSizeMB": 1000,
+            "FileSizeMB": 1000,
+            "PostStageProgress": 437,
+            "PostStageTimeSec": 25,
+            "FailedArticles": 155,
+            "DupeRecoveredArticles": 150,
+            "DupeRecoveredBytesLo": 111104000,
+            "DupeRecoveredBytesHi": 0,
+            "LiveRepairing": True,
+        }
+    ]
+    with patch("resources.lib.nzbget_api._rpc_call", return_value=(groups, None)):
+        status = group_status(42, settings_getter=getter)
+    assert status["post_percent"] == 43
+    assert status["post_seconds"] == 25
+    assert status["failed_articles"] == 155
+    assert status["recovered_articles"] == 150
+    assert status["recovered_mb"] == 105
+    assert status["live_repairing"] is True
 
 
 def test_group_status_absent_when_nzbid_not_in_queue():

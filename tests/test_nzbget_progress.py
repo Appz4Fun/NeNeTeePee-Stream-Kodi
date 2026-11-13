@@ -132,7 +132,8 @@ def test_no_size_line_when_nzbget_gave_no_sizes_or_is_past_downloading():
     unpacking = nzbget_progress.progress_message(
         {}, _group("UNPACKING", 100, 10650, 10650), None, now=0
     )
-    assert unpacking == "Copy 1 - unpacking[CR]10.4 of 10.4 GB"
+    # After the download the size line gives way to the stage's running time.
+    assert unpacking == "Copy 1 - unpacking"
 
 
 @pytest.mark.parametrize(
@@ -297,8 +298,7 @@ def test_the_poll_shows_copy_stage_size_and_the_earlier_failure():
         "[CR]Copy 1 failed: too many missing articles"
     )
     assert messages[2] == (
-        "Copy 2 of 3 - unpacking[CR]10.4 of 10.4 GB"
-        "[CR]Copy 1 failed: too many missing articles"
+        "Copy 2 of 3 - unpacking[CR]Copy 1 failed: too many missing articles"
     )
 
 
@@ -459,12 +459,15 @@ def test_the_download_dialog_adds_backup_kinds_and_what_was_not_sent():
         "Backups: 5 alts",
         "Not sent: Digital Carnage refused 1, 1 duplicate upload",
     ]
-    # A copy that failed mid-download takes the last line.
+    # Four lines at most. A copy that failed mid-download comes first of the
+    # rest, so the least important line (what was not sent) makes room.
     nzbget_progress.record_failure(state, "FAILURE/HEALTH")
     nzbget_progress.next_copy(state)
     text = nzbget_progress.progress_message(state, _group(), fleet, now=0)
-    assert _lines(text)[-1] == "Copy 1 failed: too many missing articles"
-    assert len(_lines(text)) == 4
+    assert _lines(text)[2:] == [
+        "Copy 1 failed: too many missing articles",
+        "Backups: 5 alts",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -558,27 +561,42 @@ def _post(status, post_percent=0, post_seconds=0):
 
 
 @pytest.mark.parametrize(
-    "group, first_line, bar_percent",
+    "group, lines, bar_percent",
     [
-        (_post("UNPACKING", 43, 25), "Copy 1 - unpacking 43% - 25s", 43),
-        (_post("UNPACKING", 43, 2), "Copy 1 - unpacking 43%", 43),
-        (_post("MOVING", 0, 51), "Copy 1 - moving into place - 51s", None),
+        (
+            _post("UNPACKING", 43, 25),
+            ["Copy 1 - unpacking 43%", "25s so far - about 33s left"],
+            43,
+        ),
+        (_post("UNPACKING", 43, 2), ["Copy 1 - unpacking 43%"], 43),
+        (_post("MOVING", 0, 51), ["Copy 1 - moving into place", "51s so far"], None),
         (
             _post("EXECUTING_SCRIPT", 0, 130),
-            "Copy 1 - running NZBGet's scripts - 2m 10s",
+            ["Copy 1 - running NZBGet's scripts", "2m 10s so far"],
             None,
         ),
-        (_post("REPAIRING", 100, 3725), "Copy 1 - repairing - 1h 2m", None),
-        (_post("LOADING_PARS"), "Copy 1 - checking the files", None),
+        (
+            _post("REPAIRING", 10, 600),
+            ["Copy 1 - repairing 10%", "10m 0s so far - about 1h 30m left"],
+            10,
+        ),
+        (
+            _post("REPAIRING", 100, 3725),
+            ["Copy 1 - repairing", "1h 2m so far"],
+            None,
+        ),
+        (_post("LOADING_PARS"), ["Copy 1 - checking the files"], None),
         # While downloading, the stage fields are ignored.
-        (dict(_group(), post_percent=50, post_seconds=90), None, None),
+        (
+            dict(_group(), post_percent=50, post_seconds=90),
+            ["Copy 1 - downloading 43%", "4.5 of 10.4 GB"],
+            None,
+        ),
     ],
 )
-def test_a_post_stage_shows_its_progress_and_how_long_it_has_run(
-    group, first_line, bar_percent
-):
+def test_a_post_stage_shows_its_progress_time_and_time_left(group, lines, bar_percent):
     text = nzbget_progress.progress_message({}, group, None, now=0)
-    assert _lines(text)[0] == (first_line or "Copy 1 - downloading 43%")
+    assert _lines(text) == lines
     assert nzbget_progress.stage_percent(group) == bar_percent
 
 
@@ -593,8 +611,10 @@ def test_the_bar_follows_an_unpack_instead_of_resting_at_100():
     with patch(_GS, side_effect=groups), patch(_HS, return_value=dict(_DONE)):
         poll_nzbget_job(1, dialog, _Monitor(), 60, interval=0)
     assert [percent for percent, _message in dialog.lines[:3]] == [99, 43, 100]
-    assert dialog.lines[1][1].startswith("Copy 1 - unpacking 43% - 25s")
-    assert dialog.lines[2][1].startswith("Copy 1 - moving into place - 51s")
+    assert dialog.lines[1][1] == (
+        "Copy 1 - unpacking 43%[CR]25s so far - about 33s left"
+    )
+    assert dialog.lines[2][1] == "Copy 1 - moving into place[CR]51s so far"
 
 
 def test_the_backup_line_goes_away_once_no_backup_is_left():
@@ -655,3 +675,106 @@ def test_a_kept_copy_is_named_after_the_indexer_that_supplied_it():
     report.kept({"indexer": "Refuser", "_supplied_by": "Worker"})
     report.kept({"indexer": "Geek"})
     assert nzbget_progress.indexers_line(report) == "Geek, Worker"
+
+
+# --- which copy, missing articles, recovery ---------------------------------
+
+
+_AGES = {"M": "4 days", "S": "12 days"}
+
+
+def _accepted_report():
+    report = nzbget_progress.FleetReport()
+    for nzbid, name, pubdate, extra in (
+        (41, "abNZB", "Mon, 09 Nov 2026 14:41:07 +0000", {}),
+        (42, "Refuser", "Sun, 01 Nov 2026 10:00:00 +0000", {"_supplied_by": "Slug"}),
+        (43, "Geek", "", {"age": "3 days"}),
+        (None, "Zurg", "", {}),  # sent, but the server echoed no id for it
+    ):
+        row = dict({"indexer": name, "pubdate": pubdate}, **extra)
+        report.kept(row)
+        if nzbid:
+            row["_nzbid"] = nzbid  # set once NZBGet accepts the copy
+    return report
+
+
+def test_the_first_line_names_the_indexer_and_age_of_the_copy():
+    report = _accepted_report()
+    fleet = dict(_fleet(41, 42, 43, 44), report=report)
+    with patch(
+        "resources.lib.nzbget_progress.calculate_age",
+        side_effect=lambda pubdate: _AGES.get(pubdate[:1], ""),
+    ):
+        first = nzbget_progress.progress_message(
+            {"current": 41}, _group(), fleet, now=0
+        )
+        # After a failover the line follows the copy now being downloaded,
+        # named after the mirror that supplied it.
+        state = {"current": "42", "copy_number": 2}
+        second = nzbget_progress.progress_message(state, _group(), fleet, now=0)
+        third = nzbget_progress.progress_message(
+            {"current": 43}, _group(), fleet, now=0
+        )
+    assert _lines(first)[0] == "Copy 1 of 4 (abNZB, 4 days) - downloading 43%"
+    assert _lines(second)[0] == "Copy 2 of 4 (Slug, 12 days) - downloading 43%"
+    assert _lines(third)[0] == "Copy 1 of 4 (Geek, 3 days) - downloading 43%"
+
+
+def test_a_copy_this_play_did_not_send_has_no_source():
+    fleet = dict(_fleet(41, 99), report=_accepted_report())
+    for current in (99, None):
+        text = nzbget_progress.progress_message(
+            {"current": current}, _group(), fleet, now=0
+        )
+        assert _lines(text)[0] == "Copy 1 of 2 - downloading 43%"
+    # No report at all (a plain single submit).
+    text = nzbget_progress.progress_message({"current": 41}, _group(), None, now=0)
+    assert _lines(text)[0] == "Copy 1 - downloading 43%"
+
+
+@pytest.mark.parametrize(
+    "fields, line",
+    [
+        ({}, ""),
+        ({"failed_articles": 1}, "1 article missing"),
+        ({"failed_articles": 155}, "155 articles missing"),
+        (
+            {"failed_articles": 155, "recovered_articles": 155},
+            "155 articles missing - 155 recovered from backups",
+        ),
+        (
+            {"failed_articles": 40, "recovered_mb": 106},
+            "40 articles missing - 106 MB rebuilt by stream repair",
+        ),
+        (
+            {"failed_articles": 40, "live_repairing": True},
+            "40 articles missing - repairing live from backups",
+        ),
+        ({"failed_articles": "junk", "recovered_articles": None}, ""),
+    ],
+)
+def test_the_missing_articles_line(fields, line):
+    assert nzbget_progress.health_line(dict(_group(), **fields)) == line
+
+
+def test_missing_articles_come_before_backups_and_what_was_not_sent():
+    report = _report(_SIX, refused={"Digital Carnage": 1})
+    fleet = dict(_fleet(1, 2, 3, 4, 5, 6), report=report)
+    state = {"backup_kinds": {"twin": 2, "alt": 3}}
+    group = dict(_group(), failed_articles=155, recovered_articles=155)
+    text = nzbget_progress.progress_message(state, group, fleet, now=0)
+    assert _lines(text) == [
+        "Copy 1 of 6 - downloading 43%",
+        "4.5 of 10.4 GB",
+        "155 articles missing - 155 recovered from backups",
+        "Backups: 2 twins, 3 alts",
+    ]
+    # During a repair the same two lines follow the stage and its time.
+    repair = dict(_post("REPAIRING", 43, 25), failed_articles=155)
+    text = nzbget_progress.progress_message(state, repair, fleet, now=0)
+    assert _lines(text) == [
+        "Copy 1 of 6 - repairing 43%",
+        "25s so far - about 33s left",
+        "155 articles missing",
+        "Backups: 2 twins, 3 alts",
+    ]

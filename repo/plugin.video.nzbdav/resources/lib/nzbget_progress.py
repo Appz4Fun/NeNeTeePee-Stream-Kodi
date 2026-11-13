@@ -11,21 +11,24 @@ minute) the dialog says what is being sent and what was left out:
 
 While a copy downloads it shows up to four lines:
 
-    Copy 2 of 12 - downloading 43%
+    Copy 2 of 12 (abNZB, 4 days) - downloading 43%
     4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
-    Backups: 2 twins, 3 alts
     Copy 1 failed: too many missing articles
+    155 articles missing - 155 recovered from backups
 
 The first line names the copy being followed (the pick is copy 1; every
-failover to a backup counts one up) and the stage NZBGet reports. After the
-download it reads "unpacking 43% - 25s" or "moving into place - 51s": the
-stage's own progress when the server gives one, and how long it has run, so a
-long unpack, move or script is not mistaken for a hang. The second
-appears while it downloads and the sizes are known. The third says what the
-backups are, when the server tells: a twin is a byte-identical copy the
-server can borrow missing articles from, an alt is another upload kept as a
-fallback. The last line is the most recent copy that failed, or else what was
-never sent, so neither a failover nor a refused indexer is silent.
+failover to a backup counts one up), the indexer that supplied it and its
+age, and the stage NZBGet reports. The second line is the size, speed and
+time left while it downloads; after the download it is how long the stage has
+run and, when the server gives the stage's progress, how long is left
+("25s so far - about 33s left"), so a long repair, unpack, move or script is
+not mistaken for a hang.
+
+Up to two more lines follow, the most important first: the most recent copy
+that failed; the articles no server had and what the server recovered for
+them from a twin or an alt or by stream repair; what the backups are (a twin
+is a byte-identical copy the server can borrow missing articles from, an alt
+is another upload kept as a fallback); and what was never sent.
 
 Everything here is presentation: it reads the poll ``state`` and the fleet's
 ``FleetReport`` and never changes what the poll does. The speed is worked out
@@ -34,6 +37,7 @@ from the progress between polls, so no extra NZBGet call is made.
 
 import time
 
+from resources.lib.http_util import calculate_age
 from resources.lib.i18n import fmt, string
 
 # NZBGet ``listgroups`` statuses -> the stage shown on the first line.
@@ -94,6 +98,7 @@ class FleetReport:
 
     def __init__(self, blocked=None):
         self.sent = []  # indexer name per kept copy, in the order kept
+        self._rows = []  # the kept rows; each gets ``_nzbid`` once accepted
         self.refused = {}  # indexer name -> copies dropped after it refused
         self.failed = 0  # copies dropped for any other reason
         self.duplicates = 0  # copies that were the same posting as a kept one
@@ -108,6 +113,22 @@ class FleetReport:
         # release's first listing (``nzbget_fleet_dedup.SUPPLIED_BY``).
         supplier = str((row or {}).get("_supplied_by") or "").strip()
         self.sent.append(supplier or self._indexer(row))
+        if isinstance(row, dict):
+            self._rows.append(row)
+
+    def copy_source(self, nzbid):
+        """ "abNZB, 4 days" for the kept copy NZBGet knows as ``nzbid``, or "".
+
+        The indexer that supplied the copy and how long ago it was posted.
+        Empty for a job this play did not send (an adopted download).
+        """
+        if nzbid is None:
+            return ""
+        for row, name in zip(self._rows, self.sent):
+            if str(row.get("_nzbid")) == str(nzbid):
+                age = calculate_age(row.get("pubdate") or "") or row.get("age") or ""
+                return ", ".join(part for part in (name, str(age)) if part)
+        return ""
 
     def duplicate(self):
         self.duplicates += 1
@@ -255,8 +276,16 @@ def _copy_label(state, fleet):
     number = copy_number(state)
     total = total_copies(fleet)
     if total >= number and total > 1:
-        return fmt(30637, number, total)
-    return fmt(30638, number)
+        label = fmt(30637, number, total)
+    else:
+        label = fmt(30638, number)
+    report = (fleet or {}).get("report")
+    source = (
+        report.copy_source(state.get("current"))
+        if isinstance(report, FleetReport)
+        else ""
+    )
+    return fmt(30681, label, source) if source else label
 
 
 # A stage's running time is shown once it has lasted this long.
@@ -264,18 +293,53 @@ _STAGE_TIME_FROM = 5
 
 
 def _stage(group):
-    """ "downloading 43%", "unpacking 43% - 25s", "moving into place - 51s"."""
+    """ "downloading 43%", "unpacking 43%", "moving into place"."""
     status = str(group.get("status") or "").upper()
     if status in _DOWNLOADING:
         return fmt(30639, group.get("percent", 0))
     label = string(_STAGE_STRINGS.get(status, 30645))
     percent = stage_percent(group)
-    if percent is not None:
-        label = "{} {}%".format(label, percent)
+    return label if percent is None else "{} {}%".format(label, percent)
+
+
+def _stage_time_line(group):
+    """ "25s so far - about 33s left" for a post-processing stage, or "".
+
+    The time left is worked out from the stage's own progress, so it only
+    appears for a stage NZBGet reports a percent for (a repair, an unpack).
+    """
+    if str(group.get("status") or "").upper() in _DOWNLOADING:
+        return ""
     seconds = _megabytes(group.get("post_seconds"))
-    if seconds >= _STAGE_TIME_FROM:
-        label = "{} - {}".format(label, _duration(seconds))
-    return label
+    if seconds < _STAGE_TIME_FROM:
+        return ""
+    parts = [fmt(30687, _duration(seconds))]
+    percent = stage_percent(group)
+    if percent is not None:
+        parts.append(fmt(30648, _duration(seconds * (100 - percent) / percent)))
+    return " - ".join(parts)
+
+
+def health_line(group):
+    """ "155 articles missing - 155 recovered from backups", or "".
+
+    What no server had, and what the server got back from the release's other
+    copies: whole articles from a twin or alt, or bytes rebuilt by stream
+    repair. Nothing on a clean download.
+    """
+    missing = int(_megabytes(group.get("failed_articles")))
+    recovered = int(_megabytes(group.get("recovered_articles")))
+    rebuilt_mb = int(_megabytes(group.get("recovered_mb")))
+    parts = []
+    if missing:
+        parts.append(_counted(missing, 30682, 30683))
+    if recovered:
+        parts.append(fmt(30684, recovered))
+    elif rebuilt_mb:
+        parts.append(fmt(30685, rebuilt_mb))
+    if group.get("live_repairing") is True:
+        parts.append(string(30686))
+    return " - ".join(parts)
 
 
 def stage_percent(group):
@@ -358,18 +422,32 @@ def failed_line(state):
     return fmt(30650, len(failed), reason)
 
 
+# The dialog shows at most this many lines; beyond the copy line and the
+# size or time line, the most important of the rest are kept.
+_MAX_LINES = 4
+
+
 def progress_message(state, group, fleet=None, now=None):
     """The dialog text for a copy that is in NZBGet's queue."""
     now = time.monotonic() if now is None else now
-    lines = [
+    downloading = str(group.get("status") or "").upper() in _DOWNLOADING
+    head = [
         "{} - {}".format(_copy_label(state, fleet), _stage(group)),
-        _size_line(state, group, now),
-        kinds_line(state.get("backup_kinds")),
-        # One line for what went wrong: the latest failed copy, or else the
-        # copies that were never sent.
-        failed_line(state) or not_sent_line((fleet or {}).get("report")),
+        # While it downloads: size, speed, time left. After: how long the
+        # stage has run and, when NZBGet gives its progress, how long is left.
+        _size_line(state, group, now) if downloading else _stage_time_line(group),
     ]
-    return "[CR]".join(line for line in lines if line)
+    # In order of importance: a copy that failed, articles that were missing,
+    # what the backups are, what was never sent.
+    rest = [
+        failed_line(state),
+        health_line(group),
+        kinds_line(state.get("backup_kinds")),
+        not_sent_line((fleet or {}).get("report")),
+    ]
+    lines = [line for line in head if line]
+    lines += [line for line in rest if line][: _MAX_LINES - len(lines)]
+    return "[CR]".join(lines)
 
 
 def waiting_message(state):
