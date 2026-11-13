@@ -31,6 +31,7 @@ from resources.lib.http_util import (
     redact_url as _redact_url,
 )
 from resources.lib.indexer_store import load_indexers
+from resources.lib.newznab_attrs import post_details
 from resources.lib.newznab_caps import normalize_api_endpoint
 from resources.lib.search_planner import plan_newznab_search
 from resources.lib.xml_safety import ParseError as _XmlParseError
@@ -251,7 +252,7 @@ def _build_result(item, fallback_indexer):
     size, attr_indexer = _parse_newznab_attrs(item)
     indexer = attr_indexer or _source_hostname(item) or fallback_indexer
     link, size = _apply_enclosure_fallback(item, link, size)
-    return {
+    result = {
         "title": title or "",
         "link": link or "",
         "size": size,
@@ -259,6 +260,8 @@ def _build_result(item, fallback_indexer):
         "pubdate": pubdate or "",
         "age": _calculate_age(pubdate) if pubdate else "",
     }
+    result.update(post_details(item))
+    return result
 
 
 def parse_results(xml_text, fallback_indexer):

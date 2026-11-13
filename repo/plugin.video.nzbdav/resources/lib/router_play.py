@@ -601,6 +601,9 @@ def _is_backup_row(result, selected_link, seen):
     return bool(link) and link != selected_link and link not in seen
 
 
+_POST_DETAIL_KEYS = ("usenetdate", "poster", "password")
+
+
 def _backup_row(result):
     """The fleet row for a picker result (#372).
 
@@ -611,13 +614,19 @@ def _backup_row(result):
     worker can log which indexer each NZB fetch went to and stop asking one
     that refuses (``nzbget_fleet_dedup._try_fetch``).
     """
-    return {
+    row = {
         "link": result["link"],
         "title": result.get("title"),
         "pubdate": result.get("pubdate"),
         "size": result.get("size"),
         "indexer": result.get("indexer") or "",
     }
+    # The real post time, poster and password flag, where the indexer sent
+    # them: the worker's same-listing check reads them too.
+    for key in _POST_DETAIL_KEYS:
+        if result.get(key):
+            row[key] = result[key]
+    return row
 
 
 def _same_release_backups(selected, filtered):

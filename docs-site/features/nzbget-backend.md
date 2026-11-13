@@ -306,6 +306,17 @@ listings of the same posting:
   other count as one posting. Only one is downloaded from the indexer, which
   saves indexer grabs. NeNeTeePee-Stream-Kodi uses the others only if that
   download fails.
+    - The post time is the indexer's `usenetdate` when it sends one. A
+      result's own date is often when the indexer added the release, which
+      differs between indexers for one upload, so listings added hours apart
+      but posted together are one posting, and two uploads added in the same
+      minute are two. Where an indexer sends no post time, its result date
+      is used.
+    - Listings that name different posters, or that disagree on whether the
+      release has a password, are different postings whatever their dates.
+    - The window stays at 120 seconds even for one poster. The same files
+      posted again an hour later are a separate upload with its own
+      articles, which is what makes it a useful backup.
 - NZBs that share more than 1% of their article IDs count as one posting.
 - Re-uploads of the same file with different article IDs are kept. They live
   on different articles, so they're the best backups.

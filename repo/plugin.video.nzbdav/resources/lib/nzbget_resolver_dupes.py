@@ -713,7 +713,17 @@ _MAX_VETO_REPLACEMENTS = 5
 # The candidate fields a fleet row keeps: its job name plus the listing
 # evidence (size, post date) the same-listing dedup reads.
 # ``indexer`` rides along for the fetch log and the refused-indexer skip.
-_FLEET_ROW_KEYS = ("title", "size", "pubdate", "_posted_epoch", "indexer")
+_FLEET_ROW_KEYS = (
+    "title",
+    "size",
+    "pubdate",
+    "_posted_epoch",
+    "indexer",
+    # What ``same_listing`` reads beside the size and date.
+    "usenetdate",
+    "poster",
+    "password",
+)
 
 
 def _extra_backups_from_loader(  # pylint: disable=too-many-arguments

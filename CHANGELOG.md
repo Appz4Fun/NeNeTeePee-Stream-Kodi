@@ -139,6 +139,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **"Same upload" is decided from the real post time, the poster and the
+  password flag.** Indexers send more than a title and a size with each
+  result, and NZBHydra2 passes all of it through; the add-on kept six fields
+  and dropped the rest. It now keeps when the release was posted
+  (`usenetdate`), who posted it, its newsgroup, its password flag, and its
+  file and grab counts. Two listings are one upload when their sizes are
+  equal and their real post times are within two minutes, so one upload that
+  two indexers added hours apart is fetched once, and two uploads added in
+  the same minute are no longer taken for one. Listings with different
+  posters, or one passworded and one not, are different uploads. An indexer
+  that sends no post time is compared by its result date, as before.
 - **A WEB-DL whose name leaves Atmos out takes it from a labelled copy of
   the same stream.** Groups name one stream differently: `DD+5.1.Atmos` from
   one, `DDP5.1` from another, for the same Amazon download, and the second

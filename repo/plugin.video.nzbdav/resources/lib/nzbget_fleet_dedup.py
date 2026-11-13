@@ -33,7 +33,12 @@ from array import array
 
 import xbmc
 
-from resources.lib import nzb_fingerprint_scan, nzbget_progress, release_match
+from resources.lib import (
+    newznab_attrs,
+    nzb_fingerprint_scan,
+    nzbget_progress,
+    release_match,
+)
 from resources.lib.http_util import pubdate_to_epoch, redact_text
 
 # The one "same release" rule, shared with the picker's copy grouping; kept
@@ -65,21 +70,84 @@ def _posted_epoch(row):
     return pubdate_to_epoch(pubdate) if pubdate else None
 
 
-def same_listing(left, right):
-    """Whether two indexer rows list the same posting (equal size, close post date).
+def _usenet_epoch(row):
+    """When the release was posted, from the indexer's ``usenetdate``, or None."""
+    usenetdate = row.get("usenetdate")
+    return pubdate_to_epoch(usenetdate) if isinstance(usenetdate, str) else None
 
-    Rows missing a size or a parseable post date never match.
+
+def _close(left, right):
+    return (
+        left is not None
+        and right is not None
+        and abs(left - right) <= SAME_LISTING_WINDOW_SECONDS
+    )
+
+
+def _posted_together(left, right):
+    """Whether the two rows' post times are within the same-listing window.
+
+    A row's ``pubdate`` is often when its indexer added the release, which
+    differs between indexers for one upload; ``usenetdate`` is when it was
+    posted. When both rows have the real post time, only that is compared:
+    one upload added hours apart is one upload, and two uploads added in
+    the same minute are two. Otherwise the dates the rows do have are
+    compared, as before, plus one row's real post time against the other's
+    only date (some indexers already put the post time there).
+    """
+    left_posted = _usenet_epoch(left)
+    right_posted = _usenet_epoch(right)
+    if left_posted is not None and right_posted is not None:
+        return _close(left_posted, right_posted)
+    left_listed = _posted_epoch(left)
+    right_listed = _posted_epoch(right)
+    return (
+        _close(left_listed, right_listed)
+        or _close(left_posted, right_listed)
+        or _close(left_listed, right_posted)
+    )
+
+
+def _told_apart(left, right):
+    """Whether what the indexers say of the two posts shows they differ.
+
+    Two posters, each named by an address, or one release with a password
+    and one without. A detail one row lacks, or a poster written without an
+    address, decides nothing.
+    """
+    left_poster = newznab_attrs.poster_address(left)
+    right_poster = newznab_attrs.poster_address(right)
+    if left_poster and right_poster and left_poster != right_poster:
+        return True
+    left_password = newznab_attrs.password_flag(left)
+    right_password = newznab_attrs.password_flag(right)
+    return (
+        left_password is not None
+        and right_password is not None
+        and left_password != right_password
+    )
+
+
+def same_listing(left, right):
+    """Whether two indexer rows list the same posting.
+
+    Equal size and post times within ``SAME_LISTING_WINDOW_SECONDS`` of each
+    other (``_posted_together``), unless the rows name different posters or
+    disagree on whether the release has a password (``_told_apart``). Rows
+    missing a size or a parseable date never match.
+
+    The window stays short even for one poster: the same files posted again
+    an hour later, or twice side by side, are separate uploads with their
+    own articles, which is exactly what makes them worth having as backups.
     """
     if not isinstance(left, dict) or not isinstance(right, dict):
         return False
     size = _size_bytes(left)
     if size <= 0 or size != _size_bytes(right):
         return False
-    left_epoch = _posted_epoch(left)
-    right_epoch = _posted_epoch(right)
-    if left_epoch is None or right_epoch is None:
+    if not _posted_together(left, right):
         return False
-    return abs(left_epoch - right_epoch) <= SAME_LISTING_WINDOW_SECONDS
+    return not _told_apart(left, right)
 
 
 def posting_fingerprint(nzb_bytes):
