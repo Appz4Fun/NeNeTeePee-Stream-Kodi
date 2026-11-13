@@ -306,6 +306,9 @@ def _ptt_identity(name, parsed):
         "year": year,
         "seasons": list(parsed.get("seasons") or []),
         "episodes": list(parsed.get("episodes") or []),
+        # The air date of a daily show ("2026-11-12"); such a name has no
+        # season or episode, so the date is what tells two episodes apart.
+        "date": str(parsed.get("date") or ""),
     }
 
 

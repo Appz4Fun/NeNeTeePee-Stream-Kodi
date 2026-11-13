@@ -165,7 +165,7 @@ your filters, the picker opens instead.
 Copies are grouped with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release):
 the same title and year or episode, and equal resolution, HDR, audio,
 channels, codec, quality (source), edition, PROPER/REPACK, HYBRID, 3D, dubbed,
-hardcoded-subtitle and cut tags, and release group. Language and soft-subtitle tags don't split a release, and a
+hardcoded-subtitle and cut tags, release group, and a daily show's air date. Language and soft-subtitle tags don't split a release, and a
 result with no release group is never grouped with another.
 
 ### How a release is named in the picker
@@ -179,7 +179,8 @@ Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-Ci
 Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX
 ```
 
-That is the title and year, the episode for TV, the edition or cut in braces
+That is the title and year, the episode for TV (the air date for a daily
+show), the edition or cut in braces
 (`{Unrated}`), then source and resolution, HYBRID, 3D, DUBBED and HC
 (hardcoded subtitles), HDR, the main audio track with its own channel count,
 MULTi or dubbed languages, the video codec, and the release group. A part the name doesn't

@@ -111,6 +111,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A WtFnZb subject with a poster prefix is read as the release inside
   it** (`[N3wZ] \id\::[PRiVATE]-[WtFnZb]-[Name]-[1/2]`); the prefix used to
   end up in the title and split the release from its other copies.
+- **Two nights of a daily show are no longer one release.** A name dated
+  instead of numbered (`The.Daily.Show.2026.11.12`) has no season or episode,
+  so the same-release rule now compares the air date. Before, another
+  night's episode from the same group could be grouped as a copy and sent to
+  NZBGet as a duplicate backup. The picker shows the date as the episode.
 - **A group at the end of a parenthesized tag block is read**, as in
   `Movie (2023) (2160p BluRay x265 HEVC 10bit HDR AAC 7.1 Tigole)`.
 

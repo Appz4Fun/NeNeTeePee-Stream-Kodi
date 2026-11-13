@@ -12,7 +12,10 @@ extras in ``nzbget_resolver_dupes``) and the picker's copy grouping all ask
   HDR set, audio set, channels, codec, quality, edition, PROPER, REPACK,
   HYBRID, the 3D / dubbed / hardcoded-subs / cut flags, and the group; and
 * the group is known. A row with no group is never grouped with another
-  (a literal ``NOGRP`` or ``P2P`` tag is a group like any other).
+  (a literal ``NOGRP`` or ``P2P`` tag is a group like any other); and
+* a daily show's air date is equal. A dated name ("Show.2026.11.12") has no
+  season or episode for the content gate to compare, so two nights of one
+  show would otherwise be one release.
 
 A container (".mkv", ".mp4") splits a release only when both rows name one.
 Languages and soft subtitles are not compared: they don't make a different
@@ -83,12 +86,34 @@ def is_hybrid(row, meta):
     return detect_hybrid(release_name_from_subject(row.get("title")))
 
 
+def air_date(row, meta):
+    """The air date of a dated release with no SxxEyy ("2026-11-12"), or "".
+
+    Read from the stored PTT identity, else from a PTT parse of the title.
+    A row that names an episode is told apart by it, so its date is ignored:
+    one listing adding the date to "S01E02" is still the same episode.
+    """
+    from resources.lib import fallback_streams as _fs
+
+    _title, _year, seasons, episodes, _part = _fs._release_identity(row)
+    if seasons or episodes:
+        return ""
+    stored = meta.get("ptt_identity")
+    if isinstance(stored, dict) and isinstance(stored.get("date"), str):
+        return stored["date"]
+    from resources.lib.ptt import parse_title
+    from resources.lib.release_subject import release_name_from_subject
+
+    parsed = parse_title(release_name_from_subject(row.get("title")))
+    return str(parsed.get("date") or "") if isinstance(parsed, dict) else ""
+
+
 def release_profile(row):
     """The parsed release fields of ``row`` that ``same_release`` compares.
 
     A hashable tuple of ``(name, value)`` pairs; equal profiles mean equal
     resolution, HDR, audio, channels, codec, quality, edition, PROPER/REPACK,
-    HYBRID, variant flags and group.
+    HYBRID, air date, variant flags and group.
     """
     from resources.lib import fallback_streams as _fs
 
@@ -105,6 +130,7 @@ def release_profile(row):
         fields.append((key, tuple(sorted({_fold(v) for v in values if v}))))
     fields.extend((key, bool(meta.get(key))) for key in _FLAG_FIELDS)
     fields.append(("hybrid", is_hybrid(row, meta)))
+    fields.append(("date", air_date(row, meta)))
     fields.append(("variant", _variant_flags(row, meta)))
     profile = tuple(fields)
     row[_PROFILE_CACHE_KEY] = (title, profile)

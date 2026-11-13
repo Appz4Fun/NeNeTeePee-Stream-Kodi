@@ -15,6 +15,7 @@ from resources.lib.results_dialog import (
     _build_result_item,
     _wrap_display_name,
 )
+from resources.lib.results_groups import release_groups
 from resources.lib.xml_safety import safe_fromstring
 
 _DIALOG_XML_PATH = os.path.join(
@@ -125,10 +126,36 @@ def _row(title, **extra):
             "Movie.2023.3D.HSBS.1080p.BluRay.x264.DTS-GRP",
             "Movie (2023) [Bluray-1080p][3D][DTS][x264]-GRP",
         ),
-        # A subtitle language is not a dubbed one.
+        # A subtitle language is not a dubbed one; a language stated apart
+        # from the subtitle tag still is.
         (
             "Movie.2023.KORSUB.1080p.HDRip.x264.AAC-GRP",
             "Movie (2023) [HDRip-1080p][AAC][x264]-GRP",
+        ),
+        (
+            "Movie.2023.German.Subbed.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) [Bluray-1080p][DTS][x264]-GRP",
+        ),
+        (
+            "Movie.2023.German.1080p.BluRay.x264.DTS.ESubs-GRP",
+            "Movie (2023) [Bluray-1080p][DTS][DE][x264]-GRP",
+        ),
+        (
+            "Movie.2023.French.1080p.BluRay.x264.DTS.ESubs-GRP",
+            "Movie (2023) [Bluray-1080p][DTS][FR][x264]-GRP",
+        ),
+        # A daily show's air date is its episode.
+        (
+            "The.Daily.Show.2026.11.12.1080p.WEB.H264-GRP",
+            "The Daily Show - 2026-11-12 [WEB-DL-1080p][H264]-GRP",
+        ),
+        (
+            "Conan.2009-09-16.720p.HDTV.x264-GRP",
+            "Conan - 2009-09-16 [HDTV-720p][x264]-GRP",
+        ),
+        (
+            "Show.S01E02.2023.11.12.1080p.WEB.H264-GRP",
+            "Show - S01E02 [WEB-DL-1080p][H264]-GRP",
         ),
         (
             "Movie.2023.GERMAN.1080p.BluRay.x264.DTS-GRP",
@@ -235,6 +262,29 @@ def test_a_hybrid_is_a_different_release_from_its_plain_twin():
     spaced = "Movie 2023 HYBRID 2160p UHD BluRay REMUX DV HEVC TrueHD 7.1-GRP"
     assert not same_release(_row(plain), _row(hybrid))
     assert same_release(_row(hybrid), _row(spaced))
+
+
+def test_two_air_dates_of_a_daily_show_are_different_releases():
+    monday = _row("The.Daily.Show.2026.11.12.1080p.WEB.H264-GRP")
+    tuesday = _row("The.Daily.Show.2026.11.13.1080p.WEB.H264-GRP")
+    spaced = _row("The Daily Show 2026 11 12 1080p WEB H264-GRP")
+    assert not same_release(monday, tuesday)
+    assert same_release(monday, spaced)
+    assert release_groups([monday, tuesday, spaced]) == [[monday, spaced], [tuesday]]
+
+
+def test_an_air_date_without_the_stored_identity_is_read_from_the_title():
+    monday = _row("The.Daily.Show.2026.11.12.1080p.WEB.H264-GRP")
+    stale = _row("The.Daily.Show.2026.11.13.1080p.WEB.H264-GRP")
+    del stale["_meta"]["ptt_identity"]
+    assert not same_release(monday, stale)
+    assert not same_release(stale, monday)
+
+
+def test_an_episode_listing_that_adds_its_date_is_the_same_episode():
+    plain = _row("Show.S01E02.1080p.WEB.H264-GRP")
+    dated = _row("Show.S01E02.2023.11.12.1080p.WEB.H264-GRP")
+    assert same_release(plain, dated)
 
 
 def test_hybrid_without_the_stored_attribute_is_read_from_the_title():

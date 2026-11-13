@@ -260,6 +260,7 @@ every parsed release field is equal:
 - 3D, dubbed or MULTi, hardcoded-subtitle, and cut tags (Extended, Unrated,
   Uncensored, Remastered)
 - release group
+- the air date, for a daily show named by date instead of season and episode
 
 A field one name states and the other leaves out counts as different. Language
 and soft-subtitle tags aren't compared, and the naming style (dots, spaces,

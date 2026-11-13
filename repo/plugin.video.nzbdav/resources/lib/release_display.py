@@ -18,6 +18,7 @@ word) is shown as its cleaned release name instead.
 import re
 
 from resources.lib.filter_audio import audio_label
+from resources.lib.filter_languages import title_languages
 from resources.lib.release_subject import (
     release_name_from_subject,
     without_media_extension,
@@ -60,11 +61,15 @@ _SD_SOURCES = {
     "cam": "CAM",
 }
 _CODEC_NAMES = {"x265/HEVC": ("5", "HEVC"), "x264/AVC": ("4", "AVC")}
-# A subtitle tag ("KORSUB", "ESubs", "SUBBED", "VOSTFR"): the languages the
-# name lists are then read, not heard.
-_SUBBED = re.compile(
-    r"(?<![a-z0-9])(?:[a-z]{0,3}subs?|subbed|vostfr)(?![a-z0-9])", re.I
+# A subtitle tag and the language it names: "KORSUB", "ESubs", "VOSTFR", or
+# a bare "Subs" / "Subbed" with the word before it ("German.Subbed"). That
+# language is read, not heard.
+_SUB_TAGS = re.compile(
+    r"(?<![a-z0-9])(?:[a-z]{1,3}subs?|vostfr"
+    r"|(?:[a-z]+[ ._-])?(?:subs?|subbed|subtitles?))(?![a-z0-9])",
+    re.I,
 )
+_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # ``meta["variant"]`` flags shown as their own "[...]" block, and the cut
 # flags shown with the edition. PTT strips all of them from the title, so a
 # name that left them out would read like the plain release.
@@ -150,8 +155,12 @@ def _heading(title, identity, meta):
     code = _episode_code(
         _int_list(identity.get("seasons")), _int_list(identity.get("episodes"))
     )
+    date = str(identity.get("date") or "")
     if code:
         out += " - " + code
+    elif _DATE.fullmatch(date):
+        # A daily show: the air date is its episode.
+        out += " - " + date
     edition = _edition(meta)
     if edition:
         out += " {" + edition + "}"
@@ -202,13 +211,15 @@ def dynamic_range(meta):
 def _languages(name, meta):
     """ "MULTi", or the languages heard when one is not English.
 
-    Nothing for a subtitled release: its language tags name the subtitles.
+    A language named only by a subtitle tag ("KORSUB", "German.Subbed") is
+    left out; one the name states apart from it ("German ... ESubs") stays.
     """
     if _MULTI.search(_MULTI_SUBS.sub(" ", name)):
         return "MULTi"
-    if _SUBBED.search(name):
-        return ""
     codes = [str(code) for code in meta.get("languages") or [] if code]
+    if _SUB_TAGS.search(name):
+        heard = title_languages(_SUB_TAGS.sub(" ", name), [])
+        codes = [code for code in codes if code in heard]
     if not codes or all(code.lower() == "en" for code in codes):
         return ""
     if len(codes) > _MAX_LANGUAGES:
