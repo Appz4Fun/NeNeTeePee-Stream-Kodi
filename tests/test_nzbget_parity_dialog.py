@@ -3,11 +3,11 @@
 """Parity in the NZBGet progress text, and the add-on's own download dialog."""
 
 import os
-import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
 
 from resources.lib import nzbget_api, nzbget_dialog, nzbget_progress, nzbget_resolver
 from resources.lib.nzbget_api import group_status
+from resources.lib.xml_safety import safe_fromstring
 
 _DIALOG_XML = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -426,7 +426,8 @@ def test_the_window_file_is_where_the_dialog_looks_for_it():
 
 
 def test_the_window_has_the_controls_the_dialog_relies_on():
-    root = ET.parse(_DIALOG_XML).getroot()
+    with open(_DIALOG_XML, "rb") as handle:
+        root = safe_fromstring(handle.read())
     assert root.tag == "window" and root.get("type") == "dialog"
     assert root.findtext("defaultcontrol") == str(nzbget_dialog.CANCEL_BUTTON_ID)
     controls = {c.get("id"): c for c in root.iter("control") if c.get("id")}
