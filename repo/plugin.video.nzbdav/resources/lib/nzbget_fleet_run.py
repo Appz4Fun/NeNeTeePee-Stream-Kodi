@@ -136,6 +136,7 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
         else FleetDedup(spool_base=_core._fleet_spool_base(), progress=progress.update)
     )
     dedup.aborted = lambda: progress.aborted
+    progress.report = ctx.fleet_report = dedup.report
     run = (dupe_key, getter, ctx, dedup, held)
     try:
         if prepared is None:
@@ -644,6 +645,9 @@ class _FleetProgress:
         self.aborted = False
         # Called once a cancel/shutdown is seen (stops the loader's engine).
         self._on_cancel = on_cancel
+        # The play's ``FleetReport`` once its FleetDedup exists: the send
+        # stage and the toast say what is sent and what was left out.
+        self.report = None
 
     @property
     def cancel_event(self):
@@ -658,7 +662,9 @@ class _FleetProgress:
             self._update(percent, _core._fmt(30616, done, total))
         elif phase == "send":
             percent = int(done * 100 / total) if total else 100
-            self._update(percent, _core._fmt(30617, total))
+            self._update(
+                percent, _core.nzbget_progress.sending_message(self.report, total)
+            )
         self.canceled()
 
     def canceled(self):

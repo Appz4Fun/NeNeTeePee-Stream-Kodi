@@ -206,7 +206,54 @@ def _update_active_dialog(dialog, group, state=None, fleet=None):
     message = nzbget_progress.progress_message(
         state if state is not None else {}, group, fleet
     )
-    dialog.update(group["percent"], message)
+    # After the download the bar follows the stage (an unpack at 43%) when
+    # NZBGet reports its progress, instead of resting at the download's 100%.
+    stage = nzbget_progress.stage_percent(group)
+    dialog.update(group["percent"] if stage is None else stage, message)
+
+
+# The backups' twin/alt marks are read from NZBGet's history at most this many
+# times per followed copy (the server may still be working them out on the
+# first read), this many polls apart: history can be large on a busy server.
+_KIND_READS = 3
+_KIND_READ_EVERY = 10
+
+
+def _refresh_backup_kinds(state, fleet, settings_getter):
+    """Note how many owned backups NZBGet marks as twins or alts.
+
+    Display only and best-effort: a server without the marks (stock NZBGet),
+    a play with no backups, or a failed history read leaves the line out.
+    """
+    owned = (fleet or {}).get("owned_nzbids")
+    if owned is None:
+        return
+    copy = nzbget_progress.copy_number(state)
+    if state.get("kinds_copy") != copy:
+        state["kinds_copy"] = copy
+        state["kinds_reads"] = 0
+        state["kinds_ticks"] = 0
+    ticks = state["kinds_ticks"]
+    state["kinds_ticks"] = ticks + 1
+    if state["kinds_reads"] >= _KIND_READS or ticks % _KIND_READ_EVERY:
+        return
+    state["kinds_reads"] += 1
+    try:
+        ids = list(owned() or [])
+        if len(ids) < 2:
+            state["kinds_reads"] = _KIND_READS
+            return
+        rows = nzbget_api.history_rows(settings_getter)
+        if rows is None:
+            return  # the read failed: keep what the last one found
+        kinds = nzbget_progress.backup_kinds(rows, ids, state.get("current"))
+    except Exception:  # pylint: disable=broad-except
+        return
+    # A read that finds none replaces the count too: once the last parked
+    # backup has been promoted there are no backups left to show.
+    state["backup_kinds"] = kinds
+    if kinds and sum(kinds.values()) >= len(ids) - 1:
+        state["kinds_reads"] = _KIND_READS  # every backup is marked
 
 
 def _update_waiting_dialog(dialog, state):
@@ -246,6 +293,7 @@ def _tick_tracked_member(state, dialog, settings_getter, dupe_key, fleet=None):
     current = state["current"]
     group = nzbget_api.group_status(current, settings_getter=settings_getter)
     if group["present"]:
+        _refresh_backup_kinds(state, fleet, settings_getter)
         _update_active_dialog(dialog, group, state, fleet)
         state["promotion_deadline"] = None
         return None
@@ -904,6 +952,8 @@ def _submit_poll_resolve(ctx, nzb_url, title, download_pubdate, download_size):
         dupe_key=dupe_key,
         fleet={
             "owned_nzbids": _owned_fleet_nzbids,
+            # What the collection kept and left out, for the dialog text.
+            "report": getattr(ctx, "fleet_report", None),
             "preexisting_successes": getattr(ctx, "preexisting_successes", None),
             "queue_era_nzbids": getattr(ctx, "queue_era_nzbids", None),
             # #372 r6: a confirmed COPY veto (pick died DELETED/COPY, group

@@ -189,7 +189,22 @@ _FALLBACK_STRINGS = {
     30663: "NZBGet could not read the NZB",
     30664: "it was removed from NZBGet",
     30665: "{} - health {}%",
+    30617: "Sending {} NZBs to NZBGet...",
     30666: "Download started",
+    30667: "{} x{}",
+    30668: "Not sent: {}",
+    30669: "{} refused {}",
+    30670: "{} could not be downloaded",
+    30671: "1 duplicate upload",
+    30672: "{} duplicate uploads",
+    30673: "Backups: {}",
+    30674: "1 twin",
+    30675: "{} twins",
+    30676: "1 alt",
+    30677: "{} alts",
+    30678: "{} of {} copies ready",
+    30679: "running NZBGet's scripts",
+    30680: "repairing from backups",
 }
 
 

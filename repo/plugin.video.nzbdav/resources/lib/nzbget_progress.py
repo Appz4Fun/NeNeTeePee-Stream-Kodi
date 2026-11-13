@@ -1,23 +1,35 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
-"""What the NZBGet download dialog says while a release downloads.
+"""What the NZBGet dialogs say while copies are collected, sent and downloaded.
 
-A download takes minutes, and the dialog used to say only "Downloading... 43%"
-or "Post-processing...". These helpers turn what the poll already knows into
-up to three lines:
+While the copies are handed to NZBGet (its health check can take most of a
+minute) the dialog says what is being sent and what was left out:
+
+    Sending 6 NZBs to NZBGet...
+    abNZB, altHUB, Ninjacentral, Square Eyed, Zurg x2
+    Not sent: Digital Carnage refused 1, 1 duplicate upload
+
+While a copy downloads it shows up to four lines:
 
     Copy 2 of 12 - downloading 43%
     4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
+    Backups: 2 twins, 3 alts
     Copy 1 failed: too many missing articles
 
 The first line names the copy being followed (the pick is copy 1; every
-failover to a backup counts one up) and the stage NZBGet reports. The second
-appears while it downloads and the sizes are known. The third appears once a
-copy has failed, so a switch to a backup is never silent.
+failover to a backup counts one up) and the stage NZBGet reports. After the
+download it reads "unpacking 43% - 25s" or "moving into place - 51s": the
+stage's own progress when the server gives one, and how long it has run, so a
+long unpack, move or script is not mistaken for a hang. The second
+appears while it downloads and the sizes are known. The third says what the
+backups are, when the server tells: a twin is a byte-identical copy the
+server can borrow missing articles from, an alt is another upload kept as a
+fallback. The last line is the most recent copy that failed, or else what was
+never sent, so neither a failover nor a refused indexer is silent.
 
-Everything here is presentation: it reads the poll ``state`` and never changes
-what the poll does. The speed is worked out from the progress between polls,
-so no extra NZBGet call is made.
+Everything here is presentation: it reads the poll ``state`` and the fleet's
+``FleetReport`` and never changes what the poll does. The speed is worked out
+from the progress between polls, so no extra NZBGet call is made.
 """
 
 import time
@@ -36,7 +48,8 @@ _STAGE_STRINGS = {
     "RENAMING": 30643,
     "UNPACKING": 30643,
     "MOVING": 30644,
-    "EXECUTING_SCRIPT": 30645,
+    "EXECUTING_SCRIPT": 30679,
+    "STREAM_REPAIRING": 30680,
     "PP_FINISHED": 30645,
 }
 _DOWNLOADING = frozenset(("DOWNLOADING", "FETCHING"))
@@ -68,6 +81,136 @@ _GENERIC_REASON = 30661
 # The speed is averaged over the samples of about this many seconds.
 _RATE_WINDOW = 30.0
 _MB_PER_GB = 1024.0
+
+
+class FleetReport:
+    """What happened to each copy while one play collected its NZBs.
+
+    Filled in by the collector (kept, dropped, duplicate) and read by the
+    dialog text below. ``blocked`` is the play's set of indexers that refused
+    an NZB (``FleetDedup.blocked_indexers``): a dropped copy from one of them
+    is reported as refused by that indexer, any other as not downloaded.
+    """
+
+    def __init__(self, blocked=None):
+        self.sent = []  # indexer name per kept copy, in the order kept
+        self.refused = {}  # indexer name -> copies dropped after it refused
+        self.failed = 0  # copies dropped for any other reason
+        self.duplicates = 0  # copies that were the same posting as a kept one
+        self._blocked = blocked if blocked is not None else set()
+
+    @staticmethod
+    def _indexer(row):
+        return str((row or {}).get("indexer") or "").strip()
+
+    def kept(self, row):
+        # The listing that supplied the NZB, when a mirror stood in for the
+        # release's first listing (``nzbget_fleet_dedup.SUPPLIED_BY``).
+        supplier = str((row or {}).get("_supplied_by") or "").strip()
+        self.sent.append(supplier or self._indexer(row))
+
+    def duplicate(self):
+        self.duplicates += 1
+
+    def dropped(self, row):
+        name = self._indexer(row)
+        if name and name.lower() in self._blocked:
+            self.refused[name] = self.refused.get(name, 0) + 1
+        else:
+            self.failed += 1
+
+    def not_sent(self):
+        """How many copies were found but not kept."""
+        return sum(self.refused.values()) + self.failed + self.duplicates
+
+    def found(self):
+        return len(self.sent) + self.not_sent()
+
+
+# A backup NZBGet holds in history and can still promote on a failover.
+_PARKED_STATUS = "DELETED/DUPE"
+
+# The indexer line stops adding names past this many characters.
+_INDEXER_LINE_WIDTH = 64
+
+
+def indexers_line(report):
+    """ "abNZB, altHUB, Zurg x2": where the kept copies came from, or ""."""
+    counts = {}
+    for name in getattr(report, "sent", None) or []:
+        if name:
+            counts[name] = counts.get(name, 0) + 1
+    labels = [
+        fmt(30667, name, count) if count > 1 else name
+        for name, count in sorted(counts.items(), key=lambda item: item[0].lower())
+    ]
+    shown = []
+    for index, label in enumerate(labels):
+        if shown and len(", ".join(shown + [label])) > _INDEXER_LINE_WIDTH:
+            shown.append(fmt(30489, len(labels) - index))
+            break
+        shown.append(label)
+    return ", ".join(shown)
+
+
+def not_sent_line(report):
+    """ "Not sent: Digital Carnage refused 1, 1 duplicate upload", or ""."""
+    if not isinstance(report, FleetReport) or not report.not_sent():
+        return ""
+    parts = [
+        fmt(30669, name, count)
+        for name, count in sorted(report.refused.items(), key=lambda i: i[0].lower())
+    ]
+    if report.failed:
+        parts.append(fmt(30670, report.failed))
+    if report.duplicates:
+        parts.append(_counted(report.duplicates, 30671, 30672))
+    return fmt(30668, ", ".join(parts))
+
+
+def sending_message(report, total):
+    """The dialog text while the copies are handed to NZBGet."""
+    lines = [fmt(30617, total), indexers_line(report), not_sent_line(report)]
+    return "[CR]".join(line for line in lines if line)
+
+
+def backup_kinds(rows, owned, current):
+    """Count the owned backups NZBGet marked as twins or alts.
+
+    ``rows`` are history rows; a server that sets no ``DupeKind`` parameter
+    (stock NZBGet) yields ``{}``. Only a parked backup counts: a
+    ``DELETED/DUPE`` row the server can still promote. ``current`` (the copy
+    being downloaded) is not a backup, and a copy that was promoted and failed
+    keeps its mark but is no longer one.
+    """
+    wanted = {str(nzbid) for nzbid in owned or [] if str(nzbid) != str(current)}
+    kinds = {}
+    for row in rows or []:
+        if not isinstance(row, dict) or str(row.get("NZBID")) not in wanted:
+            continue
+        if str(row.get("Status") or "").upper() != _PARKED_STATUS:
+            continue
+        for parameter in row.get("Parameters") or []:
+            if isinstance(parameter, dict) and parameter.get("Name") == "DupeKind":
+                kind = str(parameter.get("Value") or "").lower()
+                key = "twin" if kind.startswith("twin") else "alt" if kind else ""
+                if key:
+                    kinds[key] = kinds.get(key, 0) + 1
+    return kinds
+
+
+def kinds_line(kinds):
+    """ "Backups: 2 twins, 3 alts", or "" when the server did not say."""
+    parts = []
+    if (kinds or {}).get("twin"):
+        parts.append(_counted(kinds["twin"], 30674, 30675))
+    if (kinds or {}).get("alt"):
+        parts.append(_counted(kinds["alt"], 30676, 30677))
+    return fmt(30673, ", ".join(parts)) if parts else ""
+
+
+def _counted(count, one_id, many_id):
+    return string(one_id) if count == 1 else fmt(many_id, count)
 
 
 def record_failure(state, status):
@@ -116,11 +259,35 @@ def _copy_label(state, fleet):
     return fmt(30638, number)
 
 
+# A stage's running time is shown once it has lasted this long.
+_STAGE_TIME_FROM = 5
+
+
 def _stage(group):
+    """ "downloading 43%", "unpacking 43% - 25s", "moving into place - 51s"."""
     status = str(group.get("status") or "").upper()
     if status in _DOWNLOADING:
         return fmt(30639, group.get("percent", 0))
-    return string(_STAGE_STRINGS.get(status, 30645))
+    label = string(_STAGE_STRINGS.get(status, 30645))
+    percent = stage_percent(group)
+    if percent is not None:
+        label = "{} {}%".format(label, percent)
+    seconds = _megabytes(group.get("post_seconds"))
+    if seconds >= _STAGE_TIME_FROM:
+        label = "{} - {}".format(label, _duration(seconds))
+    return label
+
+
+def stage_percent(group):
+    """The post-processing stage's own percent (1 to 99), or None.
+
+    None while downloading, and for a stage NZBGet gives no progress for (a
+    move, a script): the bar then keeps the download's 100%.
+    """
+    if str(group.get("status") or "").upper() in _DOWNLOADING:
+        return None
+    percent = _megabytes(group.get("post_percent"))
+    return int(percent) if 1 <= percent <= 99 else None
 
 
 def _megabytes(value):
@@ -197,7 +364,10 @@ def progress_message(state, group, fleet=None, now=None):
     lines = [
         "{} - {}".format(_copy_label(state, fleet), _stage(group)),
         _size_line(state, group, now),
-        failed_line(state),
+        kinds_line(state.get("backup_kinds")),
+        # One line for what went wrong: the latest failed copy, or else the
+        # copies that were never sent.
+        failed_line(state) or not_sent_line((fleet or {}).get("report")),
     ]
     return "[CR]".join(line for line in lines if line)
 
@@ -214,16 +384,21 @@ def waiting_message(state):
     return "{}[CR]{}".format(line, string(30651))
 
 
-def ready_toast(copies, health=None):
+def ready_toast(copies, health=None, report=None):
     """The short toast once NZBGet accepts the copies.
 
     No brackets and no commas: the notification call replaces both with
     look-alike characters most skin fonts cannot draw, and the toast is
     narrow, so the long sentence lost its last characters ("(100% health)"
-    showed as "(10").
+    showed as "(10"). When fewer copies are usable than were found (one
+    refused, one a duplicate, one dead on the server) it says so:
+    "6 of 8 copies ready".
     """
+    found = report.found() if isinstance(report, FleetReport) else 0
     if not _is_count(copies) or copies < 1:
         label = string(30666)
+    elif found > copies:
+        label = fmt(30678, copies, found)
     elif copies == 1:
         label = string(30653)
     else:

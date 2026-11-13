@@ -2421,3 +2421,59 @@ msgstr ""
 msgctxt "#30666"
 msgid "Download started"
 msgstr ""
+
+msgctxt "#30667"
+msgid "{} x{}"
+msgstr ""
+
+msgctxt "#30668"
+msgid "Not sent: {}"
+msgstr ""
+
+msgctxt "#30669"
+msgid "{} refused {}"
+msgstr ""
+
+msgctxt "#30670"
+msgid "{} could not be downloaded"
+msgstr ""
+
+msgctxt "#30671"
+msgid "1 duplicate upload"
+msgstr ""
+
+msgctxt "#30672"
+msgid "{} duplicate uploads"
+msgstr ""
+
+msgctxt "#30673"
+msgid "Backups: {}"
+msgstr ""
+
+msgctxt "#30674"
+msgid "1 twin"
+msgstr ""
+
+msgctxt "#30675"
+msgid "{} twins"
+msgstr ""
+
+msgctxt "#30676"
+msgid "1 alt"
+msgstr ""
+
+msgctxt "#30677"
+msgid "{} alts"
+msgstr ""
+
+msgctxt "#30678"
+msgid "{} of {} copies ready"
+msgstr ""
+
+msgctxt "#30679"
+msgid "running NZBGet's scripts"
+msgstr ""
+
+msgctxt "#30680"
+msgid "repairing from backups"
+msgstr ""

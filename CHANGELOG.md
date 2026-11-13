@@ -69,6 +69,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The NZBGet dialog says what was sent, what was left out, and what the
+  backups are.** While the copies are handed to NZBGet it lists the indexers
+  they came from and anything not sent: `Not sent: Digital Carnage refused 1,
+  1 duplicate upload`. While a copy downloads, a new line reads `Backups: 2
+  twins, 3 alts` on a server that reports it (RustyGet): a twin is a
+  byte-identical copy the server can borrow missing articles from, an alt is
+  a different upload kept as a fallback. The notification reads `6 of 8 copies
+  ready - health 100%` when some of the copies found could not be used.
+- **Stages after the download show their progress and running time.** The
+  dialog rested at 100% with one label through unpacking, moving and
+  NZBGet's scripts. It now reads `unpacking 43% - 25s`, `moving into place -
+  51s` or `running NZBGet's scripts - 2m 10s`, and the bar follows the
+  stage when NZBGet reports its progress.
 - **Normalized release names in the picker.** Every row is shown in one
   format, built from what the release name says:
   `Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES`,
