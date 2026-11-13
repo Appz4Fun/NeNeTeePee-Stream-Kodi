@@ -73,8 +73,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   such as `Movie.2004.MULTi.1080p.BluRay.x264-GRP` tags no audio and ranked
   as "audio unknown"; its NFO says `DTS-HD MA 5.1`. When an indexer offers a
   release's NFO with its search result, the add-on reads it for the first
-  three releases of a search (`nfo_audio_releases`, 0 for off) and adds the
-  formats and channel count it names to the release's label and ranking.
+  three releases of a search (`nfo_audio_releases`, 0 for off) and uses the
+  formats and channel count it names for the release's label and ranking.
+  What was read wins over the name: `DTS.5.1` in a name whose NFO says
+  `DTS-HD MA 7.1` is DTS-HD MA 7.1. A name's Atmos or DTS:X tag is kept when
+  a hand-written NFO leads with the same track and leaves the word out.
   Where the indexer also serves MediaInfo (Treasure Maps does, from
   `/api/v1/releases/<id>/mediainfo`), that is asked for first: it lists
   every audio track with its format, Atmos or DTS:X marker and channel

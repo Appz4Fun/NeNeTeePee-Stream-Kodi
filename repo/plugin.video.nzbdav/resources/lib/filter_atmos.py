@@ -106,6 +106,11 @@ def _from_nfo(meta):
     return isinstance(added, list) and _OBJECTS in added
 
 
+def _was_read(meta):
+    """Whether the row's audio is what its NFO or MediaInfo said."""
+    return meta.get("audio_source") in ("mediainfo", "nfo")
+
+
 def share_atmos(rows, derived_keys=()):
     """Mark unlabelled Dolby Digital Plus WEB-DLs as Atmos; see the module.
 
@@ -124,6 +129,9 @@ def share_atmos(rows, derived_keys=()):
             continue
         labelled = _OBJECTS in audio
         if labelled and (meta.get(INFERRED_KEY) is True or _from_nfo(meta)):
+            continue
+        if not labelled and _was_read(meta):
+            # Its NFO or MediaInfo was read and names no Atmos: no guess.
             continue
         key = _source_key(row, meta)
         if key is None:

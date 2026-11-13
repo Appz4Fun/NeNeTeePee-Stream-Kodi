@@ -239,16 +239,90 @@ def test_the_nfos_audio_is_added_to_every_listing_of_the_release():
     assert nfo_audio.FROM_NFO_KEY not in rows[2]["_meta"]
 
 
-def test_it_only_adds_to_what_the_name_says():
+def test_what_was_read_replaces_what_the_name_says():
+    # The name says DTS; the NFO says the track is DTS-HD MA 7.1.
+    name = "Some.Movie.2004.1080p.BluRay.DTS.5.1.x264-GRP"
+    (row,) = _rows(name)
+    assert row["_meta"]["audio"] == ["DTS"] and row["_meta"]["channels"] == "5.1"
+    nfo_audio._remember(_key(name), ["DTS-HD MA", "DD"], "7.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["audio"] == ["DTS-HD MA", "DD"]
+    assert row["_meta"]["channels"] == "7.1"
+    assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DTS-HD MA", "DD"]
+    assert row["_meta"][nfo_audio.SOURCE_KEY] == "nfo"
+    # What the name itself tags is kept beside it.
+    assert row["_meta"][nfo_audio.NAME_AUDIO_KEY] == {
+        "audio": ["DTS"],
+        "channels": "5.1",
+    }
+
+    # And the other way: the name oversells, the NFO says plain DD 5.1.
+    name = "Some.Movie.2005.1080p.BluRay.DTS-HD.MA.7.1.x264-GRP"
+    (row,) = _rows(name)
+    nfo_audio._remember(_key(name), ["DD"], "5.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["audio"] == ["DD"] and row["_meta"]["channels"] == "5.1"
+    assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DD"]
+
+
+def test_a_hand_written_nfo_keeps_the_names_atmos_on_the_same_track():
+    # "Audio: English TrueHD 7.1" for an Atmos track is how NFOs are written.
     name = "Some.Movie.2004.2160p.UHD.BluRay.REMUX.TrueHD.7.1.Atmos-GRP"
     (row,) = _rows(name)
-    before = list(row["_meta"]["audio"])
-    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "5.1")
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "7.1")
     filter_module.attach_metadata([row])
-    assert row["_meta"]["audio"] == before + ["DD"]
-    # The name's own channel count stays.
-    assert row["_meta"]["channels"] == "7.1"
+    assert row["_meta"]["audio"] == ["TrueHD", "DD", "Atmos"]
     assert row["_meta"][nfo_audio.FROM_NFO_KEY] == ["DD"]
+    # MediaInfo marks Atmos on the track: without the marker there is none.
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "7.1", exact=True)
+    (row,) = _rows(name)
+    assert row["_meta"]["audio"] == ["TrueHD", "DD"]
+    assert row["_meta"][nfo_audio.SOURCE_KEY] == "mediainfo"
+    # A row already given the NFO's answer takes the newer one.
+    nfo_audio._remember(_key(name), ["TrueHD"], "7.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["audio"] == ["TrueHD", "Atmos"]
+    assert row["_meta"][nfo_audio.SOURCE_KEY] == "nfo"
+
+    # A name that tags the object audio alone keeps it on a bed it can ride.
+    alone = "Some.Movie.2007.2160p.UHD.BluRay.Atmos.7.1.x265-GRP"
+    (row,) = _rows(alone)
+    assert row["_meta"]["audio"] == ["Atmos"]
+    nfo_audio._remember(_key(alone), ["TrueHD"], "7.1")
+    filter_module.attach_metadata([row])
+    assert sorted(row["_meta"]["audio"]) == ["Atmos", "TrueHD"]
+    # DTS:X does not ride on TrueHD.
+    dtsx = "Some.Movie.2008.2160p.UHD.BluRay.DTS-X.7.1.x265-GRP"
+    (row,) = _rows(dtsx)
+    nfo_audio._remember(_key(dtsx), ["TrueHD"], "7.1")
+    filter_module.attach_metadata([row])
+    assert row["_meta"]["audio"] == ["TrueHD"]
+    nfo_audio._remember(_key(dtsx), ["DTS-HD MA"], "7.1")
+    (row,) = _rows(dtsx)
+    assert sorted(row["_meta"]["audio"]) == ["DTS-HD MA", "DTS:X"]
+
+
+def test_a_guessed_atmos_gives_way_to_what_was_read():
+    from resources.lib.filter_atmos import INFERRED_KEY
+
+    show = "Some.Show.S03E02.2160p.AMZN.WEB-DL."
+    labelled = show + "DD+5.1.Atmos.DoVi.H.265-playWEB"
+    plain = show + "DDP5.1.DV.H.265-NTb"
+    rows = _rows(labelled, plain)
+    assert rows[1]["_meta"].get(INFERRED_KEY) is True
+    # MediaInfo for the unlabelled copy: Dolby Digital Plus, no Atmos.
+    nfo_audio._remember(_key(plain), ["DD+"], "5.1", exact=True)
+    filter_module.attach_metadata(rows)
+    assert rows[1]["_meta"]["audio"] == ["DD+"]
+    assert INFERRED_KEY not in rows[1]["_meta"]
+    # And it is not guessed again on the next pass, or on a fresh parse.
+    filter_module.attach_metadata(rows)
+    assert rows[1]["_meta"]["audio"] == ["DD+"]
+    fresh = _rows(labelled, plain)
+    assert fresh[1]["_meta"]["audio"] == ["DD+"]
+    assert INFERRED_KEY not in fresh[1]["_meta"]
+    # The labelled copy is as its name says.
+    assert sorted(fresh[0]["_meta"]["audio"]) == ["Atmos", "DD+"]
 
 
 def test_applying_it_again_changes_nothing():
@@ -704,11 +778,15 @@ def test_the_nfos_count_is_used_when_its_track_becomes_the_main_one():
     filter_module.attach_metadata([row])
     assert row["_meta"]["channels"] == "7.1"
 
-    # The name's main track stays the main one: its own count is kept.
+    # What was read gives the count, also for the name's own main track.
     name = "Some.Movie.2004.2160p.UHD.BluRay.REMUX.TrueHD.7.1.Atmos-GRP"
     (row,) = _rows(name)
     nfo_audio._remember(_key(name), ["TrueHD", "DD"], "5.1")
     filter_module.attach_metadata([row])
+    assert row["_meta"]["channels"] == "5.1"
+    # With no count read, the name's stays.
+    nfo_audio._remember(_key(name), ["TrueHD", "DD"], "")
+    (row,) = _rows(name)
     assert row["_meta"]["channels"] == "7.1"
 
 
@@ -1163,16 +1241,3 @@ def test_the_names_atmos_does_not_move_onto_a_new_main_track():
     nfo_audio._remember(_key(other), ["Atmos", "TrueHD", "DD+"], "7.1")
     (row,) = _rows(other)
     assert sorted(row["_meta"]["audio"]) == ["Atmos", "DD+", "TrueHD"]
-    # A name's TrueHD.Atmos with an NFO that writes only TrueHD keeps both.
-    third = "Some.Movie.2006.2160p.UHD.BluRay.TrueHD.7.1.Atmos.x265-GRP"
-    nfo_audio._remember(_key(third), ["TrueHD", "DD"], "7.1")
-    (row,) = _rows(third)
-    assert sorted(row["_meta"]["audio"]) == ["Atmos", "DD", "TrueHD"]
-    # A name that tags the object audio alone keeps it: nothing else says
-    # that track is there.
-    fourth = "Some.Movie.2007.2160p.UHD.BluRay.DTS-X.7.1.x265-GRP"
-    (row,) = _rows(fourth)
-    assert row["_meta"]["audio"] == ["DTS:X"]
-    nfo_audio._remember(_key(fourth), ["TrueHD"], "7.1")
-    filter_module.attach_metadata([row])
-    assert sorted(row["_meta"]["audio"]) == ["DTS:X", "TrueHD"]

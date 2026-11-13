@@ -148,8 +148,8 @@ it carries: `Audio.........: English DTS-HD MA 5.1 @ 3739 kb/s`.
 
 Some indexers send, with each search result, a flag that the release has an
 NFO and a link to it, and NZBHydra2 passes both through. For the first
-releases of a search that offer one, the add-on reads the NFO and adds the
-audio formats and the channel count it names to the release:
+releases of a search that offer one, the add-on reads the NFO and uses the
+audio formats and the channel count it names for the release:
 
 - **MediaInfo first, where the indexer serves it.** An NFO is free text.
   MediaInfo is the tool's own report of the file and lists every audio
@@ -177,11 +177,18 @@ audio formats and the channel count it names to the release:
   the release "TrueHD Atmos".
 - **The picker waits two seconds at most.** A slower answer is stored when
   it arrives and used the next time the search is opened.
-- **It only adds.** A name that tags `TrueHD.Atmos` keeps both when its NFO
-  writes only `TrueHD`. One exception: a name tagged `DDP.5.1.Atmos` whose
-  NFO lists a plain TrueHD 7.1 track beside the Dolby Digital Plus one now
-  leads with TrueHD 7.1, and the name's Atmos is dropped so that it does not
-  read as "TrueHD Atmos".
+- **What was read wins over the name.** The formats and the channel count
+  read from MediaInfo or the NFO replace the ones the name tags: a name that
+  says `DTS.5.1` whose NFO says `DTS-HD MA 7.1` is labelled and ranked as
+  DTS-HD MA 7.1, and a name that says `DDP.5.1.Atmos` whose NFO leads with a
+  plain TrueHD 7.1 track is TrueHD 7.1, not "TrueHD Atmos". One thing is
+  kept from the name: its Atmos or DTS:X tag, when a hand-written NFO leads
+  with the track the name put it on. `Audio: English TrueHD 7.1` is how many
+  NFOs describe an Atmos track. MediaInfo marks Atmos on the track itself,
+  so it is used exactly as it reads.
+- **No Atmos guess for a release that was read.** The rule under
+  [Atmos a name leaves out](#atmos-a-name-leaves-out) does not add Atmos to
+  a release whose MediaInfo or NFO was read and names none.
 - **The link is only followed to the indexer the result came from**, and is
   never written to the log: it carries your API key for that indexer.
 

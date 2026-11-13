@@ -22,8 +22,13 @@ NFO, reads the audio formats out of it and remembers them:
   opens without them when an indexer is slow. They are stored when they
   arrive and used the next time.
 
-What the NFO names is added to what the name says, never taken away: a name
-that tags ``TrueHD.Atmos`` keeps it when the NFO only writes ``TrueHD``.
+Where the indexer also serves MediaInfo it is asked for first and the NFO is
+the fallback (``mediainfo_audio``).
+
+What was read is preferred over what the name says: it replaces the name's
+formats and channel count (``apply_known``). The one thing kept from the
+name is an Atmos or DTS:X tag on the track a hand-written NFO leads with,
+since such NFOs often leave the word out; MediaInfo is used as it is.
 
 The link carries the user's API key for that indexer, so it is never logged.
 """
@@ -53,9 +58,15 @@ from resources.lib.mediainfo_audio import (
 SETTING = "nfo_audio_releases"
 DEFAULT_RELEASES = 3
 MAX_RELEASES = 5
-# On a row's metadata: the audio formats its NFO added to the name's (an
-# empty list when the NFO only supplied the channel count).
+# On a row's metadata, once its release's audio has been read:
+# the formats the release has that its name does not tag,
 FROM_NFO_KEY = "audio_from_nfo"
+# what the name itself tags ({"audio": [...], "channels": "5.1"}),
+NAME_AUDIO_KEY = "audio_in_name"
+# and where the answer came from: "mediainfo" or "nfo".
+SOURCE_KEY = "audio_source"
+# ``filter_atmos.INFERRED_KEY``: Atmos a row took from a labelled copy.
+_INFERRED_KEY = "atmos_inferred"
 
 _PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
 _STORE_NAME = "nfo_audio.json"
@@ -281,7 +292,8 @@ def _known(key):
         return _STORE.get(key)
 
 
-def _remember(key, audio, channels, failed=False):
+def _remember(key, audio, channels, failed=False, exact=False):
+    """Keep one release's answer; ``exact`` when MediaInfo gave it."""
     _load()
     with _LOCK:
         _STORE[key] = {
@@ -289,6 +301,7 @@ def _remember(key, audio, channels, failed=False):
             "channels": channels,
             "at": int(time.time()),
             "failed": bool(failed),
+            "exact": bool(exact),
         }
 
 
@@ -336,39 +349,61 @@ def forget_all():
 # --- putting it on the rows -------------------------------------------------
 
 
-def _without_moved_objects(audio, added, known, quality, new_main):
-    """The name's formats and the added ones, object audio on its own track.
+# Object audio rides on a bed track: these are the beds it can be on.
+_BEDS_OF = {"Atmos": ("TrueHD", "DD+"), "DTS:X": ("DTS-HD MA", "DTS-HD HR", "DTS")}
 
-    The picker reads "Atmos" beside "TrueHD" as TrueHD with Atmos. A name
-    tagged ``DDP.5.1.Atmos`` whose NFO lists a plain TrueHD 7.1 track and
-    the Dolby Digital Plus one now leads with TrueHD, and the name's Atmos
-    must not move onto it: what was read names no object audio on that
-    track, or it would be in ``known``. This is the one case where a tag
-    from the name is dropped. A name's ``TrueHD.Atmos`` with an NFO that
-    writes only ``TrueHD`` keeps both: the main track did not change. So
-    does a name that tags the object audio alone (``DTS-X.7.1``): with no
-    track named beside it, the tag is all that says the track is there.
+
+def _name_audio(meta):
+    """``(formats, channels)`` as the release's name tags them.
+
+    Once what was read has replaced them they are kept under
+    ``NAME_AUDIO_KEY``, so a later pass starts from the name again. Atmos a
+    row took from a labelled copy (``filter_atmos``) is a guess, not the
+    name's, and is left out.
     """
-    merged = audio + added
-    if not new_main or all(name in OBJECT_FORMATS for name in audio):
-        return merged
-    main = main_audio(
-        [name for name in merged if name not in OBJECT_FORMATS] or merged, quality
-    )
-    return [
-        name
-        for name in merged
-        if name not in OBJECT_FORMATS or name == main or name in known
-    ]
+    kept = meta.get(NAME_AUDIO_KEY)
+    if isinstance(kept, dict) and isinstance(kept.get("audio"), list):
+        return list(kept["audio"]), kept.get("channels") or ""
+    audio = meta.get("audio")
+    audio = list(audio) if isinstance(audio, list) else []
+    if meta.get(_INFERRED_KEY) is True:
+        audio = [name for name in audio if name != "Atmos"]
+    return audio, meta.get("channels") or ""
+
+
+def _preferred(name_audio, entry, quality):
+    """The release's formats: what was read, not what the name tags.
+
+    MediaInfo lists every track with its object-audio marker, so it is used
+    as it is. An NFO is written by hand, and a line such as ``Audio: English
+    TrueHD 7.1`` often leaves "Atmos" out: the name's Atmos or DTS:X tag is
+    kept when the NFO's main track is the bed the name put it on (or a bed
+    it can be on, for a name that tags it alone). A name tagged
+    ``DDP.5.1.Atmos`` whose NFO leads with a plain TrueHD 7.1 track does not
+    keep it: the picker would read "TrueHD Atmos".
+    """
+    audio = list(entry["audio"])
+    if entry.get("exact"):
+        return audio
+    main = main_audio(audio, quality)
+    name_beds = [name for name in name_audio if name not in OBJECT_FORMATS]
+    for name in name_audio:
+        if name not in OBJECT_FORMATS or name in audio:
+            continue
+        if main in _BEDS_OF.get(name, ()) and (not name_beds or main in name_beds):
+            audio.append(name)
+    return audio
 
 
 def apply_known(rows, key_of, derived_keys=()):
-    """Add the audio a stored NFO names to every listing of its release.
+    """Give every listing of a release the audio that was read for it.
 
     ``key_of`` gives a release name's key (``filter._name_form_key``): every
-    spelling of a name, from any indexer, takes the same additions. A row
-    whose metadata changes loses its ``derived_keys`` (per-row caches built
-    from it). Returns how many rows changed.
+    spelling of a name, from any indexer, takes the same answer. What was
+    read replaces what the name tags (``_preferred``); the name's own stay
+    on the row under ``NAME_AUDIO_KEY``. A row whose audio or channel count
+    changes loses its ``derived_keys`` (per-row caches built from them).
+    Returns how many rows changed.
     """
     changed = 0
     for row in rows:
@@ -379,32 +414,25 @@ def apply_known(rows, key_of, derived_keys=()):
         entry = _known(key_of(title))
         if not entry or not entry["audio"]:
             continue
-        audio = meta.get("audio")
-        audio = list(audio) if isinstance(audio, list) else []
-        added = [name for name in entry["audio"] if name not in audio]
-        channels = entry.get("channels", "")
-        # The NFO's count is its main track's. It replaces the name's when
-        # what the NFO added becomes the release's main track ("DD5.1" in
-        # the name, "TrueHD 7.1" in the NFO), and fills in a missing one.
-        quality = meta.get("quality", "")
-        new_main = main_audio(audio + added, quality) != main_audio(audio, quality)
-        use_channels = bool(channels) and (
-            not meta.get("channels") or (bool(added) and new_main)
+        name_audio, name_channels = _name_audio(meta)
+        audio = _preferred(name_audio, entry, meta.get("quality", ""))
+        channels = entry.get("channels") or name_channels
+        source = "mediainfo" if entry.get("exact") else "nfo"
+        same = meta.get("audio") == audio and (
+            not channels or meta.get("channels") == channels
         )
-        if use_channels and meta.get("channels") == channels:
-            use_channels = False
-        if not added and not use_channels:
+        if same and meta.get(SOURCE_KEY) == source and NAME_AUDIO_KEY in meta:
             continue
-        if added:
-            meta["audio"] = _without_moved_objects(
-                audio, added, entry["audio"], quality, new_main
-            )
-        if use_channels:
+        meta[NAME_AUDIO_KEY] = {"audio": name_audio, "channels": name_channels}
+        meta[SOURCE_KEY] = source
+        # What the name did not tag, so a later pass can tell the two apart.
+        meta[FROM_NFO_KEY] = [name for name in audio if name not in name_audio]
+        meta.pop(_INFERRED_KEY, None)
+        if same:
+            continue
+        meta["audio"] = audio
+        if channels:
             meta["channels"] = channels
-        # What the NFO added, so a later pass can tell it from the name's.
-        earlier = meta.get(FROM_NFO_KEY)
-        earlier = earlier if isinstance(earlier, list) else []
-        meta[FROM_NFO_KEY] = earlier + [n for n in added if n not in earlier]
         for name in derived_keys:
             row.pop(name, None)
         changed += 1
@@ -571,7 +599,7 @@ def _fetch_mediainfo(key, url, title):
     found = mediainfo_audio.merge_tracks(tracks)
     if not found["audio"]:
         return None
-    _remember(key, found["audio"], found["channels"])
+    _remember(key, found["audio"], found["channels"], exact=True)
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' names audio: {}".format(
             title, ", ".join(found["audio"])
