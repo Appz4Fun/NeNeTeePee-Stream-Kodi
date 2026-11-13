@@ -3,6 +3,7 @@
 
 import re
 
+from resources.lib.filter_audio import main_audio
 from resources.lib.filter_languages import is_language_word, title_languages
 from resources.lib.release_subject import release_name_from_subject
 
@@ -56,13 +57,27 @@ _DDP_ATMOS = _pattern(r"dd(?:p|\+)a(?:tmos)?(?:[1-9][. _]?\d)?")
 # "+" of "DD+5.1" replaced by an indexer or a URL decode. Group 1 is the
 # stand-in character.
 _DD_LOST_PLUS = _pattern(r"dd([ _])[1-9][. _]?\d")
-# The channel count written right after an audio tag, an "Atmos" in between
-# at most: "FLAC.1.0", "TrueHD.Atmos.7.1", "DDP5.1", "Opus 2 0".
-_CHANNELS_AFTER_AUDIO = re.compile(
-    r"(?<![a-z0-9])(?:"
-    + "|".join(expression for _name, expression in _AUDIO_EXPRESSIONS)
-    + r")(?:[. _-]?atmos)?[. _-]?([1-9])[. _]?([0-2])(?![a-z0-9])",
-    re.I,
+
+
+def _channels_after(expression):
+    """A pattern for the channel count written right after an audio tag.
+
+    An "Atmos" in between at most: "FLAC.1.0", "TrueHD.Atmos.7.1", "DDP5.1",
+    "DDPA5.1", "Opus 2 0". Groups 1 and 2 are the two digits.
+    """
+    return re.compile(
+        r"(?<![a-z0-9])(?:"
+        + expression
+        + r")(?:[. _-]?atmos|(?<=[p+])a)?[. _-]?([1-9])[. _]?([0-2])(?![a-z0-9])",
+        re.I,
+    )
+
+
+_CHANNELS_AFTER = {
+    name: _channels_after(expression) for name, expression in _AUDIO_EXPRESSIONS
+}
+_CHANNELS_AFTER_ANY = _channels_after(
+    "|".join(expression for _name, expression in _AUDIO_EXPRESSIONS)
 )
 _HYBRID = _pattern(r"hybrid")
 # Where a name's title ends and its tags begin: a year, SxxEyy or a
@@ -128,8 +143,8 @@ _PAREN_TAG_BLOCK = re.compile(r"\(([^()]*\s[a-z0-9][\w&@-]*)\)\s*$", re.I)
 _NOT_A_GROUP = re.compile(
     r"\d+|\d+v\d+|\d+/\d+|s\d+(?:e\d+)*|e\d+|\d+x\d+|dl|rip|web(?:rip|dl)?|hd(?:tv|rip)?"
     r"|sd|uhd|blu-?ray|bd(?:rip|remux)?|dvd(?:rip)?|remux|hdr\d*|sdr|dv|hlg"
-    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed|bits?|"
-    + _EDITION_TAGS,
+    r"|\d{3,4}[pi]|[48]k|[xh]\d{3}|hevc|avc|multi|dual|dubbed|subbed"
+    r"|(?:\d{1,2}-?)?bits?|[a-z]{0,3}subs?|" + _EDITION_TAGS,
     re.I,
 )
 
@@ -297,10 +312,39 @@ def detect_audio(title):
     return [name for name in _AUDIO_ORDER if name in found]
 
 
+def _count(match):
+    return "{}.{}".format(match.group(1), match.group(2))
+
+
 def detect_channels(title):
-    """The channel count written right after an audio tag ("5.1"), or ""."""
-    match = _CHANNELS_AFTER_AUDIO.search(title)
-    return "{}.{}".format(match.group(1), match.group(2)) if match else ""
+    """Every distinct channel count written right after an audio tag."""
+    return list(dict.fromkeys(_count(m) for m in _CHANNELS_AFTER_ANY.finditer(title)))
+
+
+def main_track_channels(title, audio, quality="", parsed=""):
+    """The channel count of the release's main audio track, or "".
+
+    A name can tag several tracks ("TrueHD.7.1.Atmos.DD5.1"), so the count
+    is the one written right after the main track's own tag
+    (``filter_audio.main_audio``). A "DD" tag read as Dolby Digital Plus
+    ("DD_5.1", "DD5.1.Atmos") is looked up as written. With no count by
+    that tag, the name's only count is used; several counts and none by the
+    main track is ambiguous and gives "". ``parsed`` is PTT's value, used
+    when no count follows any audio tag ("stereo", "x264.5.1").
+    """
+    main = main_audio(audio, quality)
+    tags = [main]
+    if main == "DD+" and "DD" not in audio:
+        tags.append("DD")
+    for tag in tags:
+        pattern = _CHANNELS_AFTER.get(tag)
+        match = pattern.search(title) if pattern else None
+        if match:
+            return _count(match)
+    counts = detect_channels(title)
+    if not counts:
+        return str(parsed or "")
+    return counts[0] if len(counts) == 1 else ""
 
 
 def detect_hybrid(title):
@@ -357,7 +401,9 @@ def supplement_metadata(title, meta):
         meta["audio"] = audio + [
             value for value in meta["audio"] if value not in replaced
         ]
-    meta["channels"] = meta.get("channels") or detect_channels(title)
+    meta["channels"] = main_track_channels(
+        title, meta["audio"], meta.get("quality", ""), meta.get("channels", "")
+    )
     meta["hybrid"] = detect_hybrid(title)
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])

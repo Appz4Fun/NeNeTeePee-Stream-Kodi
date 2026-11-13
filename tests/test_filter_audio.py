@@ -4,7 +4,11 @@
 import pytest
 from resources.lib import filter as filters
 from resources.lib.filter_audio import audio_label, audio_tier
-from resources.lib.filter_tags import detect_audio, detect_channels
+from resources.lib.filter_tags import (
+    detect_audio,
+    detect_channels,
+    main_track_channels,
+)
 
 
 def _name(tags, group="GRP"):
@@ -78,8 +82,40 @@ def test_channels_are_read_after_the_audio_tag(tags, channels):
 
 
 def test_detect_channels_ignores_numbers_that_follow_no_audio_tag():
-    assert detect_channels("Movie.2.0.2023.1080p.BluRay.x264-GRP") == ""
-    assert detect_channels("Movie.2023.1080p.BluRay.AC3.10bit.x264-GRP") == ""
+    assert not detect_channels("Movie.2.0.2023.1080p.BluRay.x264-GRP")
+    assert not detect_channels("Movie.2023.1080p.BluRay.AC3.10bit.x264-GRP")
+    assert detect_channels("Movie.2023.TrueHD.7.1.Atmos.DD5.1.AC3.5.1-GRP") == [
+        "7.1",
+        "5.1",
+    ]
+
+
+@pytest.mark.parametrize(
+    "tags,channels",
+    [
+        # The count by the main track's tag, wherever that track is named.
+        ("2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD5.1", "7.1"),
+        ("2160p.BluRay.REMUX.DD5.1.TrueHD.7.1.Atmos", "7.1"),
+        ("2160p.BluRay.REMUX.TrueHD.Atmos.7.1.DD.5.1", "7.1"),
+        ("1080p.BluRay.REMUX.DD.2.0.DTS-HD.MA.5.1", "5.1"),
+        ("1080p.BluRay.DD5.1.FLAC.2.0.x264", "2.0"),
+        ("2160p.NF.WEB-DL.DDPA5.1.H.265", "5.1"),
+        ("2160p.NF.WEB-DL.DD5.1.Atmos.H.265", "5.1"),
+        # No count by the main track: the only count, else none.
+        ("2160p.BluRay.REMUX.TrueHD.Atmos.DD5.1", "5.1"),
+        ("2160p.BluRay.REMUX.TrueHD.DD5.1.AAC2.0", ""),
+        # No count by any audio tag: what PTT read.
+        ("1080p.BluRay.DTS.x264.5.1", "5.1"),
+    ],
+)
+def test_channels_belong_to_the_main_track(tags, channels):
+    assert filters.parse_title_metadata(_name(tags))["channels"] == channels
+
+
+def test_main_track_channels_falls_back_to_the_parsed_value():
+    name = "Movie.2023.1080p.BluRay.AAC.x264-GRP"
+    assert main_track_channels(name, ["AAC"], "BluRay", "stereo") == "stereo"
+    assert main_track_channels(name, [], "BluRay", "") == ""
 
 
 @pytest.mark.parametrize(

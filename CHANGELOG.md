@@ -74,8 +74,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Dune Part Two (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-CiNEPHiLES`,
   or `Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX` for
   an episode. Raw Usenet subjects (`[1/3] - "Name.mkv" yEnc 4400443301`) no
-  longer appear as listed. In List compacted, the side panel shows the name
-  as the indexer listed it in grey under the normalized one.
+  longer appear as listed. Cuts and variants keep their place in the name:
+  `{Unrated}`, `[3D]`, `[DUBBED]`, `[HC]`. In List compacted, the side panel
+  shows the name as the indexer listed it in grey under the normalized one.
 - **HYBRID is a parsed attribute** with its own cyan slot on each picker row.
   It is part of the same-release rule, so a hybrid and its plain twin are
   never grouped or used as each other's backup. A `Hybrid` in the title
@@ -104,7 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with Atmos, and `DD` beside `Atmos` with no TrueHD is Dolby Digital Plus,
   because Atmos is never carried on plain Dolby Digital.
 - **Channel counts are read after any audio tag**, so `FLAC.1.0` and
-  `Opus.5.1` keep their channels.
+  `Opus.5.1` keep their channels, and a release naming several tracks
+  (`TrueHD.7.1.Atmos.DD5.1`) gets the main track's count, not the first one
+  in the name.
 - **A WtFnZb subject with a poster prefix is read as the release inside
   it** (`[N3wZ] \id\::[PRiVATE]-[WtFnZb]-[Name]-[1/2]`); the prefix used to
   end up in the title and split the release from its other copies.

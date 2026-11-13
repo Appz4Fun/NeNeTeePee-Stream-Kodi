@@ -2,7 +2,6 @@
 """Normalized picker names, the HYBRID attribute, and subject cleanup."""
 
 import os
-import xml.etree.ElementTree as ET
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -16,6 +15,7 @@ from resources.lib.results_dialog import (
     _build_result_item,
     _wrap_display_name,
 )
+from resources.lib.xml_safety import safe_fromstring
 
 _DIALOG_XML_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -99,6 +99,49 @@ def _row(title, **extra):
         (
             "Movie.2023.1080p.WEB-DL.DDP5.1.H.264",
             "Movie (2023) [WEB-DL-1080p][DD+ 5.1][H264]",
+        ),
+        # Cuts and variants PTT strips from the title stay in the name.
+        (
+            "Movie.2023.UNRATED.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) {Unrated} [Bluray-1080p][DTS][x264]-GRP",
+        ),
+        (
+            "Movie.2023.UNCENSORED.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) {Uncensored} [Bluray-1080p][DTS][x264]-GRP",
+        ),
+        (
+            "Movie.2023.EXTENDED.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) {Extended Edition} [Bluray-1080p][DTS][x264]-GRP",
+        ),
+        (
+            "Movie.2023.DUBBED.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) [Bluray-1080p][DUBBED][DTS][x264]-GRP",
+        ),
+        (
+            "Movie.2023.HC.1080p.HDRip.x264.AAC-GRP",
+            "Movie (2023) [HDRip-1080p][HC][AAC][x264]-GRP",
+        ),
+        (
+            "Movie.2023.3D.HSBS.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) [Bluray-1080p][3D][DTS][x264]-GRP",
+        ),
+        # A subtitle language is not a dubbed one.
+        (
+            "Movie.2023.KORSUB.1080p.HDRip.x264.AAC-GRP",
+            "Movie (2023) [HDRip-1080p][AAC][x264]-GRP",
+        ),
+        (
+            "Movie.2023.GERMAN.1080p.BluRay.x264.DTS-GRP",
+            "Movie (2023) [Bluray-1080p][DTS][DE][x264]-GRP",
+        ),
+        # The channels are the main track's, not the first count in the name.
+        (
+            "Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD5.1-GRP",
+            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1]-GRP",
+        ),
+        (
+            "Movie.2023.2160p.BluRay.REMUX.DD5.1.TrueHD.7.1.Atmos-GRP",
+            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1]-GRP",
         ),
     ],
 )
@@ -209,6 +252,10 @@ def test_a_parenthesized_tag_block_ends_with_the_group():
     for no_group in (
         "Movie (2023) (2160p BluRay x265 HEVC 10bit HDR AAC 7.1)",
         "Movie (2023) (1080p BluRay x265 English)",
+        "Movie (2023) (1080p BluRay x265 10bit)",
+        "Movie (2023) (1080p BluRay x265 8bit)",
+        "Movie (2023) (1080p BluRay x265 10-bit)",
+        "Movie (2023) (1080p BluRay x265 ESubs)",
         "Movie (2023) (Directors Cut)",
     ):
         assert parse_title_metadata(no_group)["group"] == ""
@@ -298,8 +345,13 @@ def test_wrap_display_name_never_breaks_inside_a_bracket_block():
     assert all(line.count("[") == line.count("]") for line in lines)
 
 
+def _dialog_root():
+    with open(_DIALOG_XML_PATH, encoding="utf-8") as handle:
+        return safe_fromstring(handle.read())
+
+
 def _layouts(list_id):
-    root = ET.parse(_DIALOG_XML_PATH).getroot()
+    root = _dialog_root()
     control = root.find(".//control[@type='list'][@id='{}']".format(list_id))
     return [control.find("itemlayout"), control.find("focusedlayout")]
 
@@ -328,6 +380,7 @@ def test_every_row_layout_has_a_hybrid_slot_that_overlaps_nothing(list_id):
 
 
 def test_the_panel_has_a_line_for_the_listed_name():
-    root = ET.parse(_DIALOG_XML_PATH).getroot()
-    labels = [control.findtext("label") or "" for control in root.iter("control")]
+    labels = [
+        control.findtext("label") or "" for control in _dialog_root().iter("control")
+    ]
     assert "$INFO[Container(51).ListItem.Property(panel_raw)]" in labels

@@ -80,6 +80,22 @@ def _label_rank(name, names, web):
     return (_format_tier(name, names, web), order)
 
 
+def main_audio(audio, quality=""):
+    """The format of a release's main track: its best-tier bed, or "".
+
+    "Atmos" is never the main track while a bed is named beside it; alone,
+    it is. Ties within a tier follow ``_LABEL_ORDER``.
+    """
+    if isinstance(audio, str):
+        audio = [audio]
+    names = [str(name) for name in audio or [] if name]
+    beds = [name for name in names if name != "Atmos"]
+    if not beds:
+        return "Atmos" if names else ""
+    web = _is_web(quality)
+    return min(beds, key=lambda name: _label_rank(name, names, web))
+
+
 def _channel_text(channels):
     if isinstance(channels, (list, tuple)):
         channels = channels[0] if channels else ""
@@ -90,25 +106,20 @@ def _channel_text(channels):
 def audio_label(audio, channels="", quality=""):
     """One label for a release's main track: "TrueHD Atmos 7.1", "DD+ 5.1".
 
-    The main track is the best-tier format; Atmos is appended to the TrueHD
-    or Dolby Digital Plus track that carries it, and the channel count goes
-    last. A name tagging only "Atmos" is shown as "Atmos". Empty when the
-    name tags no audio.
+    The main track is the best-tier format (``main_audio``); Atmos is
+    appended to the TrueHD or Dolby Digital Plus track that carries it, and
+    the channel count goes last. ``channels`` must be the main track's own
+    count (``filter_tags.main_track_channels``). A name tagging only "Atmos"
+    is shown as "Atmos". Empty when the name tags no audio.
     """
     if isinstance(audio, str):
         audio = [audio]
     names = [str(name) for name in audio or [] if name]
-    if not names:
+    main = main_audio(names, quality)
+    if not main:
         return ""
-    web = _is_web(quality)
-    beds = [name for name in names if name != "Atmos"]
-    parts = []
-    if beds:
-        main = min(beds, key=lambda name: _label_rank(name, names, web))
-        parts.append(_LABEL_NAMES.get(main, main))
-        if "Atmos" in names and main in ("TrueHD", "DD+", "DD"):
-            parts.append("Atmos")
-    else:
+    parts = [_LABEL_NAMES.get(main, main)]
+    if "Atmos" in names and main in ("TrueHD", "DD+", "DD"):
         parts.append("Atmos")
     channel_text = _channel_text(channels)
     if channel_text:

@@ -60,6 +60,21 @@ _SD_SOURCES = {
     "cam": "CAM",
 }
 _CODEC_NAMES = {"x265/HEVC": ("5", "HEVC"), "x264/AVC": ("4", "AVC")}
+# A subtitle tag ("KORSUB", "ESubs", "SUBBED", "VOSTFR"): the languages the
+# name lists are then read, not heard.
+_SUBBED = re.compile(
+    r"(?<![a-z0-9])(?:[a-z]{0,3}subs?|subbed|vostfr)(?![a-z0-9])", re.I
+)
+# ``meta["variant"]`` flags shown as their own "[...]" block, and the cut
+# flags shown with the edition. PTT strips all of them from the title, so a
+# name that left them out would read like the plain release.
+_VARIANT_BLOCKS = (("3d", "3D"), ("dubbed", "DUBBED"), ("hardcoded", "HC"))
+_CUT_NAMES = (
+    ("extended", "Extended"),
+    ("unrated", "Unrated"),
+    ("uncensored", "Uncensored"),
+    ("remastered", "Remastered"),
+)
 # More dubbed languages than this reads as "MULTi".
 _MAX_LANGUAGES = 3
 
@@ -110,6 +125,22 @@ def _year(identity, meta):
     return 0
 
 
+def _variant(meta):
+    variant = meta.get("variant")
+    return variant if isinstance(variant, (list, tuple)) else ()
+
+
+def _edition(meta):
+    """The edition plus any cut flag it doesn't already name: "Unrated"."""
+    edition = _collapse(meta.get("edition"))
+    parts = [edition] if edition else []
+    variant = _variant(meta)
+    for flag, name in _CUT_NAMES:
+        if flag in variant and flag not in edition.lower():
+            parts.append(name)
+    return " ".join(parts)
+
+
 def _heading(title, identity, meta):
     """ "Title (Year)", then " - S02E01" for an episode, then " {Edition}"."""
     out = title
@@ -121,7 +152,7 @@ def _heading(title, identity, meta):
     )
     if code:
         out += " - " + code
-    edition = _collapse(meta.get("edition"))
+    edition = _edition(meta)
     if edition:
         out += " {" + edition + "}"
     return out
@@ -169,9 +200,14 @@ def dynamic_range(meta):
 
 
 def _languages(name, meta):
-    """ "MULTi", or the languages heard when one is not English."""
+    """ "MULTi", or the languages heard when one is not English.
+
+    Nothing for a subtitled release: its language tags name the subtitles.
+    """
     if _MULTI.search(_MULTI_SUBS.sub(" ", name)):
         return "MULTi"
+    if _SUBBED.search(name):
+        return ""
     codes = [str(code) for code in meta.get("languages") or [] if code]
     if not codes or all(code.lower() == "en" for code in codes):
         return ""
@@ -194,15 +230,23 @@ def codec_label(name, meta):
 
 
 def _specs(name, meta):
-    """ "[WEB-DL-2160p][HYBRID][DV HDR10][DD+ Atmos 5.1][MULTi][H265]"."""
-    variant = meta.get("variant")
+    """ "[WEB-DL-2160p][HYBRID][3D][DV HDR10][DD+ Atmos 5.1][MULTi][H265]"."""
+    variant = _variant(meta)
+    languages = _languages(name, meta)
     parts = (
         _quality(meta),
         HYBRID_LABEL if meta.get("hybrid") else "",
-        "3D" if isinstance(variant, (list, tuple)) and "3d" in variant else "",
+    )
+    # PTT flags a MULTi release as dubbed; "[MULTi]" already says so.
+    parts += tuple(
+        label
+        for flag, label in _VARIANT_BLOCKS
+        if flag in variant and not (flag == "dubbed" and languages == "MULTi")
+    )
+    parts += (
         dynamic_range(meta),
         audio_label(meta.get("audio"), meta.get("channels"), meta.get("quality")),
-        _languages(name, meta),
+        languages,
         codec_label(name, meta),
     )
     return "".join("[{}]".format(part) for part in parts if part)
