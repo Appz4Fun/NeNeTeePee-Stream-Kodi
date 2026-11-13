@@ -113,8 +113,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   three times took three lines and the rest were cut off as `+5 more`. It now
   shows one line per indexer with a count, such as `NZB Finder x3`, so every
   indexer carrying the release is visible. Each line shows the size and age of
-  that indexer's best copy, and the indexer holding the copy Enter plays is
-  highlighted.
+  that indexer's best copy, or a range when its copies differ (`39-42 GB`,
+  `20d-2mo`), and the indexer holding the copy Enter plays is highlighted. A
+  long indexer name is shortened so the rows stay aligned.
 - **NZBGet downloads start sooner and use half the indexer grabs.** After
   collecting the backup NZBs, the add-on ran a second "same-content" search
   that downloaded every candidate NZB again, and NZBGet was only sent the

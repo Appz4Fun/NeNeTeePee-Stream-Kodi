@@ -270,6 +270,61 @@ def test_dl_on_any_copy_marks_the_group_row_and_that_panel_line():
     assert props["panel_foot"].startswith("Already downloaded")
 
 
+GB = 1024**3
+
+
+def test_an_indexer_with_copies_of_different_size_and_age_shows_ranges():
+    group = [
+        _row(ALPHA, "a1", indexer="Geek", size=str(42 * GB), age="today"),
+        _row(ALPHA, "a2", indexer="NZB Finder", size=str(40 * GB), age="2 months"),
+        _row(ALPHA, "a3", indexer="NZB Finder", size=str(38 * GB), age="20 days"),
+        _row(ALPHA, "a4", indexer="NZB Finder", size=str(42 * GB), age="1 month"),
+        _row(ALPHA, "a5", indexer="Slug", size=str(40 * GB), age="3 days"),
+        _row(ALPHA, "a6", indexer="Slug", size=str(40 * GB + 1), age="3 days"),
+    ]
+    props = _group_props(group)
+
+    indexers = props["panel_indexers"].split("[CR]")
+    sizes = props["panel_sizes"].split("[CR]")
+    ages = props["panel_ages"].split("[CR]")
+    assert "NZB Finder x3" in indexers[1]
+    assert "38-42 GB" in sizes[1]
+    assert "20d-2mo" in ages[1]
+    # One copy, or copies that read the same, keep the plain size and age.
+    assert "42.0 GB" in sizes[0] and "today" in ages[0]
+    assert "40.0 GB" in sizes[2] and "3 days" in ages[2]
+
+
+def test_ranges_cover_small_sizes_and_young_copies():
+    from resources.lib.results_dialog import _age_range, _size_range
+
+    mb = 1024**2
+    small = [{"size": str(300 * mb)}, {"size": str(700 * mb)}]
+    assert _size_range(small, small[0]) == "300-700 MB"
+    mixed = [{"size": str(900 * mb)}, {"size": str(3 * GB)}]
+    assert _size_range(mixed, mixed[0]) == "900-3072 MB"
+    unsized = [{"size": ""}, {"size": "junk"}]
+    assert _size_range(unsized, unsized[0]) == ""
+    young = [{"age": "today"}, {"age": "1 day"}, {"age": "5 days"}]
+    assert _age_range(young, young[0]) == "0d-5d"
+    old = [{"age": "11 months"}, {"age": "2 years"}]
+    assert _age_range(old, old[0]) == "11mo-2y"
+    unknown = [{"age": "3 days"}, {"age": ""}, {"age": "soon"}]
+    assert _age_range(unknown, unknown[0]) == "3 days"
+
+
+def test_a_long_indexer_name_is_shortened_so_the_panel_rows_stay_aligned():
+    from resources.lib.results_dialog import _panel_indexer_name
+
+    assert _panel_indexer_name("NZB Finder", 3) == "NZB Finder x3"
+    assert _panel_indexer_name("SceneNZBs (TreasureMaps)", 1) == (
+        "SceneNZBs (Treasure\u2026"
+    )
+    long_name = _panel_indexer_name("scenenzbs.org-free-custom", 12)
+    assert long_name.endswith(" x12") and len(long_name) <= 20
+    assert _panel_indexer_name("", 1) == " "
+
+
 def test_panel_caps_many_indexers_with_a_more_line():
     group = [
         _row(ALPHA, "a{}".format(i), indexer="Indexer {:02d}".format(i))

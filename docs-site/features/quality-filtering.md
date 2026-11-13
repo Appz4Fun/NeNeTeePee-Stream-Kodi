@@ -165,7 +165,8 @@ your filters, the picker opens instead.
   carry it, with its copy count on the right of the row. A panel on the right
   lists the indexers that carry the focused release, one line each, with a
   count when an indexer lists it more than once (`NZB Finder x3`) and the size
-  and age of that indexer's best copy. A green
+  and age of that indexer's best copy, or a range when its copies differ
+  (`39-42 GB`, `20d-2mo`). A green
   **DL** on the row means a copy is already downloaded. Press ++enter++ to
   play the downloaded copy if there is one, otherwise the top-ranked copy.
 - **List** shows every indexer copy on its own row, as earlier versions did.
