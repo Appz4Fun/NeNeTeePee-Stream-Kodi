@@ -737,3 +737,87 @@ def test_a_second_tracks_channels_show_in_the_normalized_name():
     stereo = shown("Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD2.0-GRP")
     assert "DD 5.1" in surround and "DD 2.0" in stereo
     assert surround != stereo
+
+
+# --- groups the hyphen rule cannot see (from real downloaded NZBs) -------------
+
+
+@pytest.mark.parametrize(
+    "title, group",
+    [
+        # a poster or indexer tag written after the file extension
+        (
+            "A.Beautiful.Mind.2001.2160p.UHD.Blu-ray.Remux.DV.HDR.HEVC.DTS-HD.MA.5.1"
+            "-CiNEPHiLES.mkv-WtF",
+            "CiNEPHiLES",
+        ),
+        (
+            "Stitch.2002.MULTi.UHD.BluRay.2160p.TrueHD.Atmos.7.1.DV.HDR10.REMUX"
+            "-seedpool.mkv-[N-Z-B]",
+            "seedpool",
+        ),
+        # a group of several words
+        (
+            "Crime.101.2026.2160p.UHD.BluRay.REMUX.DV.P7.HDR.MULTi[Ben The Men]",
+            "Ben The Men",
+        ),
+        (
+            "Ace.Ventura.1994.2160p.UHD.BluRay.Remux.DV.P7.HDR.MULTi.DTS-MA.5.1-H265"
+            "-BEN.THE.MEN",
+            "BEN.THE.MEN",
+        ),
+        # a tag block wrapped in brackets
+        (
+            "Casa.Grande.[2026].[2160p.YKW.WEB-DL.Hybrid.H265.DV.HDR.DDP.5.1.English"
+            "-HONE]",
+            "HONE",
+        ),
+        # the last word after a tag, with no hyphen before it
+        ("House of the Dragon S03E01 2160p HBO Max WEBDL H265 EAC3 TSRG", "TSRG"),
+        ("Monarch (2026) S02E03 Secrets 1080p WEBDL H264 Atmos @TSRG", "TSRG"),
+        ("Return.to.Silent.Hill.2026.1080p.WEB-DL.DUAL.AAC2.0.H.264.TSRG", "TSRG"),
+        ("9-1-1 - S02E06 - Dosed.WEBDL-1080p.EAC3.h264.NTb", "NTb"),
+    ],
+)
+def test_groups_read_from_real_download_names(title, group):
+    assert parse_title_metadata(title)["group"] == group
+
+
+@pytest.mark.parametrize(
+    "title",
+    [
+        "The.Eric.Andre.Show.S04E07.Raymond.Cruz.1080p.WEB-DL.DD5.1.H.264",
+        "Married.At.First.Sight.S12E04.720p.HEVC.x265",
+        "MasterChef.US.S10E01.1080p.AMZN.WEB-DL",
+        "Married.at.First.Sight.S08E02.WEB-DL.720p.H.264.AAC",
+        "Movie.2020.1080p.BluRay.x264.German",
+        "Movie.2020.1080p.BluRay.DTS.x264.Extended",
+        "Show.S01E01.1080p.WEB.h264.REPACK",
+        "Show S01E01 1080p WEB h264 Episode Title Words",
+    ],
+)
+def test_names_with_no_group_stay_without_one(title):
+    assert parse_title_metadata(title)["group"] == ""
+
+
+def test_a_site_tag_in_brackets_is_not_the_group():
+    title = "Movie.2020.1080p.BluRay.x264-GRP[rarbg]"
+    assert parse_title_metadata(title)["group"] == "GRP"
+
+
+def test_a_group_is_the_same_however_its_words_are_joined():
+    groups = _groups(
+        [
+            "Movie.2026.2160p.UHD.BluRay.REMUX.DV.HDR.MULTi.TrueHD.7.1-BEN.THE.MEN",
+            "Movie 2026 2160p UHD BluRay REMUX DV HDR MULTi TrueHD 7 1 [Ben The Men]",
+        ]
+    )
+    assert len(groups) == 1
+
+
+def test_an_anime_episode_number_is_read_in_a_dotted_name():
+    """All five unread names among 42,004 real TV downloads had this shape."""
+    dotted = "[Erai-raws].rakudai.kenja-07.[1080p.CR.WEB-DL.AVC.AAC][MultiSub]"
+    assert parse_title_metadata(dotted)["ptt_identity"]["episodes"] == [7]
+    spaced = "[Erai-raws] Sousou no Frieren - 05 [1080p][165931CD]"
+    assert parse_title_metadata(spaced)["ptt_identity"]["episodes"] == [5]

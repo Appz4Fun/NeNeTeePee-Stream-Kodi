@@ -242,6 +242,9 @@ _REVISION_TAG = re.compile(
 )
 
 
+_BRACKETED_EPISODE = re.compile(
+    r"(?<=[^\W\d_])[ ._]?-[ ._]?(\d{1,4})(?:v\d)?[ ._]*(?=[\[(])", re.IGNORECASE
+)
 _INTERNAL_TAG = re.compile(r"(?<![a-z0-9])internal(?![a-z0-9])", re.IGNORECASE)
 _MINI_TAG = re.compile(r"(?<![a-z0-9])m(?:720|1080|2160)p(?![a-z0-9])", re.IGNORECASE)
 
@@ -269,6 +272,17 @@ def parse_title_metadata(title):
             xbmc.LOGERROR,
         )
         parsed = _fallback_parse(title)
+    if (
+        title.startswith("[")
+        and not parsed.get("seasons")
+        and not parsed.get("episodes")
+        and not parsed.get("date")
+    ):
+        # "[Group].Show.Name-07.[1080p...]": the parser reads the episode in
+        # "Show Name - 07" but not when the name is written with dots.
+        numbered = _BRACKETED_EPISODE.search(title)
+        if numbered:
+            parsed = dict(parsed, episodes=[int(numbered.group(1))])
     variant = variant_tags(parsed)
     revision = _REVISION_TAG.search(title)
     if revision:

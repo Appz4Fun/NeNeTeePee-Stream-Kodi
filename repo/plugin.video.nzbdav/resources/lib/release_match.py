@@ -160,6 +160,11 @@ def release_profile(row):
     meta = _fs._result_meta(row)
     fields = [(key, _fold(meta.get(key))) for key in _STRING_FIELDS]
     fields = [
+        # "Ben The Men", "BEN.THE.MEN" and "Ben_The_Men" are one group.
+        (key, title_key(value) if key == "group" else value)
+        for key, value in fields
+    ]
+    fields = [
         # A remux is taken from a disc, so one name saying "Remux" and another
         # "BluRay.Remux" name the same source.
         (key, "bluray remux" if key == "quality" and value == "remux" else value)

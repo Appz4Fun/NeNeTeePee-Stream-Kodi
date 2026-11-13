@@ -204,10 +204,91 @@ def _without_hyphenated_tags(name):
     return name
 
 
+# A poster or indexer tag written after the file extension:
+# "...-CiNEPHiLES.mkv-WtF", "...-seedpool.mkv-[N-Z-B]". The group is the one
+# before the extension.
+_AFTER_EXTENSION = re.compile(r"\.(?:mkv|mp4|m4v|avi|ts|m2ts)-\[?[\w-]{1,16}\]?$", re.I)
+# A group of two or three plain words joined by dots after the last hyphen:
+# "-BEN.THE.MEN", "-Pahe.in".
+_DOTTED_GROUP_AT_END = re.compile(r"-([a-z]+(?:\.[a-z]+){1,2})\s*$", re.I)
+# A trailing "[Group Name]" with nothing but the name in it.
+_BRACKET_GROUP_AT_END = re.compile(r"\[([a-z][a-z0-9 ]*[a-z0-9])\]\s*$", re.I)
+# A whole tag block in trailing brackets that ends with "-GROUP".
+_BRACKET_BLOCK_AT_END = re.compile(r"\[([^\[\]]*-([a-z0-9][\w&@-]*))\]\s*$", re.I)
+# Site and indexer tags seen in trailing brackets, never a group.
+_SITE_TAGS = frozenset(
+    "rarbg eztv ettv tgx private nzb wtfnzb pre nzbgeek abnzb usenet".split()
+)
+_HEX_TAG = re.compile(r"[0-9a-f]{8}", re.I)
+
+
 def _release_name(title):
     """The release name inside ``title`` (see ``release_subject``), no extension."""
-    name = release_name_from_subject(title)
-    return _MEDIA_EXTENSION.sub("", name.strip().rstrip("/"))
+    name = release_name_from_subject(title).strip().rstrip("/")
+    name = _AFTER_EXTENSION.sub("", name)
+    return _MEDIA_EXTENSION.sub("", name)
+
+
+def _words_group(words):
+    """``words`` when they can be a group name.
+
+    A single word must be no tag and no language ("WEB-DL", "Multi",
+    "German"). Several words are only checked for tags: a language code can be
+    part of a name ("Ben The Men"), and a lone trailing language never gets
+    here as several words.
+    """
+    if not words:
+        return []
+    if len(words) == 1:
+        word = words[0]
+        if _group_candidate(word) == word and not is_language_word(word):
+            return words
+        return []
+    return words if all(_valid_group(word) for word in words) else []
+
+
+def _spelled_out_group(name):
+    """A group the hyphen rule cannot see, read from the untrimmed name.
+
+    * ``-BEN.THE.MEN``: dotted words after the last hyphen;
+    * ``...MULTi[Ben The Men]``: a trailing bracket holding only a name;
+    * ``[2160p.WEB-DL...English-HONE]``: a tag block wrapped in brackets
+      that ends with "-GROUP";
+    * ``... H265 EAC3 TSRG`` and ``...h264.NTb``: the last word of the name,
+      when it follows the resolution and a tag, and is no tag itself.
+    """
+    dotted = _DOTTED_GROUP_AT_END.search(name)
+    if dotted and _words_group(dotted.group(1).split(".")):
+        return dotted.group(1)
+    bracket = _BRACKET_GROUP_AT_END.search(name)
+    if bracket:
+        inner = bracket.group(1).strip()
+        if (
+            inner.casefold() not in _SITE_TAGS
+            and not _HEX_TAG.fullmatch(inner)
+            and _words_group(inner.split())
+        ):
+            return inner
+    block = _BRACKET_BLOCK_AT_END.search(name)
+    if block and _RESOLUTION.search(block.group(1)):
+        return _group_candidate(block.group(2))
+    resolution = _RESOLUTION.search(name)
+    words = [word for word in re.split(r"[. _]+", name) if word]
+    if resolution and len(words) > 3:
+        last = words[-1].lstrip("@")
+        if (
+            # Two characters at least: the "H" left of "H.264" once ".264" is
+            # taken for a split-archive extension is not a group.
+            len(last) > 1
+            and last.isalnum()
+            and name.rfind(words[-1]) > resolution.end()
+            # After a tag, not after a title word: "... H265 EAC3 TSRG",
+            # "...WEBDL-1080p.EAC3.h264.NTb".
+            and not _valid_group(words[-2])
+            and _words_group([last])
+        ):
+            return last
+    return ""
 
 
 def detect_release_group(title, parsed_group=""):
@@ -223,6 +304,7 @@ def detect_release_group(title, parsed_group=""):
     """
     title = str(title or "")
     name = _release_name(title)
+    untrimmed = name
     previous = None
     while previous != name:
         previous = name
@@ -242,7 +324,7 @@ def detect_release_group(title, parsed_group=""):
         return group
     if _valid_group(parsed_group) and not _TRAILING_TAG.search("-" + str(parsed_group)):
         return str(parsed_group)
-    return leading or _tag_block_group(name)
+    return leading or _tag_block_group(name) or _spelled_out_group(untrimmed)
 
 
 def _tag_block_group(name):

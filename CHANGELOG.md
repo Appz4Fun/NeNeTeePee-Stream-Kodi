@@ -152,6 +152,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A second audio track's channels are part of the release**, so
   `TrueHD.7.1.Atmos.DD5.1` and `...DD2.0` are two releases, and copies listed
   as `Remux` and `BluRay.Remux` count as one release's copies.
+- **More release groups are read**, checked against the names of 48,000
+  downloaded NZBs: a group before a poster tag written after the extension
+  (`-CiNEPHiLES.mkv-WtF`), a group of several words (`[Ben The Men]`,
+  `-BEN.THE.MEN`), a group ending a bracketed tag block
+  (`[2160p.WEB-DL...English-HONE]`), and a group that follows a tag with no
+  hyphen (`... EAC3 TSRG`, `...h264.NTb`). A group compares equal however its
+  words are joined.
+- **An anime episode number is read in a dotted name**
+  (`[Group].Show.Name-07.[1080p]`).
 - **A movie search drops films dated for another year.** *Avatar* (2009)
   listed *Avatar: Fire and Ash* (2025) first. A result dated more than a year
   from the requested year is removed, unless that year also appears in its
