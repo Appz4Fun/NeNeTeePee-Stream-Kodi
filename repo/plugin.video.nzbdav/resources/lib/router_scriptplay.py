@@ -332,6 +332,12 @@ def _script_play_search_filter_tag(
         )
         if results is None:
             return None
+        results = _router._requested_episode_rows(
+            results,
+            search_type,
+            search_kwargs.get("season"),
+            search_kwargs.get("episode"),
+        )
         return _script_play_filter_autoselect_tag(
             loading,
             params,
