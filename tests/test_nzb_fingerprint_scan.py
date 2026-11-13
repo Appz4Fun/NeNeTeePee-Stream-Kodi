@@ -221,3 +221,96 @@ def test_no_entity_is_ever_expanded_by_the_fast_read():
     )
     assert _fast(bomb) is scan.UNUSUAL
     assert dedup.posting_fingerprint(bomb) is None
+
+
+# Documents the scan could be fooled by. Whatever it does with them, the
+# public function must answer exactly as the XML parser does: the parser, not
+# the scan, decides whether a document is valid.
+TRICKY = {
+    "bare ampersand in a subject": _swap(
+        _BASE, b'subject="movie.mkv"', b'subject="A & B"'
+    ),
+    "unclosed meta": _swap(_BASE, b"<file ", b'<head><meta type="t">v</head><file '),
+    "file inside meta": _swap(
+        _BASE,
+        b"<file ",
+        b'<head><meta type="t"><file><segments><segment>m@x</segment></segments>'
+        b"</file></meta></head><file ",
+    ),
+    "file inside groups": _swap(
+        _BASE,
+        b"<groups>",
+        b"<groups><file><segments><segment>g@x</segment></segments></file>",
+    ),
+    "second nzb inside": _swap(
+        _BASE,
+        b"<file ",
+        b"<nzb><file><segments><segment>n@x</segment></segments></file></nzb><file ",
+    ),
+    "greater-than in an attribute": _swap(
+        _BASE, b'number="1"', b'number="1" note="a > b"'
+    ),
+    "greater-than in a subject": _swap(
+        _BASE, b'subject="movie.mkv"', b'subject="a > b"'
+    ),
+    "single-quoted attributes": _BASE.replace(b'number="1"', b"number='1'"),
+    "unquoted attribute": _swap(_BASE, b'number="1"', b"number=1"),
+    "duplicate attribute": _swap(_BASE, b'number="1"', b'number="1" number="1"'),
+    "junk after the document": _BASE + b"<extra/>",
+    "text after the document": _BASE + b"trailing",
+    "comment after the document": _BASE + b"<!-- bye -->\n",
+    "invalid utf-8 in a subject": _swap(
+        _BASE, b'subject="movie.mkv"', b'subject="\xff\xfe"'
+    ),
+    "control character": _swap(_BASE, b'subject="movie.mkv"', b'subject="a\x01b"'),
+    "mismatched closing tag": _swap(_BASE, b"</groups>", b"</group>"),
+    "segment closed twice": _swap(_BASE, b"</segment>", b"</segment></segment>"),
+    "text between segments": _swap(_BASE, b"</segment>", b"</segment>stray"),
+    "two documents": _BASE + _BASE,
+}
+
+
+@pytest.mark.parametrize("name", sorted(TRICKY))
+def test_the_parser_decides_whether_a_document_is_valid(name):
+    data = TRICKY[name]
+    walked = _walk(data)
+    result = dedup.posting_fingerprint(data)
+    assert (list(result) if result else None) == (list(walked) if walked else None)
+
+
+def test_a_malformed_nzb_the_scan_can_read_is_still_refused():
+    # Codex P1 on this change: a bare "&" in an attribute is malformed XML.
+    # The scan finds the segment, but the document has no fingerprint, so the
+    # collector goes on to the next listing of that upload.
+    data = (
+        b'<nzb><file subject="Movie & Title"><segments>'
+        b"<segment>id@x</segment></segments></file></nzb>"
+    )
+    assert _fast(data) is not scan.UNUSUAL  # the scan alone would accept it
+    assert dedup.posting_fingerprint(data) is None
+    assert _walk(data) is None
+
+
+def test_check_well_formed_refuses_what_the_safe_parser_refuses(tmp_path):
+    from resources.lib import xml_safety
+
+    xml_safety.check_well_formed(io.BytesIO(_BASE))
+    path = tmp_path / "ok.nzb"
+    path.write_bytes(_BASE)
+    xml_safety.check_well_formed(str(path))
+    stream = io.BytesIO(_BASE)
+    stream.seek(7)
+    xml_safety.check_well_formed(stream)
+    assert stream.tell() == 7  # left where it was
+    with pytest.raises(xml_safety.ParseError):
+        xml_safety.check_well_formed(io.BytesIO(_BASE[: len(_BASE) // 2]))
+    with pytest.raises(xml_safety.ParseError):
+        xml_safety.check_well_formed(io.BytesIO(b"<nzb><a></b></nzb>"))
+    with pytest.raises(xml_safety.UnsafeXmlError):
+        xml_safety.check_well_formed(
+            io.BytesIO(b'<!DOCTYPE nzb [<!ENTITY e "x">]><nzb>&e;</nzb>')
+        )
+    with pytest.raises(xml_safety.UnsafeXmlError):
+        xml_safety.check_well_formed(
+            io.BytesIO(b"<!DOCTYPE nzb [<!ELEMENT nzb ANY>]><nzb/>")
+        )

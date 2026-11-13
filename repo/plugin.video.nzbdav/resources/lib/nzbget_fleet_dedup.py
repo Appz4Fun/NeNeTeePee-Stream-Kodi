@@ -95,19 +95,31 @@ def posting_fingerprint(nzb_bytes):
 
 
 def _fast_fingerprint(path):
-    """``nzb_fingerprint_scan``'s result for ``path``, or ``UNUSUAL``.
+    """The fast read's fingerprint for ``path``, None, or ``UNUSUAL``.
 
-    ``path`` is a file path or a seekable binary stream; a stream is rewound
-    afterwards so the XML walk can read it when the fast read declines.
+    ``path`` is a file path or a seekable binary stream. ``UNUSUAL`` sends the
+    caller to the XML walk. A fingerprint is only returned for a document the
+    safe XML reader also finds well-formed and safe: the scan says where the
+    Message-IDs are, ``xml_safety`` says whether the document is valid, and a
+    document it refuses has no fingerprint (None), exactly as when walked.
     """
+    from resources.lib.xml_safety import ParseError, UnsafeXmlError, check_well_formed
+
     try:
         if hasattr(path, "read"):
             try:
-                return nzb_fingerprint_scan.scan_fingerprint(path)
+                found = nzb_fingerprint_scan.scan_fingerprint(path)
             finally:
                 path.seek(0)
-        with open(path, "rb") as stream:
-            return nzb_fingerprint_scan.scan_fingerprint(stream)
+        else:
+            with open(path, "rb") as stream:
+                found = nzb_fingerprint_scan.scan_fingerprint(stream)
+        if found is nzb_fingerprint_scan.UNUSUAL:
+            return found
+        check_well_formed(path)
+        return found
+    except (ParseError, UnsafeXmlError):
+        return None
     except (OSError, ValueError):
         return nzb_fingerprint_scan.UNUSUAL
 

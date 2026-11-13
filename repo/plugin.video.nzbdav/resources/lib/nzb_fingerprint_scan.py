@@ -18,14 +18,19 @@ way every indexer writes them: an optional XML declaration and DOCTYPE, then
 Comments are skipped, as the parser skips them: newznab writes one into
 nearly every NZB it serves.
 
-It never decides on anything unusual. CDATA, processing
-instructions, entity declarations, namespace prefixes, an element outside the
-NZB vocabulary, unexpected nesting, an encoding other than UTF-8, non-ASCII or
-unrecognized-entity Message-ID text, a segment it cannot read whole, or a
-document that does not end cleanly all return ``UNUSUAL``, and the caller
-falls back to the XML parser, which stays the authority (and the one place
-that refuses unsafe XML). No entity is ever expanded here: the five predefined
-ones and numeric character references are replaced by table, nothing else.
+It never decides on anything unusual. CDATA, processing instructions, entity
+declarations, namespace prefixes, an element outside the NZB vocabulary,
+unexpected nesting, an attribute it cannot read, an encoding other than UTF-8,
+non-ASCII or unrecognized-reference Message-ID text, a segment it cannot read
+whole, or a document that does not end cleanly all return ``UNUSUAL``, and the
+caller falls back to the XML parser.
+
+It is not a validator either. It only says where the Message-IDs are in a
+document shaped like an NZB; whether the document is well-formed XML is for
+the caller to ask the safe XML reader (``xml_safety.check_well_formed``)
+before it accepts the result. No entity is ever expanded here: the five
+predefined ones and printable-ASCII character references are replaced by
+table, nothing else.
 """
 
 import operator
@@ -44,31 +49,33 @@ _PROLOG_BYTES = 4096
 # internal subset are optional; the first element must be <nzb>.
 _PROLOG = re.compile(
     rb"\A(?:\xef\xbb\xbf)?\s*(?:<\?xml\b([^<>]*)\?>)?\s*"
-    rb"(?:<!DOCTYPE\b[^<>\[\]]*>)?\s*<nzb[\s>]"
+    rb"(?:<!DOCTYPE\b[^<>\[\]]*>)?\s*(?=<nzb[\s>])"
 )
 _ENCODING = re.compile(rb"""encoding\s*=\s*["']([^"']*)["']""")
 _PLAIN_ENCODINGS = frozenset((b"utf-8", b"utf8", b"us-ascii", b"ascii"))
 
-# Anything the plain shape does not contain. A "<" must open or close one of
-# the NZB's own elements, or start the leading "<?xml" / "<!DOCTYPE".
-_NOT_PLAIN = re.compile(
-    rb"<!--|<!\[CDATA\[|<!ENTITY|<\?(?!xml[\s?])"
-    rb"|<(?!/?(?:nzb|head|meta|file|groups|group|segments|segment)[\s/>]|[?!])"
-)
-
-# Outside a <segments> block: the container tags, and any segment (which
-# does not belong there).
-_OUTER_TOKEN = re.compile(
-    rb"<(/?)(head|file|groups|segments)\b([^<>]*)>"  # 1-3: a container tag
-    rb"|<(segment)\b"  # 4: a segment outside its block
+# Attributes as every NZB writes them: name="value", with no "<" or ">"
+# inside the quotes. A tag written any other way is not read here.
+_ATTRS = rb"""(?:\s+[A-Za-z_:][\w:.-]*\s*=\s*(?:"[^"<>]*"|'[^'<>]*'))*\s*"""
+# Between <segments> blocks: any tag of the NZB vocabulary.
+_TAG = re.compile(
+    rb"<(/?)(nzb|head|meta|file|groups|group|segments|segment)" + _ATTRS + rb"(/?)>"
 )
 # Inside a block: a whole segment whose text is plain ASCII with no
 # reference, which is every Message-ID in practice; and any whole segment.
-_PLAIN_SEGMENT = re.compile(rb"<segment\b[^<>]*>([^<&\x80-\xff]*)</segment\s*>")
-_ANY_SEGMENT = re.compile(rb"<segment\b[^<>]*>([^<]*)</segment\s*>")
-_IN_BLOCK = [b"file", b"segments"]
-# Where each container may open: its parent in the stack of open containers.
-_PARENT = {b"head": None, b"file": None, b"groups": b"file", b"segments": b"file"}
+_PLAIN_SEGMENT = re.compile(rb"<segment" + _ATTRS + rb">([^<&\x80-\xff]*)</segment\s*>")
+_ANY_SEGMENT = re.compile(rb"<segment" + _ATTRS + rb">([^<]*)</segment\s*>")
+# Where each element may open: its parent in the stack of open elements.
+_PARENT = {
+    b"nzb": None,
+    b"head": b"nzb",
+    b"meta": b"head",
+    b"file": b"nzb",
+    b"groups": b"file",
+    b"group": b"groups",
+    b"segments": b"file",
+}
+_IN_BLOCK = [b"nzb", b"file", b"segments"]
 
 
 def scan_fingerprint(stream):
@@ -87,32 +94,41 @@ def scan_fingerprint(stream):
         if not chunk:
             break
         tail += chunk
-    start = _without_comments(tail)
-    if start is None or not _plain_start(start):
+    tail = _after_prolog(tail)
+    if tail is None:
         return UNUSUAL
+    closed = False
     while True:
         cut = _complete_upto(tail)
+        if closed and tail[:cut].strip():
+            return UNUSUAL  # something follows </nzb>
         if not _scan(tail[:cut], hashes, stack):
             return UNUSUAL
+        closed = closed or (cut > 0 and not stack)
         tail = tail[cut:]
         chunk = stream.read(_CHUNK_BYTES)
         if not chunk:
             break
         tail += chunk
-    # What is left must close the document, with every container closed.
-    if not _scan(tail, hashes, stack) or stack:
-        return UNUSUAL
-    if not tail.rstrip().endswith(b"</nzb>") or not hashes:
+    # Only white space and comments may be left, with every element closed.
+    rest = _without_comments(tail)
+    if rest is None or rest.strip() or stack or not closed or not hashes:
         return UNUSUAL
     return hashes
 
 
-def _plain_start(head):
+def _after_prolog(head):
+    """``head`` from its ``<nzb`` on, comments removed; None if not plain."""
+    head = _without_comments(head)
+    if head is None:
+        return None
     match = _PROLOG.match(head)
     if match is None:
-        return False
+        return None
     encoding = _ENCODING.search(match.group(1) or b"")
-    return encoding is None or encoding.group(1).strip().lower() in _PLAIN_ENCODINGS
+    if encoding and encoding.group(1).strip().lower() not in _PLAIN_ENCODINGS:
+        return None
+    return head[match.end() :]
 
 
 def _complete_upto(buffer):
@@ -140,7 +156,7 @@ def _unfinished_comment(buffer, end):
     return opened
 
 
-_CLOSING_TAGS = (b"</segment>", b"</segments>", b"</file>", b"</head>")
+_CLOSING_TAGS = (b"</segment>", b"</segments>", b"</file>", b"</head>", b"</nzb>")
 
 
 def _scan(data, hashes, stack):
@@ -179,12 +195,33 @@ def _scan(data, hashes, stack):
 
 
 def _outer(region, stack):
-    """Apply the tags between two segment blocks to ``stack``."""
-    if _NOT_PLAIN.search(region):
-        return False
-    for match in _OUTER_TOKEN.finditer(region):
-        if match.group(4) is not None or not _container(match, stack):
+    """Apply the tags between two segment blocks to ``stack``.
+
+    Every "<" in the stretch must start a tag that was read, so a comment
+    with no end, a CDATA section, a processing instruction, an element
+    outside the vocabulary or a tag written unusually stops the read.
+    """
+    tags = 0
+    for match in _TAG.finditer(region):
+        tags += 1
+        if match.group(2) == b"segment" or not _apply(match, stack):
             return False
+    return tags == region.count(b"<")
+
+
+def _apply(match, stack):
+    """Open or close the matched element on ``stack``; False if it cannot."""
+    name = match.group(2)
+    if match.group(3):
+        return False  # self-closing
+    if match.group(1):  # a closing tag
+        if not stack or stack[-1] != name:
+            return False
+        stack.pop()
+        return True
+    if (stack[-1] if stack else None) != _PARENT[name]:
+        return False
+    stack.append(name)
     return True
 
 
@@ -236,22 +273,6 @@ def _without_comments(data):
         if b"--" in body or body.endswith(b"-"):
             return None
     return _COMMENT.sub(b"", data)
-
-
-def _container(match, stack):
-    """Apply a container tag to ``stack``; False when it does not fit."""
-    name = match.group(2)
-    if match.group(3).endswith(b"/"):
-        return False  # self-closing
-    if match.group(1):  # a closing tag
-        if not stack or stack[-1] != name:
-            return False
-        stack.pop()
-        return True
-    if (stack[-1] if stack else None) != _PARENT[name]:
-        return False
-    stack.append(name)
-    return True
 
 
 def _message_id(text):
