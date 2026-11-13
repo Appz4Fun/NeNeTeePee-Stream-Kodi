@@ -695,3 +695,15 @@ def test_sizes_of_a_mkv_and_a_mp4_are_not_compared():
     ]
     filtered, _all = flt.filter_results(rows, settings_getter=_defaults)
     assert not any(row.get("_size_outlier") for row in filtered)
+
+
+def test_sizes_of_two_known_years_are_not_compared():
+    """A film and its remake are different releases under one set of tags."""
+    old = "Movie.1990.1080p.BluRay.x264-GRP"
+    new = "Movie.2020.1080p.BluRay.x264-GRP"
+    rows = _sized([10 * GB] * 3, title=old) + [
+        _row(new, size=13 * GB, link="http://example.com/new/0"),
+        _row(new, size=15 * GB, link="http://example.com/new/1"),
+    ]
+    filtered, _all = flt.filter_results(rows, settings_getter=_defaults)
+    assert not any(row.get("_size_outlier") for row in filtered)

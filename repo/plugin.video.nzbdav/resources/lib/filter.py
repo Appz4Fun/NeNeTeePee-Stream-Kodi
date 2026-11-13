@@ -1368,25 +1368,49 @@ def _release_copies_key(row):
     return (profile, title_key(title), tuple(seasons), tuple(episodes), part)
 
 
-def _split_by_container(ordered, buckets):
-    """Yield each bucket of row indexes, split when its rows name containers.
+def _split_where_named_apart(ordered, buckets, value_of):
+    """Yield each bucket of row indexes, split where its rows name a value apart.
 
-    The same-release rule keeps a ``.mkv`` and a ``.mp4`` of one name apart
-    (an unknown container never splits). Their sizes must not share a median
-    either, or an ordinary copy of one reads as an odd copy of the other. A
-    bucket naming two or more containers is split by container, the rows
-    naming none on their own; any other bucket is left whole.
+    A bucket whose rows name two or more different values (``value_of(row)``,
+    empty when the row names none) is split by value, the rows naming none on
+    their own; any other bucket is left whole.
     """
     for indexes in buckets:
-        by_container = {}
+        by_value = {}
         for index in indexes:
-            meta = ordered[index].get("_meta")
-            container = meta.get("container") if isinstance(meta, dict) else ""
-            by_container.setdefault(str(container or "").casefold(), []).append(index)
-        if len([name for name in by_container if name]) < 2:
+            by_value.setdefault(value_of(ordered[index]), []).append(index)
+        if len([value for value in by_value if value]) < 2:
             yield indexes
         else:
-            yield from by_container.values()
+            yield from by_value.values()
+
+
+def _named_container(row):
+    meta = row.get("_meta")
+    container = meta.get("container") if isinstance(meta, dict) else ""
+    return str(container or "").casefold()
+
+
+def _named_year(row):
+    from resources.lib import fallback_streams as _fs
+
+    try:
+        return _fs._release_identity(row)[1] or 0
+    except Exception:  # pylint: disable=broad-except
+        return 0
+
+
+def _size_buckets(ordered, buckets):
+    """The copy buckets whose sizes may share a median.
+
+    ``_release_copies_key`` leaves out what the same-release rule lets an
+    unknown value match: the container and the year. Two *known* different
+    values are different releases, though (a ``.mkv`` and a ``.mp4``, a 1990
+    film and its 2020 remake), and an ordinary copy of one must not read as an
+    odd copy of the other, so such buckets are split.
+    """
+    buckets = _split_where_named_apart(ordered, buckets, _named_container)
+    return _split_where_named_apart(ordered, buckets, _named_year)
 
 
 def _demote_size_outliers(ordered):
@@ -1409,7 +1433,7 @@ def _demote_size_outliers(ordered):
             copies.setdefault(key, []).append(index)
     follow = {}
     moved = set()
-    for indexes in _split_by_container(ordered, copies.values()):
+    for indexes in _size_buckets(ordered, copies.values()):
         if len(indexes) < _SIZE_OUTLIER_MIN_COPIES:
             continue
         median = statistics.median(_row_size(ordered[i]) for i in indexes)
