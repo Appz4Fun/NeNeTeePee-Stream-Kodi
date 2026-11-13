@@ -149,7 +149,9 @@ is:
 
 - the same movie (same year and cut) or the same episode;
 - from the same streaming service (`AMZN`, `ATVP`, ...);
-- the same resolution, video codec and channel count.
+- the same resolution, video codec and channel count;
+- tagged with the same audio languages, or none, and the same dubbed or
+  MULTi flags, since a dub is another audio track.
 
 It applies to WEB-DL only, since a WEBRip or a disc encode carries whatever
 audio its encoder chose. A row that names no service takes nothing. A

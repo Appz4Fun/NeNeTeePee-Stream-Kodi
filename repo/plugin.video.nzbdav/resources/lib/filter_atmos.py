@@ -18,6 +18,8 @@ It is deliberately narrow:
 * WEB-DL only (and the scene's bare ``WEB``). A WEBRip is re-encoded, and a
   disc's encodes carry whatever audio each encoder chose.
 * Both rows must name the same service; a row that names none takes nothing.
+* Both rows must tag the same audio languages, or none, and the same
+  dubbed, MULTi and cut flags: a dub is another track.
 * A HYBRID release neither gives nor takes: it combines sources, so its
   audio may come from somewhere else.
 * Only a tag written in a name gives. A row that took Atmos here never
@@ -34,6 +36,31 @@ INFERRED_KEY = "atmos_inferred"
 def _audio(meta):
     audio = meta.get("audio")
     return audio if isinstance(audio, list) else []
+
+
+def _languages(meta):
+    """The audio languages a name tags, as a comparable key.
+
+    A dub is another audio track: a German copy of a stream says nothing
+    about whether its track has Atmos. Names that tag no language (most
+    English releases) only match each other.
+    """
+    languages = meta.get("languages")
+    if not isinstance(languages, (list, tuple)):
+        return ()
+    return tuple(sorted({str(value).lower() for value in languages if value}))
+
+
+def _variant(meta):
+    """The dubbed, MULTi, cut, 3D and re-release flags of a name.
+
+    A MULTi or dubbed release carries other tracks, and a different cut may
+    carry another mix. A group's iNTERNAL mark says nothing about the audio.
+    """
+    variant = meta.get("variant")
+    if not isinstance(variant, (list, tuple)):
+        return ()
+    return tuple(sorted(str(flag) for flag in variant if flag != "internal"))
 
 
 def _source_key(row, meta):
@@ -64,6 +91,8 @@ def _source_key(row, meta):
         part,
         date,
         str(meta.get("edition") or "").lower(),
+        _languages(meta),
+        _variant(meta),
         network,
         resolution,
         codec,

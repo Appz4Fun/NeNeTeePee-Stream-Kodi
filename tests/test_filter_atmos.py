@@ -95,6 +95,9 @@ def test_only_the_same_stream_takes_it():
         # plain Dolby Digital and AAC are other tracks
         _plain_variant("DDP5.1", "DD5.1"),
         _plain_variant("DDP5.1", "AAC5.1"),
+        # a dub, and a multi-language release: other audio tracks
+        _plain_variant("WEB-DL", "WEB-DL.German"),
+        _plain_variant("WEB-DL", "WEB-DL.MULTi"),
         # another show
         PLAIN.replace("Some.Show", "Other.Show"),
     ]
@@ -110,6 +113,7 @@ def test_the_same_stream_under_other_spellings_takes_it():
         _plain_variant("DDP5.1", "DD+5.1"),
         _plain_variant("H.265", "HEVC"),
         _plain_variant("-NTb", "-FLUX"),
+        _plain_variant("2160p", "iNTERNAL.2160p"),
         # HDR is not part of what the audio track is.
         _plain_variant(".DV", ""),
         _plain_variant("WEB-DL", "WEB"),
@@ -214,3 +218,13 @@ def test_rows_without_usable_metadata_are_skipped():
         {"title": LABELLED, "_meta": {"audio": ["DD+", "Atmos"]}},
     ]
     assert share_atmos(rows) == 0
+
+
+def test_copies_tagged_with_the_same_language_share_it():
+    labelled = LABELLED.replace("WEB-DL", "WEB-DL.German")
+    plain = PLAIN.replace("WEB-DL", "WEB-DL.German")
+    rows = _rows(labelled, plain, PLAIN)
+    assert rows[0]["_meta"]["languages"] == rows[1]["_meta"]["languages"] != []
+    assert _took(rows[1])
+    # The untagged copy has no labelled copy in its own language.
+    assert not _took(rows[2])
