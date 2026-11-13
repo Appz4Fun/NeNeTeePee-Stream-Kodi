@@ -601,13 +601,16 @@ def _backup_row(result):
     Carries the row's post-date and size: each backup is a DIFFERENT upload, a
     follow-to-backup success is ledger-recorded under the backup's own identity
     so the picker's repost-guard recognizes it, and the worker's same-listing
-    dedup compares size + post date.
+    dedup compares size + post date. The indexer's name goes along so the
+    worker can log which indexer each NZB fetch went to and stop asking one
+    that refuses (``nzbget_fleet_dedup._try_fetch``).
     """
     return {
         "link": result["link"],
         "title": result.get("title"),
         "pubdate": result.get("pubdate"),
         "size": result.get("size"),
+        "indexer": result.get("indexer") or "",
     }
 
 

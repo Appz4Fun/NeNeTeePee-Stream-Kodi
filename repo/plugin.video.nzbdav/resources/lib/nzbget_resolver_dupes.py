@@ -109,7 +109,7 @@ def _submit_candidates(
         "pick_pending": bool(usable and usable[0].get("_is_pick")),
     }
     spool = NzbSpool(dedup.spool_base)
-    fetch = _fleet_fetcher(clusters, spool, cached_pick)
+    fetch = _fleet_fetcher(clusters, spool, cached_pick, dedup.blocked_indexers)
     stream = prefetched_clusters(
         clusters,
         fetch,
@@ -194,8 +194,12 @@ _LOCAL_DISK_ERRNOS = frozenset(
 )
 
 
-def _fleet_fetcher(clusters, spool, cached_pick=None):
+def _fleet_fetcher(clusters, spool, cached_pick=None, blocked=None):
     """The fleet's NZB fetch.
+
+    ``blocked`` is the play's set of indexers that refused an NZB
+    (``FleetDedup.blocked_indexers``): the fetcher carries it, so a refusal
+    seen by an earlier fetcher of the same play is honored here too.
 
     Each BACKUP streams straight into a spool file and is fingerprinted from
     disk (``posting_fingerprint_file``): one GET, no body in memory, capped at
@@ -271,6 +275,8 @@ def _fleet_fetcher(clusters, spool, cached_pick=None):
         return path, fingerprint
 
     _fetch.release_memory = _release_memory
+    if blocked is not None:
+        _fetch.blocked_indexers = blocked
     return _fetch
 
 
@@ -703,7 +709,8 @@ _MAX_VETO_REPLACEMENTS = 5
 
 # The candidate fields a fleet row keeps: its job name plus the listing
 # evidence (size, post date) the same-listing dedup reads.
-_FLEET_ROW_KEYS = ("title", "size", "pubdate", "_posted_epoch")
+# ``indexer`` rides along for the fetch log and the refused-indexer skip.
+_FLEET_ROW_KEYS = ("title", "size", "pubdate", "_posted_epoch", "indexer")
 
 
 def _extra_backups_from_loader(  # pylint: disable=too-many-arguments

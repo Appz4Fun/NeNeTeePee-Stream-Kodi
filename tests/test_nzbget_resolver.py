@@ -2689,6 +2689,19 @@ def test_extra_backups_from_loader_dedups_caps_and_scores_descending():
     assert [e["score"] for e in extras] == [0, -1]
 
 
+def test_extra_backups_from_loader_keep_the_indexer_name():
+    # The fetch log names the indexer and a refusing one is skipped, so the
+    # name must survive into the loader's rows too.
+    from resources.lib.nzbget_resolver import _extra_backups_from_loader
+
+    candidates = [
+        {"link": "http://i/a.nzb", "title": "A", "indexer": "Geek"},
+        {"link": "http://i/b.nzb", "title": "B"},
+    ]
+    extras = _extra_backups_from_loader(lambda: candidates, [])
+    assert [row.get("indexer") for row in extras] == ["Geek", None]
+
+
 def test_extra_backups_from_loader_best_effort_on_none_or_error():
     from resources.lib.nzbget_resolver import _extra_backups_from_loader
 

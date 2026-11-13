@@ -349,6 +349,9 @@ NZBGet starts downloading:
    kept. Each unique NZB is saved to a folder in Kodi's temp directory as soon
    as it passes; duplicates are discarded. If your pick's indexer fails,
    another indexer's copy of the same posting is used.
+   An indexer that refuses an NZB (HTTP 401, 403 or 429) is skipped for the
+   rest of that play, apart from your pick. With debug logging on, the log
+   names the indexer and the result of every NZB fetch.
 3. **Sending 25 NZBs to NZBGet...**: it sends one fleet request, waits for
    NZBGet's health ranking, then deletes the temp folder. Collection stops
    once 50 unique members (or your lower configured limit) are ready.

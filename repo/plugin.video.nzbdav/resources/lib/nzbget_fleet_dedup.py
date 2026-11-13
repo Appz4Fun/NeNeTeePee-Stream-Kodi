@@ -205,6 +205,10 @@ class FleetDedup:
         self._spill_dir = None
         self.spool_base = spool_base
         self.progress = progress
+        # Indexers (lower-cased names) that refused an NZB during this play.
+        # Every fetcher the play creates shares this set, so a refusal in one
+        # collection phase also spares the later ones (loader extras, refills).
+        self.blocked_indexers = set()
         # Optional zero-arg callable: True once Kodi is shutting down (vs a
         # user cancel) -- late appends are then left to finish, not deleted.
         self.aborted = None
@@ -488,7 +492,13 @@ def _fetch_cluster(cluster, fetch, stop_events):
     for member in cluster:
         if _stopped(stop_events):
             break
-        payload, fingerprint = _as_payload(_try_fetch(fetch, member["link"]))
+        if _skip_blocked(fetch, member):
+            continue
+        result = _try_fetch(fetch, member)
+        if result is _FAILED:
+            continue
+        payload, fingerprint = _as_payload(result)
+        _log_fetch(member, "ok" if fingerprint else "no usable NZB in the reply")
         if fingerprint:
             return cluster[0], payload, fingerprint
     return cluster[0], None, None
@@ -509,17 +519,82 @@ def _as_payload(result):
     return (result, fingerprint) if fingerprint else (None, None)
 
 
-def _try_fetch(fetch, url):
-    """One listing's NZB body, or None (logged) when the indexer fetch fails."""
+# HTTP statuses that mean the indexer refuses this account for now (bad key,
+# download allowance used up, rate limit), not that one NZB is missing.
+_BLOCK_STATUSES = frozenset((401, 403, 429))
+_FAILED = object()
+
+
+def _try_fetch(fetch, member):
+    """One listing's fetch result, or ``_FAILED`` (logged) when it raises.
+
+    A refusal (``_BLOCK_STATUSES``) is remembered on ``fetch`` -- in the set
+    its play's ``FleetDedup`` shares with every fetcher of that play -- so the
+    play's later listings from that indexer are skipped instead of each
+    costing a request that will be refused too.
+    """
     try:
-        return fetch(url)
+        return fetch(member["link"])
     except Exception as exc:  # pylint: disable=broad-except
-        xbmc.log(
-            "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup NZB fetch failed, "
-            "trying the next listing: {}".format(redact_text(str(exc))),
-            xbmc.LOGDEBUG,
+        status = getattr(exc, "code", None)
+        blocked = status in _BLOCK_STATUSES and _remember_block(fetch, member)
+        _log_fetch(
+            member,
+            "failed{}, trying the next listing: {}".format(
+                " (skipping this indexer for the rest of this play)" if blocked else "",
+                redact_text(str(exc)),
+            ),
         )
-        return None
+        return _FAILED
+
+
+def _indexer(member):
+    return str(member.get("indexer") or "").strip()
+
+
+def _blocked_indexers(fetch, create=False):
+    """The indexers that refused this play, kept on its fetcher (or None)."""
+    blocked = getattr(fetch, "blocked_indexers", None)
+    if blocked is None and create:
+        try:
+            fetch.blocked_indexers = blocked = set()
+        except AttributeError:
+            return None  # a fetcher that can't carry state: nothing is skipped
+    return blocked
+
+
+def _remember_block(fetch, member):
+    """Note that ``member``'s indexer refused; False when it can't be kept."""
+    name = _indexer(member).lower()
+    blocked = _blocked_indexers(fetch, create=True) if name else None
+    if blocked is None:
+        return False
+    blocked.add(name)
+    return True
+
+
+def _skip_blocked(fetch, member):
+    """True (logged) for a backup listing from an indexer that refused earlier.
+
+    The pick is never skipped: it is the release the user chose, and it is
+    fetched first.
+    """
+    if member.get("_is_pick"):
+        return False
+    blocked = _blocked_indexers(fetch)
+    if not blocked or _indexer(member).lower() not in blocked:
+        return False
+    _log_fetch(member, "skipped, this indexer refused an NZB earlier in this play")
+    return True
+
+
+def _log_fetch(member, outcome):
+    """One log line per listing: which indexer, and how the fetch went."""
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: NZBGet duplicate backup NZB fetch from {}: "
+        "{}".format(_indexer(member) or "an unnamed indexer", outcome),
+        xbmc.LOGDEBUG,
+    )
 
 
 class _Fetch:
