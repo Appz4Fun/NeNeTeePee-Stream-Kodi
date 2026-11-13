@@ -66,7 +66,7 @@ def test_real_package_contains_scrobbling_helper_and_matching_boundary_sources(
             )
             == PLAYER_JSON
         )
-        assert PLAYER_JSON["schema_version"] == 10
+        assert PLAYER_JSON["schema_version"] == 11
         assert not any(
             "__pycache__" in name or name.endswith(".pyc")
             for name in archive.namelist()

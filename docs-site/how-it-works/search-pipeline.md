@@ -87,6 +87,30 @@ flags such as PROPER/REPACK. If the parser throws or returns nothing useful, a
 regular expression fallback extracts the essentials. The normalized metadata is cached on the
 result and reused by filtering, ranking, and fallback matching.
 
+## Requested episode only
+
+An episode search doesn't trust the indexer to return only the episode it was
+asked for. An indexer that searches raw post subjects matches the show's name
+alone and returns every episode it has. Before filtering, NeNeTeePee-Stream-Kodi
+removes any result whose parsed name can't hold the requested episode. These
+results aren't marked as filtered: they appear in neither picker view.
+
+A result stays when its name is one of these:
+
+- the requested season and episode, or a multi-episode file that includes it
+- a pack for the requested season, or a complete-series pack
+- a daily show named by air date
+
+Two kinds of name stay because they may still be the episode. The first is a
+video release whose episode number the parser can't read, as some anime names
+are written. The second is a bare episode number with no season, when it equals
+the requested episode or could be an absolute count for a later season.
+
+For a show named by date, the TMDBHelper player passes the episode's air date
+and only that night's releases stay. If no release carries that exact date,
+releases dated one day either side stay. If none of those exist either, every
+dated release stays, so a metadata mismatch never empties the list.
+
 ## Filtering and ranking
 
 Filtering applies your format, keyword, size, and excluded-group rules. Each

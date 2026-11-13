@@ -3,6 +3,7 @@
 
 """Result filtering and sorting using PTT for title parsing."""
 
+import datetime
 import math
 import time
 from copy import deepcopy
@@ -687,7 +688,61 @@ def _names_other_episode(meta, season, episode):
     return not (identity.get("date") or identity.get("complete") or looks_like_video)
 
 
-def drop_other_episodes(results, requested_episode):
+def _air_date(value):
+    """``value`` as a ``datetime.date`` when it starts ``YYYY-MM-DD``, else ``None``."""
+    parts = str(value or "").strip()[:10].split("-")
+    if len(parts) != 3 or len(parts[0]) != 4:
+        return None
+    try:
+        return datetime.date(int(parts[0]), int(parts[1]), int(parts[2]))
+    except ValueError:
+        return None
+
+
+def _dated_row_days(rows):
+    """Map ``id(row)`` to the air date of each row named by date alone."""
+    days = {}
+    for row in rows:
+        meta = row.get("_meta") if isinstance(row, dict) else None
+        identity = meta.get("ptt_identity") if isinstance(meta, dict) else None
+        if not isinstance(identity, dict):
+            continue
+        if identity.get("seasons") or identity.get("episodes"):
+            continue
+        day = _air_date(identity.get("date"))
+        if day is not None:
+            days[id(row)] = day
+    return days
+
+
+def _keep_requested_air_date(rows, air_date):
+    """Among rows named by air date alone, keep the requested night.
+
+    A daily show's releases carry a date and no season or episode, so the
+    episode rule cannot tell one night from another. When the caller knows
+    the episode's air date, rows dated that day are kept and the other nights
+    are dropped. When no row has that exact date, the listing and the release
+    names may disagree by a day (a late-night show listed under the next
+    calendar day), so rows one day either side are kept instead. When even
+    those are missing, every dated row is kept: hiding them all would leave
+    nothing to pick from on a metadata mismatch.
+    """
+    wanted = _air_date(air_date)
+    if wanted is None:
+        return rows
+    days = _dated_row_days(rows)
+    if not days:
+        return rows
+    for tolerance in (0, 1):
+        near = {
+            key for key, day in days.items() if abs((day - wanted).days) <= tolerance
+        }
+        if near:
+            return [row for row in rows if id(row) not in days or id(row) in near]
+    return rows
+
+
+def drop_other_episodes(results, requested_episode, air_date=None):
     """Return ``results`` without rows that name a different episode.
 
     An episode search trusts the indexer to honour the season and episode it
@@ -700,7 +755,9 @@ def drop_other_episodes(results, requested_episode):
 
     ``requested_episode`` is ``(season, episode)``; anything that does not
     hold two whole numbers (a movie search passes ``None``) leaves ``results``
-    untouched. Side effect: attaches ``_meta`` to each row, which
+    untouched. ``air_date`` (``YYYY-MM-DD``, optional) narrows rows named by
+    date alone to the requested night (see ``_keep_requested_air_date``).
+    Side effect: attaches ``_meta`` to each row, which
     ``filter_results`` then reuses instead of parsing the title again.
     """
     wanted = _requested_episode_numbers(requested_episode)
@@ -717,6 +774,7 @@ def drop_other_episodes(results, requested_episode):
         result["_meta"] = meta
         if not _names_other_episode(meta, season, episode):
             kept.append(result)
+    kept = _keep_requested_air_date(kept, air_date)
     dropped = len(results) - len(kept)
     if dropped:
         xbmc.log(

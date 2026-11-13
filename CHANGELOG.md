@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only |
+| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -79,6 +79,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the episode itself, a multi-episode file that includes it, a pack for the
   season or the whole series, a daily show named by its air date, and a video
   release whose name carries no readable episode number.
+- **A daily-show search lists the requested night only.** Releases named by
+  air date have no season or episode, so every night the indexer returned was
+  listed. The TMDBHelper player now passes the episode's air date
+  (`premiered={premiered}`, player schema 11) and releases dated another day
+  are removed. With no exact match, releases one day either side stay; with
+  none of those, every dated release stays. An installed player file is
+  upgraded automatically.
 
 ## [2.0.0-rc.1][] — 2026-11-09
 
