@@ -118,6 +118,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Audio is ranked before the preferred-group tier** under Relevance. A
+  release with Dolby Digital Plus and Atmos from a group in no tier now ranks
+  above plain Dolby Digital Plus from a preferred group; before, the group
+  was compared first, so `DDP5.1` from NTb led `DD+5.1.Atmos` from playWEB.
+  The preferred tiers still order releases whose audio is in the same tier.
+  Resolution, CiNEPHiLES and FraMeSToR, HDR and REMUX are still compared
+  before audio.
 - **Collecting a large release's NZBs is about four times faster.** To tell
   whether two copies are the same upload, the add-on reads every article ID in
   each NZB: 130,000 of them in a 12 MB NZB for a remux. On a CoreELEC box that

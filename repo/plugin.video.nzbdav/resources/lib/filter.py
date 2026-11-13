@@ -1275,8 +1275,13 @@ def _hdr_rank(hdr_list):
 
 def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
     """Rank resolution, then the pinned groups (CiNEPHiLES, FraMeSToR), then
-    named groups before none, then HDR, REMUX, group tier, audio tier
-    (``filter_audio.audio_tier``), and size."""
+    named groups before none, then HDR, REMUX, audio tier
+    (``filter_audio.audio_tier``), group tier, and size.
+
+    Audio comes before the preferred-group tier: Dolby Digital Plus with
+    Atmos from a group in no tier ranks above plain Dolby Digital Plus from a
+    preferred one. The group tier then orders releases whose audio is in the
+    same tier."""
     tier_patterns = compile_remux_tiers(remux_tiers)
 
     def _relevance_key(r):
@@ -1290,8 +1295,8 @@ def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
             0 if meta.get("group") else 1,  # no release group: last in its resolution
             _hdr_rank(meta.get("hdr", [])),
             priority,
-            remux_group_rank(r, tier_patterns),
             audio_tier(meta.get("audio", []), meta.get("quality", "")),
+            remux_group_rank(r, tier_patterns),
             size,
         )
 
@@ -1645,7 +1650,7 @@ def _break_ties_by_copies(ordered, relevance_key):
 
     ``ordered`` is already sorted by ``relevance_key``, whose last element is
     size. Each run of rows that ties on everything before size (resolution,
-    pinned group, HDR, REMUX, group tier, audio tier) is re-sorted by copy
+    pinned group, HDR, REMUX, audio tier, group tier) is re-sorted by copy
     count, most first, then by size as before. A stable sort keeps the
     original order when both tie. Copies are counted within the run.
     same_release requires equal resolution, HDR, audio, HYBRID and group, so
