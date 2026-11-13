@@ -353,8 +353,8 @@ def group_status(nzbid, settings_getter=None):
     """Look up an active job by NZBID via listgroups.
 
     Returns a dict: {"present": bool, "status": str, "percent": int}, plus
-    "downloaded_mb" and "total_mb" for a job that is present (the progress
-    dialog shows them). "present" is False once the job leaves the active
+    the sizes of ``_download_progress`` for a job that is present (the
+    progress dialog shows them). "present" is False once the job leaves the active
     queue (moved to history). On RPC error, returns status="ERROR" with
     present=False.
     """
@@ -365,18 +365,62 @@ def group_status(nzbid, settings_getter=None):
         if not isinstance(group, dict):
             continue
         if _same_nzbid(group.get("NZBID"), nzbid):
-            downloaded = _as_number(group.get("DownloadedSizeMB"))
-            total = _as_number(group.get("FileSizeMB"))
-            percent = int(downloaded * 100 / total) if total else 0
             return {
                 "present": True,
                 "status": str(group.get("Status") or ""),
-                "percent": percent,
-                "downloaded_mb": downloaded,
-                "total_mb": total,
+                **_download_progress(group),
                 **_post_stage(group),
             }
     return {"present": False, "status": "", "percent": 0}
+
+
+def _download_progress(group):
+    """The download's percent and sizes, counted without the parity on hold.
+
+    NZBGet queues a release's extra par2 volumes paused and only fetches the
+    ones a repair asks for, so their size (``PausedSizeMB``) is not part of
+    what the download has to fetch: counted in, a clean 89 GB download ended
+    at "85.3 of 89 GB", 95%. The percent is of what is wanted, as in NZBGet's
+    own web page. A job that is paused as a whole has everything on hold, so
+    nothing is taken off for it.
+    """
+    downloaded = _as_number(group.get("DownloadedSizeMB"))
+    total = _as_number(group.get("FileSizeMB"))
+    on_hold = 0
+    if str(group.get("Status") or "").upper() != "PAUSED":
+        on_hold = min(max(_as_number(group.get("PausedSizeMB")), 0), total)
+    wanted = total - on_hold
+    percent = min(int(downloaded * 100 / wanted), 100) if wanted > 0 else 0
+    return {
+        "percent": percent,
+        "downloaded_mb": downloaded,
+        "total_mb": total,
+        "parity_hold_mb": on_hold,
+        "remaining_mb": max(_as_number(group.get("RemainingSizeMB")), 0),
+    }
+
+
+# How many of a download's latest log lines are read for its parity needs.
+_PAR_LOG_LINES = 120
+
+
+def par_log(nzbid, settings_getter=None):
+    """The latest lines of one download's own log, or None when unreadable.
+
+    NZBGet reports how many parity blocks a repair needs, and which par2
+    volumes it took off hold, only as log lines of the download
+    (``loadlog``). Display only: the caller reads counts out of the text.
+    """
+    try:
+        nzbid = int(nzbid)
+    except (TypeError, ValueError):
+        return None
+    rows, error = _rpc_call(
+        "loadlog", [nzbid, 0, _PAR_LOG_LINES], settings_getter=settings_getter
+    )
+    if error is not None or not isinstance(rows, list):
+        return None
+    return [str(row.get("Text") or "") for row in rows if isinstance(row, dict)]
 
 
 def _post_stage(group):
@@ -765,16 +809,11 @@ def _promoted_group_entry(group, dupe_key, exclude_nzbid):
     status = str(group.get("Status") or "")
     if status.upper() == "PAUSED":
         return _PAUSED_MATCH
-    downloaded = _as_number(group.get("DownloadedSizeMB"))
-    total = _as_number(group.get("FileSizeMB"))
-    percent = int(downloaded * 100 / total) if total else 0
     return {
         "present": True,
         "nzbid": group.get("NZBID"),
         "status": status,
-        "percent": percent,
-        "downloaded_mb": downloaded,
-        "total_mb": total,
+        **_download_progress(group),
         **_post_stage(group),
     }
 

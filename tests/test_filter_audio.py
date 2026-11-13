@@ -245,3 +245,42 @@ def test_a_group_that_only_contains_a_pinned_name_is_not_pinned():
         "Movie.2023.2160p.WEB-DL.DV.HEVC.DDP5.1.Atmos-FLUX",
     ]
     assert _sorted_titles(titles) == list(reversed(titles))
+
+
+_ROP = "The.Lord.of.the.Rings.The.Rings.of.Power.S03E02.The.Gift.of.Men."
+
+
+def test_atmos_from_an_unlisted_group_ranks_above_plain_dd_plus_from_a_preferred_one():
+    # Seen on a real search: NTb is in a preferred tier, playWEB is in none,
+    # and NTb's plain DD+ led playWEB's DD+ Atmos. Audio is compared first.
+    ntb = _ROP + "2160p.AMZN.WEB-DL.DDP5.1.DV.H.265-NTb"
+    playweb = _ROP + "2160p.AMZN.WEB-DL.DD+5.1.Atmos.DoVi.H.265-playWEB"
+    tiers = filters.compile_remux_tiers(filters.DEFAULT_REMUX_GROUPS)
+    assert filters.remux_group_rank(
+        {"_meta": {"group": "NTb"}}, tiers
+    ) < filters.remux_group_rank({"_meta": {"group": "playWEB"}}, tiers)
+    assert _sorted_titles([ntb, playweb]) == [playweb, ntb]
+
+
+def test_the_preferred_group_still_leads_among_releases_with_the_same_audio():
+    ntb = _ROP + "2160p.AMZN.WEB-DL.DDP5.1.Atmos.DV.H.265-NTb"
+    playweb = _ROP + "2160p.AMZN.WEB-DL.DD+5.1.Atmos.DoVi.H.265-playWEB"
+    assert _sorted_titles([playweb, ntb]) == [ntb, playweb]
+    # DD+ and plain DD are one tier, so the group decides there too.
+    plain_ntb = _ROP + "2160p.AMZN.WEB-DL.DD5.1.DV.H.265-NTb"
+    plain_playweb = _ROP + "2160p.AMZN.WEB-DL.DDP5.1.DoVi.H.265-playWEB"
+    assert _sorted_titles([plain_playweb, plain_ntb]) == [plain_ntb, plain_playweb]
+
+
+def test_audio_does_not_outrank_hdr_or_the_pinned_groups():
+    # HDR is still compared before audio: Dolby Vision with plain DD+ leads
+    # HDR10 with Atmos.
+    vision = _ROP + "2160p.AMZN.WEB-DL.DDP5.1.DV.H.265-GRP"
+    atmos_hdr = _ROP + "2160p.AMZN.WEB-DL.DDP5.1.Atmos.HDR.H.265-GRP"
+    assert _sorted_titles([atmos_hdr, vision]) == [vision, atmos_hdr]
+    # CiNEPHiLES and FraMeSToR keep the top of their resolution whatever the
+    # audio of the releases around them.
+    pinned = "Movie.2023.2160p.UHD.BluRay.REMUX.HEVC.DTS-HD.HR.5.1-CiNEPHiLES"
+    second = "Movie.2023.2160p.UHD.BluRay.REMUX.HEVC.DD.5.1-FraMeSToR"
+    lossless = "Movie.2023.2160p.UHD.BluRay.REMUX.DV.HEVC.TrueHD.7.1.Atmos-GRP"
+    assert _sorted_titles([lossless, second, pinned]) == [pinned, second, lossless]

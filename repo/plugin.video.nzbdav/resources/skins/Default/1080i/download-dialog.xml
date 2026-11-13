@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The NZBGet download dialog: text only, no progress bar, room for eight
+     lines. Cancel and Back set a Home window property that the add-on reads
+     (nzbget_dialog.py), so a cancel is seen at once, without waiting for a
+     script callback. -->
+<window type="dialog" id="1101">
+  <defaultcontrol always="true">10</defaultcontrol>
+  <coordinates>
+    <system>1</system>
+  </coordinates>
+  <controls>
+
+    <!-- Dim the screen behind the panel -->
+    <control type="image">
+      <left>0</left><top>0</top><width>1920</width><height>1080</height>
+      <colordiffuse>B0000000</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+
+    <!-- Panel -->
+    <control type="image">
+      <left>280</left><top>250</top><width>1360</width><height>580</height>
+      <colordiffuse>FF151520</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+    <control type="image">
+      <left>280</left><top>250</top><width>1360</width><height>70</height>
+      <colordiffuse>FF1E1E2E</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+
+    <!-- Heading -->
+    <control type="label" id="1">
+      <left>320</left><top>250</top><width>1280</width><height>70</height>
+      <label>$INFO[Window.Property(heading)]</label>
+      <font>font13</font>
+      <textcolor>FFFFFFFF</textcolor>
+      <aligny>center</aligny>
+    </control>
+
+    <!-- First line: the copy and its stage -->
+    <control type="label" id="2">
+      <left>320</left><top>345</top><width>1280</width><height>50</height>
+      <label>$INFO[Window.Property(headline)]</label>
+      <font>font13</font>
+      <textcolor>FFFFFFFF</textcolor>
+      <aligny>center</aligny>
+      <scroll>true</scroll>
+    </control>
+
+    <!-- The other lines -->
+    <control type="textbox" id="3">
+      <left>320</left><top>405</top><width>1280</width><height>310</height>
+      <label>$INFO[Window.Property(body)]</label>
+      <font>font12</font>
+      <textcolor>FFD4D4D8</textcolor>
+    </control>
+
+    <!-- Cancel -->
+    <control type="button" id="10">
+      <left>1340</left><top>740</top><width>260</width><height>60</height>
+      <label>$ADDON[plugin.video.nzbdav 30694]</label>
+      <font>font12</font>
+      <textcolor>FFFFFFFF</textcolor>
+      <focusedcolor>FFFFFFFF</focusedcolor>
+      <align>center</align>
+      <aligny>center</aligny>
+      <texturefocus colordiffuse="FF2563EB">white.png</texturefocus>
+      <texturenofocus colordiffuse="FF374151">white.png</texturenofocus>
+      <onclick>SetProperty(nzbdav.download.cancel,1,home)</onclick>
+      <onback>SetProperty(nzbdav.download.cancel,1,home)</onback>
+    </control>
+
+    <!-- Shown once a cancel was asked for, until the add-on closes the dialog -->
+    <control type="label" id="4">
+      <left>320</left><top>740</top><width>980</width><height>60</height>
+      <label>$ADDON[plugin.video.nzbdav 30695]</label>
+      <font>font12</font>
+      <textcolor>FF9CA3AF</textcolor>
+      <aligny>center</aligny>
+      <visible>!String.IsEmpty(Window(home).Property(nzbdav.download.cancel))</visible>
+    </control>
+
+  </controls>
+</window>

@@ -1,7 +1,15 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
 
-"""Simple JSON-based search result cache."""
+"""Simple JSON-based search result cache.
+
+An entry holds the provider's answer and the parsed details of each release
+name in it (the rows' ``_meta``). Parsing is the slow part of opening the
+picker on a CoreELEC box, so a repeat open reads the parses back instead of
+redoing them. They are stored once per name, not once per row: indexers list
+one name several times. They are trusted only while the add-on's code is
+unchanged (``_parser_stamp``).
+"""
 
 import json
 import os
@@ -11,12 +19,109 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
-MAX_CACHE_SIZE_BYTES = 52428800  # 50 MB
+# Raised from 50 MB when entries began to carry the parsed details of their
+# release names (about 40% more per entry), so the cache still holds as many
+# searches.
+MAX_CACHE_SIZE_BYTES = 73400320  # 70 MB
 MAX_CACHE_ENTRY_COUNT = 1000
 CACHE_TTL_SETTING = "cache_ttl_minutes"
 DEFAULT_CACHE_TTL_MINUTES = 30
 MAX_CACHE_TTL_MINUTES = 1440
 _PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
+
+
+# The rows' parsed details, as ``filter.attach_metadata`` stores them.
+_PARSED_KEY = "_meta"
+# The entry's field naming the code that produced its parses.
+_PARSER_FIELD = "parser"
+# The entry's field holding the parses: release name -> parsed details.
+_PARSES_FIELD = "parsed"
+# path -> the timestamp of the entry last read from it, for ``keep_parsed``.
+_READ_TIMESTAMPS = {}
+_STAMP = []
+
+
+def _parser_stamp():
+    """A fingerprint of the add-on's code, or None when it cannot be read.
+
+    A parse stored by one build must not be reused by another: a fix to the
+    name parser would otherwise wait out the cache window. The fingerprint is
+    the name, size and modification time of ``addon.xml`` and every Python
+    file under ``resources/lib``, so any install or update changes it.
+    """
+    if not _STAMP:
+        _STAMP.append(_compute_parser_stamp())
+    return _STAMP[0]
+
+
+def _compute_parser_stamp():
+    import hashlib
+
+    lib = os.path.dirname(os.path.abspath(__file__))
+    addon_xml = os.path.join(os.path.dirname(os.path.dirname(lib)), "addon.xml")
+    seen = []
+    try:
+        paths = [addon_xml]
+        for folder, _dirs, names in os.walk(lib):
+            paths.extend(
+                os.path.join(folder, name) for name in names if name.endswith(".py")
+            )
+        for path in paths:
+            stat = os.stat(path)
+            seen.append((os.path.relpath(path, lib), stat.st_size, stat.st_mtime_ns))
+    except (OSError, ValueError):
+        return None
+    return hashlib.sha256(repr(sorted(seen)).encode("utf-8")).hexdigest()[:20]
+
+
+def _drop_parses(rows):
+    """Remove the stored parses from ``rows`` (another build made them)."""
+    for row in rows:
+        row.pop(_PARSED_KEY, None)
+
+
+def _split_parses(rows):
+    """Move the rows' parses into one ``{name: parse}`` table and return it.
+
+    ``rows`` are the copies about to be written. Rows with the same name
+    carry equal parses, so the table holds each once. A row whose parse
+    differs from the one already stored for its name keeps it on the row.
+    """
+    parses = {}
+    for row in rows:
+        meta = row.get(_PARSED_KEY)
+        title = row.get("title")
+        if not isinstance(meta, dict) or not isinstance(title, str):
+            continue
+        if parses.setdefault(title, meta) == meta:
+            del row[_PARSED_KEY]
+    return parses
+
+
+def _attach_parses(rows, parses):
+    """Give each row the stored parse of its name, as an object of its own.
+
+    Rows of one name must not share a parse: later stages replace fields on
+    one row's. The first row of a name takes the stored object and every
+    further row a copy made by the JSON reader, which is far quicker than
+    copying in Python.
+    """
+    if not isinstance(parses, dict):
+        return
+    texts = {}
+    for row in rows:
+        title = row.get("title")
+        if _PARSED_KEY in row or not isinstance(title, str):
+            continue
+        meta = parses.get(title)
+        if not isinstance(meta, dict):
+            continue
+        text = texts.get(title)
+        if text is None:
+            texts[title] = json.dumps(meta)
+            row[_PARSED_KEY] = meta
+        else:
+            row[_PARSED_KEY] = json.loads(text)
 
 
 def _get_cache_dir():
@@ -160,6 +265,12 @@ def _read_fresh_cache(path, cache_ttl, title):
         pass
     xbmc.log("NeNeTeePee-Stream-Kodi: Cache hit for '{}'".format(title), xbmc.LOGDEBUG)
     results = data.get("results", [])
+    stamp = _parser_stamp()
+    if stamp is None or data.get(_PARSER_FIELD) != stamp:
+        _drop_parses(results)
+    else:
+        _attach_parses(results, data.get(_PARSES_FIELD))
+    _READ_TIMESTAMPS[path] = timestamp
     uploads = data.get("hydra_uploads")
     if isinstance(results, list) and isinstance(uploads, list):
         from resources.lib.hydra import _cache_search_uploads
@@ -195,7 +306,10 @@ def get_cached(search_type, title, settings_getter=None, **kwargs):
 
 
 def set_cached(search_type, title, results, settings_getter=None, **kwargs):
-    """Cache search results."""
+    """Cache search results.
+
+    The parsed details of rows that carry them (``_meta``) are stored too.
+    """
     cache_ttl = _get_cache_ttl_seconds(settings_getter)
     if cache_ttl <= 0:
         return
@@ -203,13 +317,50 @@ def set_cached(search_type, title, results, settings_getter=None, **kwargs):
     path = _cache_path(search_type, title, kwargs)
     if path is None:
         return
+    _write_entry(path, title, results, time.time())
+    _evict_oldest()
 
+
+def keep_parsed(search_type, title, results, settings_getter=None, **kwargs):
+    """Store the parses of rows just read from the cache, if they were missing.
+
+    ``results`` is what ``get_cached`` returned. An entry written before
+    parses were stored, or by another build of the add-on, comes back without
+    them; this parses the rows once and rewrites the entry so the next open is
+    fast. The entry keeps its age: it still expires when it would have.
+    """
+    path = _cache_path(search_type, title, kwargs)
+    timestamp = _READ_TIMESTAMPS.get(path)
+    if timestamp is None or _all_parsed(results):
+        return
+    if _get_cache_ttl_seconds(settings_getter) <= 0:
+        return
+    from resources.lib.filter import attach_metadata
+
+    attach_metadata(results)
+    _write_entry(path, title, results, timestamp)
+
+
+def _all_parsed(results):
+    """Whether every row with a name already carries its parsed details."""
+    return all(
+        isinstance(row.get(_PARSED_KEY), dict)
+        for row in results
+        if isinstance(row, dict) and "title" in row
+    )
+
+
+def _write_entry(path, title, results, timestamp):
+    """Write one cache entry, dated ``timestamp``; a failed write is ignored."""
+    tmp_path = path + ".tmp"
     try:
         from resources.lib.hydra import split_search_uploads
 
         plain_results, uploads = split_search_uploads(results)
         data = {
-            "timestamp": time.time(),
+            "timestamp": timestamp,
+            _PARSER_FIELD: _parser_stamp(),
+            _PARSES_FIELD: _split_parses(plain_results),
             "results": plain_results,
             "hydra_uploads": uploads,
         }
@@ -217,7 +368,6 @@ def set_cached(search_type, title, results, settings_getter=None, **kwargs):
         # final path. A concurrent get_cached() sees either the old file
         # or the new file, never a half-written JSON blob that would
         # JSONDecodeError.
-        tmp_path = path + ".tmp"
         with open(tmp_path, "w", encoding="utf-8") as f:
             json.dump(data, f)
         os.replace(tmp_path, path)
@@ -227,13 +377,22 @@ def set_cached(search_type, title, results, settings_getter=None, **kwargs):
             ),
             xbmc.LOGDEBUG,
         )
-    except OSError:
+    except (OSError, TypeError, ValueError) as exc:
+        if not isinstance(exc, OSError):
+            # A row that cannot be written as JSON: the search goes on
+            # uncached, and the log says why.
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Search cache entry for '{}' not "
+                "written: {}".format(title, exc),
+                xbmc.LOGWARNING,
+            )
         # Clean up the temp file if the replace didn't happen.
         try:
             os.remove(tmp_path)
-        except (OSError, NameError):
+        except OSError:
+            # Nothing was left behind, or it cannot be removed: either way
+            # the next write replaces it.
             pass
-    _evict_oldest()
 
 
 def _cache_file_size(path):

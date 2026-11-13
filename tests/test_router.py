@@ -2626,9 +2626,9 @@ def test_handle_search_auto_select_passes_clean_params_to_resolver(
     mock_filter.return_value = ([chosen], [chosen])
 
     # The filter is mocked, so keep the rows as bare as it would leave them:
-    # the movie-row check upstream attaches parsed metadata, and this test is
-    # about the params handed to the resolver.
-    with patch(
+    # the parse before caching and the movie-row check upstream attach parsed
+    # metadata, and this test is about the params handed to the resolver.
+    with patch("resources.lib.filter.attach_metadata"), patch(
         "resources.lib.router._requested_movie_rows",
         side_effect=lambda results, *_args, **_kwargs: results,
     ):
@@ -2832,7 +2832,7 @@ def test_handle_search_picker_passes_clean_params_to_resolver(
     mock_dialog.return_value = chosen
 
     # As above: the filter is mocked, so the rows stay bare.
-    with patch(
+    with patch("resources.lib.filter.attach_metadata"), patch(
         "resources.lib.router._requested_movie_rows",
         side_effect=lambda results, *_args, **_kwargs: results,
     ):

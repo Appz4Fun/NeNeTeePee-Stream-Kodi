@@ -216,5 +216,8 @@ class _FakeWindowXMLDialog:
     def doModal(self):
         return None
 
+    def show(self):
+        self._closed = False
+
     def close(self):
         self._closed = True

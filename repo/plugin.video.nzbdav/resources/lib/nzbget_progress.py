@@ -12,12 +12,24 @@ minute) the dialog says what is being sent and what was left out:
     abNZB, altHUB, Ninjacentral, Square Eyed, Zurg x2
     Not sent: Digital Carnage refused 1, 1 duplicate upload
 
-While a copy downloads it shows up to four lines:
+While a copy downloads it shows these lines, as many as the dialog has room
+for (eight in the add-on's own dialog, four in Kodi's):
 
     Copy 2 of 12 (abNZB, 4 days) - downloading 43%
     4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
     Copy 1 failed: too many missing articles
     155 articles missing - 155 recovered from backups
+    Parity: 3.7 GB on hold - not needed so far
+    Backups: 2 twins, 3 alts
+    Not sent: Digital Carnage refused 1
+
+The sizes and the percent leave out the parity NZBGet keeps on hold: it
+queues a release's extra par2 volumes paused and fetches only what a repair
+asks for. When a repair does ask, the parity line turns into what was taken
+off hold and a line under it gives the block counts NZBGet logged:
+
+    Parity: 1.2 of 3.7 GB taken off hold for repair
+    Repair needs 112 parity blocks - 128 requested
 
 The first line names the copy being followed (the pick is copy 1; every
 failover to a backup counts one up), the indexer that supplied it and its
@@ -27,17 +39,18 @@ run and, when the server gives the stage's progress, how long is left
 ("25s so far - about 33s left"), so a long repair, unpack, move or script is
 not mistaken for a hang.
 
-Up to two more lines follow, the most important first: the most recent copy
-that failed; the articles no server had and what the server recovered for
-them from a twin or an alt or by stream repair; what the backups are (a twin
-is a byte-identical copy the server can borrow missing articles from, an alt
-is another upload kept as a fallback); and what was never sent.
+More lines follow, the most important first: the most recent copy that
+failed; the articles no server had and what the server recovered for them
+from a twin or an alt or by stream repair; the parity; what the backups are
+(a twin is a byte-identical copy the server can borrow missing articles from,
+an alt is another upload kept as a fallback); and what was never sent.
 
 Everything here is presentation: it reads the poll ``state`` and the fleet's
 ``FleetReport`` and never changes what the poll does. The speed is worked out
 from the progress between polls, so no extra NZBGet call is made.
 """
 
+import re
 import time
 
 from resources.lib.http_util import calculate_age
@@ -105,6 +118,10 @@ class FleetReport:
         self.refused = {}  # indexer name -> copies dropped after it refused
         self.failed = 0  # copies dropped for any other reason
         self.duplicates = 0  # copies that were the same posting as a kept one
+        # Listings not downloaded at all: another indexer's listing of an
+        # upload already in hand (same size, posted within two minutes).
+        self.mirrors = 0
+        self._mirror_links = set()
         self._blocked = blocked if blocked is not None else set()
 
     @staticmethod
@@ -135,6 +152,18 @@ class FleetReport:
 
     def duplicate(self):
         self.duplicates += 1
+
+    def mirror(self, row):
+        """Count ``row`` as a second listing of an upload, once per listing.
+
+        The play groups its listings more than once (a refill, a later
+        phase), so a listing is remembered by its link.
+        """
+        link = (row or {}).get("link") if isinstance(row, dict) else None
+        key = link if isinstance(link, str) and link else id(row)
+        if key not in self._mirror_links:
+            self._mirror_links.add(key)
+            self.mirrors += 1
 
     def dropped(self, row):
         name = self._indexer(row)
@@ -177,28 +206,44 @@ def indexers_line(report):
     return ", ".join(shown)
 
 
-def not_sent_line(report):
-    """ "Not sent: Digital Carnage refused 1, 1 duplicate upload", or ""."""
-    if not isinstance(report, FleetReport) or not report.not_sent():
+def not_sent_line(report, mirrors=True):
+    """ "Not sent: Digital Carnage refused 1, 11 duplicate uploads", or "".
+
+    The duplicate count is every listing that was the same upload as a copy
+    kept: the ones never downloaded (another indexer's listing of it, unless
+    ``mirrors`` is False) and the ones downloaded and then found to be the
+    same posting.
+    """
+    if not isinstance(report, FleetReport):
         return ""
+    duplicates = report.duplicates + (report.mirrors if mirrors else 0)
     parts = [
         fmt(30669, name, count)
         for name, count in sorted(report.refused.items(), key=lambda i: i[0].lower())
     ]
     if report.failed:
         parts.append(fmt(30670, report.failed))
-    if report.duplicates:
-        parts.append(_counted(report.duplicates, 30671, 30672))
-    return fmt(30668, ", ".join(parts))
+    if duplicates:
+        parts.append(_counted(duplicates, 30671, 30672))
+    return fmt(30668, ", ".join(parts)) if parts else ""
 
 
 def collecting_message(report, done, total):
     """The dialog text while the copies' NZBs are downloaded.
 
-    Under the count: the indexers that have delivered so far, and anything
-    already refused, not downloaded or found to be a duplicate.
+    The count is of uploads. Beside it, how many more listings are not being
+    downloaded because another indexer lists the same upload ("Downloading
+    NZBs 3 of 10 - not downloading 10 duplicates"); one of those is still
+    tried if its upload's first listing fails. Under it: the indexers that
+    have delivered so far, and anything already refused, not downloaded or
+    found to be a duplicate.
     """
-    lines = [fmt(30616, done, total), indexers_line(report), not_sent_line(report)]
+    count = fmt(30616, done, total)
+    mirrors = getattr(report, "mirrors", 0) if isinstance(report, FleetReport) else 0
+    if mirrors:
+        # Listings of uploads already being fetched from another indexer.
+        count = "{} - {}".format(count, _counted(mirrors, 30696, 30697))
+    lines = [count, indexers_line(report), not_sent_line(report, mirrors=False)]
     return "[CR]".join(line for line in lines if line)
 
 
@@ -402,9 +447,103 @@ def _duration(seconds):
     return "{}h {}m".format(hours, minutes)
 
 
+def _size(megabytes):
+    """ "3.7 GB", or "350 MB" under a tenth of a gigabyte."""
+    if megabytes < _MB_PER_GB / 10:
+        return fmt(30692, int(round(megabytes)))
+    return fmt(30691, "{:.1f}".format(megabytes / _MB_PER_GB))
+
+
+def _parity_hold(state, group):
+    """(on hold now, the most that was on hold) for the copy being followed.
+
+    The most seen is the parity the release came with; what is no longer on
+    hold was taken off for a repair. Kept per followed copy: a backup that
+    takes over starts its own count.
+    """
+    held = _megabytes(group.get("parity_hold_mb"))
+    seen = state.setdefault("parity_seen", {})
+    copy = state.get("current")
+    if seen.get("copy") != copy:
+        seen.clear()
+        seen["copy"] = copy
+    seen["most"] = max(seen.get("most", 0.0), held)
+    return held, seen["most"]
+
+
+def parity_requested(state, group):
+    """Megabytes of parity taken off hold for the copy being followed."""
+    held, most = _parity_hold(state, group)
+    return max(most - held, 0.0)
+
+
+def parity_lines(state, group):
+    """The parity line and, when a repair asked for blocks, the block line.
+
+    Nothing for a release with no parity on hold (none posted, or a server
+    set to download all of it).
+    """
+    held, most = _parity_hold(state, group)
+    if most < 1:
+        return []
+    requested = most - held
+    if requested < 1:
+        return [fmt(30688, _size(held))]
+    lines = [fmt(30689, _size(requested), _size(most))]
+    blocks = state.get("parity_blocks") or {}
+    needed = blocks.get("needed")
+    asked = blocks.get("requested")
+    if _is_count(needed) and needed > 0:
+        if _is_count(asked) and asked > 0:
+            lines.append(fmt(30690, needed, asked))
+        else:
+            lines.append(fmt(30693, needed))
+    return lines
+
+
+# NZBGet's log lines for a repair: how many blocks it is short of, and each
+# par2 volume it takes off hold ("...vol015+16.par2" holds 16 blocks).
+_BLOCKS_NEEDED = re.compile(r"Need more (\d+) par-block")
+_VOLUME_UNPAUSED = re.compile(
+    r"Unpausing .*\.vol\d+\+(\d+)\.par2 for par-recovery", re.IGNORECASE
+)
+
+
+def parity_blocks(log_lines):
+    """What a download's log says its repair needs, or None when it says nothing.
+
+    ``needed`` is the count in the first "Need more N par-block(s)" line, the
+    blocks the repair was short of when it began asking. ``requested`` is
+    the blocks in the par2 volumes taken off hold for it, which is never
+    fewer: volumes come in fixed sizes.
+    """
+    needed = None
+    requested = 0
+    for line in log_lines or ():
+        if not isinstance(line, str):
+            continue
+        match = _BLOCKS_NEEDED.search(line)
+        if match and needed is None:
+            needed = int(match.group(1))
+        match = _VOLUME_UNPAUSED.search(line)
+        if match:
+            requested += int(match.group(1))
+    if needed is None and not requested:
+        return None
+    return {
+        "needed": needed if needed is not None else requested,
+        "requested": requested,
+    }
+
+
 def _size_line(state, group, now):
-    """ "4.5 of 10.4 GB - 62 MB/s - about 1m 35s left", or "" when unknown."""
+    """ "4.5 of 10.4 GB - 62 MB/s - about 1m 35s left", or "" when unknown.
+
+    The total leaves out the parity on hold, which the download will not
+    fetch unless a repair asks for it.
+    """
     total = _megabytes(group.get("total_mb"))
+    total = max(total - _megabytes(group.get("parity_hold_mb")), 0.0) or total
     downloaded = min(_megabytes(group.get("downloaded_mb")), total)
     if not total:
         return ""
@@ -435,14 +574,17 @@ def failed_line(state):
     return fmt(30650, len(failed), reason)
 
 
-# The dialog shows at most this many lines; beyond the copy line and the
-# size or time line, the most important of the rest are kept.
+# Kodi's progress dialog shows at most this many lines; beyond the copy line
+# and the size or time line, the most important of the rest are kept. The
+# add-on's own dialog says how many it has room for (``max_lines``).
 _MAX_LINES = 4
 
 
-def progress_message(state, group, fleet=None, now=None):
+def progress_message(state, group, fleet=None, now=None, max_lines=None):
     """The dialog text for a copy that is in NZBGet's queue."""
     now = time.monotonic() if now is None else now
+    if not _is_count(max_lines) or max_lines < _MAX_LINES:
+        max_lines = _MAX_LINES
     downloading = str(group.get("status") or "").upper() in _DOWNLOADING
     head = [
         "{} - {}".format(_copy_label(state, fleet), _stage(group)),
@@ -451,15 +593,17 @@ def progress_message(state, group, fleet=None, now=None):
         _size_line(state, group, now) if downloading else _stage_time_line(group),
     ]
     # In order of importance: a copy that failed, articles that were missing,
-    # what the backups are, what was never sent.
-    rest = [
-        failed_line(state),
-        health_line(group),
-        kinds_line(state.get("backup_kinds")),
-        not_sent_line((fleet or {}).get("report")),
-    ]
+    # the parity, what the backups are, what was never sent.
+    rest = (
+        [failed_line(state), health_line(group)]
+        + parity_lines(state, group)
+        + [
+            kinds_line(state.get("backup_kinds")),
+            not_sent_line((fleet or {}).get("report")),
+        ]
+    )
     lines = [line for line in head if line]
-    lines += [line for line in rest if line][: _MAX_LINES - len(lines)]
+    lines += [line for line in rest if line][: int(max_lines) - len(lines)]
     return "[CR]".join(lines)
 
 

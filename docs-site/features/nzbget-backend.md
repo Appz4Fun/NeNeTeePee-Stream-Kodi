@@ -319,20 +319,43 @@ left out:
 ```text
 Sending 6 NZBs to NZBGet...
 abNZB, altHUB, Ninjacentral, Square Eyed, Zurg x2
-Not sent: Digital Carnage refused 1, 1 duplicate upload
+Not sent: Digital Carnage refused 1, 11 duplicate uploads
 ```
 
 A copy is left out when its indexer refused the download, when its NZB could
-not be downloaded for another reason, or when it turned out to be the same
-Usenet posting as a copy already kept (a duplicate upload).
+not be downloaded for another reason, or when it is a duplicate upload. The
+duplicate count is every listing that was the same upload as a copy kept: the
+listings never downloaded because another indexer lists the same posting, and
+the NZBs that were downloaded and turned out to share their articles with one
+already kept. So a release the picker shows as 20 copies can send 8: the
+other 12 are listed here.
 
-Once NZBGet has the copies, the progress dialog shows up to four lines:
+While the NZBs are being downloaded, the first line counts uploads and says
+how many more listings are not being fetched:
+
+```text
+Downloading NZBs 6 of 9 - not downloading 5 duplicates
+altHUB, Geek, miatrix, Slug, Zurg
+```
+
+One of those is still used if its upload's first listing fails: the add-on
+then asks the next indexer that lists the same upload.
+
+The download dialog is the add-on's own window. It has no progress bar, since
+the first line carries the percent, and room for eight lines. Cancel, Back
+and Escape stop the play. If the window cannot be opened, Kodi's own progress
+dialog is used and shows the first four lines.
+
+Once NZBGet has the copies, the dialog shows these lines:
 
 ```text
 Copy 2 of 12 (abNZB, 4 days) - downloading 43%
 4.5 of 10.4 GB - 62 MB/s - about 1m 35s left
 Copy 1 failed: too many missing articles
 155 articles missing - 155 recovered from backups
+Parity: 3.7 GB on hold - not needed so far
+Backups: 2 twins, 3 alts
+Not sent: Digital Carnage refused 1
 ```
 
 - **Line 1** is the copy being followed, the indexer that supplied it and how
@@ -341,14 +364,15 @@ Copy 1 failed: too many missing articles
   backup. The stage is the download percent, or `waiting in the queue`,
   `checking the files`, `repairing`, `unpacking`, `moving into place`,
   `running NZBGet's scripts`, `repairing from backups` (RustyGet), or
-  `finishing up`. A repair or unpack shows its own percent, and the bar
-  follows it.
+  `finishing up`. A repair or unpack shows its own percent.
 - **Line 2**, while it downloads, is how much has arrived, the speed over the
-  last half minute, and the time left at that speed. After the download it is
+  last half minute, and the time left at that speed. The sizes and the
+  percent leave out the parity on hold (see below), so a clean download ends
+  at 100% of what it had to fetch. After the download it is
   how long the current stage has run and, for a stage with a percent, an
   estimate of the time left: `25s so far - about 33s left`. A long move or
   script run is then not mistaken for a hang.
-- **Up to two more lines** follow, the most important first:
+- **More lines** follow, the most important first:
     - a copy that failed, with the reason in plain words, such as `too many
       missing articles`, `it could not be repaired`, `it could not be
       unpacked` or `it needs a password`. After a second failure it reads
@@ -356,6 +380,14 @@ Copy 1 failed: too many missing articles
     - the articles no server had, and what the server got back for them:
       `155 articles missing - 155 recovered from backups`, or
       `106 MB rebuilt by stream repair` (RustyGet);
+    - the parity. NZBGet queues a release's extra par2 volumes paused and
+      fetches only the ones a repair asks for. While none is needed the line
+      reads `Parity: 3.7 GB on hold - not needed so far`. When a repair asks,
+      it reads `Parity: 1.2 GB of 3.7 GB taken off hold for repair`, and a
+      line under it gives the block counts from the download's log:
+      `Repair needs 112 parity blocks - 128 requested`. More are requested
+      than needed because par2 volumes come in fixed sizes. A release with
+      no parity on hold has no parity line;
     - what the backups are, on a server that reports it (RustyGet):
       `Backups: 2 twins, 3 alts`. A **twin** is a byte-identical copy the
       server can borrow missing articles from. An **alt** is a different
@@ -364,8 +396,8 @@ Copy 1 failed: too many missing articles
       minutes;
     - what was not sent, if anything was.
 
-NZBGet doesn't report how many par2 blocks a repair needs while it runs, so
-the dialog shows the missing-article count and the repair's percent.
+The repair's time left comes from its own percent: `repairing 43%` with
+`25s so far - about 33s left` under it.
 
 While the add-on waits for NZBGet to start the next copy, the dialog shows the
 failure and `Waiting for the next copy...`.

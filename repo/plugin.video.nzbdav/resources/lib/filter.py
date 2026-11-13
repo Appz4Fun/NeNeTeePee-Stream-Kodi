@@ -4,6 +4,7 @@
 """Result filtering and sorting using PTT for title parsing."""
 
 import datetime
+import functools
 import math
 import re
 import statistics
@@ -16,6 +17,7 @@ import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kod
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
 from resources.lib import telemetry
+from resources.lib.filter_atmos import share_atmos
 from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
     _fallback_audio,
@@ -552,6 +554,7 @@ _META_DERIVED_ROW_KEYS = (
 )
 
 
+@functools.lru_cache(maxsize=4096)
 def _name_form_key(title):
     """The release name with case and punctuation removed.
 
@@ -669,12 +672,27 @@ def _unify_name_forms(rows):
 
 
 def _attach_metadata(results):
-    """Parse every row's title into ``_meta`` and unify name spellings."""
+    """Parse every row's title into ``_meta`` and unify name spellings.
+
+    Last, a WEB-DL whose name leaves Atmos out takes it from a labelled copy
+    of the same source in ``results`` (``filter_atmos``).
+    """
     parsed_by_title = {}
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
     _unify_name_forms(results)
+    share_atmos(results, _META_DERIVED_ROW_KEYS)
+
+
+def attach_metadata(results):
+    """Parse the provider's rows before they are cached.
+
+    The search cache stores each row's ``_meta`` so a repeat open of the
+    picker skips the parsing (see ``cache``). Call this on the provider's
+    whole answer: spellings of one name are unified across all of it.
+    """
+    _attach_metadata(results)
 
 
 def _log_filter_summary(total, matched_count, shown):
@@ -719,7 +737,12 @@ def filter_results(results, settings_getter=None):
     # The filtered view last: both sorts mark oddly sized copies on the same
     # row objects, and playback and backups read the rows of the filtered view.
     all_parsed = _sort_results(all_parsed, settings)
-    filtered = _sort_results(filtered, settings)
+    if len(filtered) == len(all_parsed):
+        # Nothing was rejected: the two views are the same rows in the same
+        # starting order, so the second sort would repeat the first.
+        filtered = list(all_parsed)
+    else:
+        filtered = _sort_results(filtered, settings)
 
     matched_count = len(filtered)
     max_results = settings["max_results"]
@@ -1275,8 +1298,13 @@ def _hdr_rank(hdr_list):
 
 def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
     """Rank resolution, then the pinned groups (CiNEPHiLES, FraMeSToR), then
-    named groups before none, then HDR, REMUX, group tier, audio tier
-    (``filter_audio.audio_tier``), and size."""
+    named groups before none, then HDR, REMUX, audio tier
+    (``filter_audio.audio_tier``), group tier, and size.
+
+    Audio comes before the preferred-group tier: Dolby Digital Plus with
+    Atmos from a group in no tier ranks above plain Dolby Digital Plus from a
+    preferred one. The group tier then orders releases whose audio is in the
+    same tier."""
     tier_patterns = compile_remux_tiers(remux_tiers)
 
     def _relevance_key(r):
@@ -1290,8 +1318,8 @@ def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
             0 if meta.get("group") else 1,  # no release group: last in its resolution
             _hdr_rank(meta.get("hdr", [])),
             priority,
-            remux_group_rank(r, tier_patterns),
             audio_tier(meta.get("audio", []), meta.get("quality", "")),
+            remux_group_rank(r, tier_patterns),
             size,
         )
 
@@ -1645,7 +1673,7 @@ def _break_ties_by_copies(ordered, relevance_key):
 
     ``ordered`` is already sorted by ``relevance_key``, whose last element is
     size. Each run of rows that ties on everything before size (resolution,
-    pinned group, HDR, REMUX, group tier, audio tier) is re-sorted by copy
+    pinned group, HDR, REMUX, audio tier, group tier) is re-sorted by copy
     count, most first, then by size as before. A stable sort keeps the
     original order when both tie. Copies are counted within the run.
     same_release requires equal resolution, HDR, audio, HYBRID and group, so

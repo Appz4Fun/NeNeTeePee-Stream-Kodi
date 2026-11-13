@@ -20,7 +20,13 @@ import xbmc
 import xbmcgui
 import xbmcplugin
 
-from resources.lib import nzb_cache, nzbget_api, nzbget_progress, nzbget_submit_ledger
+from resources.lib import (
+    nzb_cache,
+    nzbget_api,
+    nzbget_dialog,
+    nzbget_progress,
+    nzbget_submit_ledger,
+)
 from resources.lib.download_ledger import record_download
 from resources.lib.http_util import notify as _notify
 from resources.lib.http_util import redact_text as _redact_text
@@ -204,7 +210,11 @@ def _update_active_dialog(dialog, group, state=None, fleet=None):
     downloads, and any earlier copy that failed. See ``nzbget_progress``.
     """
     message = nzbget_progress.progress_message(
-        state if state is not None else {}, group, fleet
+        state if state is not None else {},
+        group,
+        fleet,
+        # The add-on's own dialog has room for more lines than Kodi's.
+        max_lines=getattr(dialog, "max_lines", None),
     )
     # After the download the bar follows the stage (an unpack at 43%) when
     # NZBGet reports its progress, instead of resting at the download's 100%.
@@ -259,6 +269,34 @@ def _refresh_backup_kinds(state, fleet, settings_getter):
         state["kinds_reads"] = _KIND_READS  # every backup is marked
 
 
+# The download's own log is read for its parity block counts while a repair
+# has parity off hold, this many polls apart: one small call, display only.
+_PARITY_READ_EVERY = 5
+
+
+def _refresh_parity_blocks(state, group, settings_getter):
+    """Note the parity block counts NZBGet logged for the followed copy.
+
+    Read only once parity was taken off hold for it, which is when the log
+    has the counts. Best-effort: an unreadable log leaves the line out.
+    """
+    try:
+        if nzbget_progress.parity_requested(state, group) < 1:
+            state.pop("parity_blocks", None)
+            state["parity_ticks"] = 0
+            return
+        ticks = state.get("parity_ticks", 0)
+        state["parity_ticks"] = ticks + 1
+        if ticks % _PARITY_READ_EVERY:
+            return
+        lines = nzbget_api.par_log(state.get("current"), settings_getter)
+        blocks = nzbget_progress.parity_blocks(lines)
+        if blocks is not None:
+            state["parity_blocks"] = blocks
+    except Exception:  # pylint: disable=broad-except
+        return
+
+
 def _update_waiting_dialog(dialog, state):
     """The dialog between copies: the last failure, or "Post-processing..."."""
     dialog.update(100, nzbget_progress.waiting_message(state) or _string(30219))
@@ -297,6 +335,7 @@ def _tick_tracked_member(state, dialog, settings_getter, dupe_key, fleet=None):
     group = nzbget_api.group_status(current, settings_getter=settings_getter)
     if group["present"]:
         _refresh_backup_kinds(state, fleet, settings_getter)
+        _refresh_parity_blocks(state, group, settings_getter)
         _update_active_dialog(dialog, group, state, fleet)
         state["promotion_deadline"] = None
         return None
@@ -1208,8 +1247,7 @@ def _run_nzbget_backend(  # pylint: disable=too-many-arguments
             on_failure(_string(30221))
             return
 
-        dialog = xbmcgui.DialogProgress()
-        dialog.create(_addon_name(), _string(30218))
+        dialog = nzbget_dialog.open_dialog(_addon_name(), _string(30218))
         ctx = _build_submit_ctx(
             settings_getter,
             smb_root,

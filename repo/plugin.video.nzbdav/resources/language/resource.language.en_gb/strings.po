@@ -1291,8 +1291,8 @@ msgid "Remove releases unless their title contains every one of these comma-sepa
 msgstr "Remove releases unless their title contains every one of these comma-separated keywords."
 
 msgctxt "#30332"
-msgid "Relevance ranks highest resolution first, then CiNEPHiLES and FraMeSToR releases, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio (lossless, then Atmos on DD+ and lossy DTS:X, then DD+/DD/DTS, then the rest), more NZB copies of the release, then larger size. Size and age modes sort by that property only."
-msgstr "Relevance ranks highest resolution first, then CiNEPHiLES and FraMeSToR releases, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, preferred group tiers, audio (lossless, then Atmos on DD+ and lossy DTS:X, then DD+/DD/DTS, then the rest), more NZB copies of the release, then larger size. Size and age modes sort by that property only."
+msgid "Relevance ranks highest resolution first, then CiNEPHiLES and FraMeSToR releases, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, audio (lossless, then Atmos on DD+ and lossy DTS:X, then DD+/DD/DTS, then the rest), preferred group tiers, more NZB copies of the release, then larger size. Size and age modes sort by that property only."
+msgstr "Relevance ranks highest resolution first, then CiNEPHiLES and FraMeSToR releases, then releases with a group above those without, then Dolby Vision, HDR10+, HDR/HDR10, HLG, and SDR. Ties use Hybrid REMUX, REMUX, audio (lossless, then Atmos on DD+ and lossy DTS:X, then DD+/DD/DTS, then the rest), preferred group tiers, more NZB copies of the release, then larger size. Size and age modes sort by that property only."
 
 msgctxt "#30333"
 msgid "Caps how many results are requested per provider and how many appear in the picker after filtering."
@@ -2504,4 +2504,44 @@ msgstr ""
 
 msgctxt "#30687"
 msgid "{} so far"
+msgstr ""
+
+msgctxt "#30688"
+msgid "Parity: {} on hold - not needed so far"
+msgstr ""
+
+msgctxt "#30689"
+msgid "Parity: {} of {} taken off hold for repair"
+msgstr ""
+
+msgctxt "#30690"
+msgid "Repair needs {} parity blocks - {} requested"
+msgstr ""
+
+msgctxt "#30691"
+msgid "{} GB"
+msgstr ""
+
+msgctxt "#30692"
+msgid "{} MB"
+msgstr ""
+
+msgctxt "#30693"
+msgid "Repair needs {} parity blocks"
+msgstr ""
+
+msgctxt "#30694"
+msgid "Cancel"
+msgstr ""
+
+msgctxt "#30695"
+msgid "Cancelling..."
+msgstr ""
+
+msgctxt "#30696"
+msgid "not downloading 1 duplicate"
+msgstr ""
+
+msgctxt "#30697"
+msgid "not downloading {} duplicates"
 msgstr ""

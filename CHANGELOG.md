@@ -69,6 +69,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The dialog counts the listings it does not download.** A release shown
+  as 20 copies could send 10 NZBs with nothing saying why: several indexers
+  list the same upload, and one NZB per upload is fetched. While the NZBs
+  download the first line now reads `Downloading NZBs 6 of 9 - not
+  downloading 5 duplicates`, and the `Not sent` line counts them with the
+  copies found to be the same posting after download: `Not sent: Square Eyed
+  refused 2, 5 duplicate uploads`. A listing left aside is still asked for
+  if its upload's first listing fails, as before.
+- **The NZBGet download dialog is the add-on's own window, without the
+  progress bar.** The first line already carries the percent, and the window
+  has room for eight lines where Kodi's dialog had four: the copy and its
+  stage, size and speed, a failed copy, missing articles, parity, the backups
+  and what was not sent can all show at once. Cancel, Back and Escape stop
+  the play, and a cancel is seen at once. Kodi's own dialog is used if the
+  window cannot be opened.
+- **The dialog says what the parity is doing.** NZBGet queues a release's
+  extra par2 volumes paused and fetches only what a repair asks for. A new
+  line reads `Parity: 3.7 GB on hold - not needed so far`; when a repair
+  asks, `Parity: 1.2 GB of 3.7 GB taken off hold for repair`, with the block
+  counts NZBGet logged under it: `Repair needs 112 parity blocks - 128
+  requested`.
 - **The NZBGet dialog says what was sent, what was left out, and what the
   backups are.** While the copies are handed to NZBGet it lists the indexers
   they came from and anything not sent: `Not sent: Digital Carnage refused 1,
@@ -118,6 +139,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A WEB-DL whose name leaves Atmos out takes it from a labelled copy of
+  the same stream.** Groups name one stream differently: `DD+5.1.Atmos` from
+  one, `DDP5.1` from another, for the same Amazon download, and the second
+  ranked a whole audio tier lower. A WEB-DL tagged Dolby Digital Plus without
+  Atmos now shows and ranks as Atmos when another result of the search is the
+  same movie or episode from the same service, at the same resolution, video
+  codec and channel count, in the same audio language, and is tagged with
+  Atmos. WEBRips and disc releases are left alone, and a HYBRID release
+  neither gives nor takes.
+- **The download's size and percent leave out the parity on hold.** A clean
+  89 GB download ended at `85.3 of 89 GB`, 95%, because the 3.7 GB of par2
+  volumes NZBGet never needed were counted in. It now ends at `85.3 of 85.3
+  GB`, 100%, as on NZBGet's own page.
+- **Reopening a cached search is two to three times faster.** A repeat open
+  read the search from the cache and then parsed every release name again,
+  which was most of the wait on a CoreELEC box: about 1.2 seconds of a
+  2-second open for 475 results. The cache now keeps each name's parsed
+  details beside the results, once per name, and a repeat open reads them
+  back. The list is also sorted once instead of twice when no result is
+  filtered out. With the box's own Python, the parse and sort work of that
+  open fell from 1.1 seconds to 0.5; in Kodi on a test machine a cached
+  588-result open went from 0.35 seconds to 0.11. 132 real cached searches
+  (82,933 results) give the identical list either way. Stored details are
+  reused only by the build that wrote them: after an add-on update each
+  cached search is parsed once more and stored again. An entry is about 40%
+  larger, so the cache limit is 70 MB instead of 50.
+- **Audio is ranked before the preferred-group tier** under Relevance. A
+  release with Dolby Digital Plus and Atmos from a group in no tier now ranks
+  above plain Dolby Digital Plus from a preferred group; before, the group
+  was compared first, so `DDP5.1` from NTb led `DD+5.1.Atmos` from playWEB.
+  The preferred tiers still order releases whose audio is in the same tier.
+  Resolution, CiNEPHiLES and FraMeSToR, HDR and REMUX are still compared
+  before audio.
 - **Collecting a large release's NZBs is about four times faster.** To tell
   whether two copies are the same upload, the add-on reads every article ID in
   each NZB: 130,000 of them in a 12 MB NZB for a remux. On a CoreELEC box that
