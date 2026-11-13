@@ -251,3 +251,94 @@ def test_script_play_movie_search_keeps_every_row(mock_search, mock_tag):
         {}, "movie", "Alien", "1979", {"season": "", "episode": ""}, MagicMock()
     )
     assert mock_tag.call_args.args[2] is rows
+
+
+# --- daily shows: releases named by air date -------------------------------
+
+NIGHT = "The.Daily.Show.2026.11.12.Ron.Howard.1080p.WEB.h264-EDITH"
+NIGHT_BEFORE = "The.Daily.Show.2026.11.11.Kathryn.Hahn.1080p.WEB.h264-EDITH"
+OLD_NIGHT = "The.Daily.Show.2010.02.11.Lee.Daniels.HDTV.XviD-FQM"
+NUMBERED = "The.Daily.Show.S31E20.1080p.WEB.h264-EDITH"
+
+
+def _daily_rows():
+    return [_row(NIGHT), _row(NIGHT_BEFORE), _row(OLD_NIGHT), _row(NUMBERED)]
+
+
+def test_air_date_keeps_only_the_requested_night():
+    kept = drop_other_episodes(_daily_rows(), (31, 20), air_date="2026-11-12")
+    assert _titles(kept) == [NIGHT, NUMBERED]
+
+
+def test_air_date_with_a_time_part_is_understood():
+    kept = drop_other_episodes(_daily_rows(), (31, 20), air_date="2026-11-12T04:00:00Z")
+    assert _titles(kept) == [NIGHT, NUMBERED]
+
+
+def test_air_date_one_day_off_keeps_the_neighbouring_night():
+    """The listing and the release names can disagree by a calendar day."""
+    rows = [_row(NIGHT_BEFORE), _row(OLD_NIGHT), _row(NUMBERED)]
+    kept = drop_other_episodes(rows, (31, 20), air_date="2026-11-12")
+    assert _titles(kept) == [NIGHT_BEFORE, NUMBERED]
+
+
+def test_air_date_matching_no_row_keeps_every_night():
+    """A metadata mismatch must not leave an empty list."""
+    rows = [_row(NIGHT_BEFORE), _row(OLD_NIGHT)]
+    kept = drop_other_episodes(rows, (31, 20), air_date="2026-06-01")
+    assert _titles(kept) == [NIGHT_BEFORE, OLD_NIGHT]
+
+
+@pytest.mark.parametrize("air_date", [None, "", "_", "2026", "12/11/2026", "2026-13-4"])
+def test_unknown_air_date_keeps_every_night(air_date):
+    kept = drop_other_episodes(_daily_rows(), (31, 20), air_date=air_date)
+    assert _titles(kept) == [NIGHT, NIGHT_BEFORE, OLD_NIGHT, NUMBERED]
+
+
+def test_air_date_does_not_touch_numbered_or_undated_rows():
+    rows = [_row(WANTED), _row("Six.Feet.Under.S02.1080p.AMZN.WEB-DL.H.264-FLUX")]
+    kept = drop_other_episodes(rows, (2, 1), air_date="2002-03-03")
+    assert len(kept) == 2
+
+
+def test_router_passes_the_air_date_on():
+    from resources.lib.router import _requested_episode_rows
+
+    kept = _requested_episode_rows(
+        _daily_rows(), "episode", "31", "20", air_date="2026-11-12"
+    )
+    assert _titles(kept) == [NIGHT, NUMBERED]
+
+
+@patch("resources.lib.router_scriptplay._script_play_filter_autoselect_tag")
+@patch("resources.lib.router_scriptplay._script_play_search_results")
+def test_script_play_uses_the_players_premiered_token(mock_search, mock_tag):
+    from resources.lib.router_scriptplay import _script_play_search_filter_tag
+
+    mock_search.return_value = _daily_rows()
+    _script_play_search_filter_tag(
+        {"premiered": "2026-11-12"},
+        "episode",
+        "The Daily Show",
+        "",
+        {"season": "31", "episode": "20"},
+        MagicMock(),
+    )
+    assert _titles(mock_tag.call_args.args[2]) == [NIGHT, NUMBERED]
+
+
+def test_player_sends_the_episode_air_date():
+    from resources.lib.player_installer import PLAYER_JSON
+
+    assert "premiered={premiered}" in PLAYER_JSON["play_episode"]
+    assert "premiered" not in PLAYER_JSON["play_movie"]
+
+
+def test_retargeted_play_forgets_the_old_air_date():
+    """A next-episode retarget must not pick the previous night's date."""
+    from resources.lib.router_scriptplay import _retarget_episode_params
+
+    params = {"season": "31", "episode": "20", "premiered": "2026-11-12"}
+    _retarget_episode_params(params, "31", "21")
+    assert "premiered" not in params
+    assert params["episode"] == "21"

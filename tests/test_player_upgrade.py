@@ -37,7 +37,7 @@ def _old_player(schema=9):
     }
 
 
-@pytest.mark.parametrize("schema", [None, 8, 9])
+@pytest.mark.parametrize("schema", [None, 8, 9, 10])
 def test_automatic_upgrade_preserves_custom_fields_and_original_backup(
     installed_player, schema
 ):
@@ -53,7 +53,7 @@ def test_automatic_upgrade_preserves_custom_fields_and_original_backup(
         notify.assert_not_called()
         addon.assert_not_called()
     updated = json.loads(installed_player.read_text())
-    assert updated["schema_version"] == 10
+    assert updated["schema_version"] == 11
     for field in ("name", "priority", "custom"):
         assert updated[field] == original[field]
     for field in ("play_movie", "play_episode", "is_resolvable"):
@@ -66,8 +66,8 @@ def test_automatic_upgrade_preserves_custom_fields_and_original_backup(
 @pytest.mark.parametrize(
     "value",
     [
-        _old_player(10),
         _old_player(11),
+        _old_player(12),
         dict(_old_player(), plugin="foreign"),
         [],
         "invalid",
@@ -225,7 +225,7 @@ def test_migration_artifacts_are_not_tmdbhelper_player_candidates(installed_play
     )
     assert candidates == ["nzbdav.json"]
     reader = namespace["PlayerMeta"](str(installed_player.parent) + "/", candidates[0])
-    assert reader.meta["schema_version"] == 10
+    assert reader.meta["schema_version"] == 11
     assert reader.meta["plugin"] == "plugin.video.nzbdav"
 
 

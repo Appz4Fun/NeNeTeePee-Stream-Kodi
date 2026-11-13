@@ -75,12 +75,14 @@ def _write_back_episode_params(params, season, episode):
 
 # Player tokens that describe the episode TMDBHelper asked for. Once a play is
 # retargeted at another episode they would label it with the wrong title and
-# episode TMDB id (playback_context.metadata_from_params), so they are dropped.
+# episode TMDB id (playback_context.metadata_from_params), and its air date
+# would pick another night of a daily show, so they are dropped.
 _EPISODE_SPECIFIC_PARAMS = (
     "episode_tmdb_id",
     "episode_title",
     "ep_season",
     "ep_episode",
+    "premiered",
 )
 
 
@@ -337,6 +339,7 @@ def _script_play_search_filter_tag(
             search_type,
             search_kwargs.get("season"),
             search_kwargs.get("episode"),
+            air_date=params.get("premiered", ""),
         )
         return _script_play_filter_autoselect_tag(
             loading,
