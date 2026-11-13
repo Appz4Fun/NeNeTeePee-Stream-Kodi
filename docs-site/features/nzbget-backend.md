@@ -378,7 +378,8 @@ NZBGet starts downloading:
    from the search it already ran, so this step downloads nothing.
 2. **Downloading NZBs 1 of 25** ... **25 of 25**: it downloads every NZB file
    itself, your pick included, and checks each one against the NZBs it already
-   kept. Each unique NZB is saved to a folder in Kodi's temp directory as soon
+   kept. Under the count, the dialog lists the indexers that have delivered so
+   far and anything refused or found to be a duplicate. Each unique NZB is saved to a folder in Kodi's temp directory as soon
    as it passes; duplicates are discarded. If your pick's indexer fails,
    another indexer's copy of the same posting is used.
    An indexer that refuses an NZB (HTTP 401, 403 or 429) is skipped for the

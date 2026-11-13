@@ -189,6 +189,7 @@ _FALLBACK_STRINGS = {
     30663: "NZBGet could not read the NZB",
     30664: "it was removed from NZBGet",
     30665: "{} - health {}%",
+    30616: "Downloading NZBs {} of {}",
     30617: "Sending {} NZBs to NZBGet...",
     30666: "Download started",
     30667: "{} x{}",

@@ -778,3 +778,20 @@ def test_missing_articles_come_before_backups_and_what_was_not_sent():
         "155 articles missing",
         "Backups: 2 twins, 3 alts",
     ]
+
+
+def test_the_collecting_stage_fills_in_as_copies_arrive():
+    report = nzbget_progress.FleetReport({"digital carnage"})
+    assert nzbget_progress.collecting_message(report, 1, 8) == (
+        "Downloading NZBs 1 of 8"
+    )
+    report.kept({"indexer": "abNZB"})
+    report.kept({"indexer": "Zurg"})
+    report.dropped({"indexer": "Digital Carnage"})
+    report.kept({"indexer": "Zurg"})
+    report.duplicate()
+    assert nzbget_progress.collecting_message(report, 5, 8) == (
+        "Downloading NZBs 5 of 8[CR]abNZB, Zurg x2"
+        "[CR]Not sent: Digital Carnage refused 1, 1 duplicate upload"
+    )
+    assert nzbget_progress.collecting_message(None, 2, 3) == "Downloading NZBs 2 of 3"

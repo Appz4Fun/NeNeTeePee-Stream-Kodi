@@ -2,6 +2,9 @@
 # Copyright (C) 2026 nzbdav contributors
 """What the NZBGet dialogs say while copies are collected, sent and downloaded.
 
+While the NZBs are downloaded, the count is followed by the same two lines
+the send stage shows, filling in as each copy arrives.
+
 While the copies are handed to NZBGet (its health check can take most of a
 minute) the dialog says what is being sent and what was left out:
 
@@ -187,6 +190,16 @@ def not_sent_line(report):
     if report.duplicates:
         parts.append(_counted(report.duplicates, 30671, 30672))
     return fmt(30668, ", ".join(parts))
+
+
+def collecting_message(report, done, total):
+    """The dialog text while the copies' NZBs are downloaded.
+
+    Under the count: the indexers that have delivered so far, and anything
+    already refused, not downloaded or found to be a duplicate.
+    """
+    lines = [fmt(30616, done, total), indexers_line(report), not_sent_line(report)]
+    return "[CR]".join(line for line in lines if line)
 
 
 def sending_message(report, total):

@@ -7,6 +7,7 @@ import time
 from unittest.mock import patch
 
 import pytest
+from resources.lib import nzb_fingerprint_scan as _scan
 from resources.lib.nzbget_api import history_rows as _REAL_HISTORY_ROWS
 from resources.lib.nzbget_api import queue_rows as _REAL_QUEUE_ROWS
 from resources.lib.nzbget_fleet_dedup import (
@@ -1842,8 +1843,12 @@ def test_streaming_fingerprint_detaches_parsed_segments(tmp_path):
             if event == "end" and real(elem.tag) == "segments":
                 seen.append(len(list(elem)))
 
+    # The XML walk is what detaches elements: send this NZB to it, as the
+    # fast read would for anything unusual.
     with patch.object(xml_safety, "safe_iterparse", side_effect=_watch), patch.object(
         nzbget_fleet_dedup, "_local_name", side_effect=_spy
+    ), patch.object(
+        nzbget_fleet_dedup, "_fast_fingerprint", return_value=_scan.UNUSUAL
     ):
         fingerprint = nzbget_fleet_dedup.posting_fingerprint_file(str(path))
     assert fingerprint is not None and len(fingerprint) == 2000
@@ -2352,7 +2357,11 @@ def test_fingerprinting_detaches_every_finished_element():
                 roots.append(elem)
             yield event, elem
 
-    with patch.object(xml_safety, "safe_iterparse", side_effect=_capture):
+    from resources.lib import nzbget_fleet_dedup as dedup_module
+
+    with patch.object(xml_safety, "safe_iterparse", side_effect=_capture), patch.object(
+        dedup_module, "_fast_fingerprint", return_value=_scan.UNUSUAL
+    ):
         assert len(posting_fingerprint(body)) == 5
     assert len(roots[0]) == 0  # nothing finished is still attached
 
