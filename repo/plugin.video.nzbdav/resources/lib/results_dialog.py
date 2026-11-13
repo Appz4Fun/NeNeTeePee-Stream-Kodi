@@ -75,7 +75,7 @@ VIEW_COMPACT = "compact"
 # ``results_view`` setting values (settings.xml option order).
 _VIEW_SETTING = {"0": VIEW_COMPACT, "1": VIEW_LIST}
 
-# Copies listed in the List compacted side panel before "+N more".
+# Indexer lines in the List compacted side panel before "+N more".
 _PANEL_MAX_COPIES = 14
 # Characters per line when the panel breaks a release name at its dots.
 _PANEL_NAME_WIDTH = 46
@@ -250,24 +250,53 @@ def _tech_summary(item_props):
     return "   ".join(item_props[key] for key in keys if item_props.get(key))
 
 
+def _panel_indexer_entries(group):
+    """The group's copies gathered by indexer, in the order each first ranks."""
+    entries = []
+    by_name = {}
+    for row in group:
+        name = row.get("indexer", "") or ""
+        entry = by_name.get(name)
+        if entry is None:
+            entry = by_name[name] = {"name": name, "copies": []}
+            entries.append(entry)
+        entry["copies"].append(row)
+    return entries
+
+
 def _panel_copy_lines(group):
-    """Panel columns (marks, indexers, sizes, ages) for one release group."""
+    """Panel columns (marks, indexers, sizes, ages): one line per indexer.
+
+    An indexer that lists the release several times is one line, "NZB Finder
+    x3", so every indexer carrying the release is visible instead of the first
+    few copies and a "+N more". The line shows the size and age of the copy
+    Enter plays when that indexer has it, else of its best-ranked copy. The
+    indexer holding the copy Enter plays is highlighted.
+    """
     pick = group_pick(group)
-    shown = group[:_PANEL_MAX_COPIES]
-    if len(group) > _PANEL_MAX_COPIES:
-        shown = group[: _PANEL_MAX_COPIES - 1]
-        if not any(row is pick for row in shown):
-            shown = shown[:-1] + [pick]
+    entries = _panel_indexer_entries(group)
+    shown = entries[:_PANEL_MAX_COPIES]
+    if len(entries) > _PANEL_MAX_COPIES:
+        shown = entries[: _PANEL_MAX_COPIES - 1]
+        if not any(pick in entry["copies"] for entry in shown):
+            holder = next(entry for entry in entries if pick in entry["copies"])
+            shown = shown[:-1] + [holder]
     marks, indexers, sizes, ages = [], [], [], []
-    for row in shown:
-        marks.append(_available_text() if row.get("_available") else " ")
-        color = _COPY_LEAD_COLOR if row is pick else _COPY_COLOR
-        indexers.append(_c(row.get("indexer", "") or " ", color))
-        sizes.append(_c(_format_size(row.get("size")) or " ", "FFA1A1AA"))
-        ages.append(_c(row.get("age", "") or " ", "FF6B7280"))
-    if len(shown) < len(group):
+    for entry in shown:
+        copies = entry["copies"]
+        has_pick = any(row is pick for row in copies)
+        lead = pick if has_pick else copies[0]
+        available = any(row.get("_available") for row in copies)
+        marks.append(_available_text() if available else " ")
+        name = entry["name"] or " "
+        if len(copies) > 1:
+            name = _fmt(30667, name, len(copies))
+        indexers.append(_c(name, _COPY_LEAD_COLOR if has_pick else _COPY_COLOR))
+        sizes.append(_c(_format_size(lead.get("size")) or " ", "FFA1A1AA"))
+        ages.append(_c(lead.get("age", "") or " ", "FF6B7280"))
+    if len(shown) < len(entries):
         marks.append(" ")
-        indexers.append(_c(_fmt(30489, len(group) - len(shown)), "FF9CA3AF"))
+        indexers.append(_c(_fmt(30489, len(entries) - len(shown)), "FF9CA3AF"))
         sizes.append(" ")
         ages.append(" ")
     return ["[CR]".join(column) for column in (marks, indexers, sizes, ages)]

@@ -163,7 +163,9 @@ your filters, the picker opens instead.
 
 - **List compacted** (default) shows each release once, however many indexers
   carry it, with its copy count on the right of the row. A panel on the right
-  lists the focused release's copies with indexer, size and age. A green
+  lists the indexers that carry the focused release, one line each, with a
+  count when an indexer lists it more than once (`NZB Finder x3`) and the size
+  and age of that indexer's best copy. A green
   **DL** on the row means a copy is already downloaded. Press ++enter++ to
   play the downloaded copy if there is one, otherwise the top-ranked copy.
 - **List** shows every indexer copy on its own row, as earlier versions did.

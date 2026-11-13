@@ -108,6 +108,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The picker's side panel lists every indexer once.** In List compacted,
+  the panel showed one line per copy, so an indexer that listed a release
+  three times took three lines and the rest were cut off as `+5 more`. It now
+  shows one line per indexer with a count, such as `NZB Finder x3`, so every
+  indexer carrying the release is visible. Each line shows the size and age of
+  that indexer's best copy, and the indexer holding the copy Enter plays is
+  highlighted.
 - **NZBGet downloads start sooner and use half the indexer grabs.** After
   collecting the backup NZBs, the add-on ran a second "same-content" search
   that downloaded every candidate NZB again, and NZBGet was only sent the
