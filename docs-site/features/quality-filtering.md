@@ -157,6 +157,12 @@ audio formats and the channel count it names to the release:
   in the add-on's data folder and applies to every listing of that release
   name from then on, whichever indexer lists it. A read that failed is tried
   again a day later.
+- **An indexer that refuses is left alone for a day.** If one answers that
+  the client is not allowed, the key is wrong or a limit is reached, the
+  add-on sends it no more NFO requests until the next day.
+- **Atmos is only taken from the main track.** An NFO that lists a plain
+  TrueHD track and a separate Dolby Digital Plus Atmos track does not make
+  the release "TrueHD Atmos".
 - **The picker waits two seconds at most.** A slower answer is stored when
   it arrives and used the next time the search is opened.
 - **It only adds.** A name that tags `TrueHD.Atmos` keeps both when its NFO

@@ -13,6 +13,8 @@ NFO, reads the audio formats out of it and remembers them:
 
 * only the top releases (``nfo_audio_releases``, 3 by default, 0 for off):
   each fetch is an API call on the user's account with that indexer;
+* an indexer that refuses a read (a client it blocks, a limit reached) is
+  left alone for a day, not asked again for every new release;
 * each release is asked for once. The answer, or that there was none, is
   kept in ``nfo_audio.json`` in the add-on's data folder and applies to every
   listing of that release name from then on, whichever indexer lists it;
@@ -31,6 +33,7 @@ import os
 import re
 import threading
 import time
+from urllib.parse import urlsplit
 
 import xbmc
 import xbmcvfs
@@ -105,6 +108,8 @@ _LOCK = threading.Lock()
 # Held for a whole save, so saves land in the order they were taken.
 _SAVE_LOCK = threading.Lock()
 _STORE = {}
+# host -> when it last refused a read: it is left alone for a while.
+_PAUSED_HOSTS = {}
 _LOADED = []
 
 
@@ -155,6 +160,30 @@ def _line_channels(readable):
     return bare.group(1) if bare else ""
 
 
+# Object audio rides on a bed track: Atmos on TrueHD or DD+, DTS:X on DTS.
+_OBJECT_FORMATS = ("Atmos", "DTS:X")
+
+
+def _without_stray_objects(entries, formats, main):
+    """``formats`` without object audio that belongs to another track.
+
+    The formats of every track are kept in one list, and the picker reads
+    "Atmos" beside "TrueHD" as TrueHD with Atmos. An NFO with a plain TrueHD
+    7.1 track and a separate Dolby Digital Plus Atmos track must not say
+    that: the object format is kept only when a track carries it together
+    with the main track's format, or when it is the main format itself.
+    """
+    kept = []
+    for name in formats:
+        if name in _OBJECT_FORMATS and name != main:
+            if not any(
+                name in entry["audio"] and main in entry["audio"] for entry in entries
+            ):
+                continue
+        kept.append(name)
+    return kept
+
+
 def _join_bare_counts(entries):
     """Give a count that stands alone to the track named before it.
 
@@ -173,8 +202,10 @@ def _join_bare_counts(entries):
 def audio_from_nfo(text):
     """``{"audio": [...], "channels": "5.1"}`` read from an NFO's text.
 
-    The audio list holds the formats of every track, in the order named, and
-    is empty when the NFO names no format the add-on knows. The channel
+    The audio list holds the formats of every track, in the order named
+    (object audio only when it is on the main track, see
+    ``_without_stray_objects``), and is empty when the NFO names no format
+    the add-on knows. The channel
     count is the main track's own (the track with the format the picker
     leads with, ``filter_audio.main_audio``): "French DD 5.1" beside
     "English TrueHD 7.1" is 7.1. Only the lines that describe the audio
@@ -201,6 +232,7 @@ def audio_from_nfo(text):
     if not formats:
         return {"audio": [], "channels": ""}
     main = main_audio(formats)
+    formats = _without_stray_objects(list(tracks.values()), formats, main)
     channels = ""
     for entry in tracks.values():
         if main in entry["audio"] and entry["channels"]:
@@ -230,6 +262,10 @@ def _load():
                 for key, entry in releases.items():
                     if isinstance(key, str) and _valid_entry(entry):
                         _STORE[key] = entry
+                hosts = data.get("hosts")
+                for host, when in (hosts if isinstance(hosts, dict) else {}).items():
+                    if isinstance(host, str) and isinstance(when, (int, float)):
+                        _PAUSED_HOSTS[host] = when
         except (OSError, TypeError, ValueError):
             return
 
@@ -255,7 +291,11 @@ def _save():
             entries = sorted(_STORE.items(), key=lambda item: item[1].get("at", 0))
             for key, _entry in entries[: max(0, len(entries) - _MAX_STORED)]:
                 del _STORE[key]
-            data = {"v": _STORE_VERSION, "releases": dict(_STORE)}
+            data = {
+                "v": _STORE_VERSION,
+                "releases": dict(_STORE),
+                "hosts": dict(_PAUSED_HOSTS),
+            }
         tmp_path = ""
         try:
             path = _store_path()
@@ -300,10 +340,33 @@ def _settled(key):
     return time.time() - entry.get("at", 0) < _RETRY_AFTER_SECONDS
 
 
+def _host(url):
+    try:
+        return (urlsplit(url).hostname or "").lower()
+    except ValueError:
+        return ""
+
+
+def _pause_host(host):
+    """Leave ``host`` alone for a while: it refused a read."""
+    if host:
+        _load()
+        with _LOCK:
+            _PAUSED_HOSTS[host] = int(time.time())
+
+
+def _host_paused(host):
+    _load()
+    with _LOCK:
+        when = _PAUSED_HOSTS.get(host)
+    return when is not None and time.time() - when < _RETRY_AFTER_SECONDS
+
+
 def forget_all():
     """Drop what was read this run (for tests)."""
     with _LOCK:
         _STORE.clear()
+        _PAUSED_HOSTS.clear()
         del _LOADED[:]
 
 
@@ -399,13 +462,23 @@ def _candidates(rows, key_of, limit):
 
 
 def _nfo_url(key, rows, key_of):
+    """The NFO link of a listing of ``key``, from an indexer not paused."""
     for row in rows:
         url = row.get("nfo_url") if isinstance(row, dict) else None
         title = row.get("title") if isinstance(row, dict) else None
         if isinstance(url, str) and url and isinstance(title, str):
-            if key_of(title) == key:
+            if key_of(title) == key and not _host_paused(_host(url)):
                 return url
     return ""
+
+
+# HTTP statuses, and newznab error codes, that mean "not for you, not now":
+# a wrong or blocked key, a client the indexer refuses, a limit reached.
+_REFUSAL_STATUSES = frozenset((401, 403, 429))
+
+
+def _is_refusal_code(code):
+    return 100 <= code < 200 or 500 <= code < 600
 
 
 # A newznab error reply, sent with HTTP 200 in place of the NFO.
@@ -434,6 +507,8 @@ def _fetch(key, url, title):
             xbmc.LOGINFO,
         )
         _remember(key, [], "", failed=True)
+        if getattr(exc, "code", None) in _REFUSAL_STATUSES:
+            _pause_host(_host(url))
         return False
     error = _error_code(text)
     if error is not None and error not in _NO_NFO_CODES:
@@ -445,6 +520,8 @@ def _fetch(key, url, title):
             xbmc.LOGINFO,
         )
         _remember(key, [], "", failed=True)
+        if _is_refusal_code(error):
+            _pause_host(_host(url))
         return False
     found = audio_from_nfo(text)
     _remember(key, found["audio"], found["channels"])
@@ -460,8 +537,8 @@ def _fetch(key, url, title):
 def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS):
     """Read the NFOs of the top releases of ``rows``; True if any named audio.
 
-    ``rows`` are the picker's rows in its order. The fetches run side by
-    side on daemon threads and this waits ``wait`` seconds for them. One
+    ``rows`` are the picker's rows in its order. The fetches run on daemon
+    threads, one per indexer, and this waits ``wait`` seconds for them. One
     that is slower still finishes and is stored for the next search. True
     means the rows should be parsed again to take the new facts.
     """
@@ -476,15 +553,23 @@ def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS):
         return False
     results = []
 
-    def _work(key, url, title):
+    def _work(batch):
+        # One indexer's reads, one after another: when it refuses one, the
+        # rest are not sent.
         try:
-            results.append(_fetch(key, url, title))
+            for key, url, title in batch:
+                if _host_paused(_host(url)):
+                    break
+                results.append(_fetch(key, url, title))
         finally:
             _save()
 
+    by_host = {}
+    for candidate in candidates:
+        by_host.setdefault(_host(candidate[1]), []).append(candidate)
     threads = [
-        threading.Thread(target=_work, args=candidate, daemon=True)
-        for candidate in candidates
+        threading.Thread(target=_work, args=(batch,), daemon=True)
+        for batch in by_host.values()
     ]
     for thread in threads:
         thread.start()

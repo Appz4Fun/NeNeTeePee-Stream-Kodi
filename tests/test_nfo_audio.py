@@ -720,9 +720,10 @@ def test_an_indexers_error_is_asked_about_again_but_no_such_item_is_not(indexer)
         b'<?xml version="1.0" encoding="UTF-8"?>\n'
         b'<error code="300" description="No such item"/>\n',
     )
-    rows = _rows(PLAIN, OTHER)
-    _offer(rows[0], indexer, "badkey")
-    _offer(rows[1], indexer, "gone")
+    # "No such item" first: a refusal stops the rest of that indexer's reads.
+    rows = _rows(OTHER, PLAIN)
+    _offer(rows[0], indexer, "gone")
+    _offer(rows[1], indexer, "badkey")
     assert filter_module.learn_nfo_audio(rows, _ttl) is False
     assert len(_Handler.requests) == 2
     assert nfo_audio._known(_key(PLAIN))["failed"] is True
@@ -737,3 +738,90 @@ def test_an_indexers_error_is_asked_about_again_but_no_such_item_is_not(indexer)
     assert len(_Handler.requests) == 3
     assert _Handler.requests[-1].startswith("/nfo/badkey")
     assert nfo_audio._error_code('Audio: <error code="1"/> in an NFO') is None
+
+
+def test_an_indexer_that_refuses_is_left_alone_for_a_day(indexer, store):
+    rows = _rows(PLAIN, OTHER, THIRD)
+    for row in rows:
+        _offer(row, indexer, "refused")
+    with patch("resources.lib.nfo_audio.xbmc.log"):
+        assert filter_module.learn_nfo_audio(rows, _ttl) is False
+    # One request: after the refusal the other two were not sent.
+    assert len(_Handler.requests) == 1
+    assert "127.0.0.1" in json.loads(store.read_text())["hosts"]
+
+    # A new search, new releases, the same indexer: nothing is sent, in this
+    # run or the next.
+    more = _rows(FOURTH)
+    _offer(more[0], indexer, "plain")
+    assert filter_module.learn_nfo_audio(more, _ttl) is False
+    nfo_audio.forget_all()
+    assert filter_module.learn_nfo_audio(more, _ttl) is False
+    assert len(_Handler.requests) == 1
+
+    # A day later it is asked again.
+    with patch("resources.lib.nfo_audio.time.time", return_value=10**10):
+        assert filter_module.learn_nfo_audio(more, _ttl) is True
+    assert len(_Handler.requests) == 2
+
+
+def test_an_error_reply_that_refuses_pauses_the_indexer_and_no_such_item_does_not(
+    indexer,
+):
+    _Handler.replies["/nfo/limit"] = (
+        200,
+        b'<error code="500" description="Request limit reached"/>',
+    )
+    _Handler.replies["/nfo/gone"] = (
+        200,
+        b'<error code="300" description="No such item"/>',
+    )
+    rows = _rows(PLAIN, OTHER)
+    _offer(rows[0], indexer, "gone")
+    _offer(rows[1], indexer, "plain")
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert len(_Handler.requests) == 2
+
+    more = _rows(THIRD, FOURTH)
+    _offer(more[0], indexer, "limit")
+    _offer(more[1], indexer, "plain")
+    assert filter_module.learn_nfo_audio(more, _ttl) is False
+    assert len(_Handler.requests) == 3
+    assert nfo_audio._host_paused("127.0.0.1")
+
+
+def test_another_indexers_listing_is_used_when_one_is_paused(indexer):
+    rows = _rows(PLAIN, PLAIN.replace(".", " "))
+    rows[0]["nfo_url"] = "http://blocked.example/nfo?apikey=SECRET"
+    _offer(rows[1], indexer, "plain")
+    nfo_audio._pause_host("blocked.example")
+    assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    assert _Handler.requests == ["/nfo/plain?apikey=SECRET"]
+
+
+def test_atmos_on_a_second_track_does_not_label_the_main_one():
+    # A plain TrueHD 7.1 track and a separate Dolby Digital Plus Atmos track.
+    blocks = (
+        "Audio #1\nFormat : MLP FBA\nChannel(s) : 8 channels\n\n"
+        "Audio #2\nFormat : E-AC-3 JOC\nChannel(s) : 6 channels\n\n"
+    )
+    assert nfo_audio.audio_from_nfo(blocks) == {
+        "audio": ["TrueHD", "DD+"],
+        "channels": "7.1",
+    }
+    lines = "Audio: English TrueHD 7.1\n       English DDP 5.1 Atmos\nSubs: en\n"
+    assert nfo_audio.audio_from_nfo(lines)["audio"] == ["TrueHD", "DD+"]
+    # Atmos on the main track itself is kept, whatever else is listed.
+    blocks = (
+        "Audio #1\nFormat : MLP FBA 16-ch\nChannel(s) : 8 channels\n\n"
+        "Audio #2\nFormat : AC-3\nChannel(s) : 6 channels\n\n"
+    )
+    assert nfo_audio.audio_from_nfo(blocks)["audio"] == ["Atmos", "TrueHD", "DD"]
+    # The same for DTS:X beside a better plain track.
+    lines = "Audio: English TrueHD 7.1\n       English DTS-X DTS-HD MA 7.1\n"
+    assert "DTS:X" not in nfo_audio.audio_from_nfo(lines)["audio"]
+    # With only the Atmos track, it is the main one.
+    assert nfo_audio.audio_from_nfo("Audio: DDP 5.1 Atmos\n")["audio"] == [
+        "Atmos",
+        "DD+",
+    ]
