@@ -182,8 +182,9 @@ Six Feet Under (2001) - S02E01 [WEB-DL-1080p][DD+ 5.1][H264]-FLUX
 That is the title and year, the episode for TV (the air date for a daily
 show), the edition or cut in braces
 (`{Unrated}`), then source and resolution, HYBRID, 3D, DUBBED and HC
-(hardcoded subtitles), HDR, the main audio track with its own channel count,
-MULTi or dubbed languages, the video codec, and the release group. A part the name doesn't
+(hardcoded subtitles), HDR, the main audio track with its own channel count
+and any second track after a `+`, MULTi or dubbed languages, the video codec,
+and the release group. A split season pack keeps its part (`S01 Part 2`). A part the name doesn't
 state is left out. File counters, `yEnc`, sizes, file extensions and posting
 wrappers are never shown and never affect grouping. In **List compacted**, the
 side panel shows the release name as the indexer listed it in grey under the

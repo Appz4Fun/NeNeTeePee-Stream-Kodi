@@ -17,7 +17,7 @@ word) is shown as its cleaned release name instead.
 
 import re
 
-from resources.lib.filter_audio import audio_label
+from resources.lib.filter_audio import audio_label, main_audio
 from resources.lib.filter_languages import title_languages
 from resources.lib.release_subject import (
     release_name_from_subject,
@@ -70,6 +70,7 @@ _SUB_TAGS = re.compile(
     re.I,
 )
 _DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_PART_SEPARATORS = re.compile(r"[\s._-]+")
 # ``meta["variant"]`` flags shown as their own "[...]" block, and the cut
 # flags shown with the edition. PTT strips all of them from the title, so a
 # name that left them out would read like the plain release.
@@ -146,8 +147,25 @@ def _edition(meta):
     return " ".join(parts)
 
 
-def _heading(title, identity, meta):
-    """ "Title (Year)", then " - S02E01" for an episode, then " {Edition}"."""
+def _part(name, title):
+    """The part label of ``name`` ("Part 2") unless the title already has it.
+
+    PTT keeps "Part 2" in a movie's title but drops it from a split season
+    pack ("Show.S01.Part.1"), whose halves would then read alike.
+    """
+    # The label the same-release rule reads a part number from.
+    from resources.lib.fallback_streams import _PART_LABEL_RE
+
+    match = _PART_LABEL_RE.search(name)
+    if not match or _PART_LABEL_RE.search(title):
+        return ""
+    words = [word for word in _PART_SEPARATORS.split(match.group(0)) if word]
+    number = words[-1].upper() if len(words) > 1 else ""
+    return " ".join(part for part in (words[0].capitalize(), number) if part)
+
+
+def _heading(name, title, identity, meta):
+    """ "Title (Year)", " - S02E01" or the air date, the part, " {Edition}"."""
     out = title
     year = _year(identity, meta)
     if year and not title.endswith("({})".format(year)):
@@ -161,6 +179,9 @@ def _heading(title, identity, meta):
     elif _DATE.fullmatch(date):
         # A daily show: the air date is its episode.
         out += " - " + date
+    part = _part(name, title)
+    if part:
+        out += (" " if code else " - ") + part
     edition = _edition(meta)
     if edition:
         out += " {" + edition + "}"
@@ -187,10 +208,36 @@ def _quality(meta):
     if not text:
         return ""
     if meta.get("repack"):
-        return text + " REPACK"
+        text += " REPACK"
     if meta.get("proper"):
-        return text + " Proper"
+        text += " Proper"
     return text
+
+
+_ATMOS_BEDS = ("TrueHD", "DD+", "DD")
+
+
+def _audio(meta):
+    """The main track, then any other track the name tags: "TrueHD Atmos
+    7.1 + DD". With no audio tag, the channel count alone ("5.1").
+
+    Every tagged format is part of the same-release rule, so a name that
+    left the second track out would read like the release without it.
+    """
+    names = [str(name) for name in meta.get("audio") or [] if name]
+    label = audio_label(names, meta.get("channels"), meta.get("quality"))
+    if not label:
+        return str(meta.get("channels") or "")
+    main = main_audio(names, meta.get("quality"))
+    shown = {main}
+    if main in _ATMOS_BEDS:
+        shown.add("Atmos")
+    if main == "DTS:X" and "DTS-HD MA" in names:
+        # One track: DTS:X objects on the DTS-HD MA bed the name also tags.
+        label = "DTS-HD MA " + label
+        shown.add("DTS-HD MA")
+    others = [name for name in names if name not in shown]
+    return " + ".join([label] + others)
 
 
 def dynamic_range(meta):
@@ -256,7 +303,7 @@ def _specs(name, meta):
     )
     parts += (
         dynamic_range(meta),
-        audio_label(meta.get("audio"), meta.get("channels"), meta.get("quality")),
+        _audio(meta),
         languages,
         codec_label(name, meta),
     )
@@ -280,7 +327,7 @@ def display_name(result):
         return cleaned
     if not (meta.get("resolution") or meta.get("quality")):
         return cleaned
-    out = _heading(title, identity, meta) + " " + _specs(cleaned, meta)
+    out = _heading(cleaned, title, identity, meta) + " " + _specs(cleaned, meta)
     group = _collapse(meta.get("group"))
     if group:
         out += "-" + group

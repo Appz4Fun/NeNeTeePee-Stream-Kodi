@@ -144,6 +144,23 @@ def _row(title, **extra):
             "Movie.2023.French.1080p.BluRay.x264.DTS.ESubs-GRP",
             "Movie (2023) [Bluray-1080p][DTS][FR][x264]-GRP",
         ),
+        # The halves of a split season pack keep their part.
+        (
+            "Show.S01.Part.1.1080p.WEB.H264-GRP",
+            "Show - S01 Part 1 [WEB-DL-1080p][H264]-GRP",
+        ),
+        (
+            "Show.S01.Part.2.1080p.WEB.H264-GRP",
+            "Show - S01 Part 2 [WEB-DL-1080p][H264]-GRP",
+        ),
+        (
+            "Show.S02.Vol.II.1080p.WEB.H264-GRP",
+            "Show - S02 Vol II [WEB-DL-1080p][H264]-GRP",
+        ),
+        (
+            "Movie.Part.2.2023.1080p.WEB-DL.H.264-GRP",
+            "Movie Part 2 (2023) [WEB-DL-1080p][H264]-GRP",
+        ),
         # A daily show's air date is its episode.
         (
             "The.Daily.Show.2026.11.12.1080p.WEB.H264-GRP",
@@ -162,13 +179,26 @@ def _row(title, **extra):
             "Movie (2023) [Bluray-1080p][DTS][DE][x264]-GRP",
         ),
         # The channels are the main track's, not the first count in the name.
+        # A second track is named after the main one.
         (
             "Movie.2023.2160p.BluRay.REMUX.TrueHD.7.1.Atmos.DD5.1-GRP",
-            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1]-GRP",
+            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1 + DD]-GRP",
         ),
         (
             "Movie.2023.2160p.BluRay.REMUX.DD5.1.TrueHD.7.1.Atmos-GRP",
-            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1]-GRP",
+            "Movie (2023) [Remux-2160p][TrueHD Atmos 7.1 + DD]-GRP",
+        ),
+        (
+            "Movie.2023.2160p.BluRay.REMUX.DTS-HD.MA.7.1.DTS-X-GRP",
+            "Movie (2023) [Remux-2160p][DTS-HD MA DTS:X 7.1]-GRP",
+        ),
+        (
+            "Movie.2023.2160p.BluRay.REMUX.DTS-X.7.1-GRP",
+            "Movie (2023) [Remux-2160p][DTS:X 7.1]-GRP",
+        ),
+        (
+            "Movie.2023.PROPER.REPACK.1080p.BluRay.x264-GRP",
+            "Movie (2023) [Bluray-1080p REPACK Proper][x264]-GRP",
         ),
     ],
 )
