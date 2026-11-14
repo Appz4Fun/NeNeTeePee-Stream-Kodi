@@ -61,15 +61,23 @@ def post_details(item):
     return details
 
 
+# NZBHydra2 adds this attribute after the ones the indexer sent, so the last
+# one is NZBHydra2's own: an indexer cannot name another indexer's host.
+_LAST_WINS = ("hydraIndexerHost",)
+
+
 def _attr_values(item, names):
-    """``{name: value}`` for the first of each named attribute on ``item``."""
+    """``{name: value}`` for the named attributes on ``item``.
+
+    The first of each, except ``hydraIndexerHost``, whose last counts.
+    """
     values = {}
     for attr in item.iter():
         tag = attr.tag
         if not isinstance(tag, str) or tag.rsplit("}", 1)[-1] != "attr":
             continue
         name = attr.get("name", "")
-        if name in names and name not in values:
+        if name in names and (name not in values or name in _LAST_WINS):
             values[name] = str(attr.get("value", "") or "").strip()
     return values
 

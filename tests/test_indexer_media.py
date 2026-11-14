@@ -538,7 +538,6 @@ def test_the_profile_is_shown_only_when_it_is_a_number():
 # --- asking, against a real local server ------------------------------------
 
 _MEDIAINFO_PATH = "/api/v1/releases/{}/mediainfo".format(_ID)
-_OTHER_MEDIAINFO_PATH = "/api/v1/releases/{}/mediainfo".format(_OTHER_ID)
 _NOT_FOUND = json.dumps({"error": {"code": "mediainfo_missing"}}).encode()
 
 
@@ -733,6 +732,52 @@ def test_an_unknown_direct_indexer_is_probed_once(indexer, store):
     nfo_audio.forget_all()
     assert nfo_audio.learn_for_top(rows, _key, _ttl) is False
     assert len(_Handler.requests) == 1
+    # Nothing was learned about the releases, so nothing is settled: another
+    # indexer's listing of one, with an NFO link, is still read.
+    assert not json.loads(store.read_text())["releases"]
+    _Handler.replies["/api"] = (200, _MEDIAINFO_TEXT.encode())
+    rows[0]["nfo_url"] = _nfo_link(indexer.replace("127.0.0.1", "localhost"))
+    with _known(localhost=Offer(GETNFO, None)):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
+    assert nfo_audio._known(_key(PLAIN))["audio"] == ["DD+"]
+
+
+def test_a_release_with_no_mediainfo_and_no_nfo_link_is_settled(indexer, store):
+    _Handler.replies[_MEDIAINFO_PATH] = (404, _NOT_FOUND)
+    rows = _rows(PLAIN)
+    rows[0]["media_ref"] = "{}/api?id={}&apikey=SECRET".format(indexer, _ID)
+    with _known(**{"127_0_0_1": Offer(GETNFO, REST_V1)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is False
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is False
+    # Asked once: the indexer answered that this release has none.
+    assert _Handler.requests == [_MEDIAINFO_PATH]
+    entry = json.loads(store.read_text())["releases"][_key(PLAIN)]
+    assert entry["failed"] is False and entry["audio"] == []
+
+
+def test_a_reference_whose_key_the_call_cannot_use_asks_nothing(indexer):
+    rows = _rows(PLAIN)
+    # The key under a name the MediaInfo call does not take.
+    rows[0]["media_ref"] = "{}/api?id={}&r=SECRET".format(indexer, _ID)
+    with _known(**{"127_0_0_1": Offer(GETNFO, REST_V1)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is False
+    assert not _Handler.requests
+    assert nfo_audio._known(_key(PLAIN)) is None
+
+
+def test_the_host_nzbhydra2_names_is_the_one_compared():
+    link = "https://evil.example/api?t=getnfo&amp;id={}&amp;apikey=SECRET".format(_ID)
+    # An indexer sends its own hydraIndexerHost; NZBHydra2 adds the real one
+    # after it.
+    item = _item(
+        (
+            ("hydraIndexerHost", "evil.example"),
+            ("nfo", "1"),
+            ("info", link),
+            ("hydraIndexerHost", "indexer.example"),
+        )
+    )
+    assert newznab_attrs.nfo_link(item) == ""
 
 
 def test_html_line_breaks_in_an_nfo_are_not_read_as_text(indexer):

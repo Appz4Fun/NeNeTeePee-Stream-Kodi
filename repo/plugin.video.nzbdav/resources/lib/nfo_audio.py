@@ -743,7 +743,7 @@ def _listing(key, rows, key_of, keyed):
         else:
             if not has_key(ref):
                 ref = with_key_from(ref, keyed.get(host, ""))
-            if not ref or not _may_ask_mediainfo(host):
+            if not _may_ask_mediainfo(host) or not mediainfo_audio.request_for(ref):
                 continue
             rank = 0 if serves else 2
         if best_rank is None or rank < best_rank:
@@ -830,17 +830,18 @@ def _fetch_mediainfo(key, link, title):
     """Ask the indexer for the release's MediaInfo, where it may have the call.
 
     ``link`` names the release and carries the key (``mediainfo_audio.
-    request_for``). Returns ``(answer, video, retry)``. ``answer`` is True or
+    request_for``). Returns ``(answer, video, what)``. ``answer`` is True or
     False when that settled the release (audio found, or the indexer
     refused), None when the NFO should be read: no such call there, no
     MediaInfo for this release, none of its audio recognised, or no answer.
-    ``video`` is what the report said of the video, and ``retry`` is True
-    when the call gave no answer this time.
+    ``video`` is what the report said of the video. ``what`` is what the
+    reply meant (``mediainfo_audio.TRACKS`` and the others), None when the
+    indexer was not asked.
     """
     host = _host(link)
     request = mediainfo_audio.request_for(link)
     if request is None or not _may_ask_mediainfo(host):
-        return None, {}, False
+        return None, {}, None
     status, body = _get_with_status(*request)
     what, tracks = mediainfo_audio.read_reply(status, body)
     in_table = serves_mediainfo(host) is True
@@ -865,15 +866,15 @@ def _fetch_mediainfo(key, link, title):
         )
         _remember(key, [], "", failed=True)
         _pause_host(host)
-        return False, {}, False
+        return False, {}, what
     if what == mediainfo_audio.NO_API:
         _note_rest(host, False)
-        return None, {}, False
+        return None, {}, what
     if what == mediainfo_audio.FAILED:
-        return None, {}, True
+        return None, {}, what
     _note_rest(host, True)
     if what != mediainfo_audio.TRACKS:
-        return None, {}, False
+        return None, {}, what
     video = mediainfo_video.from_reply(body)
     if video:
         xbmc.log(
@@ -884,7 +885,7 @@ def _fetch_mediainfo(key, link, title):
         )
     found = mediainfo_audio.merge_tracks(tracks)
     if not found["audio"]:
-        return None, video, False
+        return None, video, what
     _remember(key, found["audio"], found["channels"], exact=True, video=video)
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' names audio: {}".format(
@@ -892,7 +893,7 @@ def _fetch_mediainfo(key, link, title):
         ),
         xbmc.LOGINFO,
     )
-    return True, video, False
+    return True, video, what
 
 
 def _video_words(video):
@@ -914,13 +915,21 @@ def _fetch(key, nfo_url, title, describe=None, ref=""):
     ``ref`` is the link the MediaInfo call is built from, the NFO link when
     none is given. True when something was learned. The answer, or that
     there was none, is remembered either way.
+
+    One case remembers nothing: a release with no NFO link whose indexer
+    turned out to have no MediaInfo call, or was not asked. Nothing was
+    learned about the release, and another indexer's listing of it may
+    still bring an NFO.
     """
-    answer, video, retry = _fetch_mediainfo(key, ref or nfo_url, title)
+    answer, video, what = _fetch_mediainfo(key, ref or nfo_url, title)
     if answer is not None:
         return answer
     if nfo_url:
         return _fetch_nfo(key, nfo_url, title, describe, video)
-    _remember_no_audio(key, video, failed=retry)
+    if what == mediainfo_audio.FAILED:
+        _remember_no_audio(key, video, failed=True)
+    elif what in (mediainfo_audio.TRACKS, mediainfo_audio.MISSING):
+        _remember_no_audio(key, video)
     return bool(video)
 
 
