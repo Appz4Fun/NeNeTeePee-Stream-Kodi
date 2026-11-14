@@ -480,3 +480,16 @@ def test_panel_reads_the_focused_compact_item_and_is_not_focusable():
         assert "$INFO[Container(51).ListItem.Property({})]".format(prop) in labels
     types = {c.get("type") for c in panel[0].iter("control")}
     assert not types & {"button", "list", "panel", "scrollbar"}
+
+
+def test_rows_are_built_off_screen():
+    # An on-screen ListItem takes Kodi's graphics lock on every property it
+    # is given: a few hundred releases kept the picker blank for a minute.
+    from resources.lib.results_dialog import _build_result_item
+
+    with patch("resources.lib.results_dialog.xbmcgui.ListItem") as made:
+        _build_group_item([_row(ALPHA, "a1"), _row(ALPHA, "a2")], 0)
+        _build_result_item(_row(BRAVO, "b1"), 1)
+    assert made.call_count == 2
+    for call in made.call_args_list:
+        assert call.kwargs.get("offscreen") is True

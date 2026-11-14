@@ -97,9 +97,22 @@ def _row_label(result):
     return result.get("_display_title") or display_name(result)
 
 
+def _list_item(label):
+    """A list row built off-screen.
+
+    Every call on an on-screen ``ListItem`` (``setProperty`` above all) takes
+    Kodi's graphics lock and waits for the frame being drawn. A row sets
+    about two dozen properties, so a search with a few hundred releases
+    spent tens of seconds on that lock before the list showed: 25 to 60
+    seconds for 474 releases on a CoreELEC box, 0.2 seconds off-screen.
+    The rows are not on screen until ``addItems`` puts them there.
+    """
+    return xbmcgui.ListItem(label=label, offscreen=True)
+
+
 def _build_result_item(result, row_index):
     """Build a styled ListItem for a single search result row."""
-    li = xbmcgui.ListItem(label=_row_label(result))
+    li = _list_item(_row_label(result))
     _set_result_properties(li, result)
     # Alternating row background
     li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
@@ -385,7 +398,7 @@ def _build_group_item(group, row_index):
     """
     lead = group[0]
     label = _row_label(lead)
-    item = xbmcgui.ListItem(label=label)
+    item = _list_item(label)
     recorder = _PropertyRecorder(item)
     _set_result_properties(recorder, lead)
     item.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
