@@ -170,9 +170,14 @@ def test_the_nfo_link_is_kept_when_it_points_at_the_results_indexer():
 
 def test_the_nfo_link_is_refused_otherwise():
     refused = (
-        # no NFO, or no flag
+        # flagged as having no NFO, or a flag that is not a yes
         (("nfo", "0"), ("info", _LINK), ("hydraIndexerHost", "indexer.example")),
-        (("info", _LINK), ("hydraIndexerHost", "indexer.example")),
+        (("nfo", ""), ("info", _LINK), ("hydraIndexerHost", "indexer.example")),
+        # no flag, and the link is not an NFO call
+        (
+            ("info", _LINK.replace("t=getnfo", "t=details")),
+            ("hydraIndexerHost", "indexer.example"),
+        ),
         # no link
         (("nfo", "1"), ("hydraIndexerHost", "indexer.example")),
         # another host, a look-alike host, no host to compare with
@@ -219,7 +224,7 @@ def test_a_hydra_result_carries_the_link():
     (row,) = hydra.parse_results(xml)
     assert row["nfo_url"] == _LINK.replace("&amp;", "&")
     (row,) = hydra.parse_results(
-        xml.replace('name="nfo" value="1"', 'name="x" value="1"')
+        xml.replace('name="nfo" value="1"', 'name="nfo" value="0"')
     )
     assert "nfo_url" not in row
 

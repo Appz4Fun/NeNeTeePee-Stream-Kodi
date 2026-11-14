@@ -20,11 +20,25 @@ upload (``nzbget_fleet_dedup.same_listing``). Only the fields an indexer sent
 are returned, so a result from one that sends none is unchanged.
 
 Some also send ``nfo`` and ``info``: a flag that the release has an NFO and
-the link to it (``nfo_link``, read by ``nfo_audio``).
+the link to it (``nfo_link``, read by ``nfo_audio``). What each indexer
+offers, and how a result without a link is asked about, is in
+``indexer_media``.
 """
 
 import re
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlsplit
+
+from resources.lib.indexer_media import (
+    acceptable_link,
+    direct_refs,
+    host_of,
+    id_from_details_link,
+    media_ref,
+    same_site,
+    serves_mediainfo,
+    usable_nfo_link,
+    valid_release_id,
+)
 
 # The row keys, which are the attribute names.
 POST_DETAIL_KEYS = ("usenetdate", "poster", "group", "password", "files", "grabs")
@@ -47,14 +61,15 @@ def post_details(item):
     return details
 
 
-def nfo_link(item):
-    """The link to the release's NFO an indexer sent with ``item``, or "".
+# NZBHydra2 adds this attribute after the ones the indexer sent, so the last
+# one is NZBHydra2's own: an indexer cannot name another indexer's host.
+_LAST_WINS = ("hydraIndexerHost",)
 
-    Some indexers send ``nfo`` (1 when the release has an NFO) and ``info``
-    (the call that returns it). The link carries the user's API key for that
-    indexer, so it is only accepted when it points at the indexer the result
-    came from (``hydraIndexerHost``, which NZBHydra2 adds): a result must not
-    be able to send the add-on anywhere else.
+
+def _attr_values(item, names):
+    """``{name: value}`` for the named attributes on ``item``.
+
+    The first of each, except ``hydraIndexerHost``, whose last counts.
     """
     values = {}
     for attr in item.iter():
@@ -62,31 +77,124 @@ def nfo_link(item):
         if not isinstance(tag, str) or tag.rsplit("}", 1)[-1] != "attr":
             continue
         name = attr.get("name", "")
-        if name in ("nfo", "info", "hydraIndexerHost") and name not in values:
+        if name in names and (name not in values or name in _LAST_WINS):
             values[name] = str(attr.get("value", "") or "").strip()
-    link = values.get("info", "")
-    if values.get("nfo") != "1" or not link or len(link) > 2048:
-        return ""
+    return values
+
+
+# The API calls that return a release's NFO.
+_NFO_CALLS = ("getnfo", "info")
+
+
+def _link_call(link):
     try:
-        parts = urlsplit(link)
-        host = (parts.hostname or "").lower()
+        return dict(parse_qsl(urlsplit(link).query)).get("t", "").lower()
     except ValueError:
         return ""
-    if parts.scheme.lower() not in ("http", "https") or not host:
+
+
+def nfo_link(item, indexer_host=""):
+    """The link to the release's NFO an indexer sent with ``item``, or "".
+
+    Most indexers send ``nfo`` (1 when the release has an NFO) and ``info``
+    (the call that returns it). Some send the link alone, on the results
+    that have an NFO: it is taken when it is an NFO call. The link carries
+    the user's API key for that indexer, so it is only accepted when it
+    points at the indexer the result came from: ``indexer_host`` for a
+    direct indexer, else ``hydraIndexerHost``, which NZBHydra2 adds. A
+    result must not be able to send the add-on anywhere else.
+    """
+    values = _attr_values(item, ("nfo", "info", "hydraIndexerHost"))
+    link = values.get("info", "")
+    if not acceptable_link(link):
         return ""
-    return link if _same_site(host, values.get("hydraIndexerHost", "")) else ""
+    flag = values.get("nfo")
+    if flag is None:
+        if _link_call(link) not in _NFO_CALLS:
+            return ""
+    elif flag != "1":
+        return ""
+    indexer_host = indexer_host or values.get("hydraIndexerHost", "")
+    if not same_site(host_of(link), indexer_host):
+        return ""
+    return usable_nfo_link(link)
 
 
-def _same_site(host, indexer_host):
-    """Whether ``host`` is the indexer's host, or one under or above it."""
-    indexer_host = str(indexer_host or "").strip().lower()
-    if not indexer_host or "." not in indexer_host:
-        return False
-    return (
-        host == indexer_host
-        or host.endswith("." + indexer_host)
-        or indexer_host.endswith("." + host)
+def _element_text(item, tag):
+    element = item.find(tag)
+    return (element.text or "").strip() if element is not None else ""
+
+
+def _release_id(item, values=None):
+    """The indexer's own id for the release on ``item``, or "".
+
+    From its details link: ``comments``, or a ``guid`` that is a link. With
+    ``values`` (the item's attributes, for a direct indexer's result) a
+    ``guid`` element or attribute that is the bare id serves too. Through
+    NZBHydra2 those two hold NZBHydra2's own number, so they are not looked
+    at there.
+    """
+    for tag in ("comments", "guid"):
+        found = id_from_details_link(_element_text(item, tag))
+        if found:
+            return found
+    if values is None:
+        return ""
+    for bare in (_element_text(item, "guid"), values.get("guid", "")):
+        if valid_release_id(bare):
+            return bare
+    return ""
+
+
+def media_ref_link(item):
+    """A keyless reference for the MediaInfo call of ``item``'s release, or "".
+
+    For an NZBHydra2 result with no NFO link, from an indexer known to serve
+    MediaInfo: the reference names the indexer's host and the release's id,
+    and ``nfo_audio`` completes it with the key of another result of that
+    indexer in the same search.
+    """
+    values = _attr_values(item, ("hydraIndexerHost",))
+    host = values.get("hydraIndexerHost", "").lower()
+    if serves_mediainfo(host) is not True:
+        return ""
+    comments = item.find("comments")
+    details = (comments.text or "").strip() if comments is not None else ""
+    if not same_site(host_of(details), host):
+        return ""
+    try:
+        scheme = urlsplit(details).scheme.lower()
+    except ValueError:
+        return ""
+    return media_ref(scheme, host, _release_id(item))
+
+
+def direct_media_links(item, api_url, api_key):
+    """``{"nfo_url": ..., "media_ref": ...}`` for a direct indexer's result.
+
+    The link the indexer sent is used when it points at that indexer.
+    Otherwise the add-on, which holds the key in direct-indexer mode, builds
+    the calls from the release's id (``indexer_media.direct_refs``): the NFO
+    call for a result flagged as having one, and a reference for the
+    MediaInfo call unless the indexer is known to have none. Only the keys
+    with a value are returned.
+    """
+    api_host = host_of(api_url)
+    if not api_host:
+        return {}
+    sent = nfo_link(item, indexer_host=api_host)
+    if sent:
+        return {"nfo_url": sent}
+    values = _attr_values(item, ("nfo", "guid"))
+    nfo_url, ref = direct_refs(
+        api_url, api_key, _release_id(item, values), values.get("nfo") == "1"
     )
+    links = {}
+    if nfo_url:
+        links["nfo_url"] = nfo_url
+    elif ref:
+        links["media_ref"] = ref
+    return links
 
 
 _ADDRESS = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")

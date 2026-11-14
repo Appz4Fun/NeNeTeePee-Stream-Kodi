@@ -20,10 +20,10 @@ formats, and how several tracks become one release's audio.
 
 import json
 import re
-from urllib.parse import parse_qsl, quote, urlsplit
 
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio
+from resources.lib.indexer_media import mediainfo_request
 from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_fromstring
 
 # MediaInfo's names for formats, as release names write them. The longer
@@ -128,32 +128,17 @@ def _main_channels(entries, formats, main):
 
 # --- the request ------------------------------------------------------------
 
-_GUID = re.compile(r"^[A-Za-z0-9-]{8,64}$")
-_API_PATH = "/api/v1/releases/{}/mediainfo"
 
+def request_for(link):
+    """``(url, headers)`` of the MediaInfo call for an API link, or None.
 
-def request_for(nfo_url):
-    """``(url, headers)`` of the MediaInfo call for an NFO link, or None.
-
-    The NFO link is ``.../api?t=getnfo&id=<guid>&apikey=<key>``. The call
-    goes to the same host, with the guid in the path and the key in a
-    header: the key is never put in this URL.
+    ``link`` names the release and carries the key: an NFO link
+    (``.../api?t=getnfo&id=<guid>&apikey=<key>``) or a reference built for a
+    result without one (``indexer_media``). The call goes to the same host,
+    with the guid in the path and the key in a header: the key is never put
+    in this URL.
     """
-    try:
-        parts = urlsplit(nfo_url)
-        query = dict(parse_qsl(parts.query))
-    except (AttributeError, TypeError, ValueError):
-        return None
-    guid = query.get("id", "")
-    key = query.get("apikey", "")
-    if parts.scheme not in ("http", "https") or not parts.netloc:
-        return None
-    if not _GUID.match(guid) or not key or len(key) > 128:
-        return None
-    url = "{}://{}{}".format(
-        parts.scheme, parts.netloc, _API_PATH.format(quote(guid, safe=""))
-    )
-    return url, {"X-API-Key": key, "Accept": "application/json"}
+    return mediainfo_request(link)
 
 
 # --- the reply --------------------------------------------------------------
@@ -212,6 +197,11 @@ def _mediainfo_xml(reply):
         if isinstance(text, str) and text.strip():
             return text
     return ""
+
+
+def mediainfo_xml_of(body):
+    """The MediaInfo XML in the call's JSON reply ``body``, or "" for none."""
+    return _mediainfo_xml(_json_object(body)) or ""
 
 
 _TRACK_FIELDS = ("Format", "Format_AdditionalFeatures", "Format_Commercial_IfAny")

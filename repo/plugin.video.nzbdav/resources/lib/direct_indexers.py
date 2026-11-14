@@ -31,7 +31,7 @@ from resources.lib.http_util import (
     redact_url as _redact_url,
 )
 from resources.lib.indexer_store import load_indexers
-from resources.lib.newznab_attrs import post_details
+from resources.lib.newznab_attrs import direct_media_links, post_details
 from resources.lib.newznab_caps import normalize_api_endpoint
 from resources.lib.search_planner import plan_newznab_search
 from resources.lib.xml_safety import ParseError as _XmlParseError
@@ -245,7 +245,7 @@ def _apply_enclosure_fallback(item, link, size):
     )
 
 
-def _build_result(item, fallback_indexer):
+def _build_result(item, fallback_indexer, configured=None):
     title = _get_text(item, "title")
     link = _get_text(item, "link")
     pubdate = _get_text(item, "pubDate")
@@ -261,11 +261,25 @@ def _build_result(item, fallback_indexer):
         "age": _calculate_age(pubdate) if pubdate else "",
     }
     result.update(post_details(item))
+    if isinstance(configured, dict):
+        # The calls for the release's NFO and MediaInfo (``nfo_audio``): the
+        # add-on holds this indexer's key, so it can ask by release id.
+        result.update(
+            direct_media_links(
+                item,
+                normalize_api_endpoint(configured.get("api_url", "")),
+                configured.get("api_key", ""),
+            )
+        )
     return result
 
 
-def parse_results(xml_text, fallback_indexer):
-    """Parse Newznab XML into the existing normalized result shape."""
+def parse_results(xml_text, fallback_indexer, indexer=None):
+    """Parse Newznab XML into the existing normalized result shape.
+
+    ``indexer`` is the configured indexer the reply came from: with it, each
+    result also carries the calls for its NFO and MediaInfo.
+    """
     try:
         root = _safe_fromstring(xml_text)
     except (_XmlParseError, _UnsafeXmlError, TypeError) as error:
@@ -280,7 +294,9 @@ def parse_results(xml_text, fallback_indexer):
     if root.tag != "rss":
         return [], "Direct indexer returned an invalid response: expected RSS feed"
 
-    return [_build_result(item, fallback_indexer) for item in root.iter("item")], None
+    return [
+        _build_result(item, fallback_indexer, indexer) for item in root.iter("item")
+    ], None
 
 
 def _coerce_max_results(raw):
@@ -396,7 +412,7 @@ def _fetch_and_parse(indexer, params, error_prefix):
     xml_text, request_error = _fetch_indexer(indexer, params, error_prefix)
     if request_error:
         return None, request_error
-    results, parse_error = parse_results(xml_text, indexer["label"])
+    results, parse_error = parse_results(xml_text, indexer["label"], indexer)
     if parse_error:
         return None, parse_error
     return results, None
