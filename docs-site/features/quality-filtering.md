@@ -139,6 +139,72 @@ tags DTS:X without DTS-HD MA carries the lossy kind. `DD_5.1`, or `DD 5.1` in
 a name that otherwise separates its words with dots, is read as `DD+5.1`: the
 plus sign was replaced on the way from the indexer.
 
+#### Audio from the NFO
+
+A release name can leave its audio out altogether:
+`Movie.2004.MULTi.1080p.BluRay.x264-GRP`. Such a release ranks as "audio
+unknown", after every release that tags its audio. Its NFO usually says what
+it carries: `Audio.........: English DTS-HD MA 5.1 @ 3739 kb/s`.
+
+Some indexers send, with each search result, a flag that the release has an
+NFO and a link to it, and NZBHydra2 passes both through. For the first
+releases of a search that offer one, the add-on reads the NFO and uses the
+audio formats and the channel count it names for the release:
+
+- **MediaInfo first, where the indexer serves it.** An NFO is free text.
+  MediaInfo is the tool's own report of the file and lists every audio
+  track with its format, its Atmos or DTS:X marker and its channel count.
+  Treasure Maps serves it from a second API on the same site
+  (`/api/v1/releases/<id>/mediainfo`), so the add-on asks there first, with
+  the key the NFO link carries sent in a header, and reads the NFO when the
+  release has no MediaInfo. An indexer without that call is asked once and
+  then not again for a month.
+- **Only the top releases** (`nfo_audio_releases`, 3 by default, 0 for
+  off). Each release costs one API call on your account with that indexer,
+  or two when it has no MediaInfo and its NFO is read instead.
+- **Once per release.** The answer, or that the NFO named no audio, is kept
+  in the add-on's data folder and applies to every listing of that release
+  name from then on, whichever indexer lists it. A read that failed is tried
+  again a day later.
+- **An indexer that refuses is left alone for a day.** If one answers that
+  the client is not allowed, the key is wrong or a limit is reached, the
+  add-on sends it no more MediaInfo or NFO requests until the next day.
+- **With several tracks of the main format, the fullest one counts.** A
+  stereo Dolby Digital Plus track listed before the 5.1 one with Atmos does
+  not make the release 2.0.
+- **Atmos is only taken from the main track.** An NFO that lists a plain
+  TrueHD track and a separate Dolby Digital Plus Atmos track does not make
+  the release "TrueHD Atmos".
+- **The picker waits two seconds at most.** A slower answer is stored when
+  it arrives and used the next time the search is opened.
+- **What was read wins over the name.** The formats and the channel count
+  read from MediaInfo or the NFO replace the ones the name tags: a name that
+  says `DTS.5.1` whose NFO says `DTS-HD MA 7.1` is labelled and ranked as
+  DTS-HD MA 7.1, and a name that says `DDP.5.1.Atmos` whose NFO leads with a
+  plain TrueHD 7.1 track is TrueHD 7.1, not "TrueHD Atmos". One thing is
+  kept from the name: its Atmos or DTS:X tag, when a hand-written NFO leads
+  with the track the name put it on. `Audio: English TrueHD 7.1` is how many
+  NFOs describe an Atmos track. MediaInfo marks Atmos on the track itself,
+  so it is used exactly as it reads.
+- **Only when the NFO is this release's.** Indexers attach NFOs by matching,
+  and a release can carry another release's NFO. Each NFO is checked
+  against the release's name. One that names the release (or the same film
+  or episode from the same group) is used as above. One that names another
+  film, another episode or another group's release is not used at all. One
+  that names no release, such as a bare MediaInfo dump, only adds to what
+  the name tags and replaces nothing. MediaInfo from the indexer's API is
+  made from the release's own file and needs no such check.
+- **No Atmos guess for a release that was read.** The rule under
+  [Atmos a name leaves out](#atmos-a-name-leaves-out) does not add Atmos to
+  a release whose MediaInfo or NFO was read and names none. When the copy
+  labelled Atmos turns out to have none, a copy that took the guess from it
+  gives it back, unless another copy is still labelled Atmos by its name.
+- **The link is only followed to the indexer the result came from**, and is
+  never written to the log: it carries your API key for that indexer.
+
+MediaInfo's names are understood: `E-AC-3 JOC` is Dolby Digital Plus with
+Atmos, `MLP FBA 16-ch` is TrueHD with Atmos, `DTS XLL` is DTS-HD MA.
+
 #### Atmos a name leaves out
 
 Groups name the same stream differently: one writes `DD+5.1.Atmos`, another

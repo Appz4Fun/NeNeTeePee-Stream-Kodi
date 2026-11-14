@@ -1554,6 +1554,13 @@
 						<heading>30064</heading>
 					</control>
 				</setting>
+				<setting id="nfo_audio_releases" type="integer" label="30698" help="30699">
+					<level>1</level>
+					<default>3</default>
+					<control type="edit" format="integer">
+						<heading>30698</heading>
+					</control>
+				</setting>
 			</group>
 			<group id="2" label="30065">
 				<setting id="auto_select_best" type="boolean" label="30066" help="30334">

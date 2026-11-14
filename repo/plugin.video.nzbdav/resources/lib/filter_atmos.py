@@ -22,8 +22,8 @@ It is deliberately narrow:
   dubbed, MULTi and cut flags: a dub is another track.
 * A HYBRID release neither gives nor takes: it combines sources, so its
   audio may come from somewhere else.
-* Only a tag written in a name gives. A row that took Atmos here never
-  passes it on.
+* Only a tag written in a name gives. A row that took Atmos here, or whose
+  Atmos was read from its NFO, never passes it on.
 """
 
 _WEB_DL = frozenset(("web-dl", "web"))
@@ -100,15 +100,30 @@ def _source_key(row, meta):
     )
 
 
+def _from_nfo(meta):
+    """Whether the row's Atmos came from its NFO, not from its name."""
+    added = meta.get("audio_from_nfo")
+    return isinstance(added, list) and _OBJECTS in added
+
+
+def _was_read(meta):
+    """Whether the row's audio is what its NFO or MediaInfo said."""
+    return meta.get("audio_source") in ("mediainfo", "nfo")
+
+
 def share_atmos(rows, derived_keys=()):
     """Mark unlabelled Dolby Digital Plus WEB-DLs as Atmos; see the module.
 
     ``rows`` carry ``_meta``. A row that takes Atmos gets it in its
     ``audio`` list, ``INFERRED_KEY`` set, and its ``derived_keys`` (per-row
-    caches built from the metadata) dropped. Returns how many rows changed.
+    caches built from the metadata) dropped. A row that took it earlier
+    gives it back when the stream was since read and has none (see
+    ``_withdraw``). Returns how many rows changed.
     """
     givers = set()
+    denied = set()
     takers = []
+    took = []
     for row in rows:
         meta = row.get("_meta") if isinstance(row, dict) else None
         if not isinstance(meta, dict):
@@ -117,13 +132,21 @@ def share_atmos(rows, derived_keys=()):
         if _BED not in audio:
             continue
         labelled = _OBJECTS in audio
-        if labelled and meta.get(INFERRED_KEY) is True:
+        inferred = labelled and meta.get(INFERRED_KEY) is True
+        if labelled and not inferred and _from_nfo(meta):
             continue
+        read = not labelled and _was_read(meta)
         key = _source_key(row, meta)
         if key is None:
             continue
-        if labelled:
+        if inferred:
+            took.append((key, row, meta))
+        elif labelled:
             givers.add(key)
+        elif read:
+            # Its NFO or MediaInfo was read and names no Atmos: no guess,
+            # for it or for a copy that guessed from its name.
+            denied.add(key)
         else:
             takers.append((key, row, meta))
     changed = 0
@@ -135,4 +158,23 @@ def share_atmos(rows, derived_keys=()):
         for name in derived_keys:
             row.pop(name, None)
         changed += 1
+    for key, row, meta in took:
+        if key in givers or key not in denied:
+            continue
+        _withdraw(row, meta, derived_keys)
+        changed += 1
     return changed
+
+
+def _withdraw(row, meta, derived_keys):
+    """Take back Atmos a row took from a copy that turned out to have none.
+
+    The copy it was taken from was labelled ``DD+ Atmos`` by its name. Its
+    MediaInfo or NFO has since been read and names no Atmos, and no other
+    labelled copy of the stream is left: the guess has nothing under it.
+    A pass that merely does not see the labelled copy takes nothing back.
+    """
+    meta["audio"] = [name for name in _audio(meta) if name != _OBJECTS]
+    meta.pop(INFERRED_KEY, None)
+    for name in derived_keys:
+        row.pop(name, None)

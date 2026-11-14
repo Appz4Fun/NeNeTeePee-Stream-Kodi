@@ -657,17 +657,18 @@ class _FleetProgress:
         self._update(0, _core._string(30615))
 
     def update(self, phase, done, total):
+        # The add-on's own dialog wraps its text, so it names every indexer;
+        # Kodi's has one narrow line for them.
+        wide = isinstance(getattr(self._dialog, "max_lines", None), int)
+        progress = _core.nzbget_progress
         if phase == "download":
             percent = int(done * 100 / total) if total else 0
             self._update(
-                percent,
-                _core.nzbget_progress.collecting_message(self.report, done, total),
+                percent, progress.collecting_message(self.report, done, total, wide)
             )
         elif phase == "send":
             percent = int(done * 100 / total) if total else 100
-            self._update(
-                percent, _core.nzbget_progress.sending_message(self.report, total)
-            )
+            self._update(percent, progress.sending_message(self.report, total, wide))
         self.canceled()
 
     def canceled(self):

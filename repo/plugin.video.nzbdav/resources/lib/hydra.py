@@ -25,6 +25,7 @@ from resources.lib.http_util import (
     http_get as _http_get,
 )
 from resources.lib.indexer_store import load_provider_caps, save_provider_caps
+from resources.lib.newznab_attrs import nfo_link, post_details
 from resources.lib.newznab_caps import fetch_caps
 from resources.lib.search_planner import SearchQuery, plan_newznab_search
 
@@ -637,7 +638,7 @@ def _build_result(item):
         if not link:
             link = enclosure.get("url", "")
 
-    return {
+    result = {
         "title": title or "",
         "link": link or "",
         "size": size,
@@ -645,6 +646,14 @@ def _build_result(item):
         "pubdate": pubdate or "",
         "age": _calculate_age(pubdate) if pubdate else "",
     }
+    # When it was posted, by whom and whether it has a password: what tells
+    # two listings of one upload from two uploads (``newznab_attrs``).
+    result.update(post_details(item))
+    # The release's NFO, where the indexer offers one (``nfo_audio``).
+    nfo = nfo_link(item)
+    if nfo:
+        result["nfo_url"] = nfo
+    return result
 
 
 def _parse_results_checked(xml_text):

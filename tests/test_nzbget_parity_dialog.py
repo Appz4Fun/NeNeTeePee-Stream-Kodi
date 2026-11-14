@@ -460,3 +460,39 @@ def test_the_windows_strings_exist():
 
     assert string(30694) == "Cancel"
     assert string(30695) == "Cancelling..."
+
+
+def test_the_own_dialog_names_every_indexer_and_kodis_stops_at_its_width():
+    from resources.lib.nzbget_fleet_run import _FleetProgress
+
+    names = ["Indexer Number {:02d}".format(n) for n in range(1, 9)]
+    report = nzbget_progress.FleetReport()
+    for name in names:
+        report.kept({"indexer": name})
+
+    narrow = nzbget_progress.sending_message(report, 8)
+    assert "more" in narrow and "Indexer Number 08" not in narrow
+    wide = nzbget_progress.sending_message(report, 8, wide=True)
+    assert all(name in wide for name in names) and "more" not in wide
+    assert all(
+        name in nzbget_progress.collecting_message(report, 8, 8, wide=True)
+        for name in names
+    )
+
+    import threading
+
+    own = MagicMock()
+    own.max_lines = 8
+    progress = _FleetProgress(own, threading.Event())
+    progress.report = report
+    progress.update("send", 8, 8)
+    assert "Indexer Number 08" in own.update.call_args.args[1]
+    progress.update("download", 8, 8)
+    assert "Indexer Number 08" in own.update.call_args.args[1]
+
+    kodi_dialog = MagicMock()
+    kodi_dialog.iscanceled.return_value = False
+    progress = _FleetProgress(kodi_dialog, threading.Event())
+    progress.report = report
+    progress.update("send", 8, 8)
+    assert "Indexer Number 08" not in kodi_dialog.update.call_args.args[1]

@@ -69,6 +69,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The audio a release's NFO names is read for the top releases.** A name
+  such as `Movie.2004.MULTi.1080p.BluRay.x264-GRP` tags no audio and ranked
+  as "audio unknown"; its NFO says `DTS-HD MA 5.1`. When an indexer offers a
+  release's NFO with its search result, the add-on reads it for the first
+  three releases of a search (`nfo_audio_releases`, 0 for off) and uses the
+  formats and channel count it names for the release's label and ranking.
+  What was read wins over the name: `DTS.5.1` in a name whose NFO says
+  `DTS-HD MA 7.1` is DTS-HD MA 7.1. A name's Atmos or DTS:X tag is kept when
+  a hand-written NFO leads with the same track and leaves the word out.
+  An NFO is checked against the release's name first: one about another
+  film, episode or group is not used, and one that names no release only
+  adds to what the name tags.
+  Where the indexer also serves MediaInfo (Treasure Maps does, from
+  `/api/v1/releases/<id>/mediainfo`), that is asked for first: it lists
+  every audio track with its format, Atmos or DTS:X marker and channel
+  count, so a WEB-DL named `DDP5.1` whose file carries Atmos is labelled
+  `DD+ Atmos 5.1`. The NFO is read when the release has no MediaInfo. One or
+  two API calls to that indexer per release, done once and remembered for
+  every listing of that name. The picker waits two seconds at most for the
+  answers. The link is followed only to the indexer the result came from
+  and is never logged.
 - **The dialog counts the listings it does not download.** A release shown
   as 20 copies could send 10 NZBs with nothing saying why: several indexers
   list the same upload, and one NZB per upload is fetched. While the NZBs
@@ -139,6 +160,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The download dialog names every indexer.** The line of indexers stopped
+  at 64 characters with `+2 more`, a limit made for Kodi's narrow progress
+  dialog. The add-on's own dialog wraps its text, so it lists them all.
+- **"Same upload" is decided from the real post time, the poster and the
+  password flag.** Indexers send more than a title and a size with each
+  result, and NZBHydra2 passes all of it through; the add-on kept six fields
+  and dropped the rest. It now keeps when the release was posted
+  (`usenetdate`), who posted it, its newsgroup, its password flag, and its
+  file and grab counts. Two listings are one upload when their sizes are
+  equal and their real post times are within two minutes, so one upload that
+  two indexers added hours apart is fetched once, and two uploads added in
+  the same minute are no longer taken for one. Listings with different
+  posters, or one passworded and one not, are different uploads. An indexer
+  that sends no post time is compared by its result date, as before.
 - **A WEB-DL whose name leaves Atmos out takes it from a labelled copy of
   the same stream.** Groups name one stream differently: `DD+5.1.Atmos` from
   one, `DDP5.1` from another, for the same Amazon download, and the second

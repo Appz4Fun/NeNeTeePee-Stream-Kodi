@@ -267,6 +267,7 @@ known release groups. An empty list means no exclusions.
 | Sort by | `sort_order` | `0` (Relevance) | `0` Relevance, `1` Size (largest first), `2` Size (smallest first), `3` Age (newest first), `4` Age (oldest first) |
 | Results view | `results_view` | `0` (List compacted) | `0` List compacted: one row per release, with a panel listing its indexer copies; `1` List: one row per indexer copy |
 | Max results | `max_results` | `25` | Provider request limits are clamped to 1–10000. The filtered picker uses the raw positive integer as its limit; 0 or less leaves it unbounded. The picker's show-all view is not truncated. |
+| Read the NFO of the top releases | `nfo_audio_releases` | `3` | How many of the first releases of a search have their MediaInfo or NFO read for audio details, when an indexer offers one. One or two API calls per release, remembered. `0` turns it off; values above 5 count as 5. |
 | Auto-select best match (skip result list) | `auto_select_best` | `false` | Play the top-ranked result that passed your filters and skip the picker. If nothing passed, the picker opens instead. |
 
 ## Advanced

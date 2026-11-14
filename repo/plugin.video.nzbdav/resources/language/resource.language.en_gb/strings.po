@@ -2545,3 +2545,11 @@ msgstr ""
 msgctxt "#30697"
 msgid "not downloading {} duplicates"
 msgstr ""
+
+msgctxt "#30698"
+msgid "Read the NFO of the top releases"
+msgstr ""
+
+msgctxt "#30699"
+msgid "When an indexer offers a release's NFO, the add-on reads it for the first few releases of a search and uses the audio it names (for example DTS-HD MA 5.1) for the release, in place of what the name says. Where the indexer also serves MediaInfo, that is asked for first. One or two API calls to that indexer per release, done once. 0 turns it off."
+msgstr ""
