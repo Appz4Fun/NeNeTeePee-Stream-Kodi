@@ -165,7 +165,9 @@ audio formats and the channel count it names for the release:
   (`/api/v1/releases/<id>/mediainfo`), so the add-on asks there first, with
   the key the NFO link carries sent in a header, and reads the NFO when the
   release has no MediaInfo. A release that several indexers list is asked
-  about on the one that serves MediaInfo.
+  about on the one that serves MediaInfo, and its NFO is read from an
+  indexer that flags only the releases it has an NFO for. When that indexer
+  has none after all, one more indexer's NFO is read.
 - **Each indexer is asked only for what it has.** The add-on keeps a table
   of the indexers that were checked (see
   [What each indexer tells before a download](#what-each-indexer-tells-before-a-download)).
@@ -173,8 +175,9 @@ audio formats and the channel count it names for the release:
   indexer that is not in it is asked once, and not again for a month when
   it has no such call.
 - **Only the top releases** (`nfo_audio_releases`, 3 by default, 0 for
-  off). Each release costs one API call on your account with that indexer,
-  or two when it has no MediaInfo and its NFO is read instead.
+  off). Each release costs one API call on your account with an indexer,
+  two when it has no MediaInfo and its NFO is read instead, and three at
+  most, when the first indexer asked for the NFO had none.
 - **Once per release.** The answer, or that the NFO named no audio, is kept
   in the add-on's data folder and applies to every listing of that release
   name from then on, whichever indexer lists it. A read that failed is tried
@@ -238,8 +241,11 @@ the name is kept beside it.
 
 The source is the indexer's MediaInfo call where it has one. Many NFOs are
 MediaInfo's text report: the `Video` block of such an NFO is read too, when
-the NFO names this release. A hand-written NFO's `Video: x264 @ 15371 kb/s`
-line names no dynamic range and is not read for one.
+the NFO holds this release's own name. An NFO that names the same group's
+other encode of the film (its 1080p BluRay beside this 2160p WEB-DL) still
+counts for the audio, as before, but its video is not this release's. A
+hand-written NFO's `Video: x264 @ 15371 kb/s` line names no dynamic range
+and is not read for one.
 
 #### What each indexer tells before a download
 

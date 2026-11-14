@@ -27,7 +27,8 @@ offer something, the add-on asks, reads the answer and remembers it:
 
 Where the indexer also serves MediaInfo it is asked for first and the NFO is
 the fallback (``mediainfo_audio``). A release listed by several indexers is
-asked about on the one that serves MediaInfo (``_listing``).
+asked about on the one that serves MediaInfo, and its NFO is read from an
+indexer that has one (``_listing``).
 
 What was read is preferred over what the name says: it replaces the name's
 formats and channel count (``apply_known``). The one thing kept from the
@@ -604,6 +605,18 @@ def _same_work(ours, theirs):
     )
 
 
+def names_release(text, title):
+    """Whether an NFO holds the release's own name, word for word.
+
+    Stricter than ``whose_nfo``'s ``CONFIRMED``, which also accepts a name
+    that parses to the same film or episode from the same group: that can be
+    the group's other encode (its 1080p BluRay beside this 2160p WEB-DL),
+    whose video is not this release's.
+    """
+    wanted = _words(_CONTAINER.sub("", str(title or "").strip()))
+    return len(wanted) >= _MIN_NAME_LENGTH and wanted in _words(text)
+
+
 def whose_nfo(text, title, describe):
     """Whether an NFO is about the release named ``title``.
 
@@ -620,8 +633,7 @@ def whose_nfo(text, title, describe):
     can be compared and the NFO is unconfirmed.
     """
     name = _CONTAINER.sub("", str(title or "").strip())
-    wanted = _words(name)
-    if len(wanted) >= _MIN_NAME_LENGTH and wanted in _words(text):
+    if names_release(text, title):
         return CONFIRMED
     if describe is None:
         return UNCONFIRMED
@@ -663,16 +675,16 @@ def _releases_setting(settings_getter):
 
 
 def _candidates(rows, key_of, limit):
-    """``[(key, nfo_url, title, ref)]`` to fetch among the first ``limit``
+    """``[(key, nfo_urls, title, ref)]`` to fetch among the first ``limit``
     releases.
 
     A release is the rows that share a name key, in the order given (the
     picker's order). Only the first ``limit`` releases are looked at, so a
     search never asks for more however often it is opened: one of them that
     is already settled, or that no listing offers anything for, is not
-    replaced by a release further down. ``nfo_url`` is the release's NFO
-    link ("" when it has none) and ``ref`` the link the MediaInfo call is
-    built from (``_listing``).
+    replaced by a release further down. ``nfo_urls`` are the release's NFO
+    links to try, in order, and ``ref`` the link the MediaInfo call is built
+    from (``_listing``).
     """
     seen = set()
     found = []
@@ -691,9 +703,9 @@ def _candidates(rows, key_of, limit):
             continue
         if keyed is None:
             keyed = _keyed_links(rows)
-        nfo_url, ref = _listing(key, rows, key_of, keyed)
-        if nfo_url or ref:
-            found.append((key, nfo_url, title, ref))
+        nfo_urls, ref = _listing(key, rows, key_of, keyed)
+        if nfo_urls or ref:
+            found.append((key, nfo_urls, title, ref))
     return found
 
 
@@ -718,37 +730,58 @@ def _keyed_links(rows):
     return keyed
 
 
-def _listing(key, rows, key_of, keyed):
-    """``(nfo_url, ref)`` of the listing of ``key`` to ask about, or ("", "").
+# How many NFOs are read for one release, at most: a second indexer's when
+# the first had none to give.
+_MAX_NFO_READS = 2
 
-    Listings on a paused indexer are passed over. Among the others, one on
-    an indexer that serves MediaInfo comes first (MediaInfo is exact), then
-    the first that offers an NFO, then one that can only be asked for
-    MediaInfo (a ``media_ref``, on an indexer that has or may have the call).
+
+def _listing(key, rows, key_of, keyed):
+    """``(nfo_urls, ref)``: what to ask about the release ``key``, and where.
+
+    A release can be listed by several indexers. Listings on a paused
+    indexer are passed over. Of the others:
+
+    * ``ref`` is the link the MediaInfo call is built from: a listing on an
+      indexer that serves MediaInfo (MediaInfo is exact), with an NFO link or
+      a ``media_ref``. Without one it is the first NFO link, whose indexer is
+      probed when it is not in the table, or else a ``media_ref`` on an
+      indexer that may have the call.
+    * ``nfo_urls`` are the NFO links to fall back on, one per indexer and
+      ``_MAX_NFO_READS`` at most. An indexer that flags only the releases it
+      has an NFO for comes before the one that serves MediaInfo, which flags
+      every release and often has no NFO to give.
     """
-    best = ("", "")
-    best_rank = None
+    nfo_first, nfo_last, hosts = [], [], set()
+    ref, probe = "", ""
     for row in rows:
         title = row.get("title") if isinstance(row, dict) else None
         if not isinstance(title, str) or key_of(title) != key:
             continue
         nfo_url = _row_link(row, "nfo_url")
-        ref = nfo_url or _row_link(row, "media_ref")
-        host = _host(ref) if ref else ""
+        link = nfo_url or _row_link(row, "media_ref")
+        host = _host(link) if link else ""
         if not host or _host_paused(host):
             continue
         serves = serves_mediainfo(host) is True
         if nfo_url:
-            rank = 0 if serves else 1
-        else:
-            if not has_key(ref):
-                ref = with_key_from(ref, keyed.get(host, ""))
-            if not _may_ask_mediainfo(host) or not mediainfo_audio.request_for(ref):
-                continue
-            rank = 0 if serves else 2
-        if best_rank is None or rank < best_rank:
-            best, best_rank = (nfo_url, ref), rank
-    return best
+            if host not in hosts:
+                hosts.add(host)
+                (nfo_last if serves else nfo_first).append(nfo_url)
+            if serves and not ref:
+                ref = nfo_url
+            continue
+        if not has_key(link):
+            link = with_key_from(link, keyed.get(host, ""))
+        if not _may_ask_mediainfo(host) or not mediainfo_audio.request_for(link):
+            continue
+        if serves and not ref:
+            ref = link
+        elif not serves and not probe:
+            probe = link
+    nfo_urls = tuple((nfo_first + nfo_last)[:_MAX_NFO_READS])
+    if not ref:
+        ref = nfo_urls[0] if nfo_urls else probe
+    return nfo_urls, ref
 
 
 # HTTP statuses, and newznab error codes, that mean "not for you, not now":
@@ -909,23 +942,37 @@ def _video_words(video):
     return ", ".join(names) or "nothing known"
 
 
-def _fetch(key, nfo_url, title, describe=None, ref=""):
+def _fetch(key, nfo_urls, title, describe=None, ref=""):
     """Learn one release's audio and video: MediaInfo first, then its NFO.
 
-    ``ref`` is the link the MediaInfo call is built from, the NFO link when
-    none is given. True when something was learned. The answer, or that
-    there was none, is remembered either way.
+    ``ref`` is the link the MediaInfo call is built from, the first NFO link
+    when none is given. ``nfo_urls`` are the NFO links to fall back on: the
+    next one is read when an indexer had no NFO for the release, or one that
+    names no audio, and not after a read that failed. True when something
+    was learned. The answer, or that there was none, is remembered either
+    way.
 
     One case remembers nothing: a release with no NFO link whose indexer
     turned out to have no MediaInfo call, or was not asked. Nothing was
     learned about the release, and another indexer's listing of it may
     still bring an NFO.
     """
-    answer, video, what = _fetch_mediainfo(key, ref or nfo_url, title)
+    if isinstance(nfo_urls, str):
+        nfo_urls = (nfo_urls,) if nfo_urls else ()
+    first = nfo_urls[0] if nfo_urls else ""
+    answer, video, what = _fetch_mediainfo(key, ref or first, title)
     if answer is not None:
         return answer
-    if nfo_url:
-        return _fetch_nfo(key, nfo_url, title, describe, video)
+    learned = False
+    for nfo_url in nfo_urls:
+        learned = _fetch_nfo(key, nfo_url, title, describe, video) or learned
+        entry = _known(key) or {}
+        if entry.get("audio") or entry.get("failed"):
+            break
+        # What was read of the video so far goes on to the next read.
+        video = video or entry.get("video")
+    if nfo_urls:
+        return learned
     if what == mediainfo_audio.FAILED:
         _remember_no_audio(key, video, failed=True)
     elif what in (mediainfo_audio.TRACKS, mediainfo_audio.MISSING):
@@ -952,8 +999,13 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
 
     ``video`` is what the release's MediaInfo already said of its video.
     Without it, the video block of an NFO that is MediaInfo text is read,
-    when the NFO names this release.
+    when the NFO holds this release's own name (``names_release``): the
+    same group's other encode of the film has another video.
     """
+    if _host_paused(_host(url)):
+        # Its indexer refused a read a moment ago: not sent, asked another day.
+        _remember_no_audio(key, video, failed=True)
+        return bool(video)
     try:
         text = http_get(url, timeout=_FETCH_TIMEOUT, max_bytes=_MAX_NFO_BYTES)
     except Exception as exc:  # pylint: disable=broad-except
@@ -992,7 +1044,7 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
         _remember_no_audio(key, video)
         return bool(video)
     found = audio_from_nfo(text)
-    if not video and whose == CONFIRMED:
+    if not video and names_release(text, title):
         video = mediainfo_video.from_nfo(text)
     _remember(
         key,
@@ -1011,6 +1063,11 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
         xbmc.LOGINFO,
     )
     return bool(found["audio"]) or bool(video)
+
+
+def _first_host(nfo_urls, ref):
+    """The indexer a release's first request goes to."""
+    return _host(ref or (nfo_urls[0] if nfo_urls else ""))
 
 
 def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=None):
@@ -1038,16 +1095,17 @@ def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=No
         # One indexer's reads, one after another: when it refuses one, the
         # rest are not sent.
         try:
-            for key, nfo_url, title, ref in batch:
-                if _host_paused(_host(nfo_url or ref)):
+            for key, nfo_urls, title, ref in batch:
+                if _host_paused(_first_host(nfo_urls, ref)):
                     break
-                results.append(_fetch(key, nfo_url, title, describe, ref))
+                results.append(_fetch(key, nfo_urls, title, describe, ref))
         finally:
             _save()
 
     by_host = {}
     for candidate in candidates:
-        by_host.setdefault(_host(candidate[1] or candidate[3]), []).append(candidate)
+        host = _first_host(candidate[1], candidate[3])
+        by_host.setdefault(host, []).append(candidate)
     threads = [
         threading.Thread(target=_work, args=(batch,), daemon=True)
         for batch in by_host.values()

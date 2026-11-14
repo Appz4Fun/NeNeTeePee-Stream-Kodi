@@ -795,3 +795,132 @@ def test_html_line_breaks_in_an_nfo_are_not_read_as_text(indexer):
         assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
     entry = nfo_audio._known(_key(PLAIN))
     assert sorted(entry["audio"]) == ["Atmos", "DD+"]
+
+
+# --- a release several indexers list ----------------------------------------
+
+
+def test_an_nfo_elsewhere_is_read_when_the_mediainfo_indexer_has_none(indexer):
+    other = indexer.replace("127.0.0.1", "localhost")
+    _Handler.replies[_MEDIAINFO_PATH] = (404, _NOT_FOUND)
+    _Handler.replies["/api"] = (200, _MEDIAINFO_TEXT.encode())
+    # One listing with an NFO, one that can only be asked for MediaInfo.
+    rows = _rows(PLAIN, PLAIN)
+    rows[0]["nfo_url"] = _nfo_link(other, _OTHER_ID)
+    rows[1]["media_ref"] = "{}/api?id={}&apikey=SECRET".format(indexer, _ID)
+    with _known(localhost=Offer(GETNFO, None), **{"127_0_0_1": Offer(GETNFO, REST_V1)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
+    # MediaInfo was asked for first; the release has none there, so the
+    # other indexer's NFO was read, and the release is not left empty.
+    assert _Handler.hosts == ["127.0.0.1", "localhost"]
+    assert _Handler.requests[0] == _MEDIAINFO_PATH
+    assert nfo_audio._known(_key(PLAIN))["audio"] == ["DD+"]
+
+
+def test_the_nfo_is_asked_of_the_indexer_that_flags_only_what_it_has(indexer):
+    other = indexer.replace("127.0.0.1", "localhost")
+    _Handler.replies[_MEDIAINFO_PATH] = (404, _NOT_FOUND)
+    _Handler.replies["/api"] = (200, _MEDIAINFO_TEXT.encode())
+    # Both flag an NFO. The one that serves MediaInfo flags every release.
+    rows = _rows(PLAIN, PLAIN)
+    rows[0]["nfo_url"] = _nfo_link(indexer)
+    rows[1]["nfo_url"] = _nfo_link(other, _OTHER_ID)
+    with _known(localhost=Offer(GETNFO, None), **{"127_0_0_1": Offer(GETNFO, REST_V1)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
+    # Two requests: MediaInfo there, the NFO here. Its own NFO is not asked.
+    assert _Handler.hosts == ["127.0.0.1", "localhost"]
+    assert [path.split("?")[0] for path in _Handler.requests] == [
+        _MEDIAINFO_PATH,
+        "/api",
+    ]
+
+
+def test_a_second_nfo_is_read_when_the_first_indexer_had_none():
+    no_such = b'<error code="300" description="No such item"/>'
+    seen = []
+
+    class _ByHost(_Handler):
+        def do_GET(self):  # pylint: disable=invalid-name
+            host = (self.headers.get("Host") or "").split(":")[0]
+            seen.append(host)
+            body = no_such if host == "127.0.0.1" else _MEDIAINFO_TEXT.encode()
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _ByHost)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        port = server.server_address[1]
+        rows = _rows(PLAIN, PLAIN)
+        rows[0]["nfo_url"] = _nfo_link("http://127.0.0.1:{}".format(port))
+        rows[1]["nfo_url"] = _nfo_link("http://localhost:{}".format(port), _OTHER_ID)
+        with _known(
+            localhost=Offer(GETNFO, None), **{"127_0_0_1": Offer(GETNFO, None)}
+        ):
+            assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+    assert seen == ["127.0.0.1", "localhost"]
+    assert nfo_audio._known(_key(PLAIN))["audio"] == ["DD+"]
+
+
+def test_a_failed_read_is_not_followed_by_another_indexers(indexer, store):
+    other = indexer.replace("127.0.0.1", "localhost")
+    _Handler.replies["/api"] = (500, b"")
+    rows = _rows(PLAIN, PLAIN)
+    rows[0]["nfo_url"] = _nfo_link(indexer)
+    rows[1]["nfo_url"] = _nfo_link(other, _OTHER_ID)
+    with _known(localhost=Offer(GETNFO, None), **{"127_0_0_1": Offer(GETNFO, None)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is False
+    # One request; the release is asked about again another day.
+    assert len(_Handler.requests) == 1
+    assert json.loads(store.read_text())["releases"][_key(PLAIN)]["failed"] is True
+
+
+def test_at_most_two_nfos_are_read_for_a_release_one_per_indexer():
+    rows = _rows(PLAIN, PLAIN, PLAIN, PLAIN)
+    for row, host in zip(rows, ("a.example", "a.example", "b.example", "c.example")):
+        row["nfo_url"] = _nfo_link("https://" + host)
+    nfo_urls, ref = nfo_audio._listing(_key(PLAIN), rows, _key, {})
+    assert [nfo_audio._host(url) for url in nfo_urls] == ["a.example", "b.example"]
+    # No indexer here is known to serve MediaInfo: the first is probed.
+    assert ref == nfo_urls[0]
+    # A release nobody offers anything for.
+    assert nfo_audio._listing(_key(OTHER), rows, _key, {}) == ((), "")
+
+
+def test_the_video_of_the_groups_other_encode_is_not_this_releases(indexer):
+    name = "Some.Movie.2004.2160p.WEB-DL.DV.HDR.H.265-GRP"
+    # The NFO of the same group's 1080p BluRay of the film: 8-bit BT.709.
+    nfo = (
+        "General\n"
+        "Complete name : Some.Movie.2004.1080p.BluRay.x264-GRP.mkv\n"
+        "Format        : Matroska\n\n"
+        "Video\n"
+        "Format                   : AVC\n"
+        "Bit depth                : 8 bits\n"
+        "Transfer characteristics : BT.709\n\n"
+        "Audio\n"
+        "Format        : DTS XLL\n"
+        "Channel(s)    : 6 channels\n"
+    )
+    _Handler.replies["/api"] = (200, nfo.encode())
+    rows = _rows(name)
+    rows[0]["nfo_url"] = _nfo_link(indexer)
+    assert nfo_audio.whose_nfo(nfo, name, filter_module.release_identity) == (
+        nfo_audio.CONFIRMED
+    )
+    assert nfo_audio.names_release(nfo, name) is False
+    with _known(**{"127_0_0_1": Offer(GETNFO, None)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
+    entry = nfo_audio._known(_key(name))
+    # Its audio is taken as before; its video is another encode's.
+    assert entry["audio"] == ["DTS-HD MA"] and "video" not in entry
+    filter_module.attach_metadata(rows)
+    assert rows[0]["_meta"]["hdr"] == ["Dolby Vision", "HDR10"]
+    assert nfo_audio.NAME_HDR_KEY not in rows[0]["_meta"]
