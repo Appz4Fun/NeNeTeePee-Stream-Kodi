@@ -225,7 +225,8 @@ request, the add-on reads:
 
 - **the HDR format**: Dolby Vision, HDR10+, HDR10, HLG, or none (SDR);
 - **the Dolby Vision profile** (`dvhe.05` is profile 5, `dvhe.08` profile
-  8), shown in the picker's range tag as `DV P5` or `DV P8 HDR10`;
+  8), shown in the release's name in the picker as `[DV P5]` or
+  `[DV P8 HDR10]`;
 - **the bit depth** of the video.
 
 The HDR format replaces what the name tags, for the label, the HDR filter

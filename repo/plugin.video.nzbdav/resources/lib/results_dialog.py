@@ -142,7 +142,8 @@ def _set_result_properties(li, result):
     hdr_list = meta.get("hdr", [])
     if hdr_list:
         # "DV HDR10+" as in the row's name; "SDR" and unlisted values as is.
-        hdr_text = dynamic_range(meta) or " ".join(hdr_list)
+        # The Dolby Vision profile stays in the name: this column is narrow.
+        hdr_text = dynamic_range(meta, profile=False) or " ".join(hdr_list)
         li.setProperty("hdr", _c(hdr_text, "FFFBBF24"))
     elif not is_pack:
         li.setProperty("hdr", _c(_string(30400), "FF6B7280"))

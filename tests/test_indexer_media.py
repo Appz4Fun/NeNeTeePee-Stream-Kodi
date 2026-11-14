@@ -530,6 +530,9 @@ def test_the_profile_is_shown_only_when_it_is_a_number():
     assert dynamic_range({"hdr": ["Dolby Vision"]}) == "DV"
     assert dynamic_range({"hdr": ["Dolby Vision"], "dv_profile": "x"}) == "DV"
     assert dynamic_range({"hdr": ["HDR10"], "dv_profile": "8"}) == "HDR10"
+    # The picker's narrow column leaves the profile to the row's name.
+    meta = {"hdr": ["Dolby Vision", "HDR10"], "dv_profile": "8"}
+    assert dynamic_range(meta, profile=False) == "DV HDR10"
 
 
 # --- asking, against a real local server ------------------------------------
