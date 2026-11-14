@@ -151,7 +151,7 @@ flowchart LR
     G --> B[HDR: DV > HDR10+ > HDR10 > HLG > SDR]
     B --> R[Hybrid REMUX > REMUX > other]
     R --> C[Preferred tier 1 > 2 > 3]
-    C --> D[Audio tier: lossless > Atmos on DD+ or lossy DTS:X > DD+/DD/DTS > other]
+    C --> D[Audio tier: lossless > Atmos on DD+ or lossy DTS:X > everything else]
     D --> N[More NZB copies of the release]
     N --> E[Size: larger wins]
 ```

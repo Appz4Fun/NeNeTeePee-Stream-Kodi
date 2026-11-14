@@ -114,17 +114,17 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
    release with several tags ranks by its best.
 7. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
    releases, then everything else.
-8. **Audio:** four tiers, ranked by the release's best track:
+8. **Audio:** three tiers, ranked by the release's best track:
     1. lossless: TrueHD (with or without Atmos), DTS-HD MA (with or without
        DTS:X), FLAC, PCM and ALAC;
     2. lossy with object audio: Dolby Digital Plus with Atmos, and lossy
        DTS:X;
-    3. lossy surround: Dolby Digital Plus, Dolby Digital, DTS and DTS-HD High
-       Resolution;
-    4. everything else, such as AAC, Opus and MP3.
+    3. everything else: Dolby Digital Plus, Dolby Digital, DTS, DTS-HD High
+       Resolution, AAC, Opus, MP3, and a release whose name tags no audio.
 
-    A release with no audio tag ranks after all four. Formats in one tier
-    tie, so FLAC ranks beside TrueHD Atmos.
+    Formats in one tier tie, so FLAC ranks beside TrueHD Atmos. The last
+    tier is flat because a name that leaves the audio out usually carries
+    the same Dolby Digital or DTS track that another name spells out.
 9. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
    Audio is compared first, so Dolby Digital Plus with Atmos from a group in

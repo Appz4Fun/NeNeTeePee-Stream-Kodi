@@ -154,7 +154,7 @@ Full walkthrough:
   release group, size, and keywords. Default-enabled Other / Unknown options
   prevent unrecognized formats from disappearing. Relevance ranks resolution
   first, then CiNEPHiLES and FraMeSToR, releases with a group, HDR, Hybrid
-  REMUX / REMUX, four audio tiers (lossless first) and three editable TRaSH
+  REMUX / REMUX, three audio tiers (lossless first) and three editable TRaSH
   remux group tiers, and among ties prefers the release with more NZB copies.
 - **A compact release picker**: each release appears once, however many
   indexers carry it, with a side panel listing its copies. One same-release
