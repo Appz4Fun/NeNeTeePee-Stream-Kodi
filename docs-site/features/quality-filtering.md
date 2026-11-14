@@ -164,8 +164,14 @@ audio formats and the channel count it names for the release:
   Treasure Maps serves it from a second API on the same site
   (`/api/v1/releases/<id>/mediainfo`), so the add-on asks there first, with
   the key the NFO link carries sent in a header, and reads the NFO when the
-  release has no MediaInfo. An indexer without that call is asked once and
-  then not again for a month.
+  release has no MediaInfo. A release that several indexers list is asked
+  about on the one that serves MediaInfo.
+- **Each indexer is asked only for what it has.** The add-on keeps a table
+  of the indexers that were checked (see
+  [What each indexer tells before a download](#what-each-indexer-tells-before-a-download)).
+  An indexer in it without a MediaInfo call is never asked for one. An
+  indexer that is not in it is asked once, and not again for a month when
+  it has no such call.
 - **Only the top releases** (`nfo_audio_releases`, 3 by default, 0 for
   off). Each release costs one API call on your account with that indexer,
   or two when it has no MediaInfo and its NFO is read instead.
@@ -211,6 +217,71 @@ audio formats and the channel count it names for the release:
 
 MediaInfo's names are understood: `E-AC-3 JOC` is Dolby Digital Plus with
 Atmos, `MLP FBA 16-ch` is TrueHD with Atmos, `DTS XLL` is DTS-HD MA.
+
+#### Dynamic range from MediaInfo
+
+MediaInfo also describes the video. From the same answer, with no extra
+request, the add-on reads:
+
+- **the HDR format**: Dolby Vision, HDR10+, HDR10, HLG, or none (SDR);
+- **the Dolby Vision profile** (`dvhe.05` is profile 5, `dvhe.08` profile
+  8), shown in the picker's range tag as `DV P5` or `DV P8 HDR10`;
+- **the bit depth** of the video.
+
+The HDR format replaces what the name tags, for the label, the HDR filter
+and the ranking: a name tagged `HDR` whose file is 8-bit BT.709 is SDR, and
+a name with no HDR tag whose file is Dolby Vision profile 8 ranks as Dolby
+Vision. One case only adds to the name: a report that shows a PQ transfer
+and names no HDR format (an older MediaInfo) says HDR10, and a `DV` tag in
+the name is kept beside it.
+
+The source is the indexer's MediaInfo call where it has one. Many NFOs are
+MediaInfo's text report: the `Video` block of such an NFO is read too, when
+the NFO names this release. A hand-written NFO's `Video: x264 @ 15371 kb/s`
+line names no dynamic range and is not read for one.
+
+#### What each indexer tells before a download
+
+Checked with a few searches per indexer and each site's API page. "Flag and
+link" means the indexer marks a result that has an NFO and sends the call
+that returns it. No indexer sends the audio format of a release on a search
+result.
+
+| Indexer | NFO on results | MediaInfo call | What the add-on reads |
+|---|---|---|---|
+| Treasure Maps (SceneNZBs) | Flag and link on every result; many flagged releases have no NFO to give | `/api/v1/releases/<id>/mediainfo`, key in a header | MediaInfo (audio, HDR format, Dolby Vision profile, bit depth), else the NFO |
+| nzb.life / NZB.su | Flag and link on most results | None | NFO |
+| Ninjacentral | Flag and link on some results | None | NFO |
+| altHUB | Flag and link on some results | None | NFO |
+| abNZB | Flag and link on some results | None | NFO |
+| Square Eyed | Flag and link on some results | None | NFO |
+| NzBNooB | Flag and link on some results | None | NFO |
+| Digital Carnage | Flag and link on some results; the link carries the key as `r`, which its API refuses | None | NFO, with the same key sent as `apikey` |
+| Drunken Slug | A link (`t=info`) on the few results that have an NFO, no flag; the key as `r`, which its API refuses | None | NFO, with the same key sent as `apikey` |
+| NZB Finder | Neither | None; its JSON API v2 details repeat the search fields | Nothing |
+| NZBGeek, nzbplanet, miatrix | Neither seen (miatrix flags every result as having no NFO) | Not checked: without a link the add-on has no key to ask with through NZBHydra2 | Nothing through NZBHydra2 |
+
+Several indexers also send the audio languages and subtitle languages of a
+release on the search result (Treasure Maps, NZBGeek, nzb.life; subtitles
+also abNZB, Digital Carnage, NZB Finder). Treasure Maps' release details
+call (`/api/v1/releases/<id>`) returns the same languages, subtitles,
+password state and post time as its search result, and lists an NFO and a
+MediaInfo link for releases that then answer "not found", so the add-on
+does not call it.
+
+**Through NZBHydra2** the add-on has no key of its own for an indexer. The
+link an indexer sends with a result carries the release's id and your key,
+and every request is built from such a link, to that indexer only. A result
+that brings no link, from an indexer that serves MediaInfo, is asked about
+with the key from another result of the same indexer in the same search.
+
+**With direct indexers** the add-on holds each indexer's key, so it builds
+the calls itself from the release's id: the NFO call for a result the
+indexer flags as having an NFO (`t=getnfo`, or `t=info` on Drunken Slug),
+and the MediaInfo call for any result of an indexer that has it. A direct
+indexer that is not in the table is asked once for MediaInfo, as above.
+There is no per-indexer switch: `nfo_audio_releases` covers every indexer,
+and an indexer is only asked for what it has.
 
 #### Atmos a name leaves out
 

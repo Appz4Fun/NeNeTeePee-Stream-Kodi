@@ -269,11 +269,16 @@ def _audio(name, meta):
 
 
 def dynamic_range(meta):
-    """ "DV HDR10+": Dolby Vision first, then the HDR10 kind, then HLG."""
+    """ "DV HDR10+": Dolby Vision first, then the HDR10 kind, then HLG.
+
+    "DV P8 HDR10" when the Dolby Vision profile is known (``nfo_audio``).
+    """
     values = meta.get("hdr") or []
     out = []
     if "Dolby Vision" in values:
-        out.append("DV")
+        # The profile, once the release's MediaInfo was read: "DV P5".
+        profile = str(meta.get("dv_profile") or "")
+        out.append("DV P" + profile if profile.isdigit() else "DV")
     if "HDR10+" in values:
         out.append("HDR10+")
     elif "HDR10" in values:

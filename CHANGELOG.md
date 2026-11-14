@@ -104,6 +104,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every listing of that name. The picker waits two seconds at most for the
   answers. The link is followed only to the indexer the result came from
   and is never logged.
+- **Each indexer is asked for what it has, and MediaInfo's video facts are
+  read too.** A table of the indexers that were checked says which have an
+  NFO call and which a MediaInfo call, so an indexer is no longer probed for
+  a call it lacks; one that is not in the table is still asked once. A
+  release that several indexers list is asked about on the one that serves
+  MediaInfo. Drunken Slug and Digital Carnage send their NFO link with the
+  key under a name their API refuses ("Missing parameter (apikey)"): the
+  same key is now sent as `apikey`, and Drunken Slug's link, which comes
+  without an NFO flag, is taken. With direct indexers the add-on holds the
+  key, so it asks by release id: the NFO for a result flagged as having one,
+  MediaInfo where the indexer serves it. Through NZBHydra2, a result with no
+  link from an indexer that serves MediaInfo is asked about with the key of
+  another result of that indexer. From MediaInfo, or from an NFO that is
+  MediaInfo text and names the release, the add-on now also reads the HDR
+  format, the Dolby Vision profile and the bit depth: the HDR format
+  replaces the name's for the label, the HDR filter and the ranking, and the
+  picker shows the profile (`DV P8 HDR10`). See
+  [What each indexer tells before a download](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/quality-filtering/#what-each-indexer-tells-before-a-download).
 - **The dialog counts the listings it does not download.** A release shown
   as 20 copies could send 10 NZBs with nothing saying why: several indexers
   list the same upload, and one NZB per upload is fetched. While the NZBs

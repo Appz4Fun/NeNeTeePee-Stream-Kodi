@@ -25,7 +25,7 @@ from resources.lib.http_util import (
     http_get as _http_get,
 )
 from resources.lib.indexer_store import load_provider_caps, save_provider_caps
-from resources.lib.newznab_attrs import nfo_link, post_details
+from resources.lib.newznab_attrs import media_ref_link, nfo_link, post_details
 from resources.lib.newznab_caps import fetch_caps
 from resources.lib.search_planner import SearchQuery, plan_newznab_search
 
@@ -653,6 +653,11 @@ def _build_result(item):
     nfo = nfo_link(item)
     if nfo:
         result["nfo_url"] = nfo
+    else:
+        # No link of its own, from an indexer that serves MediaInfo.
+        ref = media_ref_link(item)
+        if ref:
+            result["media_ref"] = ref
     return result
 
 

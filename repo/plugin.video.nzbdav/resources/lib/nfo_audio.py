@@ -1,15 +1,18 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
-"""The audio a release's NFO names, read for the top releases of a search.
+"""A release's audio and video, read from its MediaInfo or NFO for the top
+releases of a search.
 
 A release name can leave its audio out ("Movie.2004.MULTi.1080p.BluRay.
 x264-GRP"), and then the release ranks as "audio unknown". Its NFO usually
 says: ``Audio.........: English DTS-HD MA 5.1 @ 3739 kb/s``.
 
-Some indexers send, with a search result, a flag that the release has an NFO
+Most indexers send, with a search result, a flag that the release has an NFO
 and a link to it (``newznab_attrs.nfo_link``); NZBHydra2 passes both through.
-For the first few releases of a search that offer one, the add-on fetches the
-NFO, reads the audio formats out of it and remembers them:
+In direct-indexer mode the add-on holds the indexer's key and builds the
+calls itself (``newznab_attrs.direct_media_links``). What each indexer
+offers is in ``indexer_media``. For the first few releases of a search that
+offer something, the add-on asks, reads the answer and remembers it:
 
 * only the top releases (``nfo_audio_releases``, 3 by default, 0 for off):
   each fetch is an API call on the user's account with that indexer;
@@ -23,19 +26,26 @@ NFO, reads the audio formats out of it and remembers them:
   arrive and used the next time.
 
 Where the indexer also serves MediaInfo it is asked for first and the NFO is
-the fallback (``mediainfo_audio``).
+the fallback (``mediainfo_audio``). A release listed by several indexers is
+asked about on the one that serves MediaInfo (``_listing``).
 
 What was read is preferred over what the name says: it replaces the name's
 formats and channel count (``apply_known``). The one thing kept from the
 name is an Atmos or DTS:X tag on the track a hand-written NFO leads with,
 since such NFOs often leave the word out; MediaInfo is used as it is.
 
+MediaInfo also describes the video (``mediainfo_video``): the HDR format,
+the Dolby Vision profile and the bit depth. They are taken from an indexer's
+MediaInfo call, or from an NFO that is MediaInfo text and names this
+release, and put on the rows the same way.
+
 That holds for an NFO that is this release's. Indexers attach NFOs by
 matching, so each one is checked against the release's name (``whose_nfo``):
 one that names another release is not used, and one that names no release
 only adds to what the name says.
 
-The link carries the user's API key for that indexer, so it is never logged.
+The links carry the user's API key for that indexer, so they are never
+logged.
 """
 
 import json
@@ -49,10 +59,11 @@ from urllib.parse import urlsplit
 import xbmc
 import xbmcvfs
 
-from resources.lib import mediainfo_audio
+from resources.lib import mediainfo_audio, mediainfo_video
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
+from resources.lib.indexer_media import has_key, serves_mediainfo, with_key_from
 from resources.lib.mediainfo_audio import (
     CHANNEL_COUNT,
     OBJECT_FORMATS,
@@ -71,6 +82,8 @@ NAME_AUDIO_KEY = "audio_in_name"
 # and where the answer came from: "mediainfo", "nfo", or ``UNCONFIRMED`` for
 # an NFO that does not name the release.
 SOURCE_KEY = "audio_source"
+# The dynamic range the name tags, once MediaInfo's has taken its place.
+NAME_HDR_KEY = "hdr_in_name"
 # ``filter_atmos.INFERRED_KEY``: Atmos a row took from a labelled copy.
 _INFERRED_KEY = "atmos_inferred"
 
@@ -298,22 +311,26 @@ def _known(key):
         return _STORE.get(key)
 
 
-def _remember(key, audio, channels, failed=False, exact=False, sure=False):
+def _remember(key, audio, channels, failed=False, exact=False, sure=False, video=None):
     """Keep one release's answer.
 
     ``exact`` when MediaInfo gave it; ``sure`` when it is known to be about
-    this release (MediaInfo, or an NFO that names the release).
+    this release (MediaInfo, or an NFO that names the release). ``video`` is
+    what MediaInfo said of the video (``mediainfo_video``), when it did.
     """
     _load()
+    entry = {
+        "audio": list(audio),
+        "channels": channels,
+        "at": int(time.time()),
+        "failed": bool(failed),
+        "exact": bool(exact),
+        "sure": bool(exact or sure),
+    }
+    if video:
+        entry["video"] = dict(video)
     with _LOCK:
-        _STORE[key] = {
-            "audio": list(audio),
-            "channels": channels,
-            "at": int(time.time()),
-            "failed": bool(failed),
-            "exact": bool(exact),
-            "sure": bool(exact or sure),
-        }
+        _STORE[key] = entry
 
 
 def _settled(key):
@@ -435,18 +452,104 @@ def _added(name_audio, name_channels, entry, quality):
     return kept, channels
 
 
-def apply_known(rows, key_of, derived_keys=()):
-    """Give every listing of a release the audio that was read for it.
+# The picker's order for dynamic range: Dolby Vision, HDR10+, HDR10, HLG.
+_HDR_ORDER = ("Dolby Vision", "HDR10+", "HDR10", "HLG", "SDR")
+_VIDEO_FIELDS = ("dv_profile", "bit_depth")
 
-    ``key_of`` gives a release name's key (``filter._name_form_key``): every
-    spelling of a name, from any indexer, takes the same answer.
+
+def _apply_audio(meta, entry):
+    """Put the audio that was read on one row's metadata; True if it changed.
 
     An answer known to be about this release (MediaInfo, or an NFO that
     names the release) replaces what the name tags (``_preferred``). An NFO
     that does not say which release it is about only adds to the name
-    (``_added``). The name's own stay on the row under ``NAME_AUDIO_KEY``.
-    A row whose audio or channel count changes loses its ``derived_keys``
-    (per-row caches built from them). Returns how many rows changed.
+    (``_added``). The name's own stay under ``NAME_AUDIO_KEY``.
+    """
+    name_audio, name_channels = _name_audio(meta)
+    quality = meta.get("quality", "")
+    guessed = meta.get(_INFERRED_KEY) is True
+    if entry.get("exact") or entry.get("sure"):
+        source = "mediainfo" if entry.get("exact") else "nfo"
+        audio = _preferred(name_audio, entry, quality)
+        channels = entry.get("channels") or name_channels
+        guessed = False
+    else:
+        source = UNCONFIRMED
+        audio, channels = _added(name_audio, name_channels, entry, quality)
+    named = [name for name in audio if name not in name_audio]
+    if guessed and "Atmos" not in audio:
+        # Atmos taken from a labelled copy stays beside what was added.
+        audio = ["Atmos"] + audio
+    same = meta.get("audio") == audio and (
+        not channels or meta.get("channels") == channels
+    )
+    if same and meta.get(SOURCE_KEY) == source and NAME_AUDIO_KEY in meta:
+        return False
+    meta[NAME_AUDIO_KEY] = {"audio": name_audio, "channels": name_channels}
+    meta[SOURCE_KEY] = source
+    # What the name did not tag, so a later pass can tell the two apart.
+    meta[FROM_NFO_KEY] = named
+    if not guessed:
+        meta.pop(_INFERRED_KEY, None)
+    if same:
+        return False
+    meta["audio"] = audio
+    if channels:
+        meta["channels"] = channels
+    return True
+
+
+def _apply_video(meta, entry):
+    """Put MediaInfo's video facts on one row's metadata; True if it changed.
+
+    The Dolby Vision profile and the bit depth are added. The dynamic range
+    replaces the name's when MediaInfo named the HDR format or showed the
+    video to be SDR (``hdr_exact``); otherwise it adds to the name's. The
+    name's own stays under ``NAME_HDR_KEY``, so a later pass starts from the
+    name again.
+    """
+    video = entry.get("video")
+    if not isinstance(video, dict):
+        return False
+    changed = False
+    for field in _VIDEO_FIELDS:
+        value = video.get(field)
+        if isinstance(value, str) and value and meta.get(field) != value:
+            meta[field] = value
+            changed = True
+    read = video.get("hdr")
+    if not isinstance(read, list) or not read:
+        return changed
+    read = [name for name in read if name in _HDR_ORDER]
+    if not read:
+        return changed
+    kept = meta.get(NAME_HDR_KEY)
+    name_hdr = meta.get("hdr") if not isinstance(kept, list) else kept
+    name_hdr = [name for name in (name_hdr or []) if isinstance(name, str)]
+    if video.get("hdr_exact") is True:
+        hdr = read
+    else:
+        hdr = [name for name in name_hdr if name != "SDR"]
+        hdr = hdr + [name for name in read if name not in hdr]
+    hdr = sorted(
+        hdr, key=lambda name: _HDR_ORDER.index(name) if name in _HDR_ORDER else 99
+    )
+    if NAME_HDR_KEY not in meta:
+        meta[NAME_HDR_KEY] = name_hdr
+    if meta.get("hdr") != hdr:
+        meta["hdr"] = hdr
+        changed = True
+    return changed
+
+
+def apply_known(rows, key_of, derived_keys=()):
+    """Give every listing of a release what was read for it.
+
+    ``key_of`` gives a release name's key (``filter._name_form_key``): every
+    spelling of a name, from any indexer, takes the same answer: its audio
+    (``_apply_audio``) and what MediaInfo said of its video
+    (``_apply_video``). A row that changes loses its ``derived_keys``
+    (per-row caches built from its metadata). Returns how many rows changed.
     """
     changed = 0
     for row in rows:
@@ -455,42 +558,13 @@ def apply_known(rows, key_of, derived_keys=()):
         if not isinstance(meta, dict) or not isinstance(title, str):
             continue
         entry = _known(key_of(title))
-        if not entry or not entry["audio"]:
+        if not entry:
             continue
-        name_audio, name_channels = _name_audio(meta)
-        quality = meta.get("quality", "")
-        guessed = meta.get(_INFERRED_KEY) is True
-        if entry.get("exact") or entry.get("sure"):
-            source = "mediainfo" if entry.get("exact") else "nfo"
-            audio = _preferred(name_audio, entry, quality)
-            channels = entry.get("channels") or name_channels
-            guessed = False
-        else:
-            source = UNCONFIRMED
-            audio, channels = _added(name_audio, name_channels, entry, quality)
-        named = [name for name in audio if name not in name_audio]
-        if guessed and "Atmos" not in audio:
-            # Atmos taken from a labelled copy stays beside what was added.
-            audio = ["Atmos"] + audio
-        same = meta.get("audio") == audio and (
-            not channels or meta.get("channels") == channels
-        )
-        if same and meta.get(SOURCE_KEY) == source and NAME_AUDIO_KEY in meta:
-            continue
-        meta[NAME_AUDIO_KEY] = {"audio": name_audio, "channels": name_channels}
-        meta[SOURCE_KEY] = source
-        # What the name did not tag, so a later pass can tell the two apart.
-        meta[FROM_NFO_KEY] = named
-        if not guessed:
-            meta.pop(_INFERRED_KEY, None)
-        if same:
-            continue
-        meta["audio"] = audio
-        if channels:
-            meta["channels"] = channels
-        for name in derived_keys:
-            row.pop(name, None)
-        changed += 1
+        audio_changed = bool(entry["audio"]) and _apply_audio(meta, entry)
+        if _apply_video(meta, entry) or audio_changed:
+            for name in derived_keys:
+                row.pop(name, None)
+            changed += 1
     return changed
 
 
@@ -589,16 +663,20 @@ def _releases_setting(settings_getter):
 
 
 def _candidates(rows, key_of, limit):
-    """``[(key, url, title)]`` to fetch among the first ``limit`` releases.
+    """``[(key, nfo_url, title, ref)]`` to fetch among the first ``limit``
+    releases.
 
     A release is the rows that share a name key, in the order given (the
     picker's order). Only the first ``limit`` releases are looked at, so a
     search never asks for more however often it is opened: one of them that
-    is already settled, or that no listing offers an NFO for, is not
-    replaced by a release further down.
+    is already settled, or that no listing offers anything for, is not
+    replaced by a release further down. ``nfo_url`` is the release's NFO
+    link ("" when it has none) and ``ref`` the link the MediaInfo call is
+    built from (``_listing``).
     """
     seen = set()
     found = []
+    keyed = None
     for row in rows:
         title = row.get("title") if isinstance(row, dict) else None
         if not isinstance(title, str) or not title:
@@ -611,21 +689,66 @@ def _candidates(rows, key_of, limit):
         seen.add(key)
         if _settled(key):
             continue
-        url = _nfo_url(key, rows, key_of)
-        if url:
-            found.append((key, url, title))
+        if keyed is None:
+            keyed = _keyed_links(rows)
+        nfo_url, ref = _listing(key, rows, key_of, keyed)
+        if nfo_url or ref:
+            found.append((key, nfo_url, title, ref))
     return found
 
 
-def _nfo_url(key, rows, key_of):
-    """The NFO link of a listing of ``key``, from an indexer not paused."""
+def _row_link(row, name):
+    value = row.get(name) if isinstance(row, dict) else None
+    return value if isinstance(value, str) else ""
+
+
+def _keyed_links(rows):
+    """``{host: link}``: for each indexer, a link of this search with its key.
+
+    A result that brings no link of its own borrows the key of another
+    result of the same indexer (``indexer_media.with_key_from``).
+    """
+    keyed = {}
     for row in rows:
-        url = row.get("nfo_url") if isinstance(row, dict) else None
+        for name in ("nfo_url", "media_ref"):
+            link = _row_link(row, name)
+            host = _host(link) if link else ""
+            if host and host not in keyed and has_key(link):
+                keyed[host] = link
+    return keyed
+
+
+def _listing(key, rows, key_of, keyed):
+    """``(nfo_url, ref)`` of the listing of ``key`` to ask about, or ("", "").
+
+    Listings on a paused indexer are passed over. Among the others, one on
+    an indexer that serves MediaInfo comes first (MediaInfo is exact), then
+    the first that offers an NFO, then one that can only be asked for
+    MediaInfo (a ``media_ref``, on an indexer that has or may have the call).
+    """
+    best = ("", "")
+    best_rank = None
+    for row in rows:
         title = row.get("title") if isinstance(row, dict) else None
-        if isinstance(url, str) and url and isinstance(title, str):
-            if key_of(title) == key and not _host_paused(_host(url)):
-                return url
-    return ""
+        if not isinstance(title, str) or key_of(title) != key:
+            continue
+        nfo_url = _row_link(row, "nfo_url")
+        ref = nfo_url or _row_link(row, "media_ref")
+        host = _host(ref) if ref else ""
+        if not host or _host_paused(host):
+            continue
+        serves = serves_mediainfo(host) is True
+        if nfo_url:
+            rank = 0 if serves else 1
+        else:
+            if not has_key(ref):
+                ref = with_key_from(ref, keyed.get(host, ""))
+            if not ref or not _may_ask_mediainfo(host):
+                continue
+            rank = 0 if serves else 2
+        if best_rank is None or rank < best_rank:
+            best, best_rank = (nfo_url, ref), rank
+    return best
 
 
 # HTTP statuses, and newznab error codes, that mean "not for you, not now":
@@ -652,7 +775,15 @@ def _error_code(text):
 
 
 def _may_ask_mediainfo(host):
-    """Whether ``host`` is worth asking for MediaInfo: it has the call, or might."""
+    """Whether ``host`` is worth asking for MediaInfo: it has the call, or might.
+
+    An indexer in the table (``indexer_media.KNOWN``) is asked only when it
+    has the call. One that is not is probed, and not again for a while once
+    it was found to have none.
+    """
+    known = serves_mediainfo(host)
+    if known is not None:
+        return known
     _load()
     with _LOCK:
         state = _REST_HOSTS.get(host)
@@ -695,27 +826,37 @@ def _get_with_status(url, headers):
         return None, ""
 
 
-def _fetch_mediainfo(key, url, title):
+def _fetch_mediainfo(key, link, title):
     """Ask the indexer for the release's MediaInfo, where it may have the call.
 
-    True or False when that settled the release (audio found, or the indexer
+    ``link`` names the release and carries the key (``mediainfo_audio.
+    request_for``). Returns ``(answer, video, retry)``. ``answer`` is True or
+    False when that settled the release (audio found, or the indexer
     refused), None when the NFO should be read: no such call there, no
-    MediaInfo for this release, none of its tracks recognised, or no answer.
+    MediaInfo for this release, none of its audio recognised, or no answer.
+    ``video`` is what the report said of the video, and ``retry`` is True
+    when the call gave no answer this time.
     """
-    host = _host(url)
-    request = mediainfo_audio.request_for(url)
+    host = _host(link)
+    request = mediainfo_audio.request_for(link)
     if request is None or not _may_ask_mediainfo(host):
-        return None
+        return None, {}, False
     status, body = _get_with_status(*request)
     what, tracks = mediainfo_audio.read_reply(status, body)
+    in_table = serves_mediainfo(host) is True
     if (
         what == mediainfo_audio.REFUSED
         and status != 429
+        and not in_table
         and not _has_mediainfo_call(host)
     ):
         # An indexer never seen to answer this call, refusing the path: that
         # is how one without the call may answer. Its NFO is still read.
         what = mediainfo_audio.NO_API
+    if what == mediainfo_audio.NO_API and in_table:
+        # An odd answer from an indexer known to have the call decides
+        # nothing about it.
+        what = mediainfo_audio.FAILED
     if what == mediainfo_audio.REFUSED:
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' was refused by the "
@@ -724,42 +865,86 @@ def _fetch_mediainfo(key, url, title):
         )
         _remember(key, [], "", failed=True)
         _pause_host(host)
-        return False
+        return False, {}, False
     if what == mediainfo_audio.NO_API:
         _note_rest(host, False)
-        return None
+        return None, {}, False
     if what == mediainfo_audio.FAILED:
-        return None
+        return None, {}, True
     _note_rest(host, True)
     if what != mediainfo_audio.TRACKS:
-        return None
+        return None, {}, False
+    video = mediainfo_video.from_reply(body)
+    if video:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' names video: {}".format(
+                title, _video_words(video)
+            ),
+            xbmc.LOGINFO,
+        )
     found = mediainfo_audio.merge_tracks(tracks)
     if not found["audio"]:
-        return None
-    _remember(key, found["audio"], found["channels"], exact=True)
+        return None, video, False
+    _remember(key, found["audio"], found["channels"], exact=True, video=video)
     xbmc.log(
         "NeNeTeePee-Stream-Kodi: MediaInfo for '{}' names audio: {}".format(
             title, ", ".join(found["audio"])
         ),
         xbmc.LOGINFO,
     )
-    return True
+    return True, video, False
 
 
-def _fetch(key, url, title, describe=None):
-    """Learn one release's audio: MediaInfo first, then its NFO.
+def _video_words(video):
+    """ "Dolby Vision (profile 8), HDR10, 10 bit" for the log."""
+    names = []
+    for name in video.get("hdr") or ():
+        profile = video.get("dv_profile")
+        if name == "Dolby Vision" and profile:
+            name = "{} (profile {})".format(name, profile)
+        names.append(name)
+    if video.get("bit_depth"):
+        names.append("{} bit".format(video["bit_depth"]))
+    return ", ".join(names) or "nothing known"
 
-    True when audio was found. The answer, or that there was none, is
-    remembered either way.
+
+def _fetch(key, nfo_url, title, describe=None, ref=""):
+    """Learn one release's audio and video: MediaInfo first, then its NFO.
+
+    ``ref`` is the link the MediaInfo call is built from, the NFO link when
+    none is given. True when something was learned. The answer, or that
+    there was none, is remembered either way.
     """
-    answer = _fetch_mediainfo(key, url, title)
+    answer, video, retry = _fetch_mediainfo(key, ref or nfo_url, title)
     if answer is not None:
         return answer
-    return _fetch_nfo(key, url, title, describe)
+    if nfo_url:
+        return _fetch_nfo(key, nfo_url, title, describe, video)
+    _remember_no_audio(key, video, failed=retry)
+    return bool(video)
 
 
-def _fetch_nfo(key, url, title, describe=None):
-    """Fetch one NFO, read it and remember the answer; True when it has audio."""
+def _remember_no_audio(key, video, failed=False):
+    """Settle a release whose audio was not learned.
+
+    What MediaInfo said of its video is kept, and is exact; without it a
+    failed read is asked about again another day.
+    """
+    _remember(key, [], "", failed=failed and not video, exact=bool(video), video=video)
+
+
+# nZEDb's info call returns the NFO with HTML line breaks.
+_HTML_BREAK = re.compile(r"<br\s*/?>", re.I)
+
+
+def _fetch_nfo(key, url, title, describe=None, video=None):
+    """Fetch one NFO, read it and remember the answer; True when it told
+    something.
+
+    ``video`` is what the release's MediaInfo already said of its video.
+    Without it, the video block of an NFO that is MediaInfo text is read,
+    when the NFO names this release.
+    """
     try:
         text = http_get(url, timeout=_FETCH_TIMEOUT, max_bytes=_MAX_NFO_BYTES)
     except Exception as exc:  # pylint: disable=broad-except
@@ -769,10 +954,10 @@ def _fetch_nfo(key, url, title, describe=None):
             ),
             xbmc.LOGINFO,
         )
-        _remember(key, [], "", failed=True)
+        _remember_no_audio(key, video, failed=True)
         if getattr(exc, "code", None) in _REFUSAL_STATUSES:
             _pause_host(_host(url))
-        return False
+        return bool(video)
     error = _error_code(text)
     if error is not None and error not in _NO_NFO_CODES:
         # The indexer answered with an error, not an NFO (a bad key, a limit
@@ -782,10 +967,11 @@ def _fetch_nfo(key, url, title, describe=None):
             "(error {})".format(title, error),
             xbmc.LOGINFO,
         )
-        _remember(key, [], "", failed=True)
+        _remember_no_audio(key, video, failed=True)
         if _is_refusal_code(error):
             _pause_host(_host(url))
-        return False
+        return bool(video)
+    text = _HTML_BREAK.sub("", text)
     whose = whose_nfo(text, title, describe)
     if whose == WRONG:
         # Another release's NFO: what it says of the audio is not ours.
@@ -794,23 +980,33 @@ def _fetch_nfo(key, url, title, describe=None):
             "not used".format(title),
             xbmc.LOGINFO,
         )
-        _remember(key, [], "")
-        return False
+        _remember_no_audio(key, video)
+        return bool(video)
     found = audio_from_nfo(text)
-    _remember(key, found["audio"], found["channels"], sure=whose == CONFIRMED)
+    if not video and whose == CONFIRMED:
+        video = mediainfo_video.from_nfo(text)
+    _remember(
+        key,
+        found["audio"],
+        found["channels"],
+        sure=whose == CONFIRMED,
+        video=video,
+    )
     xbmc.log(
-        "NeNeTeePee-Stream-Kodi: NFO for '{}' names audio: {}{}".format(
+        "NeNeTeePee-Stream-Kodi: NFO for '{}' names audio: {}{}{}".format(
             title,
             ", ".join(found["audio"]) or "none",
+            "; video: {}".format(_video_words(video)) if video else "",
             "" if whose == CONFIRMED else " (the NFO does not name the release)",
         ),
         xbmc.LOGINFO,
     )
-    return bool(found["audio"])
+    return bool(found["audio"]) or bool(video)
 
 
 def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=None):
-    """Read the NFOs of the top releases of ``rows``; True if any named audio.
+    """Read the MediaInfo or NFO of the top releases of ``rows``; True if any
+    told something.
 
     ``rows`` are the picker's rows in its order. The fetches run on daemon
     threads, one per indexer, and this waits ``wait`` seconds for them. One
@@ -833,16 +1029,16 @@ def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=No
         # One indexer's reads, one after another: when it refuses one, the
         # rest are not sent.
         try:
-            for key, url, title in batch:
-                if _host_paused(_host(url)):
+            for key, nfo_url, title, ref in batch:
+                if _host_paused(_host(nfo_url or ref)):
                     break
-                results.append(_fetch(key, url, title, describe))
+                results.append(_fetch(key, nfo_url, title, describe, ref))
         finally:
             _save()
 
     by_host = {}
     for candidate in candidates:
-        by_host.setdefault(_host(candidate[1]), []).append(candidate)
+        by_host.setdefault(_host(candidate[1] or candidate[3]), []).append(candidate)
     threads = [
         threading.Thread(target=_work, args=(batch,), daemon=True)
         for batch in by_host.values()
