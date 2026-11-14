@@ -423,6 +423,28 @@ def par_log(nzbid, settings_getter=None):
     return [str(row.get("Text") or "") for row in rows if isinstance(row, dict)]
 
 
+# Enough of a download's log to hold one line per file it downloaded.
+_FILE_LOG_LINES = 3000
+
+
+def file_log(nzbid, settings_getter=None):
+    """The lines of one download's own log, or None when unreadable.
+
+    Longer than ``par_log``: the caller counts the files the download
+    brought in (its RAR volumes), one log line each. Display only.
+    """
+    try:
+        nzbid = int(nzbid)
+    except (TypeError, ValueError):
+        return None
+    rows, error = _rpc_call(
+        "loadlog", [nzbid, 0, _FILE_LOG_LINES], settings_getter=settings_getter
+    )
+    if error is not None or not isinstance(rows, list):
+        return None
+    return [str(row.get("Text") or "") for row in rows if isinstance(row, dict)]
+
+
 def _post_stage(group):
     """What ``listgroups`` says beyond the download percent, for the dialog.
 
@@ -437,6 +459,8 @@ def _post_stage(group):
     return {
         "post_percent": int(_as_number(group.get("PostStageProgress")) // 10),
         "post_seconds": int(_as_number(group.get("PostStageTimeSec"))),
+        # What the stage is doing: "Extracting from name.part13.rar".
+        "post_text": str(group.get("PostInfoText") or "")[:300],
         # Articles no server had, and what the server got back for them from
         # this release's other copies (the last three are RustyGet's; stock
         # NZBGet sends none and they read as zero).

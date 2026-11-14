@@ -2565,3 +2565,11 @@ msgstr ""
 msgctxt "#30702"
 msgid "1 copy"
 msgstr ""
+
+msgctxt "#30703"
+msgid "{} - part {} of {}"
+msgstr ""
+
+msgctxt "#30704"
+msgid "{} - part {}"
+msgstr ""

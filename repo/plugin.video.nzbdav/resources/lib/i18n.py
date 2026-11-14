@@ -226,6 +226,8 @@ _FALLBACK_STRINGS = {
     30700: "{} copies ({} listings on {} indexers)",
     30701: "1 copy ({} listings on {} indexers)",
     30702: "1 copy",
+    30703: "{} - part {} of {}",
+    30704: "{} - part {}",
 }
 
 
