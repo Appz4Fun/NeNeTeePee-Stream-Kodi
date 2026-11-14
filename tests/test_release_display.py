@@ -380,7 +380,7 @@ def _strings(string_id):
     )
 
 
-def _fake_item(label=""):
+def _fake_item(label="", **_kwargs):
     item = MagicMock()
     item.label = label
     return item

@@ -261,6 +261,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The picker no longer stays blank for a search with hundreds of
+  releases.** Each row of the list sets about two dozen display values, and
+  every one waited for Kodi's graphics lock, so the list took 25 to 60
+  seconds to appear for a film with 474 releases (2,182 results) on a
+  CoreELEC box. The rows are now built off-screen; the same list takes 0.2
+  seconds there.
 - **The "copies ready" notification is no longer cut off.** After NZBGet
   accepted the copies, the notification read `...the primary copy (10` with an
   odd character in place of the bracket when the health was 100%: the sentence

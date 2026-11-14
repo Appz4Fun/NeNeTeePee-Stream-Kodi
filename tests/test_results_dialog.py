@@ -79,7 +79,9 @@ def test_build_result_item_prefers_internal_display_title():
     ) as cls:
         _build_result_item(result, 0)
 
-    cls.assert_called_once_with(label="Already downloaded season pack - Episodes 1-8")
+    cls.assert_called_once_with(
+        label="Already downloaded season pack - Episodes 1-8", offscreen=True
+    )
 
 
 def test_pack_result_does_not_invent_sdr_or_mkv_metadata():
