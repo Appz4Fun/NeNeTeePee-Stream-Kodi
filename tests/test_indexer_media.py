@@ -258,10 +258,10 @@ def test_a_direct_indexer_is_asked_with_the_call_it_has():
 
 def test_a_direct_result_with_no_id_or_no_key_is_asked_about_nothing():
     item = _item((("nfo", "1"),), "<guid>not-a-link</guid>")
-    assert newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "K") == {}
+    assert not newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "K")
     item = _direct_item("abnzb.com", ("nfo", "1"))
-    assert newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "") == {}
-    assert newznab_attrs.direct_media_links(item, "not a url", "K") == {}
+    assert not newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "")
+    assert not newznab_attrs.direct_media_links(item, "not a url", "K")
     # The guid attribute serves when the guid element is not a link.
     item = _item((("nfo", "1"), ("guid", _ID)), "<guid>{}</guid>".format(_ID))
     links = newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "K")
@@ -404,11 +404,11 @@ def test_the_video_track_of_a_report_and_of_a_reply():
         "hdr_exact": True,
     }
     # No video track, an unreadable or unsafe report, a reply that is not one.
-    assert mediainfo_video.from_xml(_report("")) == {}
-    assert mediainfo_video.from_xml("<MediaInfo><media>") == {}
-    assert mediainfo_video.from_xml('<!DOCTYPE x [<!ENTITY a "b">]><x>&a;</x>') == {}
+    assert not mediainfo_video.from_xml(_report(""))
+    assert not mediainfo_video.from_xml("<MediaInfo><media>")
+    assert not mediainfo_video.from_xml('<!DOCTYPE x [<!ENTITY a "b">]><x>&a;</x>')
     for body in ("", "not json", "[]", '{"mediainfo": null}', None):
-        assert mediainfo_video.from_reply(body) == {}, body
+        assert not mediainfo_video.from_reply(body), body
 
 
 _MEDIAINFO_TEXT = """
@@ -441,9 +441,9 @@ def test_the_video_block_of_an_nfo_that_is_mediainfo_text():
     }
     # A hand-written NFO's video line names no dynamic range.
     scene = "Video.........: x264 @ 15371 kb/s\nAudio.........: DTS 5.1\n"
-    assert mediainfo_video.from_nfo(scene) == {}
-    assert mediainfo_video.from_nfo("Video\nBit depth : 10 bits\n") == {}
-    assert mediainfo_video.from_nfo(None) == {}
+    assert not mediainfo_video.from_nfo(scene)
+    assert not mediainfo_video.from_nfo("Video\nBit depth : 10 bits\n")
+    assert not mediainfo_video.from_nfo(None)
 
 
 # --- the facts on the rows --------------------------------------------------
@@ -628,7 +628,7 @@ def test_a_reference_with_no_key_to_borrow_asks_nothing(indexer):
     rows[1]["nfo_url"] = _nfo_link(indexer.replace("127.0.0.1", "localhost"))
     with _known(**{"127_0_0_1": Offer(GETNFO, REST_V1)}):
         assert nfo_audio.learn_for_top(rows, _key, _one) is False
-    assert _Handler.requests == []
+    assert not _Handler.requests
     # Nothing was asked, so nothing is settled: a later search may ask.
     assert nfo_audio._known(_key(PLAIN)) is None
 
@@ -641,7 +641,7 @@ def test_an_indexer_known_to_have_no_mediainfo_call_is_not_probed(indexer, store
         assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
     # One request, for the NFO: no probe of the REST path.
     assert [path.split("?")[0] for path in _Handler.requests] == ["/api"]
-    assert json.loads(store.read_text())["rest"] == {}
+    assert not json.loads(store.read_text())["rest"]
     # The NFO is MediaInfo text and names the release: its video block counts.
     filter_module.attach_metadata(rows)
     assert rows[0]["_meta"]["hdr"] == ["Dolby Vision"]
@@ -659,7 +659,7 @@ def test_a_refusal_from_an_indexer_in_the_table_is_a_refusal(indexer, store):
     # Not taken for "no such call": the NFO is not read, the indexer rests.
     assert _Handler.requests == [_MEDIAINFO_PATH]
     saved = json.loads(store.read_text())
-    assert "127.0.0.1" in saved["hosts"] and saved["rest"] == {}
+    assert "127.0.0.1" in saved["hosts"] and not saved["rest"]
 
 
 def test_an_odd_answer_from_an_indexer_in_the_table_decides_nothing(indexer, store):
@@ -671,7 +671,7 @@ def test_an_odd_answer_from_an_indexer_in_the_table_decides_nothing(indexer, sto
         assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
     # The NFO was read, and the indexer is not written down as lacking the call.
     assert len(_Handler.requests) == 2
-    assert json.loads(store.read_text())["rest"] == {}
+    assert not json.loads(store.read_text())["rest"]
 
 
 def test_the_listing_on_an_indexer_with_mediainfo_is_the_one_asked(indexer):
