@@ -72,11 +72,11 @@ def test_the_volume_count_comes_from_the_downloads_log():
             None,
         ],
     )
-    assert nzbget_progress.rar_volumes(log) == 45
+    assert nzbget_progress.rar_volumes(log) == {"x8fq": 45}
     old = ["Successfully downloaded job/name.rar"] + [
         "Successfully downloaded job/name.r{:02d}".format(n) for n in range(20)
     ]
-    assert nzbget_progress.rar_volumes(old) == 21
+    assert nzbget_progress.rar_volumes(old) == {"name": 21}
     assert nzbget_progress.rar_volumes(["Successfully downloaded job/a1b2c3"]) is None
     assert nzbget_progress.rar_volumes([]) is None
     assert nzbget_progress.rar_volumes(None) is None
@@ -120,7 +120,7 @@ def test_the_stage_names_the_volume_and_the_time_left_follows_the_pace():
     # Volumes 5, 6 and 7 seen 20 seconds apart.
     for part, now in ((5, 100), (6, 120), (7, 140)):
         nzbget_progress.note_unpack(state, _unpacking(part), now=now)
-    state["unpack"]["total"] = 45
+    state["unpack"]["totals"] = {"x8fq": 45}
     lines = _lines(state, _unpacking(7, seconds=500), now=150)
     assert lines[0] == "Copy 1 - unpacking - part 7 of 45"
     # 39 volumes left at 20 s each, less the 10 s spent on this one.
@@ -137,7 +137,7 @@ def test_before_the_count_and_the_pace_are_known():
     assert lines[0] == "Copy 1 - unpacking - part 5"
     assert lines[1] == "30s so far"
     # The count is known, the pace is not yet: two volumes are one interval.
-    state["unpack"]["total"] = 45
+    state["unpack"]["totals"] = {"x8fq": 45}
     nzbget_progress.note_unpack(state, _unpacking(6), now=120)
     lines = _lines(state, _unpacking(6, seconds=50), now=121)
     assert lines[0] == "Copy 1 - unpacking - part 6 of 45"
@@ -151,7 +151,7 @@ def test_the_servers_own_percent_is_used_when_it_gives_one():
     state = {"current": 42}
     for part, now in ((5, 100), (6, 120), (7, 140)):
         nzbget_progress.note_unpack(state, _unpacking(part), now=now)
-    state["unpack"]["total"] = 45
+    state["unpack"]["totals"] = {"x8fq": 45}
     group = _unpacking(7, seconds=30, post_percent=25)
     lines = _lines(state, group, now=150)
     assert lines[0] == "Copy 1 - unpacking 25%"
@@ -165,7 +165,7 @@ def test_a_slow_start_does_not_set_the_pace():
     marks += [(n, 300 + (n - 5) * 20) for n in range(6, 21)]
     for part, now in marks:
         nzbget_progress.note_unpack(state, _unpacking(part), now=now)
-    state["unpack"]["total"] = 45
+    state["unpack"]["totals"] = {"x8fq": 45}
     left = nzbget_progress.unpack_seconds_left(state, _unpacking(20), now=600)
     # 26 volumes left; the volumes of the last five minutes took 20 s each.
     assert 500 <= left <= 540
@@ -200,7 +200,7 @@ def test_the_marks_follow_the_copy_and_the_stage():
 def test_a_count_smaller_than_the_volume_is_not_shown():
     state = {"current": 42}
     nzbget_progress.note_unpack(state, _unpacking(9), now=1)
-    state["unpack"]["total"] = 4
+    state["unpack"]["totals"] = {"x8fq": 4}
     assert nzbget_progress.unpack_part(state, _unpacking(9)) == (9, None)
 
 
@@ -218,7 +218,7 @@ def test_the_volume_count_is_read_once_the_unpack_is_on_a_volume():
         nzbget_resolver._refresh_unpack(state, _unpacking(3), _getter)
         nzbget_resolver._refresh_unpack(state, _unpacking(4), _getter)
     assert log.call_count == 1 and log.call_args.args[0] == 42
-    assert state["unpack"]["total"] == 45
+    assert state["unpack"]["totals"] == {"x8fq": 45}
 
 
 def test_an_unreadable_log_is_tried_a_few_times_then_left():
@@ -228,8 +228,45 @@ def test_an_unreadable_log_is_tried_a_few_times_then_left():
         for part in range(1, 9):
             nzbget_resolver._refresh_unpack(state, _unpacking(part), _getter)
     assert log.call_count == 3
-    assert state["unpack"]["total"] is None
+    assert state["unpack"]["totals"] is None
     with patch(
         "resources.lib.nzbget_resolver.nzbget_api.file_log", side_effect=OSError("x")
     ):
         nzbget_resolver._refresh_unpack({"current": 7}, _unpacking(2), _getter)
+
+
+def test_a_job_with_two_archives_counts_each_archives_own_volumes():
+    log = [
+        "Successfully downloaded job/Film.part{:02d}.rar".format(n)
+        for n in range(1, 11)
+    ] + [
+        "Successfully downloaded job/Extras.part{:02d}.rar".format(n)
+        for n in range(1, 5)
+    ]
+    assert nzbget_progress.rar_volumes(log) == {"film": 10, "extras": 4}
+
+    def group(name, part):
+        text = "Extracting from {}.part{:02d}.rar".format(name, part)
+        return dict(_unpacking(None), post_text=text)
+
+    state = {"current": 42}
+    for part, now in ((8, 100), (9, 120), (10, 140)):
+        nzbget_progress.note_unpack(state, group("Film", part), now=now)
+    state["unpack"]["totals"] = nzbget_progress.rar_volumes(log)
+    assert _lines(state, group("Film", 10), now=141)[0].endswith("part 10 of 10")
+    # The next archive: its own count, and a pace of its own volumes.
+    nzbget_progress.note_unpack(state, group("Extras", 1), now=160)
+    lines = _lines(state, group("Extras", 1), now=161)
+    assert lines[0].endswith("part 1 of 4")
+    assert "left" not in " ".join(lines[1:2])
+    for part, now in ((2, 170), (3, 180)):
+        nzbget_progress.note_unpack(state, group("Extras", part), now=now)
+    left = nzbget_progress.unpack_seconds_left(state, group("Extras", 3), now=180)
+    assert left == 20
+    # A higher volume of another archive is another archive too.
+    nzbget_progress.note_unpack(state, group("Film", 9), now=190)
+    assert state["unpack"]["archive"] == "film"
+    assert [mark[0] for mark in state["unpack"]["marks"]] == [9]
+    # An archive the log did not name has no count.
+    nzbget_progress.note_unpack(state, group("Unknown", 2), now=200)
+    assert nzbget_progress.unpack_part(state, group("Unknown", 2)) == (2, None)

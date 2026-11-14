@@ -312,13 +312,13 @@ def _refresh_unpack(state, group, settings_getter):
     try:
         nzbget_progress.note_unpack(state, group)
         seen = state.get("unpack")
-        if not isinstance(seen, dict) or seen.get("total"):
+        if not isinstance(seen, dict) or seen.get("totals"):
             return
         if seen.get("reads", 0) >= _VOLUME_READS:
             return
         seen["reads"] = seen.get("reads", 0) + 1
         lines = nzbget_api.file_log(state.get("current"), settings_getter)
-        seen["total"] = nzbget_progress.rar_volumes(lines)
+        seen["totals"] = nzbget_progress.rar_volumes(lines)
     except Exception:  # pylint: disable=broad-except
         return
 

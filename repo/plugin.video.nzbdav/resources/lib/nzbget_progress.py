@@ -403,71 +403,95 @@ def _stage_time_line(group, state=None, now=None):
 
 # --- an unpack's progress, from the volume it is on -------------------------
 
-# "Extracting from name.part13.rar" (or the old "name.r11"): the volume.
-_EXTRACTING = re.compile(
-    r"Extracting from .*?(?:\.part(\d+)\.rar|\.r(\d{2,3})|(\.rar))\s*$", re.IGNORECASE
-)
+# "Extracting from name.part13.rar" (or the old "name.r11"): the archive and
+# its volume. The same suffixes mark a downloaded file as a volume.
+_VOLUME_SUFFIX = r"(?:\.part(\d+)\.rar|\.r(\d{2,3})|\.rar)\s*$"
+_EXTRACTING = re.compile(r"Extracting from (.*?)" + _VOLUME_SUFFIX, re.IGNORECASE)
 # A downloaded file's log line ends with its name.
 _DOWNLOADED_FILE = re.compile(r"Successfully downloaded .*?([^/\\]+)$")
-_VOLUME_NAME = re.compile(r"(?:\.part\d+\.rar|\.r\d{2,3}|\.rar)$", re.IGNORECASE)
+_VOLUME_NAME = re.compile(r"^(.*?)" + _VOLUME_SUFFIX, re.IGNORECASE)
 # The pace is taken over the volumes seen since this many seconds ago at
 # most, so a slow start (the disk busy with another copy) does not set it.
 _PACE_WINDOW = 300
 
 
-def _volume_number(text):
-    """Which volume an "Extracting from ..." text names, counted from 1."""
+def _archive(name):
+    """An archive's name without folders, for matching it across texts."""
+    return re.split(r"[/\\]", str(name or "").strip())[-1].lower()
+
+
+def _volume(text):
+    """``(archive, volume)`` an "Extracting from ..." text names, or None.
+
+    The volume is counted from 1: name.rar is the first of the old naming,
+    name.r00 the second.
+    """
     match = _EXTRACTING.search(str(text or ""))
     if not match:
         return None
-    if match.group(1):
-        return int(match.group(1)) or None
     if match.group(2):
-        # name.rar is the first volume, name.r00 the second.
-        return int(match.group(2)) + 2
-    return 1
+        number = int(match.group(2))
+    elif match.group(3):
+        number = int(match.group(3)) + 2
+    else:
+        number = 1
+    return (_archive(match.group(1)), number) if number > 0 else None
+
+
+def _volume_number(text):
+    """Which volume an "Extracting from ..." text names, counted from 1."""
+    found = _volume(text)
+    return found[1] if found else None
 
 
 def rar_volumes(log_lines):
-    """How many RAR volumes a download brought in, from its log, or None.
+    """How many RAR volumes each archive of a download has, or None.
 
-    One "Successfully downloaded .../name.part07.rar" line per file. None
-    when the log names no volume (files still obfuscated, or no RAR).
+    ``{archive: volumes}`` from the download's log: one "Successfully
+    downloaded .../name.part07.rar" line per file. A job can hold several
+    archives, each with its own volumes. None when the log names no volume
+    (files still obfuscated, or no RAR).
     """
-    names = set()
+    volumes = {}
     for line in log_lines or ():
         if not isinstance(line, str):
             continue
         match = _DOWNLOADED_FILE.search(line.strip())
-        if match and _VOLUME_NAME.search(match.group(1)):
-            names.add(match.group(1).lower())
-    return len(names) or None
+        name = _VOLUME_NAME.match(match.group(1)) if match else None
+        if name:
+            volumes.setdefault(_archive(name.group(1)), set()).add(
+                match.group(1).lower()
+            )
+    return {archive: len(files) for archive, files in volumes.items()} or None
 
 
 def note_unpack(state, group, now=None):
     """Remember when the unpack moved on to each volume, for the time left.
 
-    Called on every poll. The marks are kept per followed copy and dropped
-    when the copy changes or the job leaves the unpack.
+    Called on every poll. The marks are kept per followed copy and per
+    archive: they start again when the unpack moves to the job's next
+    archive, and are dropped when the copy changes or the job leaves the
+    unpack.
     """
     if not isinstance(state, dict):
         return
     now = time.monotonic() if now is None else now
-    part = None
-    if str(group.get("status") or "").upper() == "UNPACKING":
-        part = _volume_number(group.get("post_text"))
-    seen = state.get("unpack")
-    copy = state.get("current")
-    if part is None:
-        if str(group.get("status") or "").upper() != "UNPACKING":
+    unpacking = str(group.get("status") or "").upper() == "UNPACKING"
+    found = _volume(group.get("post_text")) if unpacking else None
+    if found is None:
+        if not unpacking:
             state.pop("unpack", None)
         return
+    archive, part = found[0], found[1]
+    seen = state.get("unpack")
+    copy = state.get("current")
     if not isinstance(seen, dict) or seen.get("copy") != copy:
-        seen = {"copy": copy, "marks": [], "total": None, "reads": 0}
+        seen = {"copy": copy, "archive": archive, "marks": [], "reads": 0}
+        seen["totals"] = None
         state["unpack"] = seen
     marks = seen["marks"]
-    if marks and part < marks[-1][0]:
-        # A second archive in the job starts again at its first volume.
+    if seen.get("archive") != archive or (marks and part < marks[-1][0]):
+        seen["archive"] = archive
         del marks[:]
     if not marks or part > marks[-1][0]:
         marks.append((part, now))
@@ -475,7 +499,11 @@ def note_unpack(state, group, now=None):
 
 
 def unpack_part(state, group):
-    """``(volume, of how many)`` for the unpack being followed, or Nones."""
+    """``(volume, of how many)`` for the unpack being followed, or Nones.
+
+    The count is the current archive's own. It is left out when the log did
+    not name that archive, or names fewer volumes than the one in hand.
+    """
     seen = state.get("unpack") if isinstance(state, dict) else None
     if (
         not isinstance(seen, dict)
@@ -484,7 +512,8 @@ def unpack_part(state, group):
     ):
         return None, None
     part = seen["marks"][-1][0]
-    total = seen.get("total")
+    totals = seen.get("totals")
+    total = totals.get(seen.get("archive")) if isinstance(totals, dict) else None
     if not _is_count(total) or total < part:
         total = None
     return part, total
