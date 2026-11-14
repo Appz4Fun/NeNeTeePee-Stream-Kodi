@@ -290,6 +290,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A download whose files were deleted is no longer marked DL, and can be
+  downloaded again.** The picker's **DL** tag came from NZBGet's history
+  alone, and history outlives the files: after a cleanup job or a manual
+  tidy-up removed a finished download, its release still showed **DL**, and
+  picking it ended in "This isn't in the completed folder". The picker now
+  looks in the completed folder before it tags a release, and leaves the tag
+  off when the download's folder is gone or holds no video. The look is one
+  short NZBGet call plus a few file checks, made only when a result matches
+  history, and it gives up after two seconds, so a share that stops answering
+  cannot hold the picker. When a release tagged **DL** turns out to have lost
+  its files by the time you play it, a dialog says so and offers
+  **Download again** or **Cancel** (the folder is named in `kodi.log`);
+  nothing is downloaded without a yes. A
+  release that was never tagged simply downloads. Only proof counts: an
+  unmounted share, an empty mount point or an unreadable folder keeps the tag
+  and the remount dialog, as before.
 - **The picker no longer stays blank for a search with hundreds of
   releases.** Each row of the list sets about two dozen display values, and
   every one waited for Kodi's graphics lock, so the list took 25 to 60

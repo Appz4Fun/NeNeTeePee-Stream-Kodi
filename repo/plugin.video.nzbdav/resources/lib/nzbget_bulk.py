@@ -57,8 +57,19 @@ def submit_bulk(ctx, nzb_url, title, dupe_key):
     # cannot overwrite a later accepted fleet's playback/failover state.
     ctx.preexisting_successes = probe.get("successes")
     core._warn_if_healthcheck_pauses(getter, options=probe.get("options", {}))
-    if probe.get("completed"):
-        return _use_completed(ctx, probe["completed"], progress)
+    completed = probe.get("completed")
+    if completed and core._gone_completed_folder(completed, ctx):
+        # History still lists this release, but its files were deleted: that
+        # row can't be played, so send the copies as for a first download.
+        # (A pick the picker had tagged "DL" was confirmed with the user
+        # before the resolve got here.)
+        core.xbmc.log(
+            "NeNeTeePee-Stream-Kodi: NZBGet lists this release as downloaded, "
+            "but its files are gone from the completed folder; sending it again",
+            core.xbmc.LOGINFO,
+        )
+    elif completed:
+        return _use_completed(ctx, completed, progress)
     existing = probe.get("chosen")
     if existing:
         ctx.adopted_nzbids = probe.get("adopted", [])

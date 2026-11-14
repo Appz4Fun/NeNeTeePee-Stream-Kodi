@@ -562,6 +562,63 @@ def test_missing_completed_file_fails_without_a_second_download(bulk_env):
     fetch.assert_not_called()
 
 
+def test_deleted_completed_files_are_sent_again(bulk_env):
+    """History outlives the files: a SUCCESS row whose folder is verifiably
+    gone can't be played, so the copies are sent as for a first download."""
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, _append, _fetch = bulk_env
+    history = [
+        {"NZBID": 77, "DupeKey": "k", "Status": "SUCCESS/ALL", "DestDir": "/gone"}
+    ]
+    with patch.object(nzbget_api, "history_rows", return_value=history), patch(
+        "resources.lib.nzbget_resolver._gone_completed_folder", return_value="/gone"
+    ) as gone, patch("resources.lib.nzbget_resolver._reuse_completed_job") as reuse:
+        assert submit_fleet(ctx, "pick", "T", "k") == (42, None)
+    assert gone.call_args.args[0]["dest_dir"] == "/gone"
+    reuse.assert_not_called()
+    fleet.assert_called_once()
+    assert not getattr(ctx, "bulk_completed", None)
+    # The stale row stays known as pre-existing, so the poll never mistakes
+    # it for this download finishing.
+    assert ctx.preexisting_successes is not None
+
+
+def test_server_confirmed_files_are_not_sent_again(bulk_env):
+    """The server answers ALREADY_DOWNLOADED only with the files on its disk:
+    a folder this device can't see is then a share problem, not a deletion."""
+    from resources.lib.nzbget_fleet_run import submit_fleet
+
+    ctx, fleet, append, _fetch = bulk_env
+    fleet.return_value = (
+        {
+            "Chosen": 0,
+            "Reason": "ALREADY_DOWNLOADED",
+            "Members": [
+                {"Status": "SKIPPED", "Reason": "downloaded as Movie", "NZBID": 0}
+            ],
+        },
+        None,
+    )
+    completed = {"present": True, "nzbid": 77, "job_name": "Movie", "dest_dir": "/x"}
+    with patch(
+        "resources.lib.nzbget_bulk._already_completed", return_value=completed
+    ), patch(
+        "resources.lib.nzbget_resolver._gone_completed_folder", return_value="/x"
+    ), patch(
+        "resources.lib.nzbget_resolver._reuse_completed_job", return_value=None
+    ), patch(
+        "resources.lib.nzbget_resolver._string",
+        return_value="Completed file unavailable",
+    ):
+        assert submit_fleet(ctx, "pick", "T", "k") == (
+            None,
+            "Completed file unavailable",
+        )
+    fleet.assert_called_once()
+    append.assert_not_called()
+
+
 def test_capped_legacy_refills_a_rejected_prepared_backup(bulk_env):
     from resources.lib.nzbget_fleet_run import submit_fleet
 

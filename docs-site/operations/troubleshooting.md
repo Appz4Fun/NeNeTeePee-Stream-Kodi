@@ -218,6 +218,12 @@ NeNeTeePee-Stream-Kodi needs both the nzbdav API credentials and the WebDAV cred
   lists the player errors Kodi logged. `kodi.log` always gets the same
   diagnosis on a line starting `NeNeTeePee-Stream-Kodi: playback failure
   diagnosis`.
+- **"This release was downloaded before, but its files are no longer in the
+  completed folder"**: the release you picked was tagged **DL**, but its
+  folder was deleted (or emptied of video) after the picker opened. Choose
+  **Download again** to fetch it afresh, or **Cancel**. A release whose files
+  were already gone when the picker opened shows no **DL** tag and simply
+  downloads.
 - **No video file found in completed folder**: check **NZBGet Category**.
   NZBGet puts completed downloads in a subfolder named after the category.
   Also check that the completed folder points at NZBGet's completed-downloads

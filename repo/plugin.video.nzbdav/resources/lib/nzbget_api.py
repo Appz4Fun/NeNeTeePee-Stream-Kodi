@@ -695,7 +695,7 @@ def _completed_job_entry(item):
     }
 
 
-def completed_base_dir(settings_getter=None):
+def completed_base_dir(settings_getter=None, timeout=_RPC_TIMEOUT):
     """Return NZBGet's configured global completed DestDir (absolute), or None.
 
     Lets ``nzbget_smb_target`` map a history ``DestDir`` *relative* to NZBGet's
@@ -704,7 +704,9 @@ def completed_base_dir(settings_getter=None):
     absolute path (for example, an unexpanded ``${MainDir}`` template) degrades to None
     so the caller falls back to its folder heuristic.
     """
-    cfg, error = _rpc_call("config", [], settings_getter=settings_getter)
+    cfg, error = _rpc_call(
+        "config", [], settings_getter=settings_getter, timeout=timeout
+    )
     if error is not None or not isinstance(cfg, list):
         return None
     for item in cfg:

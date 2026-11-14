@@ -227,8 +227,11 @@ The add-on tracks the returned `Chosen` NZBID and follows NZBGet's automatic
 failover to another member. An incomplete ranking response needs no extra
 submission. Accepted fleets are never resent or FORCE-resubmitted. Only `KEY_BUSY` or `SHUTDOWN` replies with no chosen download are retried, up to twice, with a three-second pause. `ALREADY_QUEUED` follows the existing download and preserves its ownership. A release
 already queued is followed; a release already downloaded is played from its
-completed file after checking that Kodi can read it. A missing or unreadable
-completed file produces an explicit error without submitting a new download.
+completed file after checking that Kodi can read it. An unreadable completed
+file, or one NZBGet reports on its disk that this device can't see, produces
+an explicit error without submitting a new download. A history item whose
+folder is verifiably gone from the completed folder is not played: the copies
+are sent as for a first download.
 If every copy is dead, the add-on reports that no working copy
 exists. Request size, chosen ID, and the health list are logged for debugging.
 Bulk job names include a copy number so replies can be matched after health
@@ -508,6 +511,18 @@ history item, its size is within 15%, and its recorded Usenet post date
 matches. If you play it, NeNeTeePee-Stream-Kodi reuses the completed file directly instead of
 resubmitting it. This is deliberate: NZBGet's duplicate check would otherwise
 delete a resubmission of a `SUCCESS` item and fail the playback.
+
+NZBGet's history outlives the files. If a cleanup job or you deleted a
+finished download, its history item is still `SUCCESS`. So before tagging, the
+picker looks in the completed folder: a release whose folder is gone, or holds
+no video, gets no **DL** tag and downloads like any other. The look gives up
+after two seconds, so a slow share cannot hold the picker. If the files of a
+release tagged **DL** are gone by the time you play it, a dialog says so and
+offers **Download again** or **Cancel**; `kodi.log` names the folder. Only proof counts: when
+the share isn't mounted or the folder can't be read, the tag stays and the
+playback failure dialog (see
+[Troubleshooting](../operations/troubleshooting.md#nzbget-backend-problems))
+offers the remount.
 
 NeNeTeePee-Stream-Kodi also remembers completed folders that hold at least two reliably named
 episodes from one season as season packs. When the exact episode you want is
