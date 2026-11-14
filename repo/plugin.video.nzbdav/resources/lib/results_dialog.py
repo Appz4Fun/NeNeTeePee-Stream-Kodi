@@ -21,6 +21,7 @@ from resources.lib.release_display import (
 )
 from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
+from resources.lib.upload_count import count_uploads
 
 # Color constants matching the mockup
 _RES_COLORS = {
@@ -395,6 +396,8 @@ def _build_group_item(group, row_index):
     The row is the group's lead (top-ranked) copy, built like a List row, plus
     the copy count, an any-copy DL mark, and the side-panel properties the skin
     reads from the focused item (``Container(51).ListItem.Property(...)``).
+    The copy count is the separate uploads among the group's listings
+    (``upload_count.count_uploads``); the panel gives the listings too.
     """
     lead = group[0]
     label = _row_label(lead)
@@ -411,9 +414,18 @@ def _build_group_item(group, row_index):
     any_available = any(row.get("_available") for row in group)
     if any_available:
         item.setProperty("available", _available_text())
-    if count > 1:
-        item.setProperty("copies", _c(_fmt(30479, count), _COPIES_CHIP_COLOR))
-        kicker = _fmt(30478, count, len(indexers))
+    # Several indexers list one upload: the row counts separate uploads, and
+    # the panel says how many listings and indexers they came from.
+    uploads = count_uploads(group) if count > 1 else 1
+    if uploads > 1:
+        item.setProperty("copies", _c(_fmt(30479, uploads), _COPIES_CHIP_COLOR))
+        if uploads == count:
+            kicker = _fmt(30478, count, len(indexers))
+        else:
+            kicker = _fmt(30700, uploads, count, len(indexers))
+    elif count > 1:
+        item.setProperty("copies", _c(_string(30702), _COPIES_CHIP_COLOR))
+        kicker = _fmt(30701, count, len(indexers))
     else:
         item.setProperty("copies", _c(lead.get("indexer", ""), "FF4A9EFF"))
         kicker = _fmt(30480, lead.get("indexer", "") or "?")

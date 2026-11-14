@@ -493,3 +493,43 @@ def test_rows_are_built_off_screen():
     assert made.call_count == 2
     for call in made.call_args_list:
         assert call.kwargs.get("offscreen") is True
+
+
+_POSTED = "Tue, 13 Jan 2026 06:46:46 +0000"
+_REPOSTED = "Wed, 14 Jan 2026 09:00:00 +0000"
+
+
+def test_the_row_counts_separate_uploads_and_the_panel_gives_the_listings():
+    # Three indexers list one upload, a fourth lists a second upload.
+    group = [
+        _row(ALPHA, "a1", indexer="SceneNZBs", pubdate=_POSTED),
+        _row(ALPHA, "a2", indexer="NZBGeek", pubdate=_POSTED),
+        _row(ALPHA, "a3", indexer="abNZB", pubdate=_POSTED),
+        _row(ALPHA, "a4", indexer="altHUB", pubdate=_REPOSTED),
+    ]
+    props = _group_props(group)
+    assert "2 copies" in props["copies"]
+    assert props["panel_kicker"] == "2 copies (4 listings on 4 indexers)"
+    # Every indexer is still listed in the panel.
+    assert len(props["panel_indexers"].split("[CR]")) == 4
+
+
+def test_one_upload_on_several_indexers_is_one_copy():
+    group = [
+        _row(ALPHA, "a1", indexer="SceneNZBs", pubdate=_POSTED),
+        _row(ALPHA, "a2", indexer="NZBGeek", pubdate=_POSTED),
+        _row(ALPHA, "a3", indexer="NZBGeek", pubdate=_POSTED),
+    ]
+    props = _group_props(group)
+    assert "1 copy" in props["copies"] and "copies" not in props["copies"]
+    assert props["panel_kicker"] == "1 copy (3 listings on 2 indexers)"
+
+
+def test_separate_uploads_read_as_before():
+    group = [
+        _row(ALPHA, "a1", indexer="SceneNZBs", pubdate=_POSTED),
+        _row(ALPHA, "a2", indexer="NZBGeek", pubdate=_REPOSTED),
+    ]
+    props = _group_props(group)
+    assert "2 copies" in props["copies"]
+    assert props["panel_kicker"] == "2 copies on 2 indexers"

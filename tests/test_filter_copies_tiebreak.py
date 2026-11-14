@@ -323,3 +323,27 @@ def test_season_rows_still_meet_movies_and_other_season_rows():
     assert peers["m2021"] == ["m2021", "s1", "s2"]
     assert peers["s1"] == ["m2020", "m2021", "s1", "s2"]
     assert peers["e1"] == ["e1"]
+
+
+_WHEN = "Tue, 13 Jan 2026 06:46:46 +0000"
+_LATER = "Wed, 14 Jan 2026 09:00:00 +0000"
+
+
+def test_one_upload_listed_on_several_indexers_counts_once():
+    # Alpha: one upload on three indexers. Bravo: two separate uploads.
+    rows = [
+        _row(ALPHA, "a1", pubdate=_WHEN, indexer="one"),
+        _row(ALPHA, "a2", pubdate=_WHEN, indexer="two"),
+        _row(ALPHA, "a3", pubdate=_WHEN, indexer="three"),
+        _row(BRAVO, "b1", pubdate=_WHEN, indexer="one"),
+        _row(BRAVO, "b2", pubdate=_LATER, indexer="two"),
+    ]
+    assert _nzb_copy_count(rows[0], rows) == 1
+    assert _nzb_copy_count(rows[3], rows) == 2
+    # Two uploads rank above three listings of one.
+    assert _order(rows) == ["b1", "b2", "a1", "a2", "a3"]
+
+
+def test_listings_with_no_date_are_still_separate_copies():
+    rows = [_row(ALPHA, "a1"), _row(ALPHA, "a2"), _row(BRAVO, "b1")]
+    assert _nzb_copy_count(rows[0], rows) == 2
