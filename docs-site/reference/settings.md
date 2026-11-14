@@ -256,6 +256,7 @@ If **Chinese** is on, releases tagged Cantonese or Urdu also pass. If every name
 | Max size (MB, 0=no limit) | `filter_max_size` | `0` | Remove releases larger than this. If max < min, the size filter is turned off. |
 | Exclude keywords (comma-separated) | `filter_exclude_keywords` | *(empty)* | Remove releases whose title contains any keyword. |
 | Required keywords (comma-separated) | `filter_require_keywords` | *(empty)* | Remove releases whose title doesn't contain every keyword. |
+| Hide AI upscales | `filter_hide_ai_upscales` | `false` | Remove releases tagged as an upscale (`AI-Raws`, `AI Upscale`, `UPSCALED`). AI in a title is not a tag. Off, they rank last in their resolution under Relevance. |
 
 **Action:** select *Configure Excluded Groups...* to open a multi-select of 94
 known release groups. An empty list means no exclusions.

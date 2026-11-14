@@ -15,6 +15,8 @@ reached at call time through ``import resources.lib.router as _router`` so those
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+import xbmc
+
 from resources.lib.http_util import pubdate_to_epoch
 from resources.lib.hydra import _DEFAULT_HYDRA_URL, _SEARCH_UPLOADS_KEY
 from resources.lib.nzbdav_api import completed_jobs_lookup_done
@@ -343,6 +345,7 @@ def _tag_available_nzbget(results, settings_getter=None):
     from resources.lib import nzbget_api
 
     completed = nzbget_api.completed_history(settings_getter=settings_getter)
+    matches = []
     for result in results:
         completed_job = completed.get(result.get("title"))
         if (
@@ -350,11 +353,68 @@ def _tag_available_nzbget(results, settings_getter=None):
             and _completed_job_matches_result(result, completed_job)
             and _result_pubdate_consistent_with_downloads(result)
         ):
-            result["_available"] = True
-            result["_nzbget_completed_job"] = completed_job
+            matches.append((result, completed_job))
+    deleted = _deleted_dest_dirs([job for _result, job in matches], settings_getter)
+    for result, completed_job in matches:
+        # History outlives the files (a cleanup job, a manual tidy-up): a row
+        # whose folder is verifiably gone is not "already downloaded".
+        if completed_job.get("dest_dir") in deleted:
+            continue
+        result["_available"] = True
+        result["_nzbget_completed_job"] = completed_job
     if completed_jobs_lookup_done(completed):
         return completed
     return _LookupDoneJobs()
+
+
+def _deleted_dest_dirs(jobs, settings_getter=None):
+    """Return the ``dest_dir`` of each history row whose files are gone.
+
+    Maps every row onto the completed folder the way the resolver will
+    (``nzbget_smb_target``) and asks ``completed_presence`` about them in one
+    time-boxed batch. Costs one small ``config`` RPC plus a few stats, and
+    only when the picker has a match to tag. Anything that can't be checked
+    (no completed folder configured, share not mounted, an error) is left
+    out, so that row keeps its tag.
+    """
+    dest_dirs = [job.get("dest_dir") for job in jobs if job.get("dest_dir")]
+    if not dest_dirs:
+        return set()
+    try:
+        from resources.lib import completed_presence, nzbget_api
+        from resources.lib.nzbget_resolver import _bind_getter
+        from resources.lib.nzbget_resolver_smb import nzbget_smb_target
+
+        root = str(_bind_getter(settings_getter)("nzbget_smb_root", "") or "").strip()
+        if not root:
+            return set()
+        category = nzbget_api._get_settings(settings_getter)[3]
+        base = nzbget_api.completed_base_dir(
+            settings_getter, timeout=nzbget_api._PICKER_RPC_TIMEOUT
+        )
+        folders = {
+            dest_dir: nzbget_smb_target(root, dest_dir, category, base)
+            for dest_dir in dest_dirs
+        }
+        gone = completed_presence.gone_folders(root, folders.values())
+    except Exception as error:  # pylint: disable=broad-except
+        from resources.lib.http_util import redact_text
+
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: completed-folder check skipped: {}".format(
+                redact_text(str(error))
+            ),
+            xbmc.LOGDEBUG,
+        )
+        return set()
+    deleted = {dest_dir for dest_dir, folder in folders.items() if folder in gone}
+    if deleted:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: {} finished download(s) are no longer in "
+            "the completed folder; not tagging them as downloaded".format(len(deleted)),
+            xbmc.LOGINFO,
+        )
+    return deleted
 
 
 def _completed_lookup_was_done(completed_jobs):

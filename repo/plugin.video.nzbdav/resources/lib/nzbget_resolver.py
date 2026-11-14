@@ -787,6 +787,69 @@ class _SubmitCtx:  # pylint: disable=too-few-public-methods
         self.smb_probe_inventory = None
 
 
+def _gone_completed_folder(completed_job, ctx):
+    """Return a completed match's folder when its files are verifiably gone.
+
+    ``None`` when there is no match, the folder still holds the download, or
+    the file system can't say (share not mounted, unreadable): only proof
+    that the files were deleted may turn a "play it" into a new download.
+    """
+    if not (isinstance(completed_job, dict) and completed_job.get("dest_dir")):
+        return None
+    root = getattr(ctx, "smb_root", "")
+    if not root:
+        return None
+    folder = nzbget_smb_target(
+        root,
+        completed_job["dest_dir"],
+        getattr(ctx, "category", ""),
+        getattr(ctx, "completed_base", None),
+    )
+    if not folder:
+        return None
+    from resources.lib import completed_presence
+
+    return folder if completed_presence.files_gone(root, folder) else None
+
+
+def _dialog_canceled(dialog):
+    try:
+        return bool(dialog.iscanceled())
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
+def _confirm_redownload(folder):
+    """Ask whether to download a release whose finished files were deleted.
+
+    True for "Download again". Back, Cancel, or a dialog Kodi refuses to show
+    all decline: a new download is never started without a yes. The folder
+    goes to the log only: Kodi clips a long path instead of wrapping it.
+    """
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: the finished download is no longer in the "
+        "completed folder, asking whether to download again: {}".format(
+            _redact_text(folder)
+        ),
+        xbmc.LOGINFO,
+    )
+    try:
+        return bool(
+            xbmcgui.Dialog().yesno(
+                _addon_name(),
+                _string(30707),
+                nolabel=_string(30709),
+                yeslabel=_string(30708),
+            )
+        )
+    except Exception as exc:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: download-again prompt failed: {}".format(exc),
+            xbmc.LOGWARNING,
+        )
+        return False
+
+
 def _completed_share_down(completed_job, ctx):
     """True when a completed match exists but its share is not mounted."""
     if not (isinstance(completed_job, dict) and completed_job.get("dest_dir")):
@@ -839,10 +902,11 @@ def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
         ctx.on_failure(failure_message)
         return False
 
-    reuse_url = _reuse_completed_job(
-        completed_job,
-        ctx,
-    )
+    # The picker tagged this pick "DL" from NZBGet's history, which outlives
+    # the files. When they are verifiably gone, skip the probe (it would only
+    # wait out its budget) and ask before downloading again.
+    gone_folder = _gone_completed_folder(completed_job, ctx)
+    reuse_url = None if gone_folder else _reuse_completed_job(completed_job, ctx)
     if reuse_url:
         ctx.on_success(reuse_url)
         return False
@@ -861,6 +925,13 @@ def _reuse_or_submit(ctx, nzb_url, title, completed_job, meta):
         return False
     if not nzb_url:
         ctx.on_failure(_string(30223))
+        return False
+    if not gone_folder and not _dialog_canceled(ctx.dialog):
+        # The probe can wake an automounted share that the first look found
+        # unmounted; look once more now that it has had its turn.
+        gone_folder = _gone_completed_folder(completed_job, ctx)
+    if gone_folder and not _confirm_redownload(gone_folder):
+        ctx.on_failure(None)
         return False
     try:
         return _submit_poll_resolve(ctx, nzb_url, title, meta[0], meta[1])

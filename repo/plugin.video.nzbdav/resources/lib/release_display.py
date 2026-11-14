@@ -92,6 +92,8 @@ _CUT_NAMES = (
 _MAX_LANGUAGES = 3
 
 HYBRID_LABEL = "HYBRID"
+# A release tagged as an upscale, by AI or otherwise (``filter_upscale``).
+UPSCALE_LABEL = "UPSCALE"
 COMPLETE_LABEL = "Complete"
 # A re-release marker ``filter.parse_title_metadata`` stores as a variant.
 _REVISION = re.compile(r"v[2-9]")
@@ -314,7 +316,9 @@ def codec_label(name, meta):
 
 
 def _specs(name, meta):
-    """ "[WEB-DL-2160p][HYBRID][3D][DV HDR10][DD+ Atmos 5.1][MULTi][H265]"."""
+    """ "[WEB-DL-2160p][HYBRID][3D][DV HDR10][DD+ Atmos 5.1][MULTi][H265]".
+
+    An upscale reads "[Bluray-2160p][UPSCALE]"."""
     variant = _variant(meta)
     languages = _languages(name, meta)
     parts = (
@@ -323,6 +327,7 @@ def _specs(name, meta):
         str(meta.get("network") or ""),
         _quality(meta),
         HYBRID_LABEL if meta.get("hybrid") else "",
+        UPSCALE_LABEL if meta.get("ai_upscale") else "",
     )
     # PTT flags a MULTi release as dubbed; "[MULTi]" already says so.
     parts += tuple(

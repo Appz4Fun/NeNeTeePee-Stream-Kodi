@@ -228,6 +228,12 @@ _FALLBACK_STRINGS = {
     30702: "1 copy",
     30703: "{} - part {} of {}",
     30704: "{} - part {}",
+    30707: (
+        "This release was downloaded before, but its files are no longer in "
+        "the completed folder. Download it again?"
+    ),
+    30708: "Download again",
+    30709: "Cancel",
 }
 
 

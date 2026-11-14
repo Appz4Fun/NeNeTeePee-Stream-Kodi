@@ -35,6 +35,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | --- | --- | --- |
 | Exclude keywords (comma-separated)[^source-filter_exclude_keywords]<br>`filter_exclude_keywords` | Empty | Remove releases whose title contains any of these comma-separated keywords. |
 | Required keywords (comma-separated)[^source-filter_require_keywords]<br>`filter_require_keywords` | Empty | Remove releases unless their title contains every one of these comma-separated keywords. |
+| Hide AI upscales<br>`filter_hide_ai_upscales` | Off | Remove releases tagged as an upscale, such as `AI-Raws`, `AI Upscale` or `UPSCALED`. Only a tag counts: AI in a title, as in A.I. Artificial Intelligence, is left alone. With this off they are still listed, last in their resolution under Relevance. See [AI upscales](../features/quality-filtering.md#ai-upscales). |
 
 ## Source notes
 

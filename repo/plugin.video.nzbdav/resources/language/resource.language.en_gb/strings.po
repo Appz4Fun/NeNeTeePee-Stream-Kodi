@@ -2573,3 +2573,23 @@ msgstr ""
 msgctxt "#30704"
 msgid "{} - part {}"
 msgstr ""
+
+msgctxt "#30705"
+msgid "Hide AI upscales"
+msgstr ""
+
+msgctxt "#30706"
+msgid "Remove releases tagged as an upscale, such as AI-Raws, AI Upscale or UPSCALED. Only a tag counts: AI in a title, as in A.I. Artificial Intelligence, is left alone. With this off they are still listed, last in their resolution under Relevance."
+msgstr ""
+
+msgctxt "#30707"
+msgid "This release was downloaded before, but its files are no longer in the completed folder. Download it again?"
+msgstr ""
+
+msgctxt "#30708"
+msgid "Download again"
+msgstr ""
+
+msgctxt "#30709"
+msgid "Cancel"
+msgstr ""

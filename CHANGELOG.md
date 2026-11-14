@@ -69,6 +69,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **AI upscales rank last in their resolution, and a setting hides them.**
+  `Street Fighter II The Animated Movie 4k [2160]-AI-Raws` led the 2160p
+  releases of a search: its name states 2160p, but the video is an upscale
+  of a lower-resolution source. A release tagged as an upscale now ranks
+  below every other release of its resolution under Relevance, and
+  **Hide AI upscales** (`filter_hide_ai_upscales`, Keyword filters, off by
+  default) removes them. The tag is an `AI` release group (`-AI-Raws`,
+  `-AI`), `AI` beside an upscale word, an upscale tag after the year,
+  episode or resolution (`UPSCALED`, `ESRGAN.Upscale`, `UpsUHD`), or a bare
+  `AI` among the technical tags. `AI` in a title (`A.I. Artificial
+  Intelligence`, `The AI Doc`, an episode named `Alien A.I.`) or inside a
+  word is never one. The picker names such a release `[UPSCALE]` and tags it
+  in red, and an upscale is no longer grouped with, or used as a backup of,
+  the release it was made from.
 - **The audio a release's NFO names is read for the top releases.** A name
   such as `Movie.2004.MULTi.1080p.BluRay.x264-GRP` tags no audio and ranked
   as "audio unknown"; its NFO says `DTS-HD MA 5.1`. When an indexer offers a
@@ -276,6 +290,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A download whose files were deleted is no longer marked DL, and can be
+  downloaded again.** The picker's **DL** tag came from NZBGet's history
+  alone, and history outlives the files: after a cleanup job or a manual
+  tidy-up removed a finished download, its release still showed **DL**, and
+  picking it ended in "This isn't in the completed folder". The picker now
+  looks in the completed folder before it tags a release, and leaves the tag
+  off when the download's folder is gone or holds no video. The look is one
+  short NZBGet call plus a few file checks, made only when a result matches
+  history, and it gives up after two seconds, so a share that stops answering
+  cannot hold the picker. When a release tagged **DL** turns out to have lost
+  its files by the time you play it, a dialog says so and offers
+  **Download again** or **Cancel** (the folder is named in `kodi.log`);
+  nothing is downloaded without a yes. A
+  release that was never tagged simply downloads. Only proof counts: an
+  unmounted share, an empty mount point or an unreadable folder keeps the tag
+  and the remount dialog, as before.
 - **The picker no longer stays blank for a search with hundreds of
   releases.** Each row of the list sets about two dozen display values, and
   every one waited for Kodi's graphics lock, so the list took 25 to 60

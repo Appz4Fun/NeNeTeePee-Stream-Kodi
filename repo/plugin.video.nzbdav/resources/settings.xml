@@ -1518,6 +1518,11 @@
 						<heading>30061</heading>
 					</control>
 				</setting>
+				<setting id="filter_hide_ai_upscales" type="boolean" label="30705" help="30706">
+					<level>0</level>
+					<default>false</default>
+					<control type="toggle"/>
+				</setting>
 			</group>
 		</category>
 		<category id="sorting" label="30062" help="30362">

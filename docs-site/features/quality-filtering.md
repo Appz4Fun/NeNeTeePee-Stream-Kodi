@@ -56,6 +56,7 @@ On the **Keyword filters** tab:
 |---------|--------|
 | **Exclude keywords** | Comma-separated. A release is removed if any keyword appears anywhere in its title. |
 | **Required keywords** | Comma-separated. A release is removed unless every keyword appears in its title. |
+| **Hide AI upscales** | Off by default. Removes releases tagged as an upscale. See [AI upscales](#ai-upscales). |
 | **Min size** / **Max size** | In MB, `0` = no limit. A release outside the range is removed. If a release's size can't be read, it's treated as 0 MB, so a non-zero minimum removes size-less placeholder rows. If you set a maximum below the minimum, the add-on turns the size filter off and logs a warning. |
 | **Preferred groups: Tier 1 / 2 / 3** | Comma-separated preferred groups, ranked in that order under Relevance. Defaults come from the TRaSH remux tiers. |
 | **Configure Excluded Groups...** | Opens a multi-select of 94 known release groups. Checked groups are **removed**. Empty means no exclusions. |
@@ -95,19 +96,25 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 2. **Pinned groups:** a CiNEPHiLES release ranks first in its resolution and
    a FraMeSToR release second, ahead of HDR and everything below. These two
    are fixed, not a setting, and match without case sensitivity.
-3. **Release group:** a release with a group ranks above one without, so a
-   release with no group ranks last within its resolution.
-4. **Listed more than once:** a release with two or more NZBs in the results
+3. **Upscales last:** a release tagged as an upscale ranks below every
+   other release of its resolution, whatever HDR, REMUX or audio tags its
+   name carries. An upscale is video stretched from a lower-resolution
+   source, so `Movie 4k [2160]-AI-Raws` is not a genuine 2160p release. See
+   [AI upscales](#ai-upscales).
+4. **Release group:** a release with a group ranks above one without, so a
+   release with no group ranks last among the genuine releases of its
+   resolution.
+5. **Listed more than once:** a release with two or more NZBs in the results
    ranks above a release with only one. A real release is listed by several
    indexers; a single NZB from one indexer is often a stray or mislabelled
    post, and it would otherwise lead its resolution on a better HDR or audio
    tag. If every release of a resolution has one NZB, this step changes
    nothing.
-5. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
+6. **HDR:** Dolby Vision, HDR10+, HDR/HDR10, HLG, then SDR (no HDR tag). A
    release with several tags ranks by its best.
-6. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
+7. **Release type:** REMUX releases tagged HYBRID first, then other REMUX
    releases, then everything else.
-7. **Audio:** four tiers, ranked by the release's best track:
+8. **Audio:** four tiers, ranked by the release's best track:
     1. lossless: TrueHD (with or without Atmos), DTS-HD MA (with or without
        DTS:X), FLAC, PCM and ALAC;
     2. lossy with object audio: Dolby Digital Plus with Atmos, and lossy
@@ -118,16 +125,16 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 
     A release with no audio tag ranks after all four. Formats in one tier
     tie, so FLAC ranks beside TrueHD Atmos.
-8. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
+9. **Preferred group:** **Tier 1**, then **Tier 2**, then **Tier 3**, then
    groups in no tier. Group names match exactly, without case sensitivity.
    Audio is compared first, so Dolby Digital Plus with Atmos from a group in
    no tier ranks above plain Dolby Digital Plus from a preferred group.
-9. **NZB copies:** among releases still tied, the release with more NZBs in
+10. **NZB copies:** among releases still tied, the release with more NZBs in
    the results sorts first, so a pick has more backups if one NZB fails.
    Copies are counted with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release)
    that NZBGet duplicate backups use, so a release with no group counts only
    itself.
-10. **Size:** larger files win the final tie-break.
+11. **Size:** larger files win the final tie-break.
 
 #### How audio tags are read
 
@@ -236,6 +243,42 @@ The Size and Age modes sort only by that property. Age uses the release's post
 date; a missing or unreadable date sorts as the oldest, and an unreadable size
 as 0.
 
+#### AI upscales
+
+An upscale is a release whose video was stretched to a higher resolution
+than its source, today mostly by an AI model. Its name states the new
+resolution, so without a rule of its own it sat with the genuine releases
+of that resolution, and led them when its name carried better tags. The
+add-on reads the tag and does two things with it:
+
+- under **Relevance**, an upscale ranks last in its resolution, below
+  releases with one NZB and releases with no group. This is not a setting;
+- with **Hide AI upscales** on (**Keyword filters**), upscales are removed
+  from the results. In the picker's show-all view they carry
+  `FILTERED: AI upscale`.
+
+Only a tag counts:
+
+| Counts as an upscale | Examples |
+|---|---|
+| A release group that is `AI` or has it as a word of its name | `...[2160]-AI-Raws`, `[AI-Raws] Show - 01`, `...h264-AI` |
+| `AI` beside an upscale word, anywhere in the name | `AI.Upscale`, `AI UPSCALED`, `Upscaled.by.AI` |
+| An upscale tag after the year, episode or resolution | `2160p.UPSCALED.BluRay`, `ESRGAN.Upscale`, `UpsUHD` |
+| A bare `AI` among the technical tags | `1994.2160p.AI.BluRay.x265`, `[BD 2160p AI]` |
+
+`AI` in a title is never a tag: `A.I. Artificial Intelligence (2001)`,
+`The.AI.Doc.2026.1080p` and the episode `S22E11.Alien.A.I.1080p` are left
+alone, as are the letters inside a word or a group name (`Air`, `RAiN`).
+An episode's own title follows its number, so in an episode's name a bare
+`AI` counts only after the resolution or source. `AI.Subs` and `AI.Dub`
+(machine-made subtitles or voices) are not upscales, and neither is
+`Enhanced` on its own (`IMAX.Enhanced`).
+
+In the picker an upscale is named `[Bluray-2160p][UPSCALE]` and carries a
+red `UPSCALE` tag where HYBRID is shown. An upscale is a different file
+from the release it was made from, so the two are never grouped as copies
+of one release or used as each other's NZBGet backups.
+
 ### About "Max results"
 
 **Max results** applies in two places: it caps how many results each provider is
@@ -289,7 +332,7 @@ Six Feet Under (2001) - S02E01 [AMZN][WEB-DL-1080p][DD+ 5.1][H264]-FLUX
 
 That is the title and year, the episode for TV (the air date for a daily
 show), the edition or cut in braces
-(`{Unrated}`), then source and resolution, HYBRID, 3D, DUBBED and HC
+(`{Unrated}`), then source and resolution, HYBRID, UPSCALE, 3D, DUBBED and HC
 (hardcoded subtitles), HDR, the main audio track with its own channel count
 and any second track after a `+`, MULTi or dubbed languages, the video codec,
 and the release group. A split season pack keeps its part (`S01 Part 2`). A part the name doesn't

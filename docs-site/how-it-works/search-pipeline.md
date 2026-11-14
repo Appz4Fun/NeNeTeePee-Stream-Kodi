@@ -164,6 +164,8 @@ bypasses the relevance priorities.
 When the picker is about to open, results already present in your download
 backend get a **DL** tag. A tag needs a name match plus a size match (and a consistent post
 date) against nzbdav's completed history, or NZBGet's history in NZBGet mode.
+In NZBGet mode the completed folder is checked too: a history item whose files
+were deleted gets no tag.
 An episode request can also get an already-downloaded season-pack row
 prepended (see
 [Playback pipeline](playback-pipeline.md#remembering-completed-season-packs)).

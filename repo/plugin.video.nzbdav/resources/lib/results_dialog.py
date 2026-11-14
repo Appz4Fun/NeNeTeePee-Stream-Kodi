@@ -14,6 +14,7 @@ from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
 from resources.lib.release_display import (
     HYBRID_LABEL,
+    UPSCALE_LABEL,
     clean_release_name,
     codec_label,
     display_name,
@@ -83,6 +84,9 @@ _PANEL_NAME_WIDTH = 46
 _PANEL_RAW_COLOR = "FF6B7280"
 # HYBRID has a slot and a color of its own, used by nothing else in the row.
 _HYBRID_COLOR = "FF22D3EE"
+# An upscale's warning takes that slot: it says why the row ranks last in
+# its resolution, which matters more than HYBRID on the same row.
+_UPSCALE_COLOR = "FFF87171"
 _COPY_LEAD_COLOR = "FFFFFFFF"
 _COPY_COLOR = "FF4A9EFF"
 _COPIES_CHIP_COLOR = "FFA8CCFF"
@@ -120,6 +124,13 @@ def _build_result_item(result, row_index):
     return li
 
 
+def _attribute_tag(meta):
+    """The row's colored attribute slot: UPSCALE, else HYBRID, else empty."""
+    if meta.get("ai_upscale"):
+        return _c(UPSCALE_LABEL, _UPSCALE_COLOR)
+    return _c(HYBRID_LABEL, _HYBRID_COLOR) if meta.get("hybrid") else ""
+
+
 def _set_result_properties(li, result):
     """Set a result row's colored metadata properties on ``li``."""
     meta = result.get("_meta", {})
@@ -150,9 +161,7 @@ def _set_result_properties(li, result):
     quality = meta.get("quality", "")
     src_display = _SRC_SHORT.get(quality, quality)
     li.setProperty("quality", _c(src_display, _SRC_COLORS.get(quality, "FFAAAAAA")))
-    li.setProperty(
-        "hybrid", _c(HYBRID_LABEL, _HYBRID_COLOR) if meta.get("hybrid") else ""
-    )
+    li.setProperty("hybrid", _attribute_tag(meta))
 
     # Container (MKV, MP4, etc.)—default to MKV since most scene releases
     # are MKV and only MP4 releases tag the title.
