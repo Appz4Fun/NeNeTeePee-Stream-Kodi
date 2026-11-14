@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, four audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
+| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -278,11 +278,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   post, and it led its resolution whenever its name carried a better HDR,
   REMUX or audio tag than the well-listed releases. CiNEPHiLES and FraMeSToR
   stay pinned first whatever their count.
-- **Audio ranks in four tiers** under Relevance: lossless (TrueHD with or
+- **Audio ranks in three tiers** under Relevance: lossless (TrueHD with or
   without Atmos, DTS-HD MA with or without DTS:X, FLAC, PCM, ALAC), then
-  Dolby Digital Plus with Atmos and lossy DTS:X, then Dolby Digital Plus,
-  Dolby Digital, DTS and DTS-HD HR, then everything else. FLAC now ranks
-  beside TrueHD Atmos, and Opus and MP3 below Dolby Digital.
+  Dolby Digital Plus with Atmos and lossy DTS:X, then everything else:
+  Dolby Digital Plus, Dolby Digital, DTS, DTS-HD HR, AAC, Opus, MP3, and a
+  name that tags no audio. FLAC ranks beside TrueHD Atmos. A name that
+  leaves the audio out usually carries the same Dolby Digital or DTS track a
+  neighbour names, so naming that track no longer wins a rank: those
+  releases tie on audio, and the preferred-group tier, NZB copies and size
+  decide.
 - **The picker's audio column shows the main track**, such as
   `TrueHD Atmos 7.1` or `DD+ 5.1`. Its HDR column reads `DV HDR10+`, and its
   codec column `HEVC`, `x265` or `H265` as the name spells it. The List

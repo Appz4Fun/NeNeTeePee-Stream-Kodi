@@ -139,11 +139,12 @@ def test_main_track_channels_falls_back_to_the_parsed_value():
         (["DD"], "BluRay", 2),
         (["DTS"], "BluRay", 2),
         (["DTS-HD HR"], "BluRay", 2),
-        (["AAC"], "WEB-DL", 3),
-        (["OPUS"], "WEB-DL", 3),
-        (["MP3"], "", 3),
+        (["AAC"], "WEB-DL", 2),
+        (["OPUS"], "WEB-DL", 2),
+        (["MP3"], "", 2),
         (["DD", "FLAC"], "BluRay", 0),  # the best track counts
-        ([], "WEB-DL", 4),
+        (["DD+", "AAC"], "WEB-DL", 2),
+        ([], "WEB-DL", 2),  # no audio tag: beside DD, DTS and AAC
     ],
 )
 def test_audio_tier(audio, quality, tier):
@@ -185,7 +186,7 @@ def _sorted_titles(titles):
     return [row["title"] for row in filters._sort_results(rows, settings)]
 
 
-def test_relevance_ranks_the_four_audio_tiers_in_order():
+def test_relevance_ranks_the_three_audio_tiers_in_order():
     titles = [
         "Movie.2023.1080p.WEB-DL.H.264-GRP",  # no audio tag
         "Movie.2023.1080p.WEB-DL.AAC2.0.H.264-GRP",
@@ -202,7 +203,30 @@ def test_relevance_ranks_the_four_audio_tiers_in_order():
         audio_tier(filters.parse_title_metadata(title)["audio"], "WEB-DL")
         for title in ranked
     ]
-    assert tiers == [0, 0, 1, 1, 2, 2, 3, 3, 4]
+    assert tiers == [0, 0, 1, 1, 2, 2, 2, 2, 2]
+
+
+def test_a_name_without_audio_is_not_beaten_by_dd_dd_plus_or_dts():
+    """Naming DD, DD+ or plain DTS wins no rank over a name that tags no
+    audio (it most likely carries the same track): those keep their order,
+    and the next keys (group tier, copies, size) decide."""
+    bare = "Movie.2023.1080p.WEB-DL.H.264-GRP"
+    for named in (
+        "Movie.2023.1080p.WEB-DL.DD5.1.H.264-GRP",
+        "Movie.2023.1080p.WEB-DL.DDP5.1.H.264-GRP",
+        "Movie.2023.1080p.WEB-DL.DTS.H.264-GRP",
+        "Movie.2023.1080p.WEB-DL.AAC2.0.H.264-GRP",
+    ):
+        assert _sorted_titles([bare, named]) == [bare, named]
+        assert _sorted_titles([named, bare]) == [named, bare]
+
+
+def test_dd_plus_atmos_and_lossless_still_rank_above_a_bare_name():
+    bare = "Movie.2023.1080p.WEB-DL.H.264-GRP"
+    atmos = "Movie.2023.1080p.WEB-DL.DDP5.1.Atmos.H.264-GRP"
+    dtshd = "Movie.2023.1080p.BluRay.DTS-HD.MA.5.1.x264-GRP"
+    assert _sorted_titles([bare, atmos]) == [atmos, bare]
+    assert _sorted_titles([bare, dtshd]) == [dtshd, bare]
 
 
 def test_flac_ranks_beside_truehd_atmos_and_above_dd_plus_atmos():

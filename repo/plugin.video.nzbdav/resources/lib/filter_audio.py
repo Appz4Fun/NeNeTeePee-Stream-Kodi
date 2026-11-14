@@ -7,21 +7,23 @@ TrueHD (lossless) or on Dolby Digital Plus (lossy), DTS:X on DTS-HD MA
 (lossless, every disc) or on a lossy DTS stream (streaming services). So a
 format's tier depends on the formats beside it.
 
-Relevance ranks audio in four tiers, best first:
+Relevance ranks audio in three tiers, best first:
 
 0. lossless: TrueHD (with or without Atmos), DTS-HD MA (with or without
    DTS:X), FLAC, PCM, ALAC;
 1. lossy with objects: Dolby Digital Plus with Atmos, lossy DTS:X;
-2. lossy surround: Dolby Digital Plus, Dolby Digital, DTS, DTS-HD HR;
-3. everything else (AAC, Opus, MP3, ...).
+2. everything else: Dolby Digital Plus, Dolby Digital, DTS, DTS-HD HR, AAC,
+   Opus, MP3, ... and a name that tags no audio at all.
 
-A release with no audio tag ranks after all of them.
+The last tier is flat on purpose: a name that leaves the audio out usually
+carries the same Dolby Digital or DTS track a neighbour names, so naming it
+must not win a rank.
 """
 
-AUDIO_TIER_UNKNOWN = 4
-
 _LOSSLESS = frozenset(("TrueHD", "DTS-HD MA", "FLAC", "PCM", "ALAC"))
-_LOSSY_SURROUND = frozenset(("DD+", "DD", "DTS", "DTS-HD HR"))
+_LOSSY_OBJECTS = 1
+_OTHER = 2
+AUDIO_TIER_UNKNOWN = _OTHER
 # The format a label leads with when a name tags several of one tier.
 _LABEL_ORDER = (
     "TrueHD",
@@ -52,12 +54,10 @@ def _format_tier(name, names, web):
     if name == "DTS:X":
         # DTS:X on a disc sits on DTS-HD MA. Only a streaming release
         # carries the lossy kind, unless it names the lossless bed itself.
-        return 1 if web and "DTS-HD MA" not in names else 0
+        return _LOSSY_OBJECTS if web and "DTS-HD MA" not in names else 0
     if name == "Atmos":
-        return 0 if "TrueHD" in names else 1
-    if name in _LOSSY_SURROUND:
-        return 2
-    return 3
+        return 0 if "TrueHD" in names else _LOSSY_OBJECTS
+    return _OTHER
 
 
 def audio_tier(audio, quality=""):
