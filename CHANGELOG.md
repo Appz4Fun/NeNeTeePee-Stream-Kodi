@@ -160,6 +160,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The picker counts separate uploads, not listings.** A release listed 11
+  times by 9 indexers showed `11 copies` and then sent 6 NZBs, because
+  several indexers list the same upload. The row now shows the uploads the
+  listings come down to before download (`8 copies`), relevance ranks tied
+  releases by that count, and the side panel gives both: `8 copies (11
+  listings on 9 indexers)`. A release that is one upload on several
+  indexers reads `1 copy`.
+
 - **The download dialog names every indexer.** The line of indexers stopped
   at 64 characters with `+2 more`, a limit made for Kodi's narrow progress
   dialog. The add-on's own dialog wraps its text, so it lists them all.

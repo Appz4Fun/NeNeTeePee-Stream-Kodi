@@ -22,6 +22,7 @@ row names a group: postings of one release can differ by GBs.
 """
 
 import collections
+import functools
 import io
 import os
 import shutil
@@ -62,18 +63,27 @@ def _size_bytes(row):
         return 0
 
 
+@functools.lru_cache(maxsize=8192)
+def _epoch(date_text):
+    # The picker compares every listing of a release with the others of its
+    # size, on each open: a date is parsed once, not once per comparison.
+    return pubdate_to_epoch(date_text)
+
+
 def _posted_epoch(row):
     epoch = row.get("_posted_epoch")
     if isinstance(epoch, int) and epoch > 0:
         return epoch
     pubdate = row.get("pubdate")
+    if isinstance(pubdate, str):
+        return _epoch(pubdate) if pubdate else None
     return pubdate_to_epoch(pubdate) if pubdate else None
 
 
 def _usenet_epoch(row):
     """When the release was posted, from the indexer's ``usenetdate``, or None."""
     usenetdate = row.get("usenetdate")
-    return pubdate_to_epoch(usenetdate) if isinstance(usenetdate, str) else None
+    return _epoch(usenetdate) if isinstance(usenetdate, str) else None
 
 
 def _close(left, right):

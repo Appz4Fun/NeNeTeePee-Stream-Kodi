@@ -250,7 +250,13 @@ your filters, the picker opens instead.
 **Sorting › Results view** picks how the picker lays out results:
 
 - **List compacted** (default) shows each release once, however many indexers
-  carry it, with its copy count on the right of the row. A panel on the right
+  carry it, with its copy count on the right of the row. The count is of
+  separate uploads: several indexers listing one upload (the same size,
+  posted within two minutes) are one copy. The panel says how many listings
+  that came from when the two differ: `8 copies (11 listings on 9
+  indexers)`. It is the count known before anything is downloaded; two
+  listings kept apart here can still turn out to be one posting once their
+  NZBs are compared. A panel on the right
   lists the indexers that carry the focused release, one line each, with a
   count when an indexer lists it more than once (`NZB Finder x3`) and the size
   and age of that indexer's best copy, or a range when its copies differ

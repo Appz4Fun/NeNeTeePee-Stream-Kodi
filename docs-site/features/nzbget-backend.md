@@ -340,8 +340,10 @@ not be downloaded for another reason, or when it is a duplicate upload. The
 duplicate count is every listing that was the same upload as a copy kept: the
 listings never downloaded because another indexer lists the same posting, and
 the NZBs that were downloaded and turned out to share their articles with one
-already kept. So a release the picker shows as 20 copies can send 8: the
-other 12 are listed here.
+already kept. The picker's copy count already leaves out the listings it
+can tell are one upload before download, so a release it shows as 8 copies
+(11 listings) can send 6: 3 listings were never fetched and 2 NZBs turned
+out to be postings already kept. All 5 are counted here.
 
 While the NZBs are being downloaded, the first line counts uploads and says
 how many more listings are not being fetched:

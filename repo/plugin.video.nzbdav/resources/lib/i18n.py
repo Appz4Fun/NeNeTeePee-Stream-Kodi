@@ -223,6 +223,9 @@ _FALLBACK_STRINGS = {
     30695: "Cancelling...",
     30696: "not downloading 1 duplicate",
     30697: "not downloading {} duplicates",
+    30700: "{} copies ({} listings on {} indexers)",
+    30701: "1 copy ({} listings on {} indexers)",
+    30702: "1 copy",
 }
 
 

@@ -61,6 +61,7 @@ from resources.lib.filter_remux import (
     remux_priority,
 )
 from resources.lib.filter_tags import supplement_metadata
+from resources.lib.upload_count import count_uploads
 
 # Re-exported so ``resources.lib.filter.<name>`` keeps resolving for callers
 # and tests after the fallback parser, groups dialog, and metadata
@@ -1677,9 +1678,10 @@ def _nzb_copy_counts(rows):
     title and the metadata parsed from it. A bucket is only compared with
     buckets sharing ``_copy_prefilter_key``, and among those only with the
     content ``_peer_candidates`` allows. A groupless row counts only itself.
-    A count is the distinct NZB links of every bucket the title accepts: a
-    link listed twice counts once and a row without a link adds nothing
-    (every row counts at least 1).
+    A count is the separate uploads among the distinct NZB links of every
+    bucket the title accepts (``upload_count.count_uploads``): several
+    indexers listing one upload count once, a link listed twice counts once
+    and a row without a link adds nothing (every row counts at least 1).
     """
     buckets = {}
     for row in rows:
@@ -1693,11 +1695,15 @@ def _nzb_copy_counts(rows):
     counts = {id(row): 1 for row in rows}
     for profile_buckets in profiles.values():
         for bucket, peers in _peer_candidates(profile_buckets):
-            links = {row.get("link") for row in bucket if row.get("link")}
+            listed = list(bucket)
             for other in peers:
                 if other is not bucket and _is_release_copy(bucket[0], other[0]):
-                    links.update(row.get("link") for row in other if row.get("link"))
-            copies = max(1, len(links))
+                    listed.extend(other)
+            by_link = {}
+            for row in listed:
+                if row.get("link"):
+                    by_link.setdefault(row["link"], row)
+            copies = max(1, count_uploads(by_link.values()))
             for row in bucket:
                 counts[id(row)] = copies
     return counts
