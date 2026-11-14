@@ -383,9 +383,11 @@ def _group_filter_passes(meta, settings):
     return not (meta["group"] and meta["group"].lower() in excluded)
 
 
-def _upscale_filter_passes(result, settings):
+def _upscale_filter_passes(result, meta, settings):
     """False for a release tagged as an upscale when those are hidden."""
-    return not (settings.get("hide_ai_upscales") and is_ai_upscale(result))
+    if not settings.get("hide_ai_upscales"):
+        return True
+    return not is_ai_upscale({"title": result.get("title"), "_meta": meta})
 
 
 def first_rejecting_filter(result, meta, settings):
@@ -408,7 +410,7 @@ def first_rejecting_filter(result, meta, settings):
         (lambda: _language_filter_passes(meta, settings), "language"),
         (lambda: _keyword_filters_pass(result["title"].lower(), settings), "keyword"),
         (lambda: _group_filter_passes(meta, settings), "group"),
-        (lambda: _upscale_filter_passes(result, settings), "AI upscale"),
+        (lambda: _upscale_filter_passes(result, meta, settings), "AI upscale"),
         (lambda: _size_filter_passes(result, settings), "size"),
     )
     for passes, label in checks:

@@ -60,6 +60,8 @@ def _row(title, link="", size=SIZE):
         "Movie.1994.4K.AI.Remaster.2160p.x265-GRP",
         "Movie.1994.2160p.AI.Enhanced.BluRay.x265-GRP",
         "[Group] Old Show - 07 [BD 2160p AI][HEVC]",
+        "Movie.1994.AI.Remastered.2160p.BluRay.x265-GRP",
+        "Movie (1994) [AI] [2160p] [x265]",
         "Show.S02E03.1080p.AI.WEB-DL.x264-GRP",
         "movie.1994.2160p.ai.x265-grp",
     ],
@@ -92,6 +94,11 @@ def test_an_upscale_tag_is_read(title):
         "Sons.of.Anarchy.S05E13.J'ai.Obtenu.Cette.Extended.1080p.AVC.REMUX-FraMeSToR",
         "[Group] Ai no Kusabi - 01 [BD 1080p]",
         "[Group] Show (2019) - 05 - AI Uprising [1080p]",
+        # A year-named programme goes on with its title after the year.
+        "Horizon.2023.AI.Revolution.1080p.HDTV.x264-GRP",
+        "Frontline.2024.AI.and.the.Future.of.Work.720p.WEB.h264-GRP",
+        # A name with no tag: what follows the dash ends the title.
+        "Ghost in the Shell - AI",
         # The letters inside a word or a group name.
         "Air.2023.2160p.WEB-DL.DDP5.1.Atmos-FLUX",
         "Samurai.Champloo.Upscaled.S01E01.1080p.BluRay.x265-GRP",

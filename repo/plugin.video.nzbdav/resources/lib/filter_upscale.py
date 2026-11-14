@@ -52,13 +52,15 @@ _TAGS_START = _pattern(
 _PLAIN_UPSCALE = _pattern(_UPSCALE + r"|ups(?:uhd|fhd|hd|4k)")
 
 # A bare "AI" is a tag only where nothing but tags can stand: after the
-# first technical tag, or after a film's year. An episode's own title
-# follows its number ("Show.S02E03.AI.1080p"), so there the year and the
-# episode number do not open that part of the name.
-_TECH_START = _pattern(
+# first technical tag, or between a film's year and that tag when a tag
+# follows it directly ("1994.AI.2160p"; "Horizon.2023.AI.Revolution.1080p"
+# goes on with its title). An episode's own title follows its number
+# ("Show.S02E03.AI.1080p"), so there only the technical tags open that part.
+_TECH = (
     r"\d{3,4}[pi]|\d{3,4}x\d{3,4}|[48]k|uhd|blu-?ray|bd(?:rip|remux)|remux"
     r"|web-?(?:dl|rip)|hdtv|dvdrip|[xh]\.?26[45]|hevc|av1"
 )
+_TECH_START = _pattern(_TECH)
 _YEAR = _pattern(r"(?:19|20)\d{2}")
 _EPISODE = re.compile(
     r"(?<![a-z0-9])(?:s\d{1,2}(?:[ ._-]?e\d{1,3})*|\d{1,2}x\d{2,3}"
@@ -71,22 +73,25 @@ _EPISODE = re.compile(
 _BARE_AI = _pattern(
     r"ai(?!" + _SEP + r"(?:sub|dub|voice|translat|narrat|audio|tts|caption))"
 )
+# A bare "AI" with a tag right after it: "AI.2160p", "AI.Remaster".
+_AI_BEFORE_TAG = _pattern(
+    r"ai(?=[ ._()\[\]-]*(?:"
+    + _TECH
+    + r"|remaster(?:ed)?|enhanced?|restor(?:ed|ation))(?![a-z0-9]))"
+)
 
 
-def _bare_ai_start(name):
-    """Where a bare "AI" starts to count as a tag, or None when nowhere."""
+def _bare_ai_tag(name):
+    """Whether a bare "AI" stands among the name's technical tags."""
     tech = _TECH_START.search(name)
-    limit = tech.start() if tech else len(name)
-    if not _EPISODE.search(name):
-        # The year of a film, not a number its title opens with ("2001: A
-        # Space Odyssey") and not one that follows the technical tags.
-        year = next(
-            (m for m in _YEAR.finditer(name) if 0 < m.start() < limit),
-            None,
-        )
-        if year:
-            return year.end()
-    return tech.end() if tech else None
+    if tech and _BARE_AI.search(name, tech.end()):
+        return True
+    if not tech or _EPISODE.search(name):
+        return False
+    # The year of a film, not a number its title opens with ("2001: A Space
+    # Odyssey").
+    year = next((m for m in _YEAR.finditer(name) if 0 < m.start() < tech.start()), None)
+    return bool(year and _AI_BEFORE_TAG.search(name, year.end(), tech.end()))
 
 
 def detect_ai_upscale(name, group=""):
@@ -94,21 +99,23 @@ def detect_ai_upscale(name, group=""):
 
     ``name`` is the release name (not a raw Usenet subject) and ``group``
     its parsed release group. True for an AI-upscale group ("-AI-Raws",
-    "-AI"), "AI" beside an upscale word anywhere, an upscale tag
-    ("UPSCALED") after the year, episode or resolution, and a bare "AI"
-    among the technical tags ("2160p.AI.x265"). "AI" in the title is not a
-    tag.
+    or "-AI" ending a name that has tags), "AI" beside an upscale word
+    anywhere, an upscale tag ("UPSCALED") after the year, episode or
+    resolution, and a bare "AI" among the technical tags ("2160p.AI.x265").
+    "AI" in the title is not a tag.
     """
     name = str(name or "")
-    if _AI_GROUP.fullmatch(str(group or "").strip()):
-        return True
     if _AI_UPSCALE.search(name) or _AI_RAWS.search(name):
         return True
     tags = _TAGS_START.search(name)
     if tags and _PLAIN_UPSCALE.search(name, tags.end()):
         return True
-    start = _bare_ai_start(name)
-    return start is not None and bool(_BARE_AI.search(name, start))
+    # What ends a name with no tag in it ("Ghost in the Shell - AI") is
+    # read as a group, and is more likely the end of the title.
+    tagged = bool(tags or _TECH_START.search(name))
+    if tagged and _AI_GROUP.fullmatch(str(group or "").strip()):
+        return True
+    return _bare_ai_tag(name)
 
 
 def is_ai_upscale(row):
