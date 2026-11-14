@@ -379,14 +379,19 @@ Not sent: Digital Carnage refused 1
   backup. The stage is the download percent, or `waiting in the queue`,
   `checking the files`, `repairing`, `unpacking`, `moving into place`,
   `running NZBGet's scripts`, `repairing from backups` (RustyGet), or
-  `finishing up`. A repair or unpack shows its own percent.
+  `finishing up`. A repair shows its own percent. NZBGet gives an unpack no
+  percent, only the archive volume it is extracting from, so the line names
+  it: `unpacking - part 13 of 45`. The count is read once from the
+  download's own log.
 - **Line 2**, while it downloads, is how much has arrived, the speed over the
   last half minute, and the time left at that speed. The sizes and the
   percent leave out the parity on hold (see below), so a clean download ends
   at 100% of what it had to fetch. After the download it is
   how long the current stage has run and, for a stage with a percent, an
-  estimate of the time left: `25s so far - about 33s left`. A long move or
-  script run is then not mistaken for a hang.
+  estimate of the time left: `25s so far - about 33s left`. For an unpack
+  the time left comes from how long its last few volumes took, once three
+  have been seen. A long move or script run is then not mistaken for a
+  hang.
 - **More lines** follow, the most important first:
     - a copy that failed, with the reason in plain words, such as `too many
       missing articles`, `it could not be repaired`, `it could not be

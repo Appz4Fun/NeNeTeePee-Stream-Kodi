@@ -297,6 +297,32 @@ def _refresh_parity_blocks(state, group, settings_getter):
         return
 
 
+# The download's log is read for its RAR volume count once the unpack is on
+# a volume, at most this many times per copy (a read can fail).
+_VOLUME_READS = 3
+
+
+def _refresh_unpack(state, group, settings_getter):
+    """Follow the unpack's volumes, for "part 13 of 45" and the time left.
+
+    NZBGet gives an unpack no percent, only the volume it is extracting
+    from. How many there are is read from the download's own log, once.
+    Display only and best-effort.
+    """
+    try:
+        nzbget_progress.note_unpack(state, group)
+        seen = state.get("unpack")
+        if not isinstance(seen, dict) or seen.get("totals"):
+            return
+        if seen.get("reads", 0) >= _VOLUME_READS:
+            return
+        seen["reads"] = seen.get("reads", 0) + 1
+        lines = nzbget_api.file_log(state.get("current"), settings_getter)
+        seen["totals"] = nzbget_progress.rar_volumes(lines)
+    except Exception:  # pylint: disable=broad-except
+        return
+
+
 def _update_waiting_dialog(dialog, state):
     """The dialog between copies: the last failure, or "Post-processing..."."""
     dialog.update(100, nzbget_progress.waiting_message(state) or _string(30219))
@@ -336,6 +362,7 @@ def _tick_tracked_member(state, dialog, settings_getter, dupe_key, fleet=None):
     if group["present"]:
         _refresh_backup_kinds(state, fleet, settings_getter)
         _refresh_parity_blocks(state, group, settings_getter)
+        _refresh_unpack(state, group, settings_getter)
         _update_active_dialog(dialog, group, state, fleet)
         state["promotion_deadline"] = None
         return None

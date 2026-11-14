@@ -359,32 +359,184 @@ def _copy_label(state, fleet):
 _STAGE_TIME_FROM = 5
 
 
-def _stage(group):
-    """ "downloading 43%", "unpacking 43%", "moving into place"."""
+def _stage(group, state=None):
+    """ "downloading 43%", "unpacking 43%", "unpacking - part 13 of 45"."""
     status = str(group.get("status") or "").upper()
     if status in _DOWNLOADING:
         return fmt(30639, group.get("percent", 0))
     label = string(_STAGE_STRINGS.get(status, 30645))
     percent = stage_percent(group)
-    return label if percent is None else "{} {}%".format(label, percent)
+    if percent is not None:
+        return "{} {}%".format(label, percent)
+    part, total = unpack_part(state, group)
+    if part and total:
+        return fmt(30703, label, part, total)
+    if part:
+        return fmt(30704, label, part)
+    return label
 
 
-def _stage_time_line(group):
+def _stage_time_line(group, state=None, now=None):
     """ "25s so far - about 33s left" for a post-processing stage, or "".
 
-    The time left is worked out from the stage's own progress, so it only
-    appears for a stage NZBGet reports a percent for (a repair, an unpack).
+    The time left is worked out from the stage's own progress when NZBGet
+    reports a percent for it (a repair). An unpack reports none, only the
+    archive volume it is on: its time left is worked out from how long the
+    volumes seen so far took (``note_unpack``).
     """
     if str(group.get("status") or "").upper() in _DOWNLOADING:
         return ""
     seconds = _megabytes(group.get("post_seconds"))
-    if seconds < _STAGE_TIME_FROM:
-        return ""
-    parts = [fmt(30687, _duration(seconds))]
+    parts = []
+    if seconds >= _STAGE_TIME_FROM:
+        parts.append(fmt(30687, _duration(seconds)))
     percent = stage_percent(group)
     if percent is not None:
-        parts.append(fmt(30648, _duration(seconds * (100 - percent) / percent)))
+        if parts:
+            parts.append(fmt(30648, _duration(seconds * (100 - percent) / percent)))
+    else:
+        left = unpack_seconds_left(state, group, now)
+        if left is not None:
+            parts.append(fmt(30648, _duration(left)))
     return " - ".join(parts)
+
+
+# --- an unpack's progress, from the volume it is on -------------------------
+
+# "Extracting from name.part13.rar" (or the old "name.r11"): the archive and
+# its volume. The same suffixes mark a downloaded file as a volume.
+_VOLUME_SUFFIX = r"(?:\.part(\d+)\.rar|\.r(\d{2,3})|\.rar)\s*$"
+_EXTRACTING = re.compile(r"Extracting from (.*?)" + _VOLUME_SUFFIX, re.IGNORECASE)
+# A downloaded file's log line ends with its name.
+_DOWNLOADED_FILE = re.compile(r"Successfully downloaded .*?([^/\\]+)$")
+_VOLUME_NAME = re.compile(r"^(.*?)" + _VOLUME_SUFFIX, re.IGNORECASE)
+# The pace is taken over the volumes seen since this many seconds ago at
+# most, so a slow start (the disk busy with another copy) does not set it.
+_PACE_WINDOW = 300
+
+
+def _archive(name):
+    """An archive's name without folders, for matching it across texts."""
+    return re.split(r"[/\\]", str(name or "").strip())[-1].lower()
+
+
+def _volume(text):
+    """``(archive, volume)`` an "Extracting from ..." text names, or None.
+
+    The volume is counted from 1: name.rar is the first of the old naming,
+    name.r00 the second.
+    """
+    match = _EXTRACTING.search(str(text or ""))
+    if not match:
+        return None
+    if match.group(2):
+        number = int(match.group(2))
+    elif match.group(3):
+        number = int(match.group(3)) + 2
+    else:
+        number = 1
+    return (_archive(match.group(1)), number) if number > 0 else None
+
+
+def _volume_number(text):
+    """Which volume an "Extracting from ..." text names, counted from 1."""
+    found = _volume(text)
+    return found[1] if found else None
+
+
+def rar_volumes(log_lines):
+    """How many RAR volumes each archive of a download has, or None.
+
+    ``{archive: volumes}`` from the download's log: one "Successfully
+    downloaded .../name.part07.rar" line per file. A job can hold several
+    archives, each with its own volumes. None when the log names no volume
+    (files still obfuscated, or no RAR).
+    """
+    volumes = {}
+    for line in log_lines or ():
+        if not isinstance(line, str):
+            continue
+        match = _DOWNLOADED_FILE.search(line.strip())
+        name = _VOLUME_NAME.match(match.group(1)) if match else None
+        if name:
+            volumes.setdefault(_archive(name.group(1)), set()).add(
+                match.group(1).lower()
+            )
+    return {archive: len(files) for archive, files in volumes.items()} or None
+
+
+def note_unpack(state, group, now=None):
+    """Remember when the unpack moved on to each volume, for the time left.
+
+    Called on every poll. The marks are kept per followed copy and per
+    archive: they start again when the unpack moves to the job's next
+    archive, and are dropped when the copy changes or the job leaves the
+    unpack.
+    """
+    if not isinstance(state, dict):
+        return
+    now = time.monotonic() if now is None else now
+    unpacking = str(group.get("status") or "").upper() == "UNPACKING"
+    found = _volume(group.get("post_text")) if unpacking else None
+    if found is None:
+        if not unpacking:
+            state.pop("unpack", None)
+        return
+    archive, part = found[0], found[1]
+    seen = state.get("unpack")
+    copy = state.get("current")
+    if not isinstance(seen, dict) or seen.get("copy") != copy:
+        seen = {"copy": copy, "archive": archive, "marks": [], "reads": 0}
+        seen["totals"] = None
+        state["unpack"] = seen
+    marks = seen["marks"]
+    if seen.get("archive") != archive or (marks and part < marks[-1][0]):
+        seen["archive"] = archive
+        del marks[:]
+    if not marks or part > marks[-1][0]:
+        marks.append((part, now))
+        del marks[:-64]
+
+
+def unpack_part(state, group):
+    """``(volume, of how many)`` for the unpack being followed, or Nones.
+
+    The count is the current archive's own. It is left out when the log did
+    not name that archive, or names fewer volumes than the one in hand.
+    """
+    seen = state.get("unpack") if isinstance(state, dict) else None
+    if (
+        not isinstance(seen, dict)
+        or not seen.get("marks")
+        or str(group.get("status") or "").upper() != "UNPACKING"
+    ):
+        return None, None
+    part = seen["marks"][-1][0]
+    totals = seen.get("totals")
+    total = totals.get(seen.get("archive")) if isinstance(totals, dict) else None
+    if not _is_count(total) or total < part:
+        total = None
+    return part, total
+
+
+def unpack_seconds_left(state, group, now=None):
+    """Seconds until the unpack is through its last volume, or None.
+
+    From the pace of the volumes seen in the last few minutes: at least two
+    volume changes, and the total must be known.
+    """
+    part, total = unpack_part(state, group)
+    if not part or not total:
+        return None
+    now = time.monotonic() if now is None else now
+    marks = [m for m in state["unpack"]["marks"] if now - m[1] <= _PACE_WINDOW]
+    if len(marks) < 3:
+        marks = state["unpack"]["marks"][-3:]
+    if len(marks) < 3 or marks[-1][0] == marks[0][0]:
+        return None
+    pace = (marks[-1][1] - marks[0][1]) / float(marks[-1][0] - marks[0][0])
+    left = (total - part + 1) * pace - (now - marks[-1][1])
+    return max(left, 0.0)
 
 
 def health_line(group):
@@ -596,10 +748,15 @@ def progress_message(state, group, fleet=None, now=None, max_lines=None):
         max_lines = _MAX_LINES
     downloading = str(group.get("status") or "").upper() in _DOWNLOADING
     head = [
-        "{} - {}".format(_copy_label(state, fleet), _stage(group)),
+        "{} - {}".format(_copy_label(state, fleet), _stage(group, state)),
         # While it downloads: size, speed, time left. After: how long the
-        # stage has run and, when NZBGet gives its progress, how long is left.
-        _size_line(state, group, now) if downloading else _stage_time_line(group),
+        # stage has run and how long is left, from the stage's own progress
+        # or, for an unpack, from the pace of its volumes.
+        (
+            _size_line(state, group, now)
+            if downloading
+            else _stage_time_line(group, state, now)
+        ),
     ]
     # In order of importance: a copy that failed, articles that were missing,
     # the parity, what the backups are, what was never sent.

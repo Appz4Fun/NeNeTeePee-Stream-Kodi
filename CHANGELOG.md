@@ -160,6 +160,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The download dialog says how far an unpack is and how long is left.**
+  NZBGet reports no percent for an unpack, so the dialog showed only
+  `unpacking` and the time so far, for ten minutes on a 77 GB remux. It now
+  names the archive volume being extracted and how many there are
+  (`unpacking - part 13 of 45`) and estimates the time left from the pace
+  of the last volumes (`8m 19s so far - about 9m left`).
+
 - **The picker counts separate uploads, not listings.** A release listed 11
   times by 9 indexers showed `11 copies` and then sent 6 NZBs, because
   several indexers list the same upload. The row now shows the uploads the
