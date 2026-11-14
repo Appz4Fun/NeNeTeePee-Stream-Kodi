@@ -105,6 +105,16 @@ def is_hybrid(row, meta):
     return detect_hybrid(release_name_from_subject(row.get("title")))
 
 
+def _is_upscale(row, meta):
+    """Whether the name is tagged as an upscale (``filter_upscale``).
+
+    An upscale of a release is another file, not a copy of it.
+    """
+    from resources.lib.filter_upscale import is_ai_upscale
+
+    return is_ai_upscale({"title": row.get("title"), "_meta": meta})
+
+
 def air_date(row, meta):
     """The air date of a dated release with no SxxEyy ("2026-11-12"), or "".
 
@@ -158,7 +168,7 @@ def release_profile(row):
 
     A hashable tuple of ``(name, value)`` pairs; equal profiles mean equal
     resolution, HDR, audio, channels, codec, quality, edition, PROPER/REPACK,
-    HYBRID, air date, variant flags and group.
+    HYBRID, upscale tag, air date, variant flags and group.
     """
     from resources.lib import fallback_streams as _fs
 
@@ -188,6 +198,7 @@ def release_profile(row):
         fields.append((key, tuple(sorted({_fold(v) for v in values if v}))))
     fields.extend((key, bool(meta.get(key))) for key in _FLAG_FIELDS)
     fields.append(("hybrid", is_hybrid(row, meta)))
+    fields.append(("upscale", _is_upscale(row, meta)))
     fields.append(("date", air_date(row, meta)))
     fields.append(("variant", _variant_flags(row, meta)))
     profile = tuple(fields)

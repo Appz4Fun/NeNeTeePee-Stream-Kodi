@@ -61,6 +61,7 @@ from resources.lib.filter_remux import (
     remux_priority,
 )
 from resources.lib.filter_tags import supplement_metadata
+from resources.lib.filter_upscale import is_ai_upscale
 from resources.lib.upload_count import count_uploads
 
 # Re-exported so ``resources.lib.filter.<name>`` keeps resolving for callers
@@ -235,6 +236,9 @@ def _get_filter_settings(settings_getter=None):
         ],
         "min_size": min_size,
         "max_size": max_size,
+        # Off unless switched on: a missing value reads as "".
+        "hide_ai_upscales": (addon.getSetting("filter_hide_ai_upscales") or "").lower()
+        == "true",
         "sort_order": _int_setting(addon, "sort_order", 0),
         "max_results": _int_setting(addon, "max_results", 25),
     }
@@ -379,6 +383,11 @@ def _group_filter_passes(meta, settings):
     return not (meta["group"] and meta["group"].lower() in excluded)
 
 
+def _upscale_filter_passes(result, settings):
+    """False for a release tagged as an upscale when those are hidden."""
+    return not (settings.get("hide_ai_upscales") and is_ai_upscale(result))
+
+
 def first_rejecting_filter(result, meta, settings):
     """Name of the first filter that rejects this result, or ``None``.
 
@@ -399,6 +408,7 @@ def first_rejecting_filter(result, meta, settings):
         (lambda: _language_filter_passes(meta, settings), "language"),
         (lambda: _keyword_filters_pass(result["title"].lower(), settings), "keyword"),
         (lambda: _group_filter_passes(meta, settings), "group"),
+        (lambda: _upscale_filter_passes(result, settings), "AI upscale"),
         (lambda: _size_filter_passes(result, settings), "size"),
     )
     for passes, label in checks:
@@ -1334,8 +1344,12 @@ def _hdr_rank(hdr_list):
 
 def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
     """Rank resolution, then the pinned groups (CiNEPHiLES, FraMeSToR), then
-    named groups before none, then HDR, REMUX, audio tier
-    (``filter_audio.audio_tier``), group tier, and size.
+    genuine releases before upscales, named groups before none, then HDR,
+    REMUX, audio tier (``filter_audio.audio_tier``), group tier, and size.
+
+    A release tagged as an upscale (``filter_upscale``) is not really of the
+    resolution its name states, so it ranks below every other release of
+    that resolution, whatever HDR, REMUX or audio tags its name carries.
 
     Audio comes before the preferred-group tier: Dolby Digital Plus with
     Atmos from a group in no tier ranks above plain Dolby Digital Plus from a
@@ -1351,6 +1365,7 @@ def _make_relevance_key(remux_tiers=DEFAULT_REMUX_GROUPS):
         return (
             res_rank,
             pinned_group_rank(r),  # CiNEPHiLES, then FraMeSToR: first in theirs
+            1 if is_ai_upscale(r) else 0,  # an upscale: last in its resolution
             0 if meta.get("group") else 1,  # no release group: last in its resolution
             _hdr_rank(meta.get("hdr", [])),
             priority,
@@ -1402,8 +1417,9 @@ def _sort_results(results, settings):
 
 
 # Where the single-copy element goes in the relevance key: after resolution,
-# the pinned groups and "has a release group", before HDR and the rest.
-_SINGLE_COPY_KEY_INDEX = 3
+# the pinned groups, "is an upscale" and "has a release group", before HDR
+# and the rest.
+_SINGLE_COPY_KEY_INDEX = 4
 
 
 def _with_single_copy_last(rows, relevance_key):
@@ -1415,9 +1431,9 @@ def _with_single_copy_last(rows, relevance_key):
     audio tag than the well-listed releases. A release with a single NZB in
     ``rows`` (counted with the same-release rule, ``_nzb_copy_counts``) now
     ranks below every release of its resolution that has two or more, and
-    above the releases with no group. CiNEPHiLES and FraMeSToR stay pinned
-    first whatever their count. When every release of a resolution has one
-    copy, nothing changes.
+    above the releases with no group and the upscales. CiNEPHiLES and
+    FraMeSToR stay pinned first whatever their count. When every release of
+    a resolution has one copy, nothing changes.
     """
     counts = _nzb_copy_counts(rows)
 

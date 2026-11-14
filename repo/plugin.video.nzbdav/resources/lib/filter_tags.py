@@ -5,6 +5,7 @@ import re
 
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_languages import is_language_word, title_languages
+from resources.lib.filter_upscale import detect_ai_upscale
 from resources.lib.release_subject import release_name_from_subject
 
 
@@ -543,4 +544,6 @@ def supplement_metadata(title, meta):
     meta["codec"] = detect_codec(title) or meta["codec"]
     meta["languages"] = title_languages(title, meta["languages"])
     meta["group"] = detect_release_group(title, meta.get("group", ""))
+    # An upscale tag ("AI Upscale", "-AI-Raws"), never "AI" in the title.
+    meta["ai_upscale"] = detect_ai_upscale(title, meta["group"])
     return meta
