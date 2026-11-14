@@ -989,8 +989,9 @@ def _remember_no_audio(key, video, failed=False):
     _remember(key, [], "", failed=failed and not video, exact=bool(video), video=video)
 
 
-# nZEDb's info call returns the NFO with HTML line breaks.
-_HTML_BREAK = re.compile(r"<br\s*/?>", re.I)
+# nZEDb's info call returns the NFO with HTML line breaks, with or without
+# the line ending after each: every break becomes one line ending.
+_HTML_BREAK = re.compile(r"<br\s*/?>(?:\r?\n)?", re.I)
 
 
 def _fetch_nfo(key, url, title, describe=None, video=None):
@@ -1032,7 +1033,7 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
         if _is_refusal_code(error):
             _pause_host(_host(url))
         return bool(video)
-    text = _HTML_BREAK.sub("", text)
+    text = _HTML_BREAK.sub("\n", text)
     whose = whose_nfo(text, title, describe)
     if whose == WRONG:
         # Another release's NFO: what it says of the audio is not ours.

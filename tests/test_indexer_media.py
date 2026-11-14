@@ -197,12 +197,6 @@ def test_a_details_link_on_another_site_gives_no_reference():
         "<comments>https://other.example/details/{}</comments>".format(_ID),
     )
     assert newznab_attrs.media_ref_link(item) == ""
-    # NZBHydra2's own number is not the indexer's id.
-    item = _item(
-        (("hydraIndexerHost", "treasure-maps.com"), ("guid", "1234567890123")),
-        "<comments>https://treasure-maps.com/</comments>",
-    )
-    assert newznab_attrs.media_ref_link(item) == ""
 
 
 # --- direct indexers --------------------------------------------------------
@@ -257,15 +251,34 @@ def test_a_direct_indexer_is_asked_with_the_call_it_has():
 
 
 def test_a_direct_result_with_no_id_or_no_key_is_asked_about_nothing():
-    item = _item((("nfo", "1"),), "<guid>not-a-link</guid>")
+    item = _item((("nfo", "1"),), "<guid>not a link</guid>")
     assert not newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "K")
     item = _direct_item("abnzb.com", ("nfo", "1"))
     assert not newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "")
     assert not newznab_attrs.direct_media_links(item, "not a url", "K")
     # The guid attribute serves when the guid element is not a link.
-    item = _item((("nfo", "1"), ("guid", _ID)), "<guid>{}</guid>".format(_ID))
+    item = _item((("nfo", "1"), ("guid", _ID)), "<guid>not a link</guid>")
     links = newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "K")
     assert links["nfo_url"].startswith("https://abnzb.com/api?t=getnfo&id=" + _ID)
+    # And so does a guid element that is the bare id, with no attribute.
+    item = _item(
+        (("nfo", "1"),), '<guid isPermaLink="false">{}</guid>'.format(_OTHER_ID)
+    )
+    links = newznab_attrs.direct_media_links(item, "https://abnzb.com/api", "K")
+    assert links["nfo_url"].startswith("https://abnzb.com/api?t=getnfo&id=" + _OTHER_ID)
+
+
+def test_nzbhydra2s_own_number_is_never_taken_for_the_indexers_id():
+    # NZBHydra2 writes its own number, which can be negative, into the guid
+    # element and attribute. Only the details link names the indexer's id.
+    for number in ("1234567890123", "-1234567890123"):
+        item = _item(
+            (("hydraIndexerHost", "treasure-maps.com"), ("guid", number)),
+            "<guid>{}</guid><comments>https://treasure-maps.com/</comments>".format(
+                number
+            ),
+        )
+        assert newznab_attrs.media_ref_link(item) == "", number
 
 
 _DIRECT_RSS = (
@@ -795,6 +808,35 @@ def test_html_line_breaks_in_an_nfo_are_not_read_as_text(indexer):
         assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
     entry = nfo_audio._known(_key(PLAIN))
     assert sorted(entry["audio"]) == ["Atmos", "DD+"]
+
+
+def test_html_line_breaks_alone_still_separate_the_lines(indexer):
+    # No line ending after each break: the breaks are the only separators.
+    nfo = (
+        "Complete name : Some.Movie.2004.2160p.WEB-DL.H.265-GRP.mkv<br />"
+        "<br />"
+        "Video<br />"
+        "Format : HEVC<br />"
+        "HDR format : Dolby Vision, Version 1.0, dvhe.05.06, BL+RPU<br />"
+        "Bit depth : 10 bits<br>"
+        "<BR/>"
+        "Audio:<br />"
+        "Codec : E-AC-3 JOC<br />"
+        "Bitrate : 576 kb/s<br />"
+    )
+    _Handler.replies["/api"] = (200, nfo.encode())
+    rows = _rows(PLAIN)
+    rows[0]["nfo_url"] = "{}/api?t=info&id={}&apikey=SECRET".format(indexer, _ID)
+    with _known(**{"127_0_0_1": Offer(INFO, None)}):
+        assert nfo_audio.learn_for_top(rows, _key, _ttl) is True
+    entry = nfo_audio._known(_key(PLAIN))
+    assert sorted(entry["audio"]) == ["Atmos", "DD+"]
+    assert entry["video"] == {
+        "hdr": ["Dolby Vision"],
+        "dv_profile": "5",
+        "bit_depth": "10",
+        "hdr_exact": True,
+    }
 
 
 # --- a release several indexers list ----------------------------------------

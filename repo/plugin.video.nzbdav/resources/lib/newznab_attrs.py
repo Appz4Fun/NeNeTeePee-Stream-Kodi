@@ -120,22 +120,30 @@ def nfo_link(item, indexer_host=""):
     return usable_nfo_link(link)
 
 
-def _release_id(item, values):
+def _element_text(item, tag):
+    element = item.find(tag)
+    return (element.text or "").strip() if element is not None else ""
+
+
+def _release_id(item, values=None):
     """The indexer's own id for the release on ``item``, or "".
 
-    From its details link (``comments``, or a ``guid`` that is a link), else
-    the ``guid`` attribute. NZBHydra2 replaces the ``guid`` attribute and
-    element with its own number, so the details link is looked at first.
+    From its details link: ``comments``, or a ``guid`` that is a link. With
+    ``values`` (the item's attributes, for a direct indexer's result) a
+    ``guid`` element or attribute that is the bare id serves too. Through
+    NZBHydra2 those two hold NZBHydra2's own number, so they are not looked
+    at there.
     """
     for tag in ("comments", "guid"):
-        element = item.find(tag)
-        text = (element.text or "").strip() if element is not None else ""
-        found = id_from_details_link(text)
+        found = id_from_details_link(_element_text(item, tag))
         if found:
             return found
-    guid = values.get("guid", "")
-    # A bare number is NZBHydra2's id, not the indexer's.
-    return guid if valid_release_id(guid) and not guid.isdigit() else ""
+    if values is None:
+        return ""
+    for bare in (_element_text(item, "guid"), values.get("guid", "")):
+        if valid_release_id(bare):
+            return bare
+    return ""
 
 
 def media_ref_link(item):
@@ -146,7 +154,7 @@ def media_ref_link(item):
     and ``nfo_audio`` completes it with the key of another result of that
     indexer in the same search.
     """
-    values = _attr_values(item, ("hydraIndexerHost", "guid"))
+    values = _attr_values(item, ("hydraIndexerHost",))
     host = values.get("hydraIndexerHost", "").lower()
     if serves_mediainfo(host) is not True:
         return ""
@@ -158,7 +166,7 @@ def media_ref_link(item):
         scheme = urlsplit(details).scheme.lower()
     except ValueError:
         return ""
-    return media_ref(scheme, host, _release_id(item, values))
+    return media_ref(scheme, host, _release_id(item))
 
 
 def direct_media_links(item, api_url, api_key):
