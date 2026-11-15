@@ -237,15 +237,22 @@ def test_follows_tmdbhelpers_cache_location(tmp_path):
     assert _state(path)["columns"] == _COLUMNS
 
 
+_SETTING_AT_DEFAULT = (
+    '<settings version="2"><setting id="cache_location" default="true" /></settings>'
+)
+_SETTING_FROM_AN_ENTITY = (
+    '<!DOCTYPE s [<!ENTITY a "b">]><settings><setting id="cache_location">'
+    "&a;</setting></settings>"
+)
+
+
 @pytest.mark.parametrize(
     "settings",
     [
-        '<settings version="2"><setting id="cache_location" default="true" />'
-        "</settings>",
+        _SETTING_AT_DEFAULT,
         '<settings version="2"><setting id="other">x</setting></settings>',
         "<settings",
-        '<!DOCTYPE s [<!ENTITY a "b">]><settings><setting id="cache_location">'
-        "&a;</setting></settings>",
+        _SETTING_FROM_AN_ENTITY,
     ],
 )
 def test_default_location_when_the_setting_is_empty_or_unreadable(stuck, settings):
@@ -304,13 +311,14 @@ def test_builds_the_statements_tmdbhelper_builds():
         }
     )
 
-    assert statements == [
+    table = (
         "CREATE TABLE IF NOT EXISTS external_ids(id INTEGER PRIMARY KEY, "
         "parent_id TEXT, season INTEGER, episode INTEGER, "
         "FOREIGN KEY(parent_id) REFERENCES baseitem(id) ON DELETE CASCADE, "
-        "UNIQUE (season, episode))",
-        "CREATE INDEX IF NOT EXISTS external_ids_season_x ON external_ids(season)",
-    ]
+        "UNIQUE (season, episode))"
+    )
+    index = "CREATE INDEX IF NOT EXISTS external_ids_season_x ON external_ids(season)"
+    assert statements == [table, index]
 
 
 def test_a_database_in_use_is_tried_again_later(stuck, monkeypatch):
