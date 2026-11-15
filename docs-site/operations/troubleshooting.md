@@ -93,6 +93,27 @@ Confirm TMDBHelper is actually using NeNeTeePee-Stream-Kodi for the item type yo
 If TMDBHelper calls NeNeTeePee-Stream-Kodi but Kodi returns immediately, collect the `kodi.log`
 lines around the play attempt.
 
+## TMDBHelper shows an error before the picker appears
+
+If picking an item ends in a TMDBHelper error and `kodi.log` has
+`sqlite3.OperationalError: no such table: external_ids` in a
+`plugin.video.themoviedb.helper` traceback, TMDBHelper failed before it called
+any player. A TMDBHelper update can leave that table out of its own
+`ItemQueries.db`: its database upgrade creates the table and then discards the
+change. It affects items whose IMDb and TVDB ids TMDBHelper has not cached
+yet, such as a daily show's newest episode, so other items may still play.
+
+NeNeTeePee-Stream-Kodi adds the missing table for you. Its service checks
+when Kodi starts and every ten minutes after, and logs
+`Added the 'external_ids' table that a TMDbHelper update left out` when it
+does. It creates only that table, with the columns your installed TMDBHelper
+declares, and changes nothing else in the database. A TMDBHelper from before
+the table existed is left alone.
+
+If the error is still there ten minutes after the update, restart Kodi and
+collect the `kodi.log` lines that start with
+`NeNeTeePee-Stream-Kodi: Could not check TMDbHelper's`.
+
 ## No results, or every result is filtered out
 
 If you see **No results found for …**, no search provider returned anything.

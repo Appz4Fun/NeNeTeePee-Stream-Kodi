@@ -314,6 +314,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A TMDBHelper update no longer stops plays before the picker opens.**
+  Picking a daily show's newest episode ended in a TMDBHelper error and the
+  picker never appeared; `kodi.log` had `no such table: external_ids`.
+  TMDBHelper looks an item's IMDb and TVDB ids up in that table of its own
+  `ItemQueries.db` before it calls any player. Its database upgrade creates
+  the table on a connection it never commits, and a `DELETE` among the
+  upgrade's changes opens a transaction, so the new table is rolled back on
+  every start. Items whose ids TMDBHelper had already cached still played.
+  The add-on's service now checks TMDBHelper's query database when Kodi
+  starts and every ten minutes after (an update installed while Kodi runs
+  breaks it without a restart), and creates the table when it is missing. It
+  reads the columns from the installed TMDBHelper's own source, so the table
+  is the one that version would have made, and it changes nothing else: no
+  rows, no other table, not the stored version. A TMDBHelper from before the
+  table existed, a database TMDBHelper has not initialised yet, and a
+  declaration the add-on does not understand are all left alone.
 - **A download whose files were deleted is no longer marked DL, and can be
   downloaded again.** The picker's **DL** tag came from NZBGet's history
   alone, and history outlives the files: after a cleanup job or a manual

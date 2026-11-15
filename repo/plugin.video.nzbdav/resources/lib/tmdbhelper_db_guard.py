@@ -1,0 +1,286 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 nzbdav contributors
+"""Add the table a TMDbHelper update can leave out of its query database.
+
+TMDbHelper looks an item's IMDb and TVDB ids up in the ``external_ids`` table
+of ``ItemQueries.db`` before it calls any player. Its database upgrade runs
+the changes for the new version, creates the tables that are missing and
+records the new version, all on one connection that it never commits. When a
+change is a ``DELETE``, Python opens a transaction for it, so the new table
+and the new version are rolled back when the connection closes. The upgrade
+then repeats, and fails the same way, on every start. Playing an item whose
+ids are not already cached (a daily show's newest episode, for one) raises
+``no such table: external_ids`` inside TMDbHelper, and this add-on's player is
+never called.
+
+The guard creates that one table, with the columns the installed TMDbHelper
+declares for it, when all of these hold:
+
+* the installed TMDbHelper has the table's module (a version from before the
+  table has none, and is left alone);
+* its query database exists and TMDbHelper has initialised it at least once;
+* the table is missing.
+
+It changes nothing else: no rows, no other table, and not the stored version.
+"""
+
+import ast
+import os
+import re
+import sqlite3
+import time
+
+import xbmc
+import xbmcvfs
+
+from resources.lib.xml_safety import ParseError, safe_fromstring
+
+TMDBHELPER_ADDON_ID = "plugin.video.themoviedb.helper"
+TMDBHELPER_ADDON_PATH = "special://home/addons/" + TMDBHELPER_ADDON_ID + "/"
+TMDBHELPER_DATA_PATH = "special://profile/addon_data/" + TMDBHELPER_ADDON_ID + "/"
+
+TABLE = "external_ids"
+DATABASE_FILE = "ItemQueries.db"
+_LIB = os.path.join("resources", "tmdbhelper", "lib")
+_TABLE_MODULE = os.path.join(_LIB, "query", "database", "external_ids.py")
+_CORE_MODULE = os.path.join(_LIB, "files", "dbdata.py")
+_COLUMNS_NAME = "external_ids_columns"
+_FOLDER_NAME = "DATABASE_NAME"
+_LOCATION_SETTING = "cache_location"
+
+# How long a write waits for TMDbHelper to let go of the database, and how
+# often the service looks again. A TMDbHelper update installed while Kodi is
+# running breaks the database without restarting this add-on's service.
+_WRITE_TIMEOUT_SECONDS = 3
+_READ_TIMEOUT_SECONDS = 1
+RECHECK_SECONDS = 600
+
+# Results of one check.
+NOT_INSTALLED = "not installed"  # No TMDbHelper, or one from before the table.
+UNREADABLE = "unreadable"  # Its source did not declare what was expected.
+NO_DATABASE = "no database"  # No query database, or one not yet initialised.
+PRESENT = "present"  # The table is there.
+REPAIRED = "repaired"  # The table was missing and has been created.
+FAILED = "failed"  # The database could not be read or written.
+
+_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
+_TYPE = re.compile(r"[A-Za-z][A-Za-z0-9_ ]*\Z")
+_REFERENCE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\([A-Za-z_][A-Za-z0-9_]*\)\Z")
+
+
+def _read_text(path):
+    with open(path, "r", encoding="utf-8") as source:
+        return source.read()
+
+
+def _declared(path, name):
+    """Return the literal assigned to ``name`` in the Python file at ``path``.
+
+    The file is parsed, never imported or run. Raises ``ValueError`` when the
+    name is not assigned a literal.
+    """
+    try:
+        tree = ast.parse(_read_text(path))
+    except (OSError, SyntaxError, UnicodeDecodeError) as error:
+        raise ValueError("cannot parse {}: {}".format(path, error)) from error
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if isinstance(target, ast.Name) and target.id == name:
+                try:
+                    return ast.literal_eval(node.value)
+                except (ValueError, TypeError, SyntaxError) as error:
+                    raise ValueError(
+                        "{} is not a literal in {}".format(name, path)
+                    ) from error
+    raise ValueError("{} is not declared in {}".format(name, path))
+
+
+def _statements(columns):
+    """Return the SQL TMDbHelper itself runs to create the table and indexes.
+
+    Mirrors ``DatabaseCore.create_database_execute``. Anything that is not a
+    plain name, column type or ``table(column)`` reference is refused, so the
+    statements hold only what a column declaration can hold.
+    """
+    if not isinstance(columns, dict) or not columns:
+        raise ValueError("no columns declared")
+    parts, references, unique, indexed = [], [], [], []
+    for column, spec in columns.items():
+        if not isinstance(column, str) or not _NAME.match(column):
+            raise ValueError("unexpected column name {!r}".format(column))
+        if not isinstance(spec, dict):
+            raise ValueError("unexpected declaration for {}".format(column))
+        data = spec.get("data")
+        if not isinstance(data, str) or not _TYPE.match(data):
+            raise ValueError("unexpected type for {}".format(column))
+        parts.append("{} {}".format(column, data))
+        if "foreign_key" in spec:
+            reference = spec["foreign_key"]
+            if not isinstance(reference, str) or not _REFERENCE.match(reference):
+                raise ValueError("unexpected reference for {}".format(column))
+            references.append(
+                "FOREIGN KEY({}) REFERENCES {} ON DELETE CASCADE".format(
+                    column, reference
+                )
+            )
+        if spec.get("unique"):
+            unique.append(column)
+        if spec.get("indexed"):
+            indexed.append(column)
+    parts.extend(references)
+    if unique:
+        parts.append("UNIQUE ({})".format(", ".join(unique)))
+    statements = ["CREATE TABLE IF NOT EXISTS {}({})".format(TABLE, ", ".join(parts))]
+    for column in indexed:
+        statements.append(
+            "CREATE INDEX IF NOT EXISTS {0}_{1}_x ON {0}({1})".format(TABLE, column)
+        )
+    return statements
+
+
+def _cache_location(data_folder):
+    """Return TMDbHelper's ``cache_location`` setting, or "" for its default."""
+    try:
+        root = safe_fromstring(
+            _read_text(os.path.join(data_folder, "settings.xml")).encode("utf-8")
+        )
+    except (OSError, UnicodeDecodeError, ParseError, ValueError):
+        return ""
+    for setting in root.iter("setting"):
+        if setting.get("id") == _LOCATION_SETTING:
+            return (setting.text or "").strip()
+    return ""
+
+
+def _database_path(addon_folder, data_folder, translate):
+    """Return where the installed TMDbHelper keeps its query database."""
+    folder = _declared(os.path.join(addon_folder, _CORE_MODULE), _FOLDER_NAME)
+    if not isinstance(folder, str) or not _NAME.match(folder):
+        raise ValueError("unexpected database folder {!r}".format(folder))
+    location = _cache_location(data_folder)
+    if location:
+        return os.path.join(translate(location + folder), DATABASE_FILE)
+    return os.path.join(data_folder, folder, DATABASE_FILE)
+
+
+def _needs_table(connection):
+    """Return True when an initialised database has no ``external_ids``."""
+    if not connection.execute("PRAGMA user_version").fetchone()[0]:
+        # TMDbHelper has not initialised this file yet. Its first
+        # initialisation runs no changes, so it creates every table itself.
+        return None
+    found = connection.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (TABLE,)
+    ).fetchone()
+    return found is None
+
+
+def _inspect(path):
+    """Return PRESENT, NO_DATABASE or None (the table is missing)."""
+    connection = sqlite3.connect(path, timeout=_READ_TIMEOUT_SECONDS)
+    try:
+        connection.execute("PRAGMA query_only=ON")
+        needed = _needs_table(connection)
+    finally:
+        connection.close()
+    if needed is None:
+        return NO_DATABASE
+    return None if needed else PRESENT
+
+
+def _create(path, statements):
+    """Create the table in one transaction; return REPAIRED or PRESENT."""
+    connection = sqlite3.connect(
+        path, timeout=_WRITE_TIMEOUT_SECONDS, isolation_level=None
+    )
+    try:
+        connection.execute("BEGIN IMMEDIATE")
+        try:
+            # Checked again under the write lock: TMDbHelper may have created
+            # the table since the read.
+            if not _needs_table(connection):
+                connection.execute("ROLLBACK")
+                return PRESENT
+            for statement in statements:
+                connection.execute(statement)
+            connection.execute("COMMIT")
+        except Exception:
+            connection.execute("ROLLBACK")
+            raise
+    finally:
+        connection.close()
+    return REPAIRED
+
+
+def repair(addon_folder, data_folder, translate=None):
+    """Create the missing table when the installed TMDbHelper expects it.
+
+    ``addon_folder`` is TMDbHelper's install folder and ``data_folder`` its
+    ``addon_data`` folder, both as real paths. ``translate`` turns a Kodi
+    path from TMDbHelper's ``cache_location`` setting into a real one.
+    Returns one of the result constants and never raises.
+    """
+    table_module = os.path.join(addon_folder, _TABLE_MODULE)
+    if not os.path.isfile(table_module):
+        return NOT_INSTALLED
+    try:
+        statements = _statements(_declared(table_module, _COLUMNS_NAME))
+        path = _database_path(addon_folder, data_folder, translate or (lambda p: p))
+    except (ValueError, TypeError) as error:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: TMDbHelper's query database was not "
+            "checked: {}".format(error),
+            xbmc.LOGDEBUG,
+        )
+        return UNREADABLE
+    if not os.path.isfile(path):
+        return NO_DATABASE
+    try:
+        return _inspect(path) or _create(path, statements)
+    except sqlite3.Error as error:
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: TMDbHelper's query database could not be "
+            "checked ({}): {}".format(path, error),
+            xbmc.LOGDEBUG,
+        )
+        return FAILED
+
+
+class Guard:  # pylint: disable=too-few-public-methods
+    """Run the check from the service loop, at start and every ten minutes."""
+
+    def __init__(self, clock=time.monotonic):
+        self._clock = clock
+        self._due = None
+        self._last = None
+
+    def tick(self):
+        """Check when one is due; return its result, or None when not due."""
+        now = self._clock()
+        if self._due is not None and now < self._due:
+            return None
+        self._due = now + RECHECK_SECONDS
+        addon_folder = xbmcvfs.translatePath(TMDBHELPER_ADDON_PATH)
+        data_folder = xbmcvfs.translatePath(TMDBHELPER_DATA_PATH)
+        if not isinstance(addon_folder, str) or not isinstance(data_folder, str):
+            return NOT_INSTALLED
+        result = repair(addon_folder, data_folder, xbmcvfs.translatePath)
+        if result == REPAIRED:
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Added the '{}' table that a TMDbHelper "
+                "update left out of {}; without it TMDbHelper fails before it "
+                "calls a player".format(TABLE, DATABASE_FILE),
+                xbmc.LOGINFO,
+            )
+        elif result == FAILED and self._last != FAILED:
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Could not check TMDbHelper's {} for "
+                "its '{}' table; trying again in {} minutes".format(
+                    DATABASE_FILE, TABLE, RECHECK_SECONDS // 60
+                ),
+                xbmc.LOGWARNING,
+            )
+        self._last = result
+        return result
