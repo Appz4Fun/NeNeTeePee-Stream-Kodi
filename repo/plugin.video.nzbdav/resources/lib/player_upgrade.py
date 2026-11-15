@@ -118,3 +118,54 @@ def upgrade_player(folder, definition):
             xbmc.LOGWARNING,
         )
         return "failed"
+
+
+def player_is_installed(folder, definition):
+    """Return True when the folder holds this add-on's own player file."""
+    path = os.path.join(folder, "nzbdav.json")
+    try:
+        with open(path, "rb") as source:
+            player = json.loads(source.read())
+    except (OSError, ValueError, TypeError):
+        return False
+    return isinstance(player, dict) and player.get("plugin") == definition["plugin"]
+
+
+def add_player(folder, definition):
+    """Write the stock player where there is none; never replace a file."""
+    path = os.path.join(folder, "nzbdav.json")
+    lock_path = os.path.splitext(path)[0] + ".upgrade.lock"
+    stage = None
+    try:
+        if os.path.islink(folder) or os.path.islink(lock_path):
+            return "failed"
+        os.makedirs(folder, exist_ok=True)
+        with open(lock_path, "a+b") as lock:
+            if not _lock_player(lock):
+                return "deferred"
+            if os.path.lexists(path):
+                return "unchanged"
+            fd, stage = tempfile.mkstemp(prefix=".nzbdav-player-", dir=folder)
+            with os.fdopen(fd, "w", encoding="utf-8") as output:
+                json.dump(definition, output, indent=4)
+                output.write("\n")
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(stage, path)
+            stage = None
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Player added automatically to {}".format(folder),
+            xbmc.LOGINFO,
+        )
+        return "added"
+    except (OSError, ValueError, TypeError):
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: Automatic player copy failed", xbmc.LOGWARNING
+        )
+        return "failed"
+    finally:
+        if stage is not None and os.path.exists(stage):
+            try:
+                os.unlink(stage)
+            except OSError:
+                pass

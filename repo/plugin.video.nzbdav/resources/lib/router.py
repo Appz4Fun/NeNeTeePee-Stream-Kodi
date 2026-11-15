@@ -313,14 +313,27 @@ def route(argv):
     _safe_resolve_handle(handle)
 
 
+# Title fields keep a literal "None": it can be a real title.
+_TITLE_PARAMS = ("title", "episode_title")
+
+
 def _clean_params(params):
-    """Convert TMDBHelper '_' placeholders to empty strings.
+    """Convert TMDBHelper's empty-field placeholders to empty strings.
 
     TMDBHelper fills empty template fields with a literal underscore when
     calling external players; see PlayerConfig docs:
     https://github.com/jurialmunkey/plugin.video.themoviedb.helper/wiki/PlayerConfig
+
+    Forks built on the older TMDBHelper player format a field they know but
+    have no value for (an IMDb or TVDB id, a year, an air date) as the text
+    "None". That is no id or date either, so it is cleared the same way.
     """
-    return {k: ("" if v == "_" else v) for k, v in params.items()}
+    cleaned = {}
+    for key, value in params.items():
+        if value == "_" or (value == "None" and key not in _TITLE_PARAMS):
+            value = ""
+        cleaned[key] = value
+    return cleaned
 
 
 def _fallback_candidate_loader_for_selection(selected, results, settings_getter=None):

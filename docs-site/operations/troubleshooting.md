@@ -50,6 +50,33 @@ Settings that are new in 2.0.0 aren't in 1.2.3. For example, the NZBGet backend,
 the read-ahead buffer, and the fallback submit delay don't exist there. See
 [Beta channel and beta features](../getting-started/beta-channel.md).
 
+## The picker shows every season and episode of a show
+
+You opened one episode and the picker lists the whole show, with other
+seasons and episodes first. `kodi.log` shows the add-on started as a movie
+search with only a title:
+
+```text
+NeNeTeePee-Stream-Kodi: Routing path='/play' params={'type': 'movie', 'title': '<show name>'}
+```
+
+The title was opened through a player that doesn't pass the season and episode.
+This happens when a skin uses its own copy of TMDBHelper (the Bingie skin's
+**TMDb Bingie Helper**) that has no NeNeTeePee-Stream-Kodi player file, and a
+generic player was generated for the add-on there instead.
+
+1. Select **Install TMDBHelper Player** in the add-on's **Player
+   Installation** settings. It installs the player into TMDBHelper and into the
+   skin's own TMDBHelper, and makes it the default where none is chosen.
+2. Remove the generated player,
+   `reconfigured_players/autogen.plugin.video.nzbdav.json`, from the helper's
+   add-on data folder, or disable it with **Configure players** in the helper's
+   settings.
+3. Open the episode again. `kodi.log` now has
+   `NeNeTeePee-Stream-Kodi: Script play route: type='episode'`.
+
+See [Skins with their own TMDBHelper](../getting-started/tmdbhelper.md#skins-with-their-own-tmdbhelper).
+
 ## NeNeTeePee-Stream-Kodi doesn't appear in TMDBHelper
 
 TMDBHelper lists NeNeTeePee-Stream-Kodi only after NeNeTeePee-Stream-Kodi's player file is installed.

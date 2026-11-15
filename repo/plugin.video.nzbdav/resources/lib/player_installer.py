@@ -17,10 +17,22 @@ from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
 
 ADDON_DATA_ROOT = "special://profile/addon_data/"
+ADDONS_ROOT = "special://home/addons/"
 NZBDAV_ADDON_ID = "plugin.video.nzbdav"
 PLAYER_FILENAME = "nzbdav.json"
 TMDBHELPER_ADDON_ID = "plugin.video.themoviedb.helper"
 TMDBHELPER_LABEL = "TMDBHelper"
+
+# Forks of TMDBHelper that a skin installs beside it. A fork reads its own
+# players folder and its own default-player settings, so a title opened through
+# the fork never sees a player that was installed only into TMDBHelper.
+TMDBHELPER_FORKS = (("plugin.video.tmdb.bingie.helper", "TMDb Bingie Helper"),)
+
+# TMDBHelper and its forks store a default player as "<file> <mode>".
+DEFAULT_PLAYER_SETTINGS = (
+    ("default_player_movies", PLAYER_FILENAME + " play_movie"),
+    ("default_player_episodes", PLAYER_FILENAME + " play_episode"),
+)
 
 
 def _player_path_for(addon_id):
@@ -176,7 +188,11 @@ def _existing_player_is_current(file_path, target_name):
 
 
 def _install_player_to_path(target_name, target_path):
-    """Install player JSON to the requested Kodi player directory."""
+    """Install player JSON to the requested Kodi player directory.
+
+    Returns True when the folder holds a current player afterwards, whether
+    this call wrote it or kept the one already there.
+    """
     player_content = json.dumps(PLAYER_JSON, indent=4)
 
     xbmc.log(
@@ -195,7 +211,7 @@ def _install_player_to_path(target_name, target_path):
                 xbmc.LOGERROR,
             )
             _notify(_addon_name(), _fmt(30095, target_name))
-            return
+            return False
 
         if not xbmcvfs.exists(real_path):
             if not xbmcvfs.mkdirs(real_path):
@@ -207,7 +223,7 @@ def _install_player_to_path(target_name, target_path):
                     xbmc.LOGERROR,
                 )
                 _notify(_addon_name(), _fmt(30095, target_name))
-                return
+                return False
 
         file_path = os.path.join(real_path, PLAYER_FILENAME)
 
@@ -218,15 +234,17 @@ def _install_player_to_path(target_name, target_path):
         if xbmcvfs.exists(file_path) and _existing_player_is_current(
             file_path, target_name
         ):
-            return
+            return True
 
         _write_player_file(file_path, player_content, target_name)
+        return True
     except Exception as e:
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Failed to install player: {}").format(e),
             xbmc.LOGERROR,
         )
         _notify(_addon_name(), _fmt(30095, target_name))
+        return False
 
 
 def _write_player_file(file_path, player_content, target_name):
@@ -252,24 +270,77 @@ def _write_player_file(file_path, player_content, target_name):
         f.close()
 
 
-def _enable_tmdbhelper_action_player_mode():
+def _addon_is_installed(addon_id):
+    """Return True when the add-on's folder is on disk.
+
+    Reads the file system only, so the service can ask at start-up without
+    building a Kodi add-on object.
+    """
+    try:
+        folder = xbmcvfs.translatePath(ADDONS_ROOT + addon_id + "/")
+        return os.path.isfile(os.path.join(folder, "addon.xml"))
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
+def _installed_helpers():
+    """Return (addon_id, label) for TMDBHelper and each fork that is installed.
+
+    TMDBHelper is always listed, as it was before forks were known: the
+    install button names it and has always written its player folder.
+    """
+    helpers = [(TMDBHELPER_ADDON_ID, TMDBHELPER_LABEL)]
+    helpers.extend(fork for fork in TMDBHELPER_FORKS if _addon_is_installed(fork[0]))
+    return helpers
+
+
+def _enable_tmdbhelper_action_player_mode(addon_id=TMDBHELPER_ADDON_ID):
     """Make TMDBHelper execute non-resolvable player actions directly."""
     try:
-        xbmcaddon.Addon(TMDBHELPER_ADDON_ID).setSetting("only_resolve_strm", "true")
+        xbmcaddon.Addon(addon_id).setSetting("only_resolve_strm", "true")
     except Exception as e:  # pylint: disable=broad-except
         xbmc.log(
             (
-                "NeNeTeePee-Stream-Kodi: Could not enable TMDBHelper "
-                "STRM-only resolver mode: {}"
-            ).format(e),
+                "NeNeTeePee-Stream-Kodi: Could not enable STRM-only resolver "
+                "mode in {}: {}"
+            ).format(addon_id, e),
+            xbmc.LOGWARNING,
+        )
+
+
+def _make_default_player(addon_id):
+    """Choose this player where the helper has no default player yet.
+
+    A default the user already chose, for this or any other player, is left
+    alone.
+    """
+    try:
+        addon = xbmcaddon.Addon(addon_id)
+        for setting_id, value in DEFAULT_PLAYER_SETTINGS:
+            current = addon.getSetting(setting_id)
+            if isinstance(current, str) and not current.strip():
+                addon.setSetting(setting_id, value)
+                xbmc.log(
+                    "NeNeTeePee-Stream-Kodi: Set {} in {} to '{}'".format(
+                        setting_id, addon_id, value
+                    ),
+                    xbmc.LOGINFO,
+                )
+    except Exception as e:  # pylint: disable=broad-except
+        xbmc.log(
+            (
+                "NeNeTeePee-Stream-Kodi: Could not set the default player in " "{}: {}"
+            ).format(addon_id, e),
             xbmc.LOGWARNING,
         )
 
 
 def install_player():
-    """Install player JSON to TMDBHelper."""
-    _enable_tmdbhelper_action_player_mode()
-    _install_player_to_path(TMDBHELPER_LABEL, TMDBHELPER_PLAYER_PATH)
+    """Install the player into TMDBHelper and every installed fork of it."""
+    for addon_id, label in _installed_helpers():
+        _enable_tmdbhelper_action_player_mode(addon_id)
+        if _install_player_to_path(label, _player_path_for(addon_id)):
+            _make_default_player(addon_id)
 
 
 def install_player_other():
@@ -288,17 +359,71 @@ def install_player_other():
     _install_player_to_path(target["label"], target["path"])
 
 
+def _player_folder(addon_id):
+    """Return the helper's real players folder, or None when it is unsafe."""
+    folder = xbmcvfs.translatePath(_player_path_for(addon_id))
+    if not _player_path_inside_profile(folder):
+        return None
+    return folder
+
+
+def _copy_player_to_other_helpers(states, folders):
+    """Give the player to an installed helper that has none.
+
+    Runs only when the player is already installed in one helper, which is
+    the user's choice to use it. Writes the file and nothing else: no setting
+    of the other add-on is read or changed here. A deleted copy comes back on
+    the next start; to hide the player in one helper, disable it there.
+    """
+    from resources.lib.player_upgrade import add_player, player_is_installed
+
+    missing = [
+        addon_id
+        for addon_id, state in states.items()
+        if state == "absent" and _addon_is_installed(addon_id)
+    ]
+    if not missing:
+        return
+    if not any(
+        player_is_installed(folders[addon_id], PLAYER_JSON)
+        for addon_id, state in states.items()
+        if state != "absent" and folders.get(addon_id)
+    ):
+        return
+    for addon_id in missing:
+        add_player(folders[addon_id], PLAYER_JSON)
+
+
 def upgrade_installed_tmdbhelper_player():
-    """Silently migrate an existing player without changing TMDbHelper settings."""
+    """Silently keep an installed player current in TMDBHelper and its forks.
+
+    An existing player is migrated to the current schema. When the player is
+    installed in one helper, an installed fork without it gets a copy, so a
+    title opened through the fork can use it too. No add-on setting changes.
+    Returns the state of TMDBHelper's own player.
+    """
     from resources.lib.player_upgrade import upgrade_player
 
+    states = {}
+    folders = {}
+    for addon_id in [TMDBHELPER_ADDON_ID] + [fork[0] for fork in TMDBHELPER_FORKS]:
+        try:
+            folder = _player_folder(addon_id)
+            if folder is None:
+                states[addon_id] = "failed"
+                continue
+            folders[addon_id] = folder
+            states[addon_id] = upgrade_player(folder, PLAYER_JSON)
+        except Exception:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Automatic player upgrade failed",
+                xbmc.LOGWARNING,
+            )
+            states[addon_id] = "failed"
     try:
-        folder = xbmcvfs.translatePath(TMDBHELPER_PLAYER_PATH)
-        if not _player_path_inside_profile(folder):
-            return "failed"
-        return upgrade_player(folder, PLAYER_JSON)
+        _copy_player_to_other_helpers(states, folders)
     except Exception:  # pylint: disable=broad-except
         xbmc.log(
-            "NeNeTeePee-Stream-Kodi: Automatic player upgrade failed", xbmc.LOGWARNING
+            "NeNeTeePee-Stream-Kodi: Automatic player copy failed", xbmc.LOGWARNING
         )
-        return "failed"
+    return states[TMDBHELPER_ADDON_ID]
