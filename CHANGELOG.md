@@ -314,6 +314,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **An episode opened from a skin's own TMDBHelper gets the right season and
+  episode.** The Bingie skin opens titles through its own copy of TMDBHelper,
+  TMDb Bingie Helper, which keeps its own players folder and its own default
+  player. **Install TMDBHelper Player** wrote the player file into TMDBHelper
+  only, and **Install Player Other** did not list the copy because its
+  players folder did not exist yet. The copy then had no player for this
+  add-on, and a player generated there from a template sends only the title
+  as a movie search, so the picker listed every season and episode of the
+  show. **Install TMDBHelper Player** now also installs into TMDb Bingie
+  Helper when it is installed, creating the folder, and turns on its
+  `only_resolve_strm` setting as it does for TMDBHelper. In each of the two it
+  makes this add-on the default player for movies and for episodes where no
+  default is chosen or the default is that generated player; any other
+  default you chose stays. Once the player is installed in one of the two,
+  the add-on copies the file to the other the next time Kodi starts or the
+  add-on is opened (the file only, no setting; never from a helper that is
+  no longer installed), and it keeps both copies on the current player
+  schema. The older player format that copy is built on sends the text
+  `None` for an id, year, air date or episode title it has no value for;
+  that is now read as empty, like TMDBHelper's `_`.
+
 - **A TMDBHelper update no longer stops plays before the picker opens.**
   Picking a daily show's newest episode ended in a TMDBHelper error and the
   picker never appeared; `kodi.log` had `no such table: external_ids`.

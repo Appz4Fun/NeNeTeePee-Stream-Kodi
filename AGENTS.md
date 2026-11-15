@@ -182,8 +182,10 @@ The background service (`service.py`) runs `StreamProxy`. MP4 sources may be rew
 
 `player_installer.py` installs the `nzbdav.json` TMDBHelper player file. Two routes exist:
 
-- `install_player` targets TMDBHelper's `players/` directory.
+- `install_player` targets the `players/` directory of TMDBHelper and of each installed fork in `TMDBHELPER_FORKS` (a skin's own TMDBHelper), turns on `only_resolve_strm` there, and sets the helper's default player where it is empty.
 - `install_player_other` calls `discover_other_player_targets()`, which scans `special://profile/addon_data/*/players/` at runtime and offers any existing player folder in a select dialog. There is no static `PLAYER_TARGETS` map and no per-target boolean setting.
+
+`upgrade_installed_tmdbhelper_player` runs at service start and on every add-on invocation. It must stay silent and must not build an `xbmcaddon.Addon`. It upgrades an installed player in each helper and copies the stock player to an installed helper that has none when another installed helper has it.
 
 When changing player behavior, keep the profile-containment guard (writes stay under `addon_data`) and the schema-version preserve/backup logic, unless a change deliberately revises them. In that case, update the tests to match.
 

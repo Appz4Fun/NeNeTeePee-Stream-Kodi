@@ -20,6 +20,13 @@ This writes a small `nzbdav.json` player file into TMDBHelper's players folder
 NeNeTeePee-Stream-Kodi's script action directly (see [Why NeNeTeePee-Stream-Kodi uses a script player](#why-neneteepee-stream-kodi-uses-a-script-player)).
 You get a **Player installed to: TMDBHelper** notification.
 
+Where TMDBHelper has no default player chosen yet, the install also makes
+**NeNeTeePee-Stream-Kodi** the default for movies and for episodes. A default
+you already chose, for any player, stays as it is. The one exception is a
+default set to a player the helper generated for this add-on
+(`autogen.plugin.video.nzbdav.json`): that player can't play, so the install
+replaces it.
+
 NeNeTeePee-Stream-Kodi protects your data while doing this:
 
 - It refuses to write anywhere outside Kodi's add-on data folder.
@@ -30,14 +37,49 @@ NeNeTeePee-Stream-Kodi protects your data while doing this:
 - If the write fails, you get a **Failed to install to: …** message instead of
   a false success.
 
-!!! tip "Re-run the install after updating NeNeTeePee-Stream-Kodi"
-    Updating the add-on doesn't update an installed player file. Select
-    **Install TMDBHelper Player** again after an update to pick up player file
-    changes.
+!!! tip "The player file follows add-on updates"
+    When an update changes the player file, the add-on updates an installed
+    `nzbdav.json` on the next Kodi start and keeps the name and priority you
+    set in that file. You don't need to install it again. A copy you changed
+    with the helper's **Configure players** screen is saved separately
+    (`reconfigured_players/nzbdav.json`) and is not updated; delete that copy
+    after an update that changes the player.
 
 ![Player Installation settings](../images/kodi/player-installation-01.png)
 
 See [every player installation option](../settings/player-installation.md) for commit-pinned installer references.
+
+### Skins with their own TMDBHelper
+
+Some skins install their own copy of TMDBHelper and open titles through it.
+The Bingie skin does this with **TMDb Bingie Helper**
+(`plugin.video.tmdb.bingie.helper`). That copy has its own players folder and
+its own default player, so it doesn't see a player installed only into
+TMDBHelper.
+
+**Install TMDBHelper Player** covers both. When TMDb Bingie Helper is
+installed, the same button also writes `nzbdav.json` into its players folder
+(`addon_data/plugin.video.tmdb.bingie.helper/players/`, created when missing),
+turns on its `only_resolve_strm` setting, and makes NeNeTeePee-Stream-Kodi its
+default player where none is chosen. You get a second notification,
+**Player installed to: TMDb Bingie Helper**.
+
+If you add such a skin later, you don't have to come back here for the player
+file: once the player is installed in one of the two, the add-on copies it to
+the other the next time Kodi starts or the add-on is opened. That automatic
+copy writes the file only.
+Select **Install TMDBHelper Player** once more to also set the default player
+and `only_resolve_strm` there. A player file left behind by a helper you
+uninstalled is never copied from.
+
+!!! warning "Don't use the helper's own \"create player\" for this add-on"
+    TMDBHelper and its forks can generate a player for any add-on from a
+    template. A player made that way for NeNeTeePee-Stream-Kodi sends only the
+    title, as a movie search, so an episode opens a picker with every season
+    and episode of the show. Use **Install TMDBHelper Player** instead, and
+    remove the generated file
+    (`reconfigured_players/autogen.plugin.video.nzbdav.json` in the helper's
+    add-on data folder).
 
 ### Install into another add-on's player list
 
@@ -53,8 +95,11 @@ route doesn't change any setting in the other add-on.
 ## Set NeNeTeePee-Stream-Kodi as your default player
 
 1. Restart Kodi, **or** open TMDBHelper and select **Players → Update players**.
-2. In TMDBHelper settings, set **Default player (Movies)** and **Default player
-   (TV Shows)** to **NeNeTeePee-Stream-Kodi**.
+2. The install already made **NeNeTeePee-Stream-Kodi** the default where no
+   default player was chosen. If you had another default, open TMDBHelper
+   settings and set **Default player (Movies)** and **Default player
+   (TV Shows)** to **NeNeTeePee-Stream-Kodi**. A skin's own TMDBHelper has the
+   same two settings in its own settings screen.
 
 The add-on's [optional TMDB API key](tmdb-api.md) belongs to its Indexers settings. It is separate from the player selection and TMDBHelper's own API settings.
 

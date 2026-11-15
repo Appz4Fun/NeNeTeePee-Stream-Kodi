@@ -1,6 +1,6 @@
 # Player Installation
 
-TMDBHelper is required for the title-browsing workflow documented here. These buttons install a player definition; they do not install TMDBHelper or a backend service. Run the installation again after updating the add-on. The installer preserves a player file with the current schema and backs up an older file before replacing it. See [TMDBHelper setup](../getting-started/tmdbhelper.md).
+TMDBHelper is required for the title-browsing workflow documented here. These buttons install a player definition; they do not install TMDBHelper or a backend service. An installed player file updates itself when the add-on updates. The installer preserves a player file with the current schema and backs up an older file before replacing it. See [TMDBHelper setup](../getting-started/tmdbhelper.md).
 
 ## Kodi screenshots
 
@@ -14,7 +14,7 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 
 | Option and setting ID | Default | What it does |
 | --- | --- | --- |
-| Install TMDBHelper Player[^source-action_install_player]<br>`action_install_player` | Button | Install the NeNeTeePee-Stream-Kodi player file into TMDBHelper. |
+| Install TMDBHelper Player[^source-action_install_player]<br>`action_install_player` | Button | Install the NeNeTeePee-Stream-Kodi player file into TMDBHelper, and into a skin's own TMDBHelper (TMDb Bingie Helper) when one is installed. Where no default player is chosen, it becomes the default for movies and episodes. |
 | Install Player Other[^source-action_install_player_other]<br>`action_install_player_other` | Button | Install the NeNeTeePee-Stream-Kodi player file into another add-on that has a players folder. |
 
 ## Source notes

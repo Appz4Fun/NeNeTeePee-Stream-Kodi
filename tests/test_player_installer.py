@@ -447,3 +447,226 @@ def test_install_player_other_notifies_when_no_other_targets(
     mock_gui.Dialog.return_value.select.assert_not_called()
     mock_vfs.File.assert_not_called()
     mock_notify.assert_called()
+
+
+# --- TMDBHelper forks (a skin's own helper) ---------------------------------
+
+BINGIE_HELPER_ID = "plugin.video.tmdb.bingie.helper"
+
+
+def _profile(tmp_path, monkeypatch, forks_installed=(BINGIE_HELPER_ID,)):
+    """Map Kodi's special:// paths onto a real folder tree under tmp_path."""
+    from resources.lib import player_installer
+
+    home = tmp_path / "home"
+    data = home / "userdata" / "addon_data"
+    data.mkdir(parents=True)
+    for addon_id in forks_installed:
+        addon_dir = home / "addons" / addon_id
+        addon_dir.mkdir(parents=True)
+        (addon_dir / "addon.xml").write_text("<addon/>")
+
+    def _translate(path):
+        return path.replace("special://profile", str(home / "userdata")).replace(
+            "special://home", str(home)
+        )
+
+    def _mkdirs(path):
+        Path(path).mkdir(parents=True, exist_ok=True)
+        return True
+
+    def _copy(source, target):
+        Path(target).write_bytes(Path(source).read_bytes())
+        return True
+
+    class _File:
+        def __init__(self, path, mode="r"):
+            self._handle = open(path, mode, encoding="utf-8")
+
+        def read(self):
+            return self._handle.read()
+
+        def write(self, text):
+            self._handle.write(text)
+            return True
+
+        def close(self):
+            self._handle.close()
+
+    vfs = MagicMock()
+    vfs.translatePath.side_effect = _translate
+    vfs.exists.side_effect = lambda path: Path(path).exists()
+    vfs.mkdirs.side_effect = _mkdirs
+    vfs.copy.side_effect = _copy
+    vfs.File.side_effect = _File
+    monkeypatch.setattr(player_installer, "xbmcvfs", vfs)
+    return data
+
+
+def _helper_addons(monkeypatch, settings):
+    """Give each helper add-on its own settings dict; return the Addon mocks."""
+    from resources.lib import player_installer
+
+    addons = {}
+
+    def _addon(addon_id=None):
+        if addon_id not in settings:
+            raise RuntimeError("Unknown addon id '{}'".format(addon_id))
+        if addon_id not in addons:
+            addon = MagicMock()
+            values = settings[addon_id]
+            addon.getSetting.side_effect = lambda key: values.get(key, "")
+            addon.setSetting.side_effect = values.__setitem__
+            addons[addon_id] = addon
+        return addons[addon_id]
+
+    xbmcaddon = MagicMock()
+    xbmcaddon.Addon.side_effect = _addon
+    monkeypatch.setattr(player_installer, "xbmcaddon", xbmcaddon)
+    return addons
+
+
+@patch("resources.lib.player_installer._notify")
+def test_install_player_also_installs_into_an_installed_fork(
+    mock_notify, tmp_path, monkeypatch
+):
+    """A skin's own helper reads its own players folder, which may not exist
+    yet. The one install button must register the player there too, or a
+    title opened through the fork has no player that passes season/episode."""
+    data = _profile(tmp_path, monkeypatch)
+    settings = {"plugin.video.themoviedb.helper": {}, BINGIE_HELPER_ID: {}}
+    _helper_addons(monkeypatch, settings)
+
+    install_player()
+
+    for addon_id, helper_settings in settings.items():
+        player = json.loads((data / addon_id / "players" / "nzbdav.json").read_text())
+        assert player == PLAYER_JSON
+        assert helper_settings == {
+            "only_resolve_strm": "true",
+            "default_player_movies": "nzbdav.json play_movie",
+            "default_player_episodes": "nzbdav.json play_episode",
+        }
+    labels = [call.args[1] for call in mock_notify.call_args_list]
+    assert any("TMDb Bingie Helper" in label for label in labels)
+
+
+@patch("resources.lib.player_installer._notify")
+def test_install_player_skips_a_fork_that_is_not_installed(
+    mock_notify, tmp_path, monkeypatch
+):
+    data = _profile(tmp_path, monkeypatch, forks_installed=())
+    addons = _helper_addons(monkeypatch, {"plugin.video.themoviedb.helper": {}})
+
+    install_player()
+
+    assert (data / "plugin.video.themoviedb.helper" / "players").is_dir()
+    assert not (data / BINGIE_HELPER_ID).exists()
+    assert list(addons) == ["plugin.video.themoviedb.helper"]
+
+
+@patch("resources.lib.player_installer._notify")
+def test_install_player_keeps_a_default_player_the_user_chose(
+    mock_notify, tmp_path, monkeypatch
+):
+    _profile(tmp_path, monkeypatch)
+    settings = {
+        "plugin.video.themoviedb.helper": {
+            "default_player_movies": "other.json play_movie"
+        },
+        BINGIE_HELPER_ID: {"default_player_episodes": "other.json play_episode"},
+    }
+    _helper_addons(monkeypatch, settings)
+
+    install_player()
+
+    main = settings["plugin.video.themoviedb.helper"]
+    assert main["default_player_movies"] == "other.json play_movie"
+    assert main["default_player_episodes"] == "nzbdav.json play_episode"
+    fork = settings[BINGIE_HELPER_ID]
+    assert fork["default_player_movies"] == "nzbdav.json play_movie"
+    assert fork["default_player_episodes"] == "other.json play_episode"
+
+
+@patch("resources.lib.player_installer._notify")
+def test_install_player_replaces_a_default_set_to_the_generated_player(
+    mock_notify, tmp_path, monkeypatch
+):
+    """A helper's "create player" template makes a player for this add-on
+    that cannot play. A default left pointing at it would send the user to
+    the chooser once that file is removed."""
+    _profile(tmp_path, monkeypatch)
+    settings = {
+        "plugin.video.themoviedb.helper": {},
+        BINGIE_HELPER_ID: {
+            "default_player_movies": "autogen.plugin.video.nzbdav.json play_movie",
+            "default_player_episodes": "autogen.plugin.video.other.json play_episode",
+        },
+    }
+    _helper_addons(monkeypatch, settings)
+
+    install_player()
+
+    fork = settings[BINGIE_HELPER_ID]
+    assert fork["default_player_movies"] == "nzbdav.json play_movie"
+    assert (
+        fork["default_player_episodes"]
+        == "autogen.plugin.video.other.json play_episode"
+    )
+
+
+@patch("resources.lib.player_installer._notify")
+def test_install_player_sets_no_default_when_the_install_fails(
+    mock_notify, tmp_path, monkeypatch
+):
+    from resources.lib import player_installer
+
+    _profile(tmp_path, monkeypatch, forks_installed=())
+    settings = {"plugin.video.themoviedb.helper": {}}
+    _helper_addons(monkeypatch, settings)
+    player_installer.xbmcvfs.mkdirs.side_effect = lambda _path: False
+
+    install_player()
+
+    assert "default_player_movies" not in settings["plugin.video.themoviedb.helper"]
+
+
+def test_fork_player_template_passes_season_and_episode():
+    """The fork formats the player string from a dict that yields "_" for a
+    field it does not know and "None" for a known field with no value. The
+    add-on must still get the requested season and episode, and no fake id."""
+    from collections import defaultdict
+    from urllib.parse import quote
+
+    from resources.lib.router import _clean_params
+    from resources.lib.script_player import parse_script_args
+
+    item = defaultdict(lambda: "_")
+    item.update(
+        showname_url=quote("Six Feet Under"),
+        title_url=quote("The Eye Inside"),
+        showyear=None,
+        season=3,
+        episode=3,
+        imdb="tt0248654",
+        tmdb=1274,
+        tvdb=None,
+        eptmdb=91031,
+        premiered="2003-03-16",
+    )
+    action = PLAYER_JSON["play_episode"].format_map(item)
+    prefix = "executebuiltin://RunScript("
+    assert action.startswith(prefix) and action.endswith(")")
+    args = action[len(prefix) : -1].split(",")
+    assert args[1] == "tmdb_play"
+
+    params = _clean_params(parse_script_args(args[2:]))
+
+    assert params["type"] == "episode"
+    assert params["title"] == "Six Feet Under"
+    assert params["season"] == "3"
+    assert params["episode"] == "3"
+    assert params["imdb"] == "tt0248654"
+    assert params["premiered"] == "2003-03-16"
+    for cleared in ("year", "tvdb", "ep_season", "ep_episode"):
+        assert params[cleared] == ""
