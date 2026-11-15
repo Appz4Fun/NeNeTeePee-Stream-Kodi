@@ -277,6 +277,8 @@ def test_default_location_when_the_setting_is_empty_or_unreadable(stuck, setting
         "external_ids_columns = {'id': {'data': 'TEXT', 'foreign_key': 'a; b'}}\n",
         "other = 1\n",
         "def broken(:\n",
+        "external_ids_columns = {'id': {'data': 'TEXT'}}\n"
+        + "external_ids_columns = {'id': {'data': 'INTEGER'}}\n",
     ],
 )
 def test_declarations_it_does_not_understand_are_not_acted_on(tmp_path, table_module):
@@ -310,6 +312,8 @@ def test_a_declaration_it_cannot_read_does_not_matter_when_the_table_exists(
     [
         "CREATE VIEW external_ids AS SELECT id FROM expiry",
         "CREATE INDEX external_ids ON expiry(expiry)",
+        "CREATE TABLE EXTERNAL_IDS(id TEXT PRIMARY KEY)",
+        "CREATE TABLE External_Ids(id TEXT PRIMARY KEY, tmdb_id INTEGER)",
     ],
 )
 def test_something_else_of_the_tables_name_is_left_alone(stuck, other):
@@ -593,3 +597,121 @@ def test_the_service_guard_says_once_when_it_cannot_read_the_declaration(tmp_pat
     ]
     assert len(warnings) == 1
     assert "has no 'external_ids' table" in warnings[0]
+
+
+def test_a_statement_that_fails_takes_the_table_back_with_it(stuck):
+    addon, data, path = stuck
+    statements = [
+        "CREATE TABLE IF NOT EXISTS external_ids(id TEXT PRIMARY KEY)",
+        "CREATE INDEX external_ids_x ON external_ids(no_such_column)",
+    ]
+
+    with patch.object(guard, "_statements", return_value=statements):
+        assert guard.repair(addon, data) == guard.FAILED
+
+    assert _state(path)["objects"] == {}
+    # No lock or transaction is left behind.
+    assert guard.repair(addon, data) == guard.REPAIRED
+
+
+def test_rolling_back_does_not_hide_the_first_error():
+    connection = MagicMock()
+    connection.in_transaction = True
+    connection.execute.side_effect = sqlite3.OperationalError("no transaction")
+
+    guard._roll_back(connection)
+
+    connection.execute.assert_called_once_with("ROLLBACK")
+    idle = MagicMock()
+    idle.in_transaction = False
+    guard._roll_back(idle)
+    idle.execute.assert_not_called()
+
+
+def test_a_database_locked_against_reading_is_tried_again_later(stuck, monkeypatch):
+    addon, data, path = stuck
+    monkeypatch.setattr(guard, "_READ_TIMEOUT_SECONDS", 0.05)
+    holder = sqlite3.connect(path, isolation_level=None)
+    holder.execute("BEGIN EXCLUSIVE")
+    try:
+        assert guard.repair(addon, data) == guard.FAILED
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+
+    assert guard.repair(addon, data) == guard.REPAIRED
+
+
+@pytest.mark.parametrize(
+    ("path", "sep", "uri"),
+    [
+        ("/storage/.kodi/db/ItemQueries.db", "/", "file:///storage/.kodi/db/"),
+        ("/odd dir?#%25/ItemQueries.db", "/", "file:///odd%20dir%3F%23%2525/"),
+        ("C:\\Kodi\\db\\ItemQueries.db", "\\", "file:///C:/Kodi/db/"),
+        ("\\\\nas\\kodi\\db\\ItemQueries.db", "\\", "file:////nas/kodi/db/"),
+    ],
+)
+def test_database_uri_keeps_the_whole_path_out_of_the_authority(path, sep, uri):
+    assert guard._uri(path, sep) == uri + "ItemQueries.db?mode=rw"
+
+
+def test_a_path_with_uri_characters_opens(tmp_path):
+    addon, data = _install(tmp_path)
+    elsewhere = tmp_path / "odd dir?#%25"
+    path = str(elsewhere / "database_07" / "ItemQueries.db")
+    _old_database(path)
+    _write(
+        os.path.join(data, "settings.xml"),
+        '<settings><setting id="cache_location">{}{}</setting></settings>'.format(
+            str(elsewhere), os.sep
+        ),
+    )
+
+    assert guard.repair(addon, data) == guard.REPAIRED
+
+    assert _state(path)["columns"] == _COLUMNS
+
+
+def test_the_service_guard_names_the_cause_and_counts_retries_afresh(stuck):
+    addon, data, path = stuck
+    now = [0.0]
+    service_guard = guard.Guard(clock=lambda: now[0])
+
+    def hold():
+        holder = sqlite3.connect(path, isolation_level=None)
+        holder.execute("BEGIN IMMEDIATE")
+        return holder
+
+    with patch.object(
+        guard.xbmcvfs, "translatePath", _kodi_paths(addon, data)
+    ), patch.object(guard, "_WRITE_TIMEOUT_SECONDS", 0.05), patch.object(
+        guard.xbmc, "log"
+    ) as log:
+        holder = hold()
+        for _ in range(guard.RETRY_LIMIT + 1):
+            assert service_guard.tick() == guard.FAILED
+            now[0] += guard.RETRY_SECONDS
+        holder.execute("ROLLBACK")
+        holder.close()
+        now[0] += guard.RECHECK_SECONDS
+        assert service_guard.tick() == guard.REPAIRED
+        connection = sqlite3.connect(path)
+        connection.execute("DROP TABLE external_ids")
+        connection.commit()
+        connection.close()
+        holder = hold()
+        now[0] += guard.RECHECK_SECONDS
+        assert service_guard.tick() == guard.FAILED
+        now[0] += guard.RETRY_SECONDS
+        assert service_guard.tick() == guard.FAILED
+        holder.execute("ROLLBACK")
+        holder.close()
+
+    warnings = [
+        call.args[0]
+        for call in log.call_args_list
+        if call.args[1] == guard.xbmc.LOGWARNING
+    ]
+    assert len(warnings) == 2
+    assert path in warnings[0]
+    assert "database is locked" in warnings[0]

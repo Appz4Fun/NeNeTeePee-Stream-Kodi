@@ -26,10 +26,10 @@ It changes nothing else: no rows, no other table, and not the stored version.
 
 import ast
 import os
-import pathlib
 import re
 import sqlite3
 import time
+from urllib.parse import quote
 
 import xbmc
 import xbmcvfs
@@ -91,18 +91,22 @@ def _declared(path, name):
         tree = ast.parse(_read_text(path))
     except (OSError, SyntaxError, UnicodeDecodeError) as error:
         raise ValueError("cannot parse {}: {}".format(path, error)) from error
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Assign):
-            continue
-        for target in node.targets:
-            if isinstance(target, ast.Name) and target.id == name:
-                try:
-                    return ast.literal_eval(node.value)
-                except (ValueError, TypeError, SyntaxError) as error:
-                    raise ValueError(
-                        "{} is not a literal in {}".format(name, path)
-                    ) from error
-    raise ValueError("{} is not declared in {}".format(name, path))
+    values = [
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        for target in node.targets
+        if isinstance(target, ast.Name) and target.id == name
+    ]
+    if len(values) != 1:
+        # Assigned twice, which one Python ends up with is not known here.
+        raise ValueError(
+            "{} is declared {} times in {}".format(name, len(values), path)
+        )
+    try:
+        return ast.literal_eval(values[0])
+    except (ValueError, TypeError, SyntaxError) as error:
+        raise ValueError("{} is not a literal in {}".format(name, path)) from error
 
 
 def _statements(columns):
@@ -111,6 +115,8 @@ def _statements(columns):
     Mirrors ``DatabaseCore.create_database_execute``. Anything that is not a
     plain name, column type or ``table(column)`` reference is refused, so the
     statements hold only what a column declaration can hold.
+    The index statements keep TMDbHelper's ``IF NOT EXISTS``: an index name
+    already in use is skipped, as TMDbHelper skips it.
     """
     if not isinstance(columns, dict) or not columns:
         raise ValueError("no columns declared")
@@ -174,10 +180,25 @@ def _database_path(addon_folder, data_folder, translate):
     return os.path.join(data_folder, folder, DATABASE_FILE)
 
 
+def _uri(path, sep=os.sep):
+    """Return the SQLite URI that opens an absolute ``path``, never creating it.
+
+    The authority is left empty and the whole path follows it, so a Windows
+    share stays in the path (``file:////nas/kodi/...``): SQLite refuses a
+    host name in the authority.
+    """
+    if sep != "/":
+        path = path.replace(sep, "/")
+    if not path.startswith("/"):
+        path = "/" + path  # A Windows drive: C:/... becomes /C:/...
+    return "file://" + quote(path, safe="/:") + "?mode=rw"
+
+
 def _connect(path, timeout):
-    """Open an existing database; never create one."""
-    uri = pathlib.Path(os.path.abspath(path)).as_uri() + "?mode=rw"
-    return sqlite3.connect(uri, uri=True, timeout=timeout, isolation_level=None)
+    """Open an existing database; never create its file."""
+    return sqlite3.connect(
+        _uri(os.path.abspath(path)), uri=True, timeout=timeout, isolation_level=None
+    )
 
 
 def _state(connection):
@@ -186,10 +207,11 @@ def _state(connection):
         # TMDbHelper has not initialised this file yet. Its first
         # initialisation runs no changes, so it creates every table itself.
         return NO_DATABASE
-    # Anything of that name counts: SQLite will not create a table beside a
-    # view or an index called the same, so such a database is left alone.
+    # Anything of that name counts, in any case, as SQLite compares names:
+    # it will not create a table beside a view or an index called the same,
+    # so such a database is left alone.
     found = connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE name=?", (TABLE,)
+        "SELECT 1 FROM sqlite_master WHERE name = ? COLLATE NOCASE", (TABLE,)
     ).fetchone()
     return PRESENT if found else None
 
@@ -202,6 +224,17 @@ def _inspect(path):
         return _state(connection)
     finally:
         connection.close()
+
+
+def _roll_back(connection):
+    """Undo an open transaction without hiding the error that ended it."""
+    try:
+        if connection.in_transaction:
+            connection.execute("ROLLBACK")
+    except sqlite3.Error:
+        # SQLite had already rolled back (disk full, I/O error); closing the
+        # connection releases whatever is left.
+        pass
 
 
 def _create(path, statements):
@@ -221,20 +254,35 @@ def _create(path, statements):
             else:
                 connection.execute("ROLLBACK")
         except Exception:
-            connection.execute("ROLLBACK")
+            _roll_back(connection)
             raise
     finally:
         connection.close()
     return state
 
 
-def _debug(message, detail):
-    xbmc.log(
-        "NeNeTeePee-Stream-Kodi: TMDbHelper's query database: {}: {}".format(
-            message, detail
-        ),
-        xbmc.LOGDEBUG,
-    )
+def _check(addon_folder, data_folder, translate):
+    """Do one check; return its result and, when it did not act, why."""
+    table_module = os.path.join(addon_folder, _TABLE_MODULE)
+    if not os.path.isfile(table_module):
+        return NOT_INSTALLED, ""
+    try:
+        path = _database_path(addon_folder, data_folder, translate)
+    except (ValueError, TypeError) as error:
+        return UNLOCATED, str(error)
+    if not os.path.isfile(path):
+        return NO_DATABASE, path
+    try:
+        state = _inspect(path)
+        if state is not None:
+            return state, path
+        try:
+            statements = _statements(_declared(table_module, _COLUMNS_NAME))
+        except (ValueError, TypeError) as error:
+            return UNREADABLE, str(error)
+        return _create(path, statements), path
+    except sqlite3.Error as error:
+        return FAILED, "{}: {}".format(path, error)
 
 
 def repair(addon_folder, data_folder, translate=None):
@@ -245,29 +293,7 @@ def repair(addon_folder, data_folder, translate=None):
     path from TMDbHelper's ``cache_location`` setting into a real one.
     Returns one of the result constants and never raises.
     """
-    table_module = os.path.join(addon_folder, _TABLE_MODULE)
-    if not os.path.isfile(table_module):
-        return NOT_INSTALLED
-    try:
-        path = _database_path(addon_folder, data_folder, translate or (lambda p: p))
-    except (ValueError, TypeError) as error:
-        _debug("not found", error)
-        return UNLOCATED
-    if not os.path.isfile(path):
-        return NO_DATABASE
-    try:
-        state = _inspect(path)
-        if state is not None:
-            return state
-        try:
-            statements = _statements(_declared(table_module, _COLUMNS_NAME))
-        except (ValueError, TypeError) as error:
-            _debug("table declaration not read", error)
-            return UNREADABLE
-        return _create(path, statements)
-    except sqlite3.Error as error:
-        _debug("could not be checked ({})".format(path), error)
-        return FAILED
+    return _check(addon_folder, data_folder, translate or (lambda p: p))[0]
 
 
 class Guard:  # pylint: disable=too-few-public-methods
@@ -289,18 +315,18 @@ class Guard:  # pylint: disable=too-few-public-methods
         data_folder = xbmcvfs.translatePath(TMDBHELPER_DATA_PATH)
         if not isinstance(addon_folder, str) or not isinstance(data_folder, str):
             return NOT_INSTALLED
-        result = repair(addon_folder, data_folder, xbmcvfs.translatePath)
+        result, detail = _check(addon_folder, data_folder, xbmcvfs.translatePath)
         if result == FAILED:
             self._failures += 1
             if self._failures <= RETRY_LIMIT:
                 self._due = now + RETRY_SECONDS
         else:
             self._failures = 0
-        self._report(result)
+        self._report(result, detail)
         self._last = result
         return result
 
-    def _report(self, result):
+    def _report(self, result, detail):
         """Log a repair, and the first of a run of checks that could not act."""
         if result == REPAIRED:
             xbmc.log(
@@ -314,13 +340,23 @@ class Guard:  # pylint: disable=too-few-public-methods
         elif result == FAILED:
             xbmc.log(
                 "NeNeTeePee-Stream-Kodi: Could not check TMDbHelper's {} for "
-                "its '{}' table; it will be checked again".format(DATABASE_FILE, TABLE),
+                "its '{}' table; it will be checked again ({})".format(
+                    DATABASE_FILE, TABLE, detail
+                ),
                 xbmc.LOGWARNING,
             )
         elif result == UNREADABLE:
             xbmc.log(
                 "NeNeTeePee-Stream-Kodi: TMDbHelper's {} has no '{}' table, and "
                 "this TMDbHelper declares the table in a way this add-on does "
-                "not read, so it was not added".format(DATABASE_FILE, TABLE),
+                "not read, so it was not added ({})".format(
+                    DATABASE_FILE, TABLE, detail
+                ),
                 xbmc.LOGWARNING,
+            )
+        elif result == UNLOCATED:
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: TMDbHelper's query database was not "
+                "checked: {}".format(detail),
+                xbmc.LOGDEBUG,
             )
