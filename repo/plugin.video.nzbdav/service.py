@@ -41,6 +41,7 @@ import xbmcgui  # noqa: E402
 from resources.lib import playback_context, playback_handoff, resume_store  # noqa: E402
 from resources.lib.http_util import notify as _notify  # noqa: E402
 from resources.lib.stream_proxy import StreamProxy  # noqa: E402
+from resources.lib.tmdbhelper_db_guard import Guard as _TmdbHelperGuard  # noqa: E402
 
 # Proxy-lifecycle helpers live in a sibling module to keep this entry module
 # under the file-size budget. The thin wrappers below preserve the original
@@ -962,6 +963,17 @@ def _run_tick(player, consecutive_failures):
         return consecutive_failures
 
 
+def _check_tmdbhelper_database(guard):
+    """Let the guard add a table TMDbHelper's update left out; never raise."""
+    try:
+        guard.tick()
+    except Exception as e:  # pylint: disable=broad-except
+        xbmc.log(
+            "NeNeTeePee-Stream-Kodi: TMDbHelper database check failed: {}".format(e),
+            xbmc.LOGERROR,
+        )
+
+
 # Thin wrappers preserving the original proxy-helper signatures. They bind the
 # Home window and ``StreamProxy`` class from this module's namespace at call
 # time so test patches on ``service._HOME_WINDOW`` / ``service.StreamProxy``
@@ -1013,6 +1025,10 @@ def main():
         "last_mode": None,
     }
 
+    # TMDbHelper fails before it calls any player when its own update left a
+    # table out of its query database; see tmdbhelper_db_guard.
+    tmdbhelper_guard = _TmdbHelperGuard()
+
     while not monitor.abortRequested():
         if monitor.waitForAbort(1):
             break
@@ -1027,6 +1043,8 @@ def main():
                 "NeNeTeePee-Stream-Kodi: cache warning check failed: {}".format(e),
                 xbmc.LOGERROR,
             )
+
+        _check_tmdbhelper_database(tmdbhelper_guard)
 
         consecutive_tick_failures = _run_tick(player, consecutive_tick_failures)
 
