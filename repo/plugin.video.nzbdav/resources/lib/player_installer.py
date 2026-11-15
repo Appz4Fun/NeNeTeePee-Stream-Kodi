@@ -385,8 +385,9 @@ def _copy_player_to_other_helpers(states, folders):
 
     Runs only when the player is already installed in one helper, which is
     the user's choice to use it. Writes the file and nothing else: no setting
-    of the other add-on is read or changed here. A deleted copy comes back on
-    the next start; to hide the player in one helper, disable it there.
+    of the other add-on is read or changed here. A deleted copy comes back
+    the next time Kodi starts or the add-on is opened; to hide the player in
+    one helper, disable it there.
     """
     from resources.lib.player_upgrade import add_player, player_is_installed
 

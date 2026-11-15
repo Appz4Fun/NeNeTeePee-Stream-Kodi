@@ -107,8 +107,9 @@ def test_clean_params_converts_tmdbhelper_placeholders():
 
 
 def test_clean_params_clears_the_none_text_a_helper_fork_sends():
-    """A fork on the older TMDBHelper player formats a missing id, year or
-    date as the text "None". It is no value; a title of "None" is kept."""
+    """A fork on the older TMDBHelper player formats a missing id, year,
+    date or episode title as the text "None". It is no value; a title of
+    "None" is kept, because the title is what gets searched."""
     params = {
         "type": "episode",
         "title": "None",
@@ -122,8 +123,7 @@ def test_clean_params_clears_the_none_text_a_helper_fork_sends():
     }
     cleaned = _clean_params(params)
     assert cleaned["title"] == "None"
-    assert cleaned["episode_title"] == "None"
-    for key in ("year", "imdb", "tvdb", "premiered"):
+    for key in ("episode_title", "year", "imdb", "tvdb", "premiered"):
         assert cleaned[key] == ""
     assert cleaned["season"] == "3"
     assert cleaned["episode"] == "3"

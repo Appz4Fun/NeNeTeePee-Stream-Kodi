@@ -313,8 +313,10 @@ def route(argv):
     _safe_resolve_handle(handle)
 
 
-# Title fields keep a literal "None": it can be a real title.
-_TITLE_PARAMS = ("title", "episode_title")
+# The title keeps a literal "None": it can be a real title, and it is what
+# gets searched. An episode title of "None" is cleared like the rest, so the
+# playback label falls back to the show name and episode number.
+_TITLE_PARAMS = ("title",)
 
 
 def _clean_params(params):

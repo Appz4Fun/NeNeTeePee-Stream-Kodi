@@ -66,7 +66,8 @@ default player where none is chosen. You get a second notification,
 
 If you add such a skin later, you don't have to come back here for the player
 file: once the player is installed in one of the two, the add-on copies it to
-the other on the next Kodi start. That automatic copy writes the file only.
+the other the next time Kodi starts or the add-on is opened. That automatic
+copy writes the file only.
 Select **Install TMDBHelper Player** once more to also set the default player
 and `only_resolve_strm` there. A player file left behind by a helper you
 uninstalled is never copied from.
