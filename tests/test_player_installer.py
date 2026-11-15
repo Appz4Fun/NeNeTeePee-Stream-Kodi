@@ -589,6 +589,33 @@ def test_install_player_keeps_a_default_player_the_user_chose(
 
 
 @patch("resources.lib.player_installer._notify")
+def test_install_player_replaces_a_default_set_to_the_generated_player(
+    mock_notify, tmp_path, monkeypatch
+):
+    """A helper's "create player" template makes a player for this add-on
+    that cannot play. A default left pointing at it would send the user to
+    the chooser once that file is removed."""
+    _profile(tmp_path, monkeypatch)
+    settings = {
+        "plugin.video.themoviedb.helper": {},
+        BINGIE_HELPER_ID: {
+            "default_player_movies": "autogen.plugin.video.nzbdav.json play_movie",
+            "default_player_episodes": "autogen.plugin.video.other.json play_episode",
+        },
+    }
+    _helper_addons(monkeypatch, settings)
+
+    install_player()
+
+    fork = settings[BINGIE_HELPER_ID]
+    assert fork["default_player_movies"] == "nzbdav.json play_movie"
+    assert (
+        fork["default_player_episodes"]
+        == "autogen.plugin.video.other.json play_episode"
+    )
+
+
+@patch("resources.lib.player_installer._notify")
 def test_install_player_sets_no_default_when_the_install_fails(
     mock_notify, tmp_path, monkeypatch
 ):

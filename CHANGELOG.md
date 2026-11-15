@@ -326,10 +326,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Helper when it is installed, creating the folder, and turns on its
   `only_resolve_strm` setting as it does for TMDBHelper. In each of the two it
   makes this add-on the default player for movies and for episodes where no
-  default is chosen; a default you chose stays. Once the player is installed
-  in one of the two, the add-on copies the file to the other on the next
-  start (the file only, no setting), and it keeps both copies on the current
-  player schema. The older player format that copy is built on sends the
+  default is chosen or the default is that generated player; any other
+  default you chose stays. Once the player is installed in one of the two,
+  the add-on copies the file to the other on the next start (the file only,
+  no setting; never from a helper that is no longer installed), and it keeps
+  both copies on the current player schema. The older player format that copy is built on sends the
   text `None` for an id, year or air date it has no value for; that is now
   read as empty, like TMDBHelper's `_`.
 

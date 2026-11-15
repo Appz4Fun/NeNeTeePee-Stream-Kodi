@@ -34,6 +34,10 @@ DEFAULT_PLAYER_SETTINGS = (
     ("default_player_episodes", PLAYER_FILENAME + " play_episode"),
 )
 
+# The file a helper's "create player" template writes for this add-on. It
+# opens the add-on as a folder with only a title, so it can never play.
+GENERATED_PLAYER_FILENAME = "autogen." + NZBDAV_ADDON_ID + ".json"
+
 
 def _player_path_for(addon_id):
     return ADDON_DATA_ROOT + addon_id + "/players/"
@@ -308,17 +312,26 @@ def _enable_tmdbhelper_action_player_mode(addon_id=TMDBHELPER_ADDON_ID):
         )
 
 
+def _default_player_is_open(current):
+    """True when the stored default is empty or the generated player."""
+    if not isinstance(current, str):
+        return False
+    parts = current.split()
+    return not parts or parts[0] == GENERATED_PLAYER_FILENAME
+
+
 def _make_default_player(addon_id):
-    """Choose this player where the helper has no default player yet.
+    """Choose this player where the helper has no working default yet.
 
     A default the user already chose, for this or any other player, is left
-    alone.
+    alone. The one exception is the player a helper generates for this add-on
+    from its template: that one cannot play, so this player replaces it.
     """
     try:
         addon = xbmcaddon.Addon(addon_id)
         for setting_id, value in DEFAULT_PLAYER_SETTINGS:
             current = addon.getSetting(setting_id)
-            if isinstance(current, str) and not current.strip():
+            if _default_player_is_open(current):
                 addon.setSetting(setting_id, value)
                 xbmc.log(
                     "NeNeTeePee-Stream-Kodi: Set {} in {} to '{}'".format(
@@ -384,10 +397,13 @@ def _copy_player_to_other_helpers(states, folders):
     ]
     if not missing:
         return
+    # A helper that was uninstalled can leave its player file behind in
+    # addon_data. Only a helper that is still installed counts as a source,
+    # or that leftover would keep bringing back a player the user removed.
     if not any(
         player_is_installed(folders[addon_id], PLAYER_JSON)
         for addon_id, state in states.items()
-        if state != "absent" and folders.get(addon_id)
+        if state != "absent" and folders.get(addon_id) and _addon_is_installed(addon_id)
     ):
         return
     for addon_id in missing:

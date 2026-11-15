@@ -289,6 +289,7 @@ def _write_player(data, addon_id, player):
 def test_installed_fork_without_the_player_gets_a_copy(helpers):
     data, addons = helpers
     _install_addon(addons, BINGIE_HELPER_ID)
+    _install_addon(addons, "plugin.video.themoviedb.helper")
     _write_player(data, "plugin.video.themoviedb.helper", _old_player(11))
     with patch.object(player_installer, "_notify") as notify, patch.object(
         player_installer.xbmcaddon, "Addon"
@@ -318,6 +319,16 @@ def test_no_copy_into_a_fork_that_is_not_installed(helpers):
     assert not (data / BINGIE_HELPER_ID).exists()
 
 
+def test_no_copy_from_the_leftover_file_of_an_uninstalled_fork(helpers):
+    """Kodi keeps an uninstalled add-on's data. That leftover must not bring
+    back a player the user deleted from TMDBHelper."""
+    data, addons = helpers
+    _install_addon(addons, "plugin.video.themoviedb.helper")
+    _write_player(data, BINGIE_HELPER_ID, _old_player(11))
+    assert player_installer.upgrade_installed_tmdbhelper_player() == "absent"
+    assert not (data / "plugin.video.themoviedb.helper").exists()
+
+
 def test_no_copy_when_the_player_was_never_installed(helpers):
     data, addons = helpers
     _install_addon(addons, BINGIE_HELPER_ID)
@@ -330,6 +341,7 @@ def test_no_copy_when_the_player_was_never_installed(helpers):
 def test_no_copy_when_the_only_player_file_belongs_to_another_addon(helpers):
     data, addons = helpers
     _install_addon(addons, BINGIE_HELPER_ID)
+    _install_addon(addons, "plugin.video.themoviedb.helper")
     _write_player(
         data, "plugin.video.themoviedb.helper", dict(_old_player(), plugin="foreign")
     )
@@ -367,6 +379,7 @@ def test_copy_failure_leaves_no_partial_player(helpers):
 
     data, addons = helpers
     _install_addon(addons, BINGIE_HELPER_ID)
+    _install_addon(addons, "plugin.video.themoviedb.helper")
     _write_player(data, "plugin.video.themoviedb.helper", _old_player(11))
     with patch(
         "resources.lib.player_upgrade.os.replace", side_effect=OSError("disk full")

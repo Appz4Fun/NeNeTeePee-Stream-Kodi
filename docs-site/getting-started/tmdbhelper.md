@@ -22,7 +22,10 @@ You get a **Player installed to: TMDBHelper** notification.
 
 Where TMDBHelper has no default player chosen yet, the install also makes
 **NeNeTeePee-Stream-Kodi** the default for movies and for episodes. A default
-you already chose, for any player, stays as it is.
+you already chose, for any player, stays as it is. The one exception is a
+default set to a player the helper generated for this add-on
+(`autogen.plugin.video.nzbdav.json`): that player can't play, so the install
+replaces it.
 
 NeNeTeePee-Stream-Kodi protects your data while doing this:
 
@@ -36,8 +39,11 @@ NeNeTeePee-Stream-Kodi protects your data while doing this:
 
 !!! tip "The player file follows add-on updates"
     When an update changes the player file, the add-on updates an installed
-    file on the next Kodi start and keeps your edits to its name and priority.
-    You don't need to install it again.
+    `nzbdav.json` on the next Kodi start and keeps the name and priority you
+    set in that file. You don't need to install it again. A copy you changed
+    with the helper's **Configure players** screen is saved separately
+    (`reconfigured_players/nzbdav.json`) and is not updated; delete that copy
+    after an update that changes the player.
 
 ![Player Installation settings](../images/kodi/player-installation-01.png)
 
@@ -62,7 +68,8 @@ If you add such a skin later, you don't have to come back here for the player
 file: once the player is installed in one of the two, the add-on copies it to
 the other on the next Kodi start. That automatic copy writes the file only.
 Select **Install TMDBHelper Player** once more to also set the default player
-and `only_resolve_strm` there.
+and `only_resolve_strm` there. A player file left behind by a helper you
+uninstalled is never copied from.
 
 !!! warning "Don't use the helper's own \"create player\" for this add-on"
     TMDBHelper and its forks can generate a player for any add-on from a

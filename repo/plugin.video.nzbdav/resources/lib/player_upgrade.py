@@ -137,7 +137,9 @@ def add_player(folder, definition):
     lock_path = os.path.splitext(path)[0] + ".upgrade.lock"
     stage = None
     try:
-        if os.path.islink(folder) or os.path.islink(lock_path):
+        # The caller has already resolved the folder and checked that it is
+        # inside the profile's addon_data.
+        if os.path.islink(lock_path):
             return "failed"
         os.makedirs(folder, exist_ok=True)
         with open(lock_path, "a+b") as lock:

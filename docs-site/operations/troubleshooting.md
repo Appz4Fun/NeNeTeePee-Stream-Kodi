@@ -67,7 +67,8 @@ generic player was generated for the add-on there instead.
 
 1. Select **Install TMDBHelper Player** in the add-on's **Player
    Installation** settings. It installs the player into TMDBHelper and into the
-   skin's own TMDBHelper, and makes it the default where none is chosen.
+   skin's own TMDBHelper, and makes it the default where none is chosen or
+   where the default was the generated player.
 2. Remove the generated player,
    `reconfigured_players/autogen.plugin.video.nzbdav.json`, from the helper's
    add-on data folder, or disable it with **Configure players** in the helper's
