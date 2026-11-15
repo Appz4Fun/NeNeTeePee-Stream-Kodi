@@ -112,7 +112,11 @@ the table existed is left alone.
 
 If the error is still there ten minutes after the update, restart Kodi and
 collect the `kodi.log` lines that start with
-`NeNeTeePee-Stream-Kodi: Could not check TMDbHelper's`.
+`NeNeTeePee-Stream-Kodi: Could not check TMDbHelper's` (the database was in
+use or unreadable; the add-on tries again every 30 seconds for a few minutes)
+or `NeNeTeePee-Stream-Kodi: TMDbHelper's ItemQueries.db has no` (this
+TMDBHelper declares the table in a way the add-on does not read, so it was
+not added).
 
 ## No results, or every result is filtered out
 

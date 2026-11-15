@@ -75,10 +75,11 @@ def _install(tmp_path, table_module=_TABLE_MODULE, core_module=_CORE_MODULE):
     return addon, data
 
 
-def _old_database(path, version=4):
+def _old_database(path, version=4, journal="DELETE"):
     """A query database as the previous TMDbHelper left it."""
     os.makedirs(os.path.dirname(path), exist_ok=True)
     connection = sqlite3.connect(path)
+    connection.execute("PRAGMA journal_mode={}".format(journal))
     connection.execute("CREATE TABLE expiry(id TEXT PRIMARY KEY, expiry INTEGER)")
     connection.execute("INSERT INTO expiry VALUES ('trakt_stats', 1)")
     connection.execute("CREATE TABLE trakt_stats(id TEXT PRIMARY KEY)")
@@ -290,6 +291,56 @@ def test_declarations_it_does_not_understand_are_not_acted_on(tmp_path, table_mo
     assert state["expiry"] == [("trakt_stats",)]
 
 
+def test_a_declaration_it_cannot_read_does_not_matter_when_the_table_exists(
+    tmp_path,
+):
+    addon, data = _install(tmp_path, table_module="external_ids_columns = f()\n")
+    path = os.path.join(data, "database_07", "ItemQueries.db")
+    _old_database(path)
+    connection = sqlite3.connect(path)
+    connection.execute("CREATE TABLE external_ids(id TEXT PRIMARY KEY)")
+    connection.commit()
+    connection.close()
+
+    assert guard.repair(addon, data) == guard.PRESENT
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        "CREATE VIEW external_ids AS SELECT id FROM expiry",
+        "CREATE INDEX external_ids ON expiry(expiry)",
+    ],
+)
+def test_something_else_of_the_tables_name_is_left_alone(stuck, other):
+    addon, data, path = stuck
+    connection = sqlite3.connect(path)
+    connection.execute(other)
+    connection.commit()
+    connection.close()
+    before = _state(path)
+
+    assert guard.repair(addon, data) == guard.PRESENT
+
+    assert _state(path) == before
+
+
+def test_a_write_ahead_log_database_is_repaired(tmp_path):
+    addon, data = _install(tmp_path)
+    path = os.path.join(data, "database_07", "ItemQueries.db")
+    _old_database(path, journal="WAL")
+    _tmdbhelper_upgrade(path)
+    reader = sqlite3.connect(path)
+    reader.execute("SELECT id FROM expiry").fetchall()
+    try:
+        assert guard.repair(addon, data) == guard.REPAIRED
+        assert reader.execute("SELECT count(*) FROM external_ids").fetchone() == (0,)
+    finally:
+        reader.close()
+
+    assert _state(path)["columns"] == _COLUMNS
+
+
 @pytest.mark.parametrize(
     "core_module",
     [None, "DATABASE_NAME = '../elsewhere'\n", "DATABASE_NAME = 7\n", "x = 1\n"],
@@ -298,7 +349,7 @@ def test_an_unknown_database_folder_is_not_guessed(tmp_path, core_module):
     addon, data = _install(tmp_path, core_module=core_module)
     _old_database(os.path.join(data, "database_07", "ItemQueries.db"))
 
-    assert guard.repair(addon, data) == guard.UNREADABLE
+    assert guard.repair(addon, data) == guard.UNLOCATED
 
 
 def test_builds_the_statements_tmdbhelper_builds():
@@ -352,6 +403,36 @@ def test_a_table_created_meanwhile_is_not_created_twice(stuck):
         assert guard.repair(addon, data) == guard.PRESENT
 
     assert _state(path)["columns"] == ("id",)
+
+
+def test_a_database_reset_meanwhile_is_left_to_tmdbhelper(stuck):
+    addon, data, path = stuck
+    real_inspect = guard._inspect
+
+    def inspect_then_reset(db_path):
+        result = real_inspect(db_path)
+        connection = sqlite3.connect(db_path)
+        connection.execute("PRAGMA user_version = 0")
+        connection.commit()
+        connection.close()
+        return result
+
+    with patch.object(guard, "_inspect", inspect_then_reset):
+        assert guard.repair(addon, data) == guard.NO_DATABASE
+
+    assert _state(path)["objects"] == {}
+
+
+def test_a_database_that_vanishes_is_never_created(tmp_path):
+    missing = str(tmp_path / "database_07" / "ItemQueries.db")
+    os.makedirs(os.path.dirname(missing))
+
+    with pytest.raises(sqlite3.Error):
+        guard._inspect(missing)
+    with pytest.raises(sqlite3.Error):
+        guard._create(missing, ["CREATE TABLE external_ids(id TEXT)"])
+
+    assert not os.path.exists(missing)
 
 
 def test_a_file_that_is_not_a_database_reports_failure(tmp_path):
@@ -446,3 +527,69 @@ def test_service_loop_runs_the_guard_and_survives_its_failure():
     lines = [call.args[0] for call in log.call_args_list]
     assert any("TMDbHelper database check failed: boom" in line for line in lines)
     assert any("Service stopped" in line for line in lines)
+
+
+def test_the_service_guard_retries_soon_while_the_database_is_busy(stuck):
+    addon, data, path = stuck
+    now = [0.0]
+    service_guard = guard.Guard(clock=lambda: now[0])
+    holder = sqlite3.connect(path, isolation_level=None)
+    holder.execute("BEGIN IMMEDIATE")
+
+    with patch.object(
+        guard.xbmcvfs, "translatePath", _kodi_paths(addon, data)
+    ), patch.object(guard, "_WRITE_TIMEOUT_SECONDS", 0.05), patch.object(
+        guard.xbmc, "log"
+    ):
+        try:
+            assert service_guard.tick() == guard.FAILED
+            now[0] += guard.RETRY_SECONDS - 1
+            assert service_guard.tick() is None
+        finally:
+            holder.execute("ROLLBACK")
+            holder.close()
+        now[0] += 1
+        assert service_guard.tick() == guard.REPAIRED
+        now[0] += guard.RETRY_SECONDS
+        assert service_guard.tick() is None
+
+
+def test_the_service_guard_stops_retrying_soon_after_a_few_failures(tmp_path):
+    addon, data = _install(tmp_path)
+    _write(os.path.join(data, "database_07", "ItemQueries.db"), "not sqlite" * 200)
+    now = [0.0]
+    service_guard = guard.Guard(clock=lambda: now[0])
+
+    with patch.object(
+        guard.xbmcvfs, "translatePath", _kodi_paths(addon, data)
+    ), patch.object(guard.xbmc, "log"):
+        for _ in range(guard.RETRY_LIMIT):
+            assert service_guard.tick() == guard.FAILED
+            now[0] += guard.RETRY_SECONDS
+        assert service_guard.tick() == guard.FAILED
+        now[0] += guard.RETRY_SECONDS
+        assert service_guard.tick() is None
+        now[0] += guard.RECHECK_SECONDS
+        assert service_guard.tick() == guard.FAILED
+
+
+def test_the_service_guard_says_once_when_it_cannot_read_the_declaration(tmp_path):
+    addon, data = _install(tmp_path, table_module="external_ids_columns = f()\n")
+    _old_database(os.path.join(data, "database_07", "ItemQueries.db"))
+    now = [0.0]
+    service_guard = guard.Guard(clock=lambda: now[0])
+
+    with patch.object(
+        guard.xbmcvfs, "translatePath", _kodi_paths(addon, data)
+    ), patch.object(guard.xbmc, "log") as log:
+        for _ in range(2):
+            assert service_guard.tick() == guard.UNREADABLE
+            now[0] += guard.RECHECK_SECONDS
+
+    warnings = [
+        call.args[0]
+        for call in log.call_args_list
+        if call.args[1] == guard.xbmc.LOGWARNING
+    ]
+    assert len(warnings) == 1
+    assert "has no 'external_ids' table" in warnings[0]
