@@ -500,11 +500,11 @@ def test_the_service_guard_does_nothing_when_kodi_gives_no_path():
     service_guard = guard.Guard(clock=lambda: 0.0)
 
     with patch.object(guard.xbmcvfs, "translatePath", return_value=None), patch.object(
-        guard, "repair"
-    ) as repair:
+        guard, "_check"
+    ) as check:
         assert service_guard.tick() == guard.NOT_INSTALLED
 
-    repair.assert_not_called()
+    check.assert_not_called()
 
 
 def test_service_loop_runs_the_guard_and_survives_its_failure():

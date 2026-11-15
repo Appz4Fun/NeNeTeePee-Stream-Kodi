@@ -106,8 +106,8 @@ yet, such as a daily show's newest episode, so other items may still play.
 NeNeTeePee-Stream-Kodi adds the missing table for you. Its service checks
 when Kodi starts and every ten minutes after, and logs
 `Added the 'external_ids' table that a TMDbHelper update left out` when it
-does. It creates only that table, with the columns your installed TMDBHelper
-declares, and changes nothing else in the database. A TMDBHelper from before
+does. It creates only that table and its index, with the columns your
+installed TMDBHelper declares, and changes nothing else in the database. A TMDBHelper from before
 the table existed is left alone.
 
 If the error is still there ten minutes after the update, restart Kodi and

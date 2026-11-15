@@ -326,8 +326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   starts and every ten minutes after (an update installed while Kodi runs
   breaks it without a restart), and creates the table when it is missing. It
   reads the columns from the installed TMDBHelper's own source, so the table
-  is the one that version would have made, and it changes nothing else: no
-  rows, no other table, not the stored version. A TMDBHelper from before the
+  is the one that version would have made, with its index, and it changes
+  nothing else: no rows, no other table, not the stored version. A TMDBHelper from before the
   table existed, a database TMDBHelper has not initialised yet, and a
   declaration the add-on does not understand are all left alone.
 - **A download whose files were deleted is no longer marked DL, and can be
