@@ -72,7 +72,7 @@ def test_release_rule_alone_decides_even_for_same_name_rows():
     # The shared rule can keep same-name rows apart (no parsed group, say);
     # the picker must not group them on the name alone.
     rows = [_row(ALPHA, "a1"), _row(ALPHA, "a2")]
-    with patch("resources.lib.results_groups._is_release_copy", return_value=False):
+    with patch("resources.lib.release_match.same_release", return_value=False):
         groups = release_groups(rows)
 
     assert _links(groups) == [["a1"], ["a2"]]
@@ -89,7 +89,7 @@ def test_a_row_must_match_every_member_not_just_the_lead():
         return {lead["title"], row["title"]} != {old, new}
 
     rows = [_row(yearless, "y"), _row(old, "o"), _row(new, "n")]
-    with patch("resources.lib.results_groups._is_release_copy", side_effect=fake_copy):
+    with patch("resources.lib.release_match.same_release", side_effect=fake_copy):
         groups = release_groups(rows)
 
     assert _links(groups) == [["y", "o"], ["n"]]
@@ -103,7 +103,7 @@ def test_identical_titles_are_compared_once():
         return True
 
     rows = [_row(ALPHA, "a{}".format(i)) for i in range(5)]
-    with patch("resources.lib.results_groups._is_release_copy", side_effect=fake_copy):
+    with patch("resources.lib.release_match.same_release", side_effect=fake_copy):
         groups = release_groups(rows)
 
     assert _links(groups) == [["a0", "a1", "a2", "a3", "a4"]]
@@ -114,7 +114,7 @@ def test_rows_with_different_profiles_are_never_compared():
     rows = [
         _row("Movie.2024.1080p.WEB-DL.H264-GRP{}".format(i), str(i)) for i in range(300)
     ]
-    with patch("resources.lib.results_groups._is_release_copy") as copy:
+    with patch("resources.lib.release_match.same_release") as copy:
         groups = release_groups(rows)
 
     assert len(groups) == 300
@@ -142,7 +142,7 @@ def test_distinct_episodes_of_one_group_are_never_compared():
         for s in range(1, 13)
         for e in range(1, 26)
     ]
-    with patch("resources.lib.results_groups._is_release_copy") as copy:
+    with patch("resources.lib.release_match.same_release") as copy:
         groups = release_groups(rows)
 
     assert len(groups) == 300

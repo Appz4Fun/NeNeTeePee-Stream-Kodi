@@ -230,10 +230,11 @@ def test_dotted_and_parenthesized_listings_of_one_release_pool_their_copies():
     assert _nzb_copy_count(rows[0], rows) == 4
 
 
-def test_copies_are_counted_per_release_not_per_cluster():
+def test_a_count_is_the_count_of_the_picker_row():
     # same_release is not transitive: the yearless listing matches both
-    # dated reboots, which reject each other. Each dated release holds two
-    # NZBs (itself and the yearless one); the yearless listing holds three.
+    # dated reboots, which reject each other. The picker lists the yearless
+    # one with the first dated release it meets, and each row is ranked by
+    # the count its picker row shows: two for that pair, one for the other.
     yearless = "Doctor.Who.S01E01.1080p.WEB-DL.DDP5.1.H264-GRP"
     rows = [
         _row(yearless, "y1"),
@@ -243,7 +244,10 @@ def test_copies_are_counted_per_release_not_per_cluster():
 
     counts = _nzb_copy_counts(rows)
 
-    assert [counts[id(row)] for row in rows] == [3, 2, 2]
+    assert [counts[id(row)] for row in rows] == [2, 2, 1]
+    from resources.lib.results_groups import release_groups
+
+    assert [len(group) for group in release_groups(rows)] == [2, 1]
 
 
 def test_whole_show_list_only_compares_listings_of_one_episode():
@@ -267,7 +271,8 @@ def test_whole_show_list_only_compares_listings_of_one_episode():
     with patch.object(release_match, "same_release", side_effect=real) as spy:
         counts = _nzb_copy_counts(rows)
 
-    assert spy.call_count == 0
+    # One check per episode (its two listings), none between episodes.
+    assert spy.call_count == 100
     assert set(counts.values()) == {2}
 
 
@@ -288,41 +293,38 @@ def test_one_groups_movies_only_compare_listings_of_one_year():
     with patch.object(release_match, "same_release", side_effect=real) as spy:
         counts = _nzb_copy_counts(rows)
 
-    assert spy.call_count == 0
+    # One check per film (its two listings), none between years.
+    assert spy.call_count == 80
     assert set(counts.values()) == {2}
 
 
-def test_season_rows_still_meet_movies_and_other_season_rows():
-    # A season-only row may be a movie whose group mis-parsed as a season, so
-    # it meets every movie and season row; a movie meets its own year plus the
-    # season rows; an episode meets only the same episode.
+def test_a_season_row_still_meets_the_movie_it_may_be():
+    # A season-only row may be a movie whose name mis-parsed as a season, so
+    # it is compared with the movies of its title and profile (the rule then
+    # decides); an episode is only ever compared with the same episode.
     from unittest.mock import patch
 
-    from resources.lib import filter as filter_mod
+    from resources.lib import release_match
 
-    classes = {
-        "m2020": ("movie", 2020, ()),
-        "m2021": ("movie", 2021, ()),
-        "s1": ("seasons", (), ()),
-        "s2": ("seasons", (), ()),
-        "e1": ("episode", (1,), (1,)),
-        "e2": ("episode", (2,), (1,)),
-    }
-    buckets = [[{"title": name}] for name in classes]
+    movie = _row("Film.2020.1080p.BluRay.DTS.x264-GRP", "m1")
+    season = _row("Film.2020.1080p.BluRay.DTS.x264-GRP", "s1")
+    season["title"] += " "
+    season["_meta"]["ptt_identity"] = dict(
+        season["_meta"]["ptt_identity"], name=season["title"].strip(), seasons=[1]
+    )
+    episode = _row("Film.S01E01.1080p.BluRay.DTS.x264-GRP", "e1")
+    rows = [movie, season, episode]
 
-    with patch.object(
-        filter_mod, "_content_class", side_effect=lambda row: classes[row["title"]]
-    ):
-        candidates = filter_mod._peer_candidates(buckets)
+    real = release_match.same_release
+    with patch.object(release_match, "same_release", side_effect=real) as spy:
+        counts = _nzb_copy_counts(rows)
 
-    peers = {
-        bucket[0]["title"]: sorted(other[0]["title"] for other in group)
-        for bucket, group in candidates
-    }
-    assert peers["m2020"] == ["m2020", "s1", "s2"]
-    assert peers["m2021"] == ["m2021", "s1", "s2"]
-    assert peers["s1"] == ["m2020", "m2021", "s1", "s2"]
-    assert peers["e1"] == ["e1"]
+    compared = [
+        {call.args[0]["link"], call.args[1]["link"]} for call in spy.call_args_list
+    ]
+    assert compared == [{"m1", "s1"}]
+    # The rule drops the phantom season of a same-year movie: one release.
+    assert [counts[id(row)] for row in rows] == [2, 2, 1]
 
 
 _WHEN = "Tue, 13 Jan 2026 06:46:46 +0000"

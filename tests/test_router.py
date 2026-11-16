@@ -6062,7 +6062,10 @@ def test_play_and_script_paths_do_not_share_cache_across_provider_sets(
         ]
         assert mock_search.call_count == 2
 
-        # Each path now hits its own entry.
+        # Each path now hits its own entry. A row read back from the cache
+        # carries no mark of this run's parsing pass.
+        hydra_row.pop("_attached", None)
+        prowlarr_row.pop("_attached", None)
         assert _search_with_cache("episode", "Task", kwargs) == ([hydra_row], None)
         assert _script_play_search_results("episode", "Task", kwargs, MagicMock()) == [
             prowlarr_row

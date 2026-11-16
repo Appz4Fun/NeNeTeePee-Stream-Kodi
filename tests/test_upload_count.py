@@ -105,3 +105,75 @@ def test_nothing_and_junk_count_nothing():
     assert count_uploads([]) == 0
     assert count_uploads([None, "row", 5]) == 0
     assert count_uploads(iter(REMUX[:2])) == 1
+
+
+def _at(seconds, indexer="A", size=5 * _GB, **extra):
+    from email.utils import formatdate
+
+    return _listing(indexer, size, formatdate(1768286806 + seconds), **extra)
+
+
+def test_a_chain_of_close_posts_counts_as_it_did_before_the_sweep():
+    # Posts 100 s apart: the first and third are 200 s apart, outside the
+    # two-minute window. The count depends on which is met first, exactly
+    # as when every row was compared with every counted upload.
+    chain = [_at(0), _at(100), _at(200)]
+
+    assert count_uploads(chain) == 2
+    assert count_uploads([chain[1], chain[0], chain[2]]) == 1
+
+
+def test_any_order_counts_as_comparing_with_every_upload_would():
+    import random
+
+    from resources.lib.nzbget_fleet_dedup import same_listing
+
+    shuffler = random.Random(11)
+    posters = ("", "one@example.com", "two@example.com")
+    for _ in range(200):
+        rows = []
+        for number in range(shuffler.randrange(1, 25)):
+            row = _at(
+                shuffler.randrange(0, 600),
+                "I{}".format(number),
+                shuffler.choice((4 * _GB, 5 * _GB)),
+                poster=shuffler.choice(posters),
+            )
+            if shuffler.random() < 0.5:
+                row["usenetdate"] = _at(shuffler.randrange(0, 600))["pubdate"]
+            if shuffler.random() < 0.1:
+                row["pubdate"] = ""
+            rows.append(row)
+        heads = []
+        for row in rows:
+            if not any(same_listing(row, head) for head in heads):
+                heads.append(row)
+
+        assert count_uploads(rows) == len(heads)
+
+
+def test_a_row_is_only_compared_with_uploads_inside_its_window():
+    from unittest.mock import patch
+
+    from resources.lib import nzbget_fleet_dedup
+
+    # One name reposted every hour at one size: 300 separate uploads.
+    rows = [_at(3600 * hour, "I{}".format(hour % 7)) for hour in range(300)]
+    real = nzbget_fleet_dedup.same_listing
+    with patch.object(nzbget_fleet_dedup, "same_listing", side_effect=real) as rule:
+        assert count_uploads(rows) == 300
+
+    assert rule.call_count == 0
+
+
+def test_count_copies_counts_distinct_links_once():
+    from resources.lib.upload_count import count_copies
+
+    rows = [dict(_at(0), link="a"), dict(_at(0, "B"), link="a")]
+    assert count_copies(rows) == 1
+    rows.append(dict(_at(7200, "C"), link="b"))
+    assert count_copies(rows) == 2
+    # One upload on two indexers, under two links: still one copy.
+    assert count_copies([dict(_at(0), link="a"), dict(_at(30, "B"), link="b")]) == 1
+    assert count_copies([_at(0), _at(7200)]) == 1
+    assert count_copies([]) == 1

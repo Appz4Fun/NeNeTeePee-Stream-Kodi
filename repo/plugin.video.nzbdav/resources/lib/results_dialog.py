@@ -24,7 +24,7 @@ from resources.lib.release_display import (
 from resources.lib.release_supersede import revision_label, superseded_rows
 from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
-from resources.lib.upload_count import count_uploads
+from resources.lib.upload_count import count_copies
 
 # Color constants matching the mockup
 _RES_COLORS = {
@@ -436,7 +436,7 @@ def _build_group_item(group, row_index, replaced_by=""):
     the copy count, an any-copy DL mark, and the side-panel properties the skin
     reads from the focused item (``Container(51).ListItem.Property(...)``).
     The copy count is the separate uploads among the group's listings
-    (``upload_count.count_uploads``); the panel gives the listings too.
+    (``upload_count.count_copies``); the panel gives the listings too.
     ``replaced_by`` is the tag of a listed REPACK or PROPER of this release:
     the row is struck through and the panel says why.
     """
@@ -457,7 +457,7 @@ def _build_group_item(group, row_index, replaced_by=""):
         item.setProperty("available", _available_text())
     # Several indexers list one upload: the row counts separate uploads, and
     # the panel says how many listings and indexers they came from.
-    uploads = count_uploads(group) if count > 1 else 1
+    uploads = count_copies(group) if count > 1 else 1
     if uploads > 1:
         item.setProperty("copies", _c(_fmt(30479, uploads), _COPIES_CHIP_COLOR))
         if uploads == count:

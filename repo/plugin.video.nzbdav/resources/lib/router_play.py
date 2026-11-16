@@ -644,27 +644,54 @@ def _backup_row(result):
     return row
 
 
+def _release_rows(selected, filtered):
+    """The rows of ``filtered`` that are the pick's release.
+
+    The grouping the picker lists and ranks by (``release_index``), so the
+    backups of a pick are the other rows of its picker row. A pick that is
+    a copy of a listed row stands where that row does; one that is not
+    listed at all (a row the filters hid) is grouped ahead of the list.
+    """
+    from resources.lib import release_index
+
+    rows = [row for row in filtered or [] if isinstance(row, dict)]
+    anchor = next((row for row in rows if row is selected), None)
+    if anchor is None:
+        anchor = next(
+            (
+                row
+                for row in rows
+                if row.get("link") == selected.get("link")
+                and row.get("title") == selected.get("title")
+            ),
+            None,
+        )
+    if anchor is None:
+        anchor = selected
+        rows.insert(0, selected)
+    return release_index.build(rows).group_of(anchor)
+
+
 def _same_release_backups(selected, filtered):
     """The other picker results that are the pick's release, deduped/capped.
 
-    Only rows ``release_match.same_release`` accepts (the picker groups with the
-    same rule); exact same-name rows (case/whitespace-normalized) come first,
-    then the other names, each in picker order. A pick with no release group
-    has no backups. Every such row is returned: ``nzbget_max_backups``
-    caps the LIVE backups in the worker, after same-posting dedup, so a row
-    that collapses as a duplicate never uses up a slot.
+    Only the rows the result list groups with the pick (``_release_rows``:
+    the same-release rule, as the picker applies it); exact same-name rows
+    (case/whitespace-normalized) come first, then the other names, each in
+    picker order. Every such row is returned: ``nzbget_max_backups`` caps the
+    LIVE backups in the worker, after same-posting dedup, so a row that
+    collapses as a duplicate never uses up a slot.
     """
-    from resources.lib.nzbget_fleet_dedup import same_release
-
     target = _normalize_release_name(selected.get("title"))
     selected_link = selected.get("link")
+    if not any(_is_backup_row(row, selected_link, ()) for row in filtered or []):
+        # Nothing else to send: the rows are not grouped (or parsed) for it.
+        return []
     exact = []
     similar = []
     seen = set()
-    for result in filtered or []:
+    for result in _release_rows(selected, filtered):
         if not _is_backup_row(result, selected_link, seen):
-            continue
-        if not same_release(selected, result):
             continue
         if result.get("_size_outlier") and not selected.get("_size_outlier"):
             # A mislabelled pack or a broken post under the release's name
