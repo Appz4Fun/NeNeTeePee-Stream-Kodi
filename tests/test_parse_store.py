@@ -105,9 +105,9 @@ def test_the_store_keeps_the_names_used_most_recently():
 
 def test_an_older_snapshot_never_replaces_a_newer_one(tmp_path):
     path = str(tmp_path / "parsed_names.json")
-    parse_store._STATE["written"] = 0
-    parse_store._write(path, ("stamp", [("new", [1, {}])]), 2)
-    parse_store._write(path, ("stamp", [("old", [1, {}])]), 1)
+    first = parse_store._STATE["written"] + 1
+    parse_store._write(path, ("stamp", [("new", [1, {}])]), first + 1)
+    parse_store._write(path, ("stamp", [("old", [1, {}])]), first)
 
     with open(path, encoding="utf-8") as handle:
         assert list(json.load(handle)["names"]) == ["new"]
@@ -125,3 +125,29 @@ def test_the_file_sits_in_the_profile_folder_not_in_the_search_cache():
         parse_store.xbmcvfs, "translatePath", side_effect=RuntimeError("no profile")
     ):
         assert parse_store._profile_store_path() is None
+
+
+def test_a_repeat_search_keeps_its_names_ahead_of_the_next_ones():
+    parse = filter_module.parse_title_metadata
+    with patch.object(parse_store, "MAX_NAMES", 2):
+        for name in ("X.2001.1080p.WEB-GRP", "Y.2002.1080p.WEB-GRP"):
+            parse_store.parsed(name, parse)
+        parse_store._STATE["changed"] = False  # as if just written
+        parse_store.parsed("X.2001.1080p.WEB-GRP", parse)  # a hit, same day
+        assert parse_store._STATE["changed"]
+
+
+def test_a_temporary_file_left_by_a_write_cut_short_is_removed(tmp_path):
+    stale = tmp_path / ".parsed_names-old.tmp"
+    stale.write_text("{")
+    old = time.time() - 7200
+    os.utime(stale, (old, old))
+    fresh = tmp_path / ".parsed_names-busy.tmp"
+    fresh.write_text("{")
+
+    parse_store._write(str(tmp_path / "parsed_names.json"), ("s", []), 10**9)
+
+    assert sorted(os.listdir(tmp_path)) == [
+        ".parsed_names-busy.tmp",
+        "parsed_names.json",
+    ]

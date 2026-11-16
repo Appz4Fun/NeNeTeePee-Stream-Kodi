@@ -115,9 +115,10 @@ def parsed(name, parse):
             # Kept in order of use, the most recent last: that order is
             # what is kept when the store is full, and what is written.
             _NAMES[name] = entry
-            if entry[0] != _today():
-                entry[0] = _today()
-                _STATE["changed"] = True
+            entry[0] = _today()
+            # The new order is worth writing too: a run of repeat searches
+            # must not lose its names to the next run's new ones.
+            _STATE["changed"] = True
             text = json.dumps(entry[1])
             return json.loads(text)
     meta = parse(name)
@@ -175,6 +176,7 @@ def _write(path, snapshot, number):
         separators=(",", ":"),
     )
     tmp_path = None
+    _remove_stale_temps(os.path.dirname(path))
     try:
         handle, tmp_path = tempfile.mkstemp(
             dir=os.path.dirname(path), prefix=".parsed_names-", suffix=".tmp"
@@ -200,8 +202,31 @@ def _write(path, snapshot, number):
                 pass
 
 
+# A temporary file older than this was left by a write cut short.
+_STALE_SECONDS = 3600
+
+
+def _remove_stale_temps(folder):
+    """Remove temporary files that writes cut short left in ``folder``."""
+    try:
+        names = os.listdir(folder)
+    except OSError:
+        return
+    cutoff = time.time() - _STALE_SECONDS
+    for name in names:
+        if name.startswith(".parsed_names-") and name.endswith(".tmp"):
+            path = os.path.join(folder, name)
+            try:
+                if os.path.getmtime(path) < cutoff:
+                    os.remove(path)
+            except OSError:
+                pass
+
+
 def forget():
     """Drop what is held in memory, so the next use reads the file (tests)."""
     with _LOCK:
         _NAMES.clear()
-        _STATE.update(loaded=False, changed=False, stamp=None, writes=0, written=0)
+        # The write counters go on: a writer still running from before
+        # must not outrank the writes that follow.
+        _STATE.update(loaded=False, changed=False, stamp=None)
