@@ -36,15 +36,17 @@ from resources.lib.upload_count import count_uploads
 #   longer depends on the rows' order. (Sharing a whole parse between named
 #   listings got to 7 split uploads, but replaced real groups and split
 #   releases from their own other copies.)
+#   6535 / 970: a name with no group listed at sizes far apart (1.35x
+#   between neighbours) is one row per size range, NOGRP-A, NOGRP-B, ...
 EXPECTED = {
     "rows": 41446,
     "shown": 39733,
-    "picker_rows": 6490,
+    "picker_rows": 6535,
     "groupless_rows": 2549,
-    "groupless_picker_rows": 925,
+    "groupless_picker_rows": 970,
     "uploads_listed_twice": 7714,
     "uploads_split": 28,
-    "multi_copy_rows": 4325,
+    "multi_copy_rows": 4336,
 }
 
 

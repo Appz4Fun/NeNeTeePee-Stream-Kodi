@@ -78,6 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Listings with no release group that carry the same name, in any
       spelling, are one release: one row with its copy count, ranked and
       size-checked as one, each a backup of the other on the NZBGet backend.
+      Where one such name is listed at sizes far apart (more than 1.35x
+      between neighbours), each size range is its own row, labelled
+      `NOGRP-A` for the largest posts, `NOGRP-B` and so on.
       A name with no group still never joins a release that has one.
     - Listings with the same exact size in bytes are one upload when they
       name the same film or episode, or when one name is the start of the

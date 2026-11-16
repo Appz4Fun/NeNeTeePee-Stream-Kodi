@@ -672,24 +672,6 @@ def _release_rows(selected, filtered):
     return release_index.build(rows).group_of(anchor)
 
 
-def _size_fits_groupless_pick(selected, result):
-    """Whether ``result`` is within the size tolerance of a pick with no group.
-
-    True for any row when the pick has a group (the release rule decides
-    there). For a pick with no group, both sizes must be known and within
-    ``filter._SIZE_OUTLIER_FACTOR`` of each other.
-    """
-    from resources.lib.filter import _SIZE_OUTLIER_FACTOR, _row_size
-    from resources.lib.release_match import title_key
-
-    if title_key((selected.get("_meta") or {}).get("group")):
-        return True
-    pick, other = _row_size(selected), _row_size(result)
-    if not pick or not other:
-        return False
-    return max(pick, other) <= min(pick, other) * _SIZE_OUTLIER_FACTOR
-
-
 def _same_release_backups(selected, filtered):
     """The other picker results that are the pick's release, deduped/capped.
 
@@ -710,11 +692,6 @@ def _same_release_backups(selected, filtered):
     seen = set()
     for result in _release_rows(selected, filtered):
         if not _is_backup_row(result, selected_link, seen):
-            continue
-        if not _size_fits_groupless_pick(selected, result):
-            # Rows with no group are listed together by name alone, and one
-            # name can cover a 1 GB and a 50 GB post: only copies of about
-            # the pick's own size back it up.
             continue
         if result.get("_size_outlier") and not selected.get("_size_outlier"):
             # A mislabelled pack or a broken post under the release's name

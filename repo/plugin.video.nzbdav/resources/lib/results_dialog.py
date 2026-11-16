@@ -205,7 +205,8 @@ def _set_result_properties(li, result):
     li.setProperty("size", _c(_format_size(result.get("size")), "FFA1A1AA"))
     li.setProperty("age", _c(result.get("age", ""), "FF6B7280"))
     li.setProperty("indexer", _c(result.get("indexer", ""), "FF4A9EFF"))
-    li.setProperty("group", _c(meta.get("group", ""), "FF34D399"))
+    group = meta.get("group", "") or result.get("_nogroup_label", "")
+    li.setProperty("group", _c(group, "FF34D399" if meta.get("group") else "FFA1A1AA"))
 
     if result.get("_available"):
         li.setProperty("available", _available_text())

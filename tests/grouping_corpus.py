@@ -137,11 +137,42 @@ def reference_groups(rows):
                 groups.append([row])
         else:
             groups.append([row])
+    groups = [part for group in groups for part in _split_by_size(group)]
     groups = _join_shared_uploads(groups)
     for group in groups:
         group.sort(key=lambda row: position[id(row)])
     groups.sort(key=lambda group: position[id(group[0])])
     return groups
+
+
+def _split_by_size(group):
+    """A group of rows with no group, cut where sizes are 1.35x apart.
+
+    Rows without a size go with the largest part (on a tie, the part of the
+    larger posts). Groups with a release group are returned whole.
+    """
+    if any(_named(row.get("_meta") or {}) for row in group):
+        return [group]
+
+    def size(row):
+        try:
+            return int(row.get("size") or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    sized = sorted((row for row in group if size(row) > 0), key=size)
+    parts = []
+    for row in sized:
+        if parts and size(row) <= size(parts[-1][-1]) * 1.35:
+            parts[-1].append(row)
+        else:
+            parts.append([row])
+    if len(parts) < 2:
+        return [group]
+    parts.reverse()
+    biggest = max(range(len(parts)), key=lambda at: (len(parts[at]), -at))
+    parts[biggest].extend(row for row in group if size(row) <= 0)
+    return parts
 
 
 def _linked_names(rows):
