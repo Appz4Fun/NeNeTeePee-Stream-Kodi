@@ -56,6 +56,8 @@ _FALLBACK_STRINGS = {
     30486: "Age",
     30487: "Already downloaded. Enter plays it without a new download.",
     30488: "Enter plays the top copy.",
+    # The picker's panel line above 30487 / 30488 for a struck-through release.
+    30770: "Struck through: a {} of this release is in the list.",
     30489: "+{} more",
     # 30115/30116/30121 are surfaced from the service-side retry/error
     # handler when strings.po hasn't been loaded yet (early in service
