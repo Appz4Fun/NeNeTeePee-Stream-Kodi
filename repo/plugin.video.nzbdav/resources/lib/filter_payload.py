@@ -1,12 +1,12 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
-"""A listing whose name lost its group takes the parse of the upload it is.
+"""A listing whose name has no group takes the group of the upload it is.
 
 Indexers do not agree on a release's name. One cuts it short
-(``...H.265`` for ``...H.265-FLUX``, ``-Ben.The`` for ``-Ben.The.Men``), one
-lists the bare title, one a name with no group at all. Parsed on its own,
-such a row has no group: it ranks last in its resolution and is never
-listed with the release it is a copy of.
+(``...H.265`` for ``...H.265-FLUX``), one lists the bare title, one a name
+with no group at all. Parsed on its own, such a row has no group: it ranks
+last in its resolution and is never listed with the release it is a copy
+of.
 
 Two things show, before anything is downloaded, that two listings are one
 upload, and both need the **byte-equal size**:
@@ -19,18 +19,21 @@ upload, and both need the **byte-equal size**:
   minutes, not told apart by poster or password), with the same season and
   episode where either names one.
 
-A listing with no group that is one upload with a named listing takes the
-named one's whole parse: its group, tags and title. So does a listing whose
-group is the named one's cut short (``-GUA`` for ``-GUACAMOLE``); between
-two such groups the one the result list knows better leads, so ``-GRP``
-is not replaced by ``-GRP_mp4``. Listings with no group and no named
-listing beside them take the fullest parse among themselves.
+What a listing with no group takes from a named listing of its upload:
 
-What is never done here: a listing that states a group does not take
-another group's parse. Two names of one group that tag one upload
-differently (``DV`` and ``DV.HDR``) keep their own parses and are listed
-together by ``release_index``, which can join whole releases; changing one
-upload's parse would split it from the other copies of its own name.
+* a name cut short takes the named one's whole parse. It is the start of
+  that name, so it states nothing the full name does not;
+* any other name keeps every tag it states and takes the group (and a year
+  it lacks). ``...NL-RetailSub.REMUX`` stays a REMUX beside a listing that
+  leaves the word out.
+
+Listings with no group and no named listing beside them: a cut name takes
+the fuller name's parse, and the others are only marked as one upload.
+
+A listing that states a group is never changed here, not even to complete
+a group cut short (``-GUA`` for ``-GUACAMOLE``): its parse is what lists it
+with the other copies of its own name. ``release_index`` lists such
+listings together instead, by joining their releases whole.
 
 A size that an indexer rounded is left alone: a whole number of megabytes
 or tenths of one, or of hundredths of a gibibyte ("4.37 GB"), could be two
@@ -147,12 +150,21 @@ def _may_be_cut(short, full):
     return not (short[1] and full[1] and short[1] != full[1])
 
 
+def cut_of_one_upload(row, other):
+    """Whether two rows list one upload, one under the other's name cut short."""
+    names = [
+        _Name(name_form_key(one.get("title")), [one], item_of(one), "")
+        for one in (row, other)
+    ]
+    return _cut_of(names[0], names[1]) or _cut_of(names[1], names[0])
+
+
 def _one_upload(taker, giver):
     """Whether ``taker`` (no group) is one upload with the named ``giver``."""
     return same_item(taker.item, giver.item) or _cut_of(taker, giver)
 
 
-def _group_names(rows):
+def group_names(rows):
     """For each release group in ``rows``, how many different names carry it.
 
     A real group posts many releases (resolutions, episodes, films), so its
@@ -212,7 +224,7 @@ class _Pass:  # pylint: disable=too-few-public-methods
     def known(self, group):
         """How many other names of the list carry ``group`` (0 for none)."""
         if self._known is None:
-            self._known = _group_names(self.rows)
+            self._known = group_names(self.rows)
         return max(self._known.get(group, 0) - 1, 0)
 
     def rank(self, entry):
@@ -237,99 +249,123 @@ class _Pass:  # pylint: disable=too-few-public-methods
             entry.rows[0]["title"],
         )
 
-    def give(self, giver, taker):
-        """Give ``taker``'s rows the parse of ``giver``; True if any changed."""
+    def give(self, giver, taker, whole):
+        """Give ``taker``'s rows what ``giver`` has; True if any changed.
+
+        ``whole``: the giver's whole parse, as its name reads (for a name
+        cut short). Otherwise the rows keep their own parse and take the
+        giver's group and a year they lack, or, when the giver has no
+        group either, only the mark that lists them together
+        (``release_index``).
+        """
         shared = as_named(giver.rows[0]["_meta"])
         source = giver.rows[0]["_meta"].get(ADOPTED_KEY) or giver.name
         changed = False
         for row in taker.rows:
             meta = row["_meta"]
-            if not self.parses_agree(as_named(meta), shared):
+            if whole and not self.parses_agree(as_named(meta), shared):
                 row["_meta"] = self.meta_for(shared, row)
-                row["_meta"][ADOPTED_KEY] = source
-            elif not shared.get("group") and meta.get(ADOPTED_KEY) != source:
-                # Nothing to take, but the mark is what lists two names
-                # with no group together (``release_index``).
-                meta[ADOPTED_KEY] = source
-            else:
+            elif not whole and shared.get("group") and not meta.get("group"):
+                meta["group"] = shared["group"]
+                _take_year(meta, shared)
+            elif meta.get(ADOPTED_KEY) == source or meta.get("group"):
                 continue
+            row["_meta"][ADOPTED_KEY] = source
             changed = True
             for key in self.derived:
                 row.pop(key, None)
         return changed
 
 
-def _named_giver(taker, named, state):
-    """The named listing ``taker`` (no group) is an upload of, or None.
+def _take_year(meta, shared):
+    """Give ``meta`` the year of ``shared`` when it names none."""
+    year = shared.get("year")
+    if year and not meta.get("year"):
+        meta["year"] = year
+        identity = meta.get("ptt_identity")
+        if isinstance(identity, dict) and not identity.get("year"):
+            identity["year"] = year
 
-    None too when it is one upload with listings of two groups: nothing
-    says which it is.
+
+def _named_giver(taker, named, state):
+    """``(giver, whole)``: the named listing ``taker`` is an upload of.
+
+    ``whole`` when the taker's name is the giver's cut short. ``(None,
+    False)`` when there is none, or when the taker is one upload with
+    listings of two groups: nothing says which it is.
     """
     givers = [entry for entry in named if _one_upload(taker, entry)]
     if not givers or len({entry.group for entry in givers}) > 1:
-        return None
-    return max(givers, key=state.rank)
+        return None, False
+    cut = [entry for entry in givers if _cut_of(taker, entry)]
+    giver = max(cut or givers, key=state.rank)
+    return giver, bool(cut)
 
 
-def _cut_groups(named, state):
-    """Pairs ``(giver, taker)`` among named listings whose group was cut.
+class Sets:
+    """Things joined into sets, two at a time."""
 
-    ``-GUA`` beside ``-GUACAMOLE``, ``-GRP`` beside ``-GRP_mp4``: one group
-    is the start of the other, one name the start of the other, the same
-    upload. The group the list knows better gives; when neither is known
-    better, the longer one does.
+    def __init__(self):
+        self._parent = {}
+
+    def of(self, thing):
+        """What the set of ``thing`` goes by."""
+        parent = self._parent
+        root = thing
+        while parent.get(root, root) != root:
+            root = parent[root]
+        while parent.get(thing, thing) != root:
+            parent[thing], thing = root, parent[thing]
+        return root
+
+    def join(self, thing, other):
+        """``thing`` and ``other`` are in one set."""
+        left, right = self.of(thing), self.of(other)
+        if left != right:
+            low, high = sorted((left, right))
+            self._parent[high] = low
+
+    def sets(self, things):
+        """The sets with two or more of ``things``, each as a frozenset."""
+        found = {}
+        for thing in things:
+            found.setdefault(self.of(thing), set()).add(thing)
+        return [frozenset(one) for one in found.values() if len(one) > 1]
+
+
+def _unify_size(titles, state):
+    """Hand groups and parses to the names with no group at one exact size.
+
+    ``titles`` maps ``(title, group key)`` to its rows.
     """
-    pairs = []
-    for short in named:
-        for full in named:
-            if (
-                short.group != full.group
-                and full.group.startswith(short.group)
-                and _cut_of(short, full)
-            ):
-                if state.known(short.group) > state.known(full.group):
-                    pairs.append((short, full))
-                else:
-                    pairs.append((full, short))
-    return pairs
-
-
-def _unify_size(names, state):
-    """Hand parses round among the names listed at one exact size."""
+    names = _names_at(titles)
     named = [entry for entry in names if entry.group]
-    bare = [entry for entry in names if not entry.group]
-    for giver, taker in _cut_groups(named, state):
-        state.give(giver, taker)
     left = []
-    for taker in bare:
-        giver = _named_giver(taker, named, state)
+    for taker in (entry for entry in names if not entry.group):
+        giver, whole = _named_giver(taker, named, state)
         if giver is None:
             left.append(taker)
         else:
-            state.give(giver, taker)
-    # Names with no group and no named listing to take from: the fullest
-    # parse among those that are one upload.
+            state.give(giver, taker, whole)
+    # Names with no group and no named listing to take from. The fullest
+    # leads: a cut of it takes its parse, another name of the same film or
+    # episode is marked as one upload with it.
     left.sort(key=state.rank, reverse=True)
     led = []
     for entry in left:
-        lead = next(
-            (
-                other
-                for other in led
-                if same_item(entry.item, other.item)
-                or _cut_of(entry, other)
-                or _cut_of(other, entry)
-            ),
-            None,
-        )
-        if lead is None:
-            led.append(entry)
+        for lead in led:
+            if _cut_of(entry, lead):
+                state.give(lead, entry, True)
+                break
+            if same_item(entry.item, lead.item) or _cut_of(lead, entry):
+                state.give(lead, entry, False)
+                break
         else:
-            state.give(lead, entry)
+            led.append(entry)
 
 
 def unify_one_payload(rows, parse_detail, meta_for, parses_agree, derived_keys=()):
-    """Give a listing that lost its group the parse of its upload's name.
+    """Give a listing with no group the group of the upload it is.
 
     ``rows`` carry ``_meta``, spellings already unified. ``parse_detail``,
     ``meta_for`` and ``parses_agree`` are ``filter``'s helpers for spellings
@@ -343,6 +379,8 @@ def unify_one_payload(rows, parse_detail, meta_for, parses_agree, derived_keys=(
     is listed under. What was read for one of them is true of the row too
     (``nfo_audio.apply_known``).
     """
+    from resources.lib.release_match import title_key
+
     state = _Pass(rows, (parse_detail, meta_for, parses_agree, derived_keys))
     by_size = {}
     for row in rows:
@@ -352,15 +390,21 @@ def unify_one_payload(rows, parse_detail, meta_for, parses_agree, derived_keys=(
             continue
         size = exact_size(row)
         if size:
-            by_size.setdefault(size, {}).setdefault(row["title"], []).append(row)
+            # Rows of one title can carry two parses (two provider answers
+            # joined, one of them already given a group): each is its own.
+            name = (row["title"], title_key(row["_meta"].get("group")))
+            by_size.setdefault(size, {}).setdefault(name, []).append(row)
     for titles in by_size.values():
         if 2 <= len(titles) <= _MAX_NAMES:
-            _unify_size(_names_at(titles), state)
+            _unify_size(titles, state)
     return _other_names(by_size)
 
 
 def _names_at(titles):
-    """``titles`` (``{title: rows}`` at one size) as ``_Name`` entries."""
+    """``titles`` (``{(title, group key): rows}`` at one size) as ``_Name``s.
+
+    The group is read from the rows as they are now, not from the key.
+    """
     from resources.lib.release_match import title_key
 
     return [
@@ -370,30 +414,34 @@ def _names_at(titles):
             item_of(same[0]),
             title_key(same[0]["_meta"].get("group")),
         )
-        for title, same in titles.items()
+        for (title, _group), same in titles.items()
     ]
 
 
 def _other_names(by_size):
     """``{id(row): names}``: the names a row's upload is also listed under.
 
-    Read from the marks, so it is the same on every pass: a row that took a
-    parse names where it came from, and a row of that name at that size
-    names every row that took from it.
+    Read from the marks, so it is the same on every pass. At one size, the
+    rows that took a parse from a name and the rows of that name are one
+    upload: each maps to the names of all the others.
     """
     others = {}
     for titles in by_size.values():
-        takers = {}
-        for title, same in titles.items():
+        uploads = {}
+        for (title, _group), same in titles.items():
+            own = name_form_key(title)
             for row in same:
                 source = row["_meta"].get(ADOPTED_KEY)
-                own = name_form_key(title)
                 if isinstance(source, str) and source != own:
-                    others[id(row)] = (source,)
-                    takers.setdefault(source, set()).add(own)
-        for title, same in titles.items():
-            found = takers.get(name_form_key(title))
-            if found:
-                for row in same:
-                    others.setdefault(id(row), tuple(sorted(found)))
+                    uploads.setdefault(source, set()).update((source, own))
+        if not uploads:
+            continue
+        for (title, _group), same in titles.items():
+            own = name_form_key(title)
+            for row in same:
+                source = row["_meta"].get(ADOPTED_KEY)
+                names = uploads.get(source if isinstance(source, str) else own)
+                names = names or uploads.get(own)
+                if names and own in names and len(names) > 1:
+                    others[id(row)] = tuple(sorted(names - {own}))
     return others

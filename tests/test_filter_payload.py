@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
-"""A listing that lost its group takes the parse of the upload it is."""
+"""A listing with no group takes the group of the upload it is."""
 
 from email.utils import formatdate
 
@@ -135,27 +135,36 @@ def test_a_round_size_or_no_size_proves_nothing():
         assert not any(ADOPTED_KEY in row["_meta"] for row in rows), size
 
 
-def test_a_group_cut_short_takes_the_full_group_and_a_junk_tail_gives_way():
+def test_a_listing_that_states_a_group_is_never_changed():
     rows = _attached(
         # "-GUA" is "-GUACAMOLE" cut short: same upload, same minute.
         _row("Film.2009.SPECIAL.EDITION.2160p.UHD.BluRay.x265-GUA", "cut"),
         _row("Film.2009.SPECIAL.EDITION.2160p.UHD.BluRay.x265-GUACAMOLE", "full", at=9),
-        # "-NTb_mp4" is the longer name, and still the one that gives way:
-        # the list knows NTb from its other names.
+        # The same cut name at another size: the cut name's own release.
+        _row(
+            "Film.2009.SPECIAL.EDITION.2160p.UHD.BluRay.x265-GUA", "cut2", size=SIZE + 1
+        ),
         _row("Show.S01E02.1080p.WEB.H264-NTb", "next", size=SIZE + 9),
         _row("Show.S01E02.1080p.WEB.H264-NTb_mp4", "junk", size=SIZE + 9, at=30),
-        _row("Show.S01E01.1080p.HMAX.WEB-DL.DDP5.1.H.264-NTb", "hd", size=SIZE + 5),
         # Not the start of the other group: two releases.
         _row("Film.2014.2160p.REMUX.HEVC-FraMeSToR.D", "fra", size=SIZE + 77),
         _row("Film.2014.2160p.REMUX.HEVC-FraMeSToR.DUAL-Rick", "rick", size=SIZE + 77),
     )
     by_link = {row["link"]: row["_meta"] for row in rows}
 
-    assert by_link["cut"]["group"] == by_link["full"]["group"] == "GUACAMOLE"
-    assert by_link["junk"]["group"] == by_link["next"]["group"] == "NTb"
-    assert ADOPTED_KEY not in by_link["next"] and ADOPTED_KEY not in by_link["full"]
-    assert by_link["fra"]["group"] != by_link["rick"]["group"]
-    assert ADOPTED_KEY not in by_link["fra"] and ADOPTED_KEY not in by_link["rick"]
+    # Every row keeps the group its name states.
+    assert by_link["cut"]["group"] == by_link["cut2"]["group"] == "GUA"
+    assert by_link["full"]["group"] == "GUACAMOLE"
+    assert by_link["junk"]["group"] != by_link["next"]["group"] == "NTb"
+    assert not any(ADOPTED_KEY in meta for meta in by_link.values())
+    # The picker lists a group with its cut: the whole of both releases, so
+    # the cut name's other copy is not left on a row of its own.
+    assert sorted(sorted(group) for group in _groups(rows)) == [
+        ["cut", "cut2", "full"],
+        ["fra"],
+        ["junk", "next"],
+        ["rick"],
+    ]
 
 
 def test_a_cut_name_never_changes_which_episode_a_row_is():
@@ -247,14 +256,32 @@ def test_a_size_shown_in_gigabytes_and_turned_back_proves_nothing():
     assert len(_groups(rows)) == 1
 
 
-def test_a_name_with_no_group_takes_the_named_listings_parse():
+def test_a_name_with_no_group_takes_the_group_and_keeps_its_own_tags():
     bare, named = _attached(
-        _row("Film (1982) HQ AC3 DD5 1 (Externe Subs)", "bare"),
-        _row("Film.1982.Directors.Cut.720p.BRRip.XviD.AC3-GRP", "named", at=7200),
+        _row(
+            "Film.1982.Final.Cut.BluRay.2160p.DV.HDR.TrueHD.HEVC.NL-Subs.REMUX", "bare"
+        ),
+        _row(
+            "Film.1982.Final.Cut.BluRay.2160p.DV.HDR.TrueHD.HEVC-GRP", "named", at=7200
+        ),
     )
 
+    assert named["_meta"]["quality"].lower() == "bluray"
+    # The group is the upload's; REMUX is what this name says, and stays.
     assert bare["_meta"]["group"] == "GRP"
-    assert bare["_meta"]["resolution"] == "720p"
+    assert bare["_meta"]["quality"].lower() == "bluray remux"
+    assert bare["_meta"][ADOPTED_KEY]
+    assert _groups([bare, named]) == [["bare", "named"]]
+
+
+def test_a_bare_title_takes_the_year_it_lacks():
+    bare, named = _attached(
+        _row("Film 1080p BluRay DTS", "bare"),
+        _row("Film.1982.1080p.BluRay.DTS.x264-GRP", "named", at=7200),
+    )
+
+    assert bare["_meta"]["group"] == "GRP" and bare["_meta"]["year"] == 1982
+    assert bare["_meta"]["codec"] == ""
     assert _groups([bare, named]) == [["bare", "named"]]
 
 

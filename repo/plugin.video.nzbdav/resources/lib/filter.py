@@ -55,7 +55,7 @@ from resources.lib.filter_options import (
     RESOLUTION_SETTINGS as _RESOLUTION_SETTINGS,
 )
 from resources.lib.filter_payload import ADOPTED_KEY as _ADOPTED_KEY
-from resources.lib.filter_payload import unify_one_payload
+from resources.lib.filter_payload import group_names, unify_one_payload
 from resources.lib.filter_remux import (
     DEFAULT_REMUX_GROUPS,
     compile_remux_tiers,
@@ -644,6 +644,40 @@ def _parses_agree(meta, best_meta):
     return comparable(meta) == comparable(best_meta)
 
 
+def _leading_spelling(spellings, known):
+    """The rows of the spelling whose parse the other spellings take.
+
+    The most detailed parse. Among equals the one whose group more names of
+    the list carry (``known()`` maps a group to that number): "HONE" over
+    "DiscoD HONE", "PsychoLogic" over "PsychoLogic arc", and "Goki-TAoE"
+    over "Goki" where the list has "GokiTAoE". Then the spelling more
+    indexers list, then the one that sorts first, which is the one written
+    with capitals ("Movie.2020-GRP" before "movie.2020-grp"): the same
+    spelling whatever order the rows are in.
+    """
+    from resources.lib.release_match import title_key
+
+    details = {
+        title: _parse_detail(same[0]["_meta"]) for title, same in spellings.items()
+    }
+    most = max(details.values())
+    leading = [same for title, same in spellings.items() if details[title] == most]
+    if len(leading) == 1:
+        return leading[0]
+    counts = known()
+    best = None
+    for same in leading:
+        group = title_key(same[0]["_meta"].get("group"))
+        rank = (counts.get(group, 0), len(same))
+        if (
+            best is None
+            or rank > best[0]
+            or (rank == best[0] and same[0]["title"] < best[1][0]["title"])
+        ):
+            best = (rank, same)
+    return best[1]
+
+
 def _unify_name_forms(rows):
     """Give every spelling of one release name the same parsed metadata.
 
@@ -655,6 +689,14 @@ def _unify_name_forms(rows):
     case and punctuation are removed all take the most detailed parse among
     them (``_parse_detail``).
     """
+    counted = []
+
+    def known():
+        # Read from the parses as they are before any spelling is changed.
+        if not counted:
+            counted.append(group_names(rows))
+        return counted[0]
+
     forms = {}
     for row in rows:
         if not isinstance(row, dict):
@@ -672,11 +714,7 @@ def _unify_name_forms(rows):
     for spellings in forms.values():
         if len(spellings) < 2:
             continue
-        # Equal detail: the same spelling wins whatever order the rows are in.
-        best = max(
-            spellings.values(),
-            key=lambda same: (_parse_detail(same[0]["_meta"]), same[0]["title"]),
-        )
+        best = _leading_spelling(spellings, known)
         best_meta = best[0]["_meta"]
         for same in spellings.values():
             if same is best or _parses_agree(same[0]["_meta"], best_meta):
@@ -786,8 +824,11 @@ def _attach_metadata(results):
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
-    _recover_list_groups(results)
     _unify_name_forms(results)
+    # After the spellings: one that parses a group ("-DNU-TAoE") gives it to
+    # the others, and only a name with no group in any spelling is asked
+    # whether its last word is a group the list knows.
+    _recover_list_groups(results)
     # A listing that lost its group takes the parse of its upload's name.
     other_names = unify_one_payload(
         results,

@@ -414,11 +414,11 @@ flowchart TD
     D -- "and the same film or episode" --> E[One upload]
     D -- "and one name is the other cut short,<br>posted within two minutes" --> E
     D -- no --> G
-    E --> K[A name with no group, or a cut-off group,<br>takes the named listing's group and tags]
+    E --> K[A name with no group<br>takes the named listing's group]
     K --> G{Has a release group?}
     G -- yes --> H[One row per release:<br>every parsed field equal]
     G -- no --> I[One row per name]
-    H --> L[Two names of one group<br>for one upload: one row]
+    H --> L[Two names of one group, or a group<br>and its cut, for one upload: one row]
     L --> J[Copies counted, odd sizes last]
     I --> J
 
@@ -435,7 +435,7 @@ flowchart TD
   is the same upload, so it takes the group and joins the row.
 - **The same film or episode at one exact size.** Two encodes never come to
   the same number of bytes. A listing with no group at the size of a named
-  one takes its group and tags. Two names from one group at one size
+  one takes its group and keeps the tags it states. Two names from one group at one size
   (`...1080p.WEB-DL.DDP5.1.H.264-GRPD` and `...1080p WEB-DL H264-GRPD`) keep
   their own tags and become one row, with every other listing of both names.
   Two different groups at one size stay two releases. A size an indexer

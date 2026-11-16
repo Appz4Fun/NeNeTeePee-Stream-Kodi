@@ -154,6 +154,91 @@ def test_a_row_is_ranked_by_the_count_of_the_row_the_picker_lists_it_in():
     assert sorted(len(group) for group in release_groups(ranked)) == [1, 3]
 
 
+def _named(title, link, size):
+    return _row(title, link, size=str(size))
+
+
+DV = "Film.2023.2160p.UHD.BluRay.DV.x265-GRP"
+HDR = "Film.2023.2160p.UHD.BluRay.HDR.x265-GRP"
+PLAIN = "Film.2023.2160p.UHD.BluRay.x265-GRP"
+
+
+def test_two_names_of_a_group_at_one_exact_size_are_one_release():
+    rows = [
+        _named(DV, "dv1", 40000000123),
+        _named(DV, "dv2", 41000000777),
+        _named(PLAIN, "p1", 40000000123),
+        _named(PLAIN, "p2", 39000000555),
+        _named(HDR, "h1", 30000000999),
+    ]
+
+    assert _links(release_index.build(rows)) == [["dv1", "dv2", "p1", "p2"], ["h1"]]
+    # A size an indexer rounded, or no size, joins nothing.
+    for size in (40000000000, 0):
+        rows = [_named(DV, "dv1", size), _named(PLAIN, "p1", size)]
+        assert _links(release_index.build(rows)) == [["dv1"], ["p1"]]
+    # Another group, another film or another episode at that size: apart.
+    for other in (
+        DV.replace("-GRP", "-OTHER"),
+        DV.replace("Film", "Other"),
+        "Film.2019.2160p.UHD.BluRay.DV.HDR.x265-GRP",
+    ):
+        rows = [_named(DV, "dv1", 40000000123), _named(other, "o1", 40000000123)]
+        assert len(release_index.build(rows).groups) == 2, other
+
+
+def test_a_name_that_fits_two_encodes_joins_neither():
+    # The plain name is listed at the size of the Dolby Vision encode and at
+    # the size of the HDR10 one. Joining all three would make one release of
+    # two encodes.
+    rows = [
+        _named(DV, "dv1", 40000000123),
+        _named(HDR, "h1", 30000000999),
+        _named(PLAIN, "p1", 40000000123),
+        _named(PLAIN, "p2", 30000000999),
+    ]
+
+    assert _links(release_index.build(rows)) == [["dv1"], ["h1"], ["p1", "p2"]]
+
+
+def test_a_listing_far_from_its_releases_size_joins_nothing():
+    # A box set listed once under the single film's name.
+    film = "Film.1999.Remaster.BluRay.1080p.DTS.x264-GRP"
+    box = "Film.1999-2021.BoxSet.BluRay.1080p.DTS.x264-GRP"
+    rows = [
+        _named(film, "f1", 13000000111),
+        _named(film, "f2", 13000000222),
+        _named(film, "f3", 13100000333),
+        _named(film, "odd", 51037966988),
+        _named(box, "b1", 51037966988),
+    ]
+
+    assert _links(release_index.build(rows)) == [["f1", "f2", "f3", "odd"], ["b1"]]
+
+
+def test_a_bare_name_listed_beside_two_films_is_not_what_joins_them():
+    def bare(title, link, size, took=None):
+        row = _row(title, link, size=str(size))
+        assert not row["_meta"]["group"]
+        if took:
+            row["_meta"]["parse_from_payload"] = took
+        return row
+
+    rows = [
+        bare("Film 2019 1080p", "a", 4000000123),
+        bare("Film 1080p", "m1", 4000000123, took="film 2019 1080p"),
+        bare("Film 2021 1080p", "b", 5000000321),
+        bare("Film 1080p", "m2", 5000000321, took="film 2021 1080p"),
+        bare("Film 1080p", "m3", 6000000555),
+    ]
+
+    # Each marked listing goes with the film it was listed beside; the two
+    # films stay apart, and the unmarked one stays under its own name.
+    assert _links(release_index.build(rows)) == [["a", "m1"], ["b", "m2"], ["m3"]]
+    # Listed beside one film only, the bare name is that film's release.
+    assert _links(release_index.build(rows[:2] + rows[4:])) == [["a", "m1", "m3"]]
+
+
 def test_many_years_of_one_title_are_not_put_to_the_rule_pair_by_pair():
     rows = [
         _row("Film.{}.1080p.BluRay.DTS.x264-GRP".format(year), str(year))

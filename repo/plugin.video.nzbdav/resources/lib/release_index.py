@@ -35,11 +35,13 @@ answer:
 
 Two things the rule itself does not decide are decided here.
 
-Two names of one group for one upload. A group's release is listed as
-``...DV.x265-GRP`` by one indexer and ``...DV.HDR.x265-GRP`` by another:
-the parses differ, so the rule keeps them apart. When a listing of each is
-the same film or episode at the same exact size in bytes, they are one
-upload, and the two releases are joined whole (``_joined_by_upload``).
+Two names for one upload of a group. A group's release is listed as
+``...DV.x265-GRP`` by one indexer and ``...DV.HDR.x265-GRP`` by another, or
+with its group cut short (``-GUA`` for ``-GUACAMOLE``): the parses differ,
+so the rule keeps them apart. When a listing of each is the same upload
+(the same exact size in bytes, and the same film or episode or one name
+the other cut short), the two releases are joined whole
+(``_joined_by_upload``). No listing's parse is changed for it.
 
 A name with no release group. ``same_release`` never accepts such a row,
 since nothing says whose release it is. Here, rows with no group that
@@ -53,7 +55,14 @@ files). A name with no group still never joins a release that has one.
 
 from resources.lib import fallback_streams as _fs
 from resources.lib import release_match
-from resources.lib.filter_payload import ADOPTED_KEY, exact_size, item_of, same_item
+from resources.lib.filter_payload import (
+    ADOPTED_KEY,
+    Sets,
+    cut_of_one_upload,
+    exact_size,
+    item_of,
+    same_item,
+)
 from resources.lib.release_subject import name_form_key
 
 # First in the exact key of a row with no release group.
@@ -95,21 +104,24 @@ def build(rows):
     """
     singles = []
     keyed = []
-    names = _Names()
     by_name = {}
+    taken = {}  # a name with no group -> the names its rows took parses from
     for at, row in enumerate(rows):
         keys = _keys_once_per_name(row, by_name)
         if keys is None:
             singles.append((at, [row]))
             continue
         keyed.append((at, row, keys))
-        if keys[0][0] is _NO_GROUP:
-            names.join(keys[0][2], keys[0][3])
+        if keys[0][0] is _NO_GROUP and keys[0][3]:
+            taken.setdefault(keys[0][2], set()).add(keys[0][3])
+    names = Sets()
+    for name, sources in taken.items():
+        if len(sources) == 1:
+            names.join(name, next(iter(sources)))
     buckets = {}
     for at, row, (exact, signature) in keyed:
         if exact[0] is _NO_GROUP:
-            # One release for every name linked by a shared upload.
-            exact = exact[:2] + (names.of(exact[2]),)
+            exact = exact[:2] + (_release_name(exact[2], exact[3], taken, names),)
         bucket = buckets.get(exact)
         if bucket is None:
             bucket = buckets[exact] = {}
@@ -125,84 +137,137 @@ def build(rows):
     return ReleaseIndex([group for _at, group in placed])
 
 
-class _Names:
-    """Names with no group that are one release with each other.
+def _release_name(name, source, taken, names):
+    """The name a row with no group is listed under.
 
-    A listing that took its parse from another name (``filter_payload``)
-    is one upload with it, and each name is one release with its own other
-    listings, so the names are joined into sets. A set goes by its first
-    name in sorted order, whatever order the rows came in.
+    A listing that took its parse from another name (``filter_payload``) is
+    one upload with it, and each name is one release with its own other
+    listings. So when the rows of ``name`` took from one other name only,
+    the two names are one release (``names`` holds those sets). When they
+    took from two (a bare "Film 1080p" beside the 2019 film at one size and
+    the 2021 film at another), ``name`` says too little to be one release:
+    each such row goes with the name it took from, and the rest stay under
+    their own.
     """
+    if source and len(taken.get(name, ())) > 1:
+        return names.of(source)
+    return names.of(name)
 
-    def __init__(self):
-        self._parent = {}
 
-    def of(self, name):
-        """The name the set of ``name`` goes by."""
-        parent = self._parent
-        root = name
-        while parent.get(root, root) != root:
-            root = parent[root]
-        while parent.get(name, name) != root:
-            parent[name], name = root, parent[name]
-        return root
-
-    def join(self, name, other):
-        """``name`` and ``other`` (or None) are one release."""
-        if not other or other == name:
-            return
-        left, right = self.of(name), self.of(other)
-        if left != right:
-            low, high = sorted((left, right))
-            self._parent[high] = low
+# As ``filter._SIZE_OUTLIER_FACTOR`` and ``_SIZE_OUTLIER_MIN_COPIES``: a
+# listing this far from its own release's usual size is not a normal copy.
+_ODD_SIZE_FACTOR = 1.35
+_ODD_SIZE_MIN_COPIES = 3
 
 
 def _joined_by_upload(releases):
     """``releases`` with those joined that share an upload.
 
-    A group names one upload two ways (``DV`` on one indexer, ``DV.HDR`` on
-    another; ``PROPER`` here, ``REPACK`` there). The parses differ, so the
+    A group's upload gets two names: ``DV`` on one indexer and ``DV.HDR`` on
+    another, ``PROPER`` here and ``REPACK`` there, ``-GUA`` where the name
+    was cut and ``-GUACAMOLE`` where it was not. The parses differ, so the
     rule keeps the names apart, and each name has its own other listings.
-    Two listings of one group, of the same film or episode, at the same
-    exact size are one upload (``filter_payload``: two encodes never come
-    to the same number of bytes), so their releases are one release: the
-    whole of both, not just the two listings.
+    Two listings at the same exact size are one upload
+    (``filter_payload``: two encodes never come to the same number of
+    bytes) when they are
+
+    * of one group and the same film or episode, or
+    * of two groups, one the start of the other, under names one the start
+      of the other, posted as one upload (``cut_of_one_upload``).
+
+    Their releases are then one release: the whole of both, not just the
+    two listings, so no listing leaves the copies of its own name.
+
+    Two guards keep distinct releases apart:
+
+    * a listing far from its own release's usual size joins nothing: a box
+      set listed once under a single film's name must not bring the film's
+      release in with it;
+    * only releases that each share an upload with every other one are
+      joined. A name that drops a tag can be listed at the size of a
+      group's Dolby Vision encode and again at the size of its HDR10
+      encode: it shares an upload with both, they share none with each
+      other, and such a set is left as the rule has it.
 
     ``releases`` is a list of ``[(position, row), ...]``, each in list
     order; so is the result.
     """
-    uploads = {}
+    by_size = {}
     for number, members in enumerate(releases):
+        usual = _usual_size(members)
         for _at, row in members:
             key = _upload_key(row)
-            if key is not None:
-                uploads.setdefault(key[:3], []).append((number, key[3]))
-    parent = list(range(len(releases)))
-
-    def find(number):
-        while parent[number] != number:
-            parent[number] = parent[parent[number]]
-            number = parent[number]
-        return number
-
-    for listed in uploads.values():
-        first_number, first_item = listed[0]
-        for number, item in listed[1:]:
-            if find(number) != find(first_number) and same_item(first_item, item):
-                low, high = sorted((find(number), find(first_number)))
-                parent[high] = low
-    joined = {}
-    for number, members in enumerate(releases):
-        joined.setdefault(find(number), []).extend(members)
-    if len(joined) == len(releases):
+            if key is not None and _near(key[1], usual):
+                by_size.setdefault(key[1], []).append((number, row, key))
+    shared = set()
+    for listed in by_size.values():
+        for at, (number, row, key) in enumerate(listed):
+            for other, other_row, other_key in listed[at + 1 :]:
+                if other != number and _one_upload(row, key, other_row, other_key):
+                    shared.add((min(number, other), max(number, other)))
+    if not shared:
         return releases
-    for members in joined.values():
-        members.sort(key=_position)
-    return list(joined.values())
+    linked = Sets()
+    for number, other in shared:
+        linked.join(number, other)
+    joined = []
+    absorbed = set()
+    for numbers in linked.sets({number for pair in shared for number in pair}):
+        ordered = sorted(numbers)
+        if all(
+            (number, other) in shared
+            for at, number in enumerate(ordered)
+            for other in ordered[at + 1 :]
+        ):
+            members = [one for number in ordered for one in releases[number]]
+            members.sort(key=_position)
+            joined.append(members)
+            absorbed.update(ordered)
+    return [
+        members for number, members in enumerate(releases) if number not in absorbed
+    ] + joined
+
+
+def _one_upload(row, key, other, other_key):
+    """Whether two named rows of one exact size are one upload."""
+    group, _size, item = key
+    other_group, _other_size, other_item = other_key
+    if group == other_group:
+        return same_item(item, other_item)
+    if group.startswith(other_group) or other_group.startswith(group):
+        return cut_of_one_upload(row, other)
+    return False
+
+
+def _usual_size(members):
+    """The median size of a release's listings, or 0 with too few to tell."""
+    sizes = sorted(
+        size for size in (_row_size(row) for _at, row in members) if size > 0
+    )
+    if len(sizes) < _ODD_SIZE_MIN_COPIES:
+        return 0
+    middle = len(sizes) // 2
+    if len(sizes) % 2:
+        return sizes[middle]
+    return (sizes[middle - 1] + sizes[middle]) / 2.0
+
+
+def _row_size(row):
+    try:
+        return int(row.get("size") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _near(size, usual):
+    """Whether ``size`` is a normal copy's, given the release's usual size."""
+    if not usual:
+        return True
+    return usual / _ODD_SIZE_FACTOR <= size <= usual * _ODD_SIZE_FACTOR
 
 
 def _upload_key(row):
-    """``(group, size, what it is of, item)`` of a named row, or None.
+    """``(group, size, item)`` of a named row, or None.
 
     None for a row with no group, a season pack, a row whose size cannot
     stand for an upload (missing, or rounded by its indexer) or whose parse
@@ -215,7 +280,7 @@ def _upload_key(row):
     item = item_of(row) if size else None
     if item is None:
         return None
-    return group, size, item[0], item
+    return group, size, item
 
 
 def _position(placed):

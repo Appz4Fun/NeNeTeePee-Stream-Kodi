@@ -100,19 +100,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Listings with the same exact size in bytes are one upload when they
       name the same film or episode, or when one name is the start of the
       other and both were posted within two minutes. A listing with no
-      group, or with a group cut short (`-GUA` for `-GUACAMOLE`), takes the
-      named listing's group and tags. Two names from one group for one
-      upload (`DV` here, `DV.HDR` there) keep their own tags and become one
-      row with every listing of both. A listing never takes another group's
-      name, and a size an indexer rounded is ignored.
+      group takes the group of the named listing it is an upload of (and
+      its whole parse when its name is that one cut short); it keeps every
+      tag it states otherwise. Two names from one group for one upload
+      (`DV` here, `DV.HDR` there), or a group and its cut (`-GUA` beside
+      `-GUACAMOLE`), become one row with every listing of both names. A
+      listing that states a group is never changed, and a size an indexer
+      rounded is ignored.
     - A trailing word after a language (`...AAC.7.1.Japanese.Tigole`) is the
       group when two or more other listings of the search carry it as theirs,
       and a library manager's file name
       (`Show - S01E02 - Title[WEBDL-1080p.AC3.h264.EDITH]`) is read from its
       bracketed tags.
 
-  On those 23 searches the picker went from 8,450 rows to 6,476, and uploads
-  shown as two or more rows from 611 to 22.
+  On those 23 searches the picker went from 8,450 rows to 6,490, and uploads
+  shown as two or more rows from 611 to 28.
 
 - **A backup that holds your pick's own files is sent first, and a pack under
   the release's name is not sent** (NZBGet backend). An NZB gives every
