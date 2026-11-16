@@ -363,7 +363,9 @@ def test_a_slow_hydra_never_holds_up_the_search():
         # The search is over before the late answer comes: it is dropped.
         session.search_finished([])
         release.set()
-        clock.sleep(0.2)
+        for thread in threading.enumerate():
+            if thread.name == "nzbdav-hydra-history":
+                thread.join(5)
 
     assert took < 1.0
     assert session.snapshot()["indexers"] == []
@@ -374,3 +376,19 @@ def test_any_length_of_fraction_is_read(fraction):
     assert hydra_history._epoch("2026-11-16T07:19:07{}Z".format(fraction)) == (
         pytest.approx(1794813547 + float("0" + fraction), abs=1e-6)
     )
+
+
+def test_an_indexer_with_one_answer_among_retries_is_not_failed():
+    rows = [
+        {"indexerName": "Alpha", "successful": True, "resultsCount": 100},
+        {"indexerName": "Alpha", "successful": False, "errorMessage": "Read timed out"},
+        {"indexerName": "Beta", "successful": False, "errorMessage": "403"},
+        {"indexerName": "Beta", "successful": False, "errorMessage": "403 again"},
+    ]
+    merged = {entry["name"]: entry for entry in hydra_history._merge(rows)}
+
+    assert merged["Alpha"]["ok"] is True
+    assert merged["Alpha"]["count"] == 100
+    assert merged["Alpha"]["error"] == ""
+    assert merged["Beta"]["ok"] is False
+    assert merged["Beta"]["error"] == "403 again"

@@ -216,13 +216,21 @@ def _merge(rows):
         count = row.get("resultsCount")
         took = row.get("responseTime")
         entry = merged.setdefault(
-            name, {"name": name, "ok": True, "count": 0, "ms": 0, "error": ""}
+            name,
+            {"name": name, "ok": False, "count": 0, "ms": 0, "error": "", "tries": 0},
         )
+        entry["tries"] += 1
         entry["count"] += count if isinstance(count, int) and count > 0 else 0
         entry["ms"] += took if isinstance(took, int) and took > 0 else 0
-        if not row.get("successful", True):
-            entry["ok"] = False
+        if row.get("successful", True):
+            # One answer is enough: its results are in the list.
+            entry["ok"] = True
+        else:
             entry["error"] = str(row.get("errorMessage") or entry["error"] or "")
+    for entry in merged.values():
+        del entry["tries"]
+        if entry["ok"]:
+            entry["error"] = ""
     return list(merged.values())
 
 

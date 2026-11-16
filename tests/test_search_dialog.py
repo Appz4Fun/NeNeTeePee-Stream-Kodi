@@ -270,8 +270,9 @@ def test_a_drawing_error_is_logged_once_and_drawing_goes_on():
     monitor = MagicMock()
     monitor.waitForAbort.side_effect = lambda seconds: time.sleep(seconds) or False
     fast = patch.object(search_dialog, "_TICK_SECONDS", 0.01)
+    logger = patch.object(search_dialog.xbmc, "log")
     with patch.object(search_dialog.xbmc, "Monitor", return_value=monitor), fast:
-        log = patch.object(search_dialog.xbmc, "log").start()
+        log = logger.start()
         painter = search_dialog._Painter(sp.Session(), surface)
         painter.start()
         deadline = time.monotonic() + 5
@@ -283,11 +284,12 @@ def test_a_drawing_error_is_logged_once_and_drawing_goes_on():
             time.sleep(0.01)
         painter.close()
 
-        patch.stopall()
+        logger.stop()
 
     assert surface.closed == 1
     assert not painter._thread.is_alive()
-    assert log.call_count == 1
+    drawing = [c for c in log.call_args_list if "could not be drawn" in c.args[0]]
+    assert len(drawing) == 1
 
 
 # --- open_progress -------------------------------------------------------------
@@ -365,3 +367,31 @@ def test_a_cancel_pressed_after_the_last_tick_is_seen_on_close():
 
     assert session.cancelled()
     assert surface.closed == 1
+
+
+def test_a_cancel_pressed_while_the_window_closes_is_kept(home):
+    session = sp.Session()
+    window = _window(session)
+    painter = search_dialog._Painter(session, window)
+    home.setProperty(search_dialog.CANCEL_PROPERTY, "1")
+
+    with patch.object(search_dialog.xbmcgui.WindowXMLDialog, "close", autospec=True):
+        painter.close()
+
+    assert session.cancelled()
+    assert home.getProperty(search_dialog.CANCEL_PROPERTY) == ""
+
+
+def test_refilling_the_table_keeps_the_viewers_place(home):
+    del home
+    session = sp.Session()
+    window = _window(session)
+    control = window.getControl(search_dialog.INDEXER_LIST_ID)
+    control.getSelectedPosition.return_value = 2
+    session.indexer_report(
+        [{"name": n, "ok": True, "count": 1} for n in ("A", "B", "C", "D")]
+    )
+
+    window.render(session.snapshot())
+
+    control.selectItem.assert_called_once_with(2)
