@@ -345,6 +345,24 @@ def _collect_unique(stream, state, cancel_event, need):
             )
             dedup.report.duplicate()
             continue
+        if is_pick:
+            dedup.note_pick(fingerprint)
+        elif dedup.pack_around_pick(fingerprint):
+            # The pick's files and a good deal more: a season pack listed
+            # under the episode's name. Not a copy of the release, and
+            # sending it would download the whole pack on a failover.
+            _discard(spool, payload)
+            _core.xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Skipped NZBGet backup '{}' (a pack "
+                "that holds this release among other files)".format(
+                    candidate.get("title") or ""
+                ),
+                _core.xbmc.LOGINFO,
+            )
+            dedup.report.pack()
+            continue
+        elif dedup.twin_of_pick(fingerprint):
+            candidate["_same_files"] = True
         handle = _keep_handle(spool, payload, is_pick)
         if handle is None and not is_pick:
             # No NZB in hand: sending it would make append_nzb fetch it on the
@@ -369,7 +387,24 @@ def _collect_unique(stream, state, cancel_event, need):
             tally["wanted"] = need - len(kept)
             if len(kept) >= need:
                 break
-    return kept
+    return _twins_first(kept)
+
+
+def _twins_first(kept):
+    """``kept`` with the backups that hold the pick's own files sent first.
+
+    The same files posted a second time, with their own articles: if the
+    pick fails, such a backup has exactly what the pick had. The pick stays
+    first and everything else keeps its order.
+    """
+
+    def rank(entry):
+        candidate = entry[0]
+        if candidate.get("_is_pick"):
+            return 0
+        return 1 if candidate.get("_same_files") else 2
+
+    return sorted(kept, key=rank)
 
 
 def _discard(spool, payload):

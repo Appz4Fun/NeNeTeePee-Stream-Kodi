@@ -2452,6 +2452,15 @@ msgctxt "#30672"
 msgid "{} duplicate uploads"
 msgstr ""
 
+# Beside 30671 / 30672: a copy that turned out to be a whole pack.
+msgctxt "#30771"
+msgid "1 pack under this name"
+msgstr ""
+
+msgctxt "#30772"
+msgid "{} packs under this name"
+msgstr ""
+
 msgctxt "#30673"
 msgid "Backups: {}"
 msgstr ""

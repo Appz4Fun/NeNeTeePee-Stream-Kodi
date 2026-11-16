@@ -33,6 +33,7 @@ predefined ones and printable-ASCII character references are replaced by
 table, nothing else.
 """
 
+import collections
 import operator
 import re
 import zlib
@@ -78,12 +79,74 @@ _PARENT = {
 _IN_BLOCK = [b"nzb", b"file", b"segments"]
 
 
-def scan_fingerprint(stream):
+class FileSizes:
+    """The segment sizes of each file of an NZB, gathered beside the IDs.
+
+    A posting's files can be told from another posting's without reading an
+    article: a file's segments have the sizes its poster's tool gave them,
+    and a repost of the same files gives the same sizes in the same order.
+    ``files`` holds one ``(bytes, signature, is_par2)`` per ``<file>``:
+
+    * ``bytes``: the sum of its segments' sizes;
+    * ``signature``: a value equal for files with the same segment sizes in
+      the same order, or None when the sizes say too little: fewer than
+      ``MIN_SEGMENTS``, a segment without a size, or one size on most
+      segments (a tool that cuts every article to a fixed size gives every
+      file of that length the same sizes);
+    * ``is_par2``: the file's subject names a ``.par2`` file. Repair data
+      differs between two posts of the same files.
+    """
+
+    MIN_SEGMENTS = 12
+    MOST = 0.5
+
+    def __init__(self):
+        self.files = []
+        self._sizes = None
+        self._segments = 0
+        self._par2 = False
+
+    def open_file(self, subject):
+        """A ``<file>`` begins; ``subject`` is its subject or its whole tag."""
+        self._sizes = []
+        self._segments = 0
+        self._par2 = b".par2" in subject.lower()
+
+    def add(self, sizes, segments):
+        """``sizes`` (digits, as bytes) read from ``segments`` segments."""
+        if self._sizes is not None:
+            self._sizes.extend(sizes)
+            self._segments += segments
+
+    def close_file(self):
+        """The ``<file>`` ended: record it."""
+        sizes, self._sizes = self._sizes, None
+        if sizes is None:
+            return
+        try:
+            total = sum(map(int, sizes))
+        except ValueError:
+            return
+        signature = None
+        if len(sizes) == self._segments and len(sizes) >= self.MIN_SEGMENTS:
+            body = sizes[:-1]
+            most = collections.Counter(body).most_common(1)[0][1]
+            if most < self.MOST * len(body):
+                signature = (len(sizes), total, zlib.crc32(b",".join(sizes)))
+        self.files.append((total, signature, self._par2))
+
+
+# A segment's size attribute, inside a block of segments.
+_BYTES = re.compile(rb"""\sbytes\s*=\s*["'](\d+)["']""")
+
+
+def scan_fingerprint(stream, sizes=None):
     """The CRC32 of every article Message-ID in ``stream``, or ``UNUSUAL``.
 
     ``stream`` is a binary file object positioned at the start. The result is
     the ``array('I')`` the XML walk would build, in document order. Memory is
     one chunk plus the unfinished element carried over, never the document.
+    ``sizes`` is an optional ``FileSizes`` to fill in the same pass.
     """
     hashes = array("I")
     stack = []
@@ -102,7 +165,7 @@ def scan_fingerprint(stream):
         cut = _complete_upto(tail)
         if closed and tail[:cut].strip():
             return UNUSUAL  # something follows </nzb>
-        if not _scan(tail[:cut], hashes, stack):
+        if not _scan(tail[:cut], hashes, stack, sizes):
             return UNUSUAL
         closed = closed or (cut > 0 and not stack)
         tail = tail[cut:]
@@ -159,7 +222,7 @@ def _unfinished_comment(buffer, end):
 _CLOSING_TAGS = (b"</segment>", b"</segments>", b"</file>", b"</head>", b"</nzb>")
 
 
-def _scan(data, hashes, stack):
+def _scan(data, hashes, stack, sizes=None):
     """Hash ``data``'s segments into ``hashes``; False for anything unusual.
 
     ``data`` is made of whole elements. It is read as alternating stretches:
@@ -176,7 +239,7 @@ def _scan(data, hashes, stack):
         if stack == _IN_BLOCK:
             closing = data.find(b"</segments", position)
             end = size if closing < 0 else closing
-            if not _hash_block(data, position, end, hashes):
+            if not _hash_block(data, position, end, hashes, sizes):
                 return False
             position = end
             if closing < 0:
@@ -188,13 +251,13 @@ def _scan(data, hashes, stack):
             end = data.find(b">", opening) + 1
             if end <= 0:
                 return False
-        if not _outer(data[position:end], stack):
+        if not _outer(data[position:end], stack, sizes):
             return False
         position = end
     return True
 
 
-def _outer(region, stack):
+def _outer(region, stack, sizes=None):
     """Apply the tags between two segment blocks to ``stack``.
 
     Every "<" in the stretch must start a tag that was read, so a comment
@@ -206,6 +269,11 @@ def _outer(region, stack):
         tags += 1
         if match.group(2) == b"segment" or not _apply(match, stack):
             return False
+        if sizes is not None and match.group(2) == b"file":
+            if match.group(1):
+                sizes.close_file()
+            else:
+                sizes.open_file(match.group(0))
     return tags == region.count(b"<")
 
 
@@ -225,13 +293,15 @@ def _apply(match, stack):
     return True
 
 
-def _hash_block(data, start, end, hashes):
+def _hash_block(data, start, end, hashes, sizes=None):
     """Hash the segments in ``data[start:end]``, the inside of a block.
 
     False unless the stretch holds whole segments and nothing else: every
     "<" in it must belong to a segment that was read.
     """
     opened = data.count(b"<", start, end)
+    if sizes is not None:
+        sizes.add(_BYTES.findall(data, start, end), opened // 2)
     texts = _PLAIN_SEGMENT.findall(data, start, end)
     if opened == 2 * len(texts):
         # No Python-level work per article: each step runs over the whole
