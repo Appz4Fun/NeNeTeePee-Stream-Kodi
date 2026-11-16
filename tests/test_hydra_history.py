@@ -102,6 +102,13 @@ def _serve(*answers):
     return seen, _urlopen
 
 
+def _shown():
+    """An active session whose window shows the indexer table."""
+    session = sp.Session()
+    session.detailed = True
+    return sp.activate(session)
+
+
 @pytest.fixture(autouse=True)
 def _no_active_session():
     sp.deactivate()
@@ -220,16 +227,39 @@ def test_only_http_urls_are_opened():
     urlopen.assert_not_called()
 
 
-def test_nothing_is_asked_when_no_search_is_being_shown():
+def test_nothing_is_asked_when_no_table_is_being_shown():
     with patch.object(hydra_history, "urlopen") as urlopen:
         hydra_history.report_indexers("http://h", _PARAMS, 1.0)
+        sp.activate(sp.Session())  # the corner indicator only
+        hydra_history.report_indexers("http://h", _PARAMS, 1.0)
+        _shown().cancel()
+        hydra_history.report_indexers("http://h", _PARAMS, 1.0)
     urlopen.assert_not_called()
+
+
+def test_any_failure_reading_the_record_is_swallowed():
+    import http.client
+
+    session = _shown()
+    with patch.object(
+        hydra_history, "_post_json", side_effect=http.client.IncompleteRead(b"")
+    ):
+        hydra_history.report_indexers("http://h", _PARAMS, 1.0)
+    assert session.snapshot()["indexers"] == []
+
+
+def test_an_oversized_reply_is_refused():
+    big = _Response({"content": [_entry(query="x" * (3 * 1024 * 1024))]})
+    _seen, urlopen = _serve(big)
+    with patch.object(hydra_history, "urlopen", side_effect=urlopen):
+        with pytest.raises(ValueError):
+            hydra_history.indexer_searches("http://h", _PARAMS, 3.0)
 
 
 def test_the_report_reaches_the_progress_window_and_logs_failures():
     import xbmc
 
-    session = sp.activate(sp.Session())
+    session = _shown()
     _seen, urlopen = _serve(
         _refused(), _Response({"content": [_entry()]}), _Response(_DETAILS)
     )
@@ -257,7 +287,7 @@ def test_the_report_reaches_the_progress_window_and_logs_failures():
     ],
 )
 def test_a_hydra_that_will_not_say_fails_soft(failure):
-    session = sp.activate(sp.Session())
+    session = _shown()
     _seen, urlopen = _serve(failure)
     with patch.object(hydra_history, "urlopen", side_effect=urlopen):
         hydra_history.report_indexers("http://h", _PARAMS, 1.0)
@@ -266,7 +296,7 @@ def test_a_hydra_that_will_not_say_fails_soft(failure):
 
 
 def test_a_second_refusal_is_not_retried_again():
-    sp.activate(sp.Session())
+    _shown()
     seen, urlopen = _serve(_refused(), _refused())
     with patch.object(hydra_history, "urlopen", side_effect=urlopen):
         hydra_history.report_indexers("http://h", _PARAMS, 1.0)
@@ -274,8 +304,42 @@ def test_a_second_refusal_is_not_retried_again():
 
 
 def test_no_matching_search_reports_nothing():
-    session = sp.activate(sp.Session())
+    session = _shown()
     _seen, urlopen = _serve(_Response({"content": []}))
     with patch.object(hydra_history, "urlopen", side_effect=urlopen):
         hydra_history.report_indexers("http://h", _PARAMS, 1.0)
     assert session.snapshot()["indexers"] == []
+
+
+def test_a_sonarr_search_for_the_same_episode_is_not_taken():
+    entry = _entry(userAgent="Sonarr")
+    seen, urlopen = _serve(_Response({"content": [entry]}))
+    with patch.object(hydra_history, "urlopen", side_effect=urlopen):
+        assert not hydra_history.indexer_searches("http://h", _PARAMS, 3.0)
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    "logged, found",
+    [
+        ("2026-11-16T07:19:07Z", True),
+        ("2026-11-16T07:19:07.123456789Z", True),
+        ("2026-11-16T07:19:07+00:00", True),
+        ("2026-11-16T08:19:07+01:00", True),
+        ("2026-11-16T07:19:07", True),
+        # Logged 10 s before the 3 s search ended: an earlier search.
+        ("2026-11-16T07:19:00Z", False),
+        # Logged as the history was read, not when this search was sent.
+        ("2026-11-16T07:19:10Z", True),
+        ("2026-11-16T07:19:16Z", False),
+        ("not a time", False),
+    ],
+)
+def test_the_entry_is_the_one_logged_when_the_search_was_sent(logged, found):
+    # The search took 3 s and ended at Hydra's 07:19:10.
+    seen, urlopen = _serve(
+        _Response({"content": [_entry(time=logged)]}), _Response(_DETAILS)
+    )
+    with patch.object(hydra_history, "urlopen", side_effect=urlopen):
+        entries = hydra_history.indexer_searches("http://h", _PARAMS, 3.0)
+    assert bool(entries) is found

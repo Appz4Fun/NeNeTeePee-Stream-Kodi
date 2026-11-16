@@ -3,6 +3,7 @@
 """The search progress window and its corner-indicator stand-in."""
 
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -232,7 +233,7 @@ def test_the_painter_thread_draws_until_it_is_closed():
     session = sp.Session()
     surface = _Surface()
     monitor = MagicMock()
-    monitor.abortRequested.return_value = False
+    monitor.waitForAbort.side_effect = lambda seconds: time.sleep(seconds) or False
     with patch.object(
         search_dialog.xbmc, "Monitor", return_value=monitor
     ), patch.object(search_dialog, "_TICK_SECONDS", 0.01):
@@ -249,7 +250,7 @@ def test_the_painter_thread_draws_until_it_is_closed():
 def test_the_painter_stops_when_kodi_is_shutting_down():
     surface = _Surface()
     monitor = MagicMock()
-    monitor.abortRequested.return_value = True
+    monitor.waitForAbort.return_value = True
     with patch.object(
         search_dialog.xbmc, "Monitor", return_value=monitor
     ), patch.object(search_dialog, "_TICK_SECONDS", 0.01):
@@ -263,21 +264,30 @@ def test_the_painter_stops_when_kodi_is_shutting_down():
     assert surface.closed == 1
 
 
-def test_a_drawing_error_ends_the_thread_without_raising():
+def test_a_drawing_error_is_logged_once_and_drawing_goes_on():
     surface = _Surface()
     surface.render = MagicMock(side_effect=RuntimeError("window gone"))
     monitor = MagicMock()
-    monitor.abortRequested.return_value = False
-    with patch.object(
-        search_dialog.xbmc, "Monitor", return_value=monitor
-    ), patch.object(search_dialog, "_TICK_SECONDS", 0.01):
+    monitor.waitForAbort.side_effect = lambda seconds: time.sleep(seconds) or False
+    fast = patch.object(search_dialog, "_TICK_SECONDS", 0.01)
+    with patch.object(search_dialog.xbmc, "Monitor", return_value=monitor), fast:
+        log = patch.object(search_dialog.xbmc, "log").start()
         painter = search_dialog._Painter(sp.Session(), surface)
         painter.start()
-        painter._thread.join(5)
+        deadline = time.monotonic() + 5
+        while surface.render.call_count < 3 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert painter._thread.is_alive()
+        surface.cancel = True
+        while surface.closed == 0 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        painter.close()
 
-    assert not painter._thread.is_alive()
-    painter.close()
+        patch.stopall()
+
     assert surface.closed == 1
+    assert not painter._thread.is_alive()
+    assert log.call_count == 1
 
 
 # --- open_progress -------------------------------------------------------------
@@ -289,6 +299,7 @@ def test_open_progress_shows_the_window_and_reports_to_its_session(home):
         session = search_dialog.open_progress("Add-on")
 
     assert sp.active() is session
+    assert session.detailed is True
     corner.assert_not_called()
     sp.search_started(["NZBHydra2"])
     assert session.snapshot()["stages"][1]["state"] == sp.ACTIVE
@@ -305,6 +316,7 @@ def test_the_setting_off_uses_the_corner_indicator(home):
         session = search_dialog.open_progress("Add-on", detailed=False)
         session.close()
 
+    assert session.detailed is False
     window_cls.assert_not_called()
     corner.return_value.create.assert_called_once()
     corner.return_value.close.assert_called_once()

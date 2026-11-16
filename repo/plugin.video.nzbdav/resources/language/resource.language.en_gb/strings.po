@@ -1818,6 +1818,12 @@ msgctxt "#30488"
 msgid "Enter plays the top copy."
 msgstr "Enter plays the top copy."
 
+# Picker side panel, above 30487 / 30488, for a struck-through release.
+# {} is REPACK or PROPER.
+msgctxt "#30770"
+msgid "Struck through: a {} of this release is in the list."
+msgstr ""
+
 msgctxt "#30489"
 msgid "+{} more"
 msgstr "+{} more"
@@ -2826,6 +2832,6 @@ msgctxt "#30768"
 msgid "Search Progress"
 msgstr ""
 
-msgctxt "#30770"
-msgid "Struck through: a {} of this release is in the list."
+msgctxt "#30769"
+msgid "Direct indexers"
 msgstr ""

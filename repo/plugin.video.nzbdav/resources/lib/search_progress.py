@@ -50,6 +50,8 @@ REFUSED = "refused"
 
 # Every line the add-on writes to kodi.log starts with this.
 LOG_TAG = "NeNeTeePee-Stream-Kodi"
+# How the search code names the direct-indexer provider; shown translated.
+DIRECT_PROVIDER = "direct indexers"
 
 TEXT_IDS = {
     "heading": 30710,
@@ -108,6 +110,7 @@ TEXT_IDS = {
     "opening": 30763,
     "best_match": 30764,
     "table_empty": 30765,
+    "direct_indexers": 30769,
 }
 
 _STAGE_NAMES = {
@@ -216,8 +219,12 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._details_told = False
         self._version = 0
         self._cancelled = False
+        self._search_over = False
         self._closers = []
         self._closed = False
+        # True while the add-on's own window shows the indexer table; the
+        # NZBHydra2 history is read only then (see ``hydra_history``).
+        self.detailed = False
 
     # --- plumbing -----------------------------------------------------------
 
@@ -230,6 +237,11 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             return template.format(*args)
         except (IndexError, KeyError, ValueError):
             return "{} {}".format(template, " ".join(str(arg) for arg in args))
+
+    def _provider(self, name):
+        """A search provider's name as shown."""
+        name = str(name or "")
+        return self.text("direct_indexers") if name == DIRECT_PROVIDER else name
 
     def _names(self, names):
         """ "A, B, C, D and 2 more" for a list of indexer names."""
@@ -391,7 +403,9 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         """A live search went out to ``providers`` (their names)."""
         self._identify_done()
         with self._lock:
-            self._waiting_for = ", ".join(str(name) for name in providers if name)
+            self._waiting_for = ", ".join(
+                self._provider(name) for name in providers if name
+            )
             waiting = self._waiting_for
         self._set(SEARCH, ACTIVE, self.text("waiting", waiting))
 
@@ -407,12 +421,15 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def provider_finished(self, label, count, error=None):
         """One search provider answered, or failed."""
         with self._lock:
-            self._providers.append((str(label), int(count or 0), error))
+            self._providers.append((self._provider(label), int(count or 0), error))
 
     def search_finished(self, rows, error=None):
         """The search is over: ``rows`` are its results, ``error`` why none."""
         rows = rows or []
         with self._lock:
+            # A direct indexer that answers after the fan-out gave up on it
+            # has its rows thrown away: its late report must change nothing.
+            self._search_over = True
             providers = list(self._providers)
             self._result_total = len(rows)
         failures = [
@@ -447,6 +464,8 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def indexers_expected(self, names):
         """Indexers that were just asked and have not answered yet."""
         with self._lock:
+            if self._search_over:
+                return
             for name in names:
                 if name and name not in self._indexers:
                     self._indexers[name] = _indexer_row(name, WAITING)
@@ -454,11 +473,21 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         self._indexers_stage()
 
     def indexer_report(self, entries):
-        """How indexers answered: dicts of name, ok, count, ms and error."""
+        """How indexers answered: dicts of name, ok, count, ms and error.
+
+        Ignored once the search is over, and a row already reported as
+        failed (a direct indexer the fan-out timed out) is not overwritten
+        by that indexer's late answer: its rows were not used.
+        """
         with self._lock:
+            if self._search_over:
+                return
             for entry in entries or ():
                 name = str(entry.get("name") or "").strip()
                 if not name:
+                    continue
+                known = self._indexers.get(name)
+                if known is not None and known["reported"] and known["state"] == FAILED:
                     continue
                 count = int(entry.get("count") or 0)
                 if not entry.get("ok", True):

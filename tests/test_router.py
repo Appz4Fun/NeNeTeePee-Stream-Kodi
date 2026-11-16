@@ -3115,6 +3115,60 @@ def test_handle_script_play_stops_quietly_after_a_cancel_in_the_window(
 @patch("resources.lib.router._show_error_dialog")
 @patch("resources.lib.router._search_all_providers")
 @patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_shows_no_error_after_a_cancel(
+    mock_cache, mock_search, mock_error, mock_window, mock_addon
+):
+    """A search the viewer cancelled shows no error dialog or toast when it
+    finally fails or comes back empty."""
+    from resources.lib import search_progress
+    from resources.lib.router import _handle_script_play
+
+    for answer in (([], "NZBHydra unavailable: refused"), ([], None)):
+
+        def _search(*_a, _answer=answer, **_k):
+            search_progress.active().cancel()
+            return _answer
+
+        mock_search.side_effect = _search
+        with patch("resources.lib.http_util.notify") as notify:
+            _handle_script_play(
+                {"type": "movie", "title": "The Matrix", "year": "1999"}
+            )
+        notify.assert_not_called()
+    mock_error.assert_not_called()
+
+
+@patch("xbmcaddon.Addon")
+@patch("resources.lib.search_dialog.SearchWindow")
+@patch("resources.lib.router._search_all_providers", return_value=([], None))
+@patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_reads_episode_labels_before_the_window_opens(
+    mock_cache, mock_search, mock_window, mock_addon
+):
+    """The focused-ListItem fallback reads InfoLabels such as
+    Container(50).ListItem, which would resolve against the window's own
+    list while it is up: it runs before the window opens."""
+    from resources.lib.router import _handle_script_play
+
+    order = []
+    mock_window.side_effect = lambda *a, **k: order.append("window") or MagicMock()
+    with patch(
+        "resources.lib.router._script_play_resolve_episode_args",
+        side_effect=lambda params, st, title, season, episode, imdb: order.append(
+            "labels"
+        )
+        or (title, "1", "2"),
+    ):
+        _handle_script_play({"type": "episode", "title": "From"})
+
+    assert order == ["labels", "window"]
+
+
+@patch("xbmcaddon.Addon")
+@patch("resources.lib.search_dialog.SearchWindow")
+@patch("resources.lib.router._show_error_dialog")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.cache.get_cached", return_value=None)
 def test_handle_script_play_closes_the_window_before_a_search_error_dialog(
     mock_cache, mock_search, mock_error, mock_window, mock_addon
 ):
