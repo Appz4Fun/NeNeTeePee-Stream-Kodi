@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # Copyright (C) 2026 nzbdav contributors
-"""Listings of one payload under different names take one parse."""
+"""A listing that lost its group takes the parse of the upload it is."""
 
 from email.utils import formatdate
 
@@ -74,18 +74,39 @@ def test_a_cut_that_took_the_title_is_recovered_from_the_same_upload_only():
     assert ADOPTED_KEY not in apart["_meta"]
 
 
-def test_one_film_at_one_exact_size_is_one_payload_whenever_it_was_posted():
+def test_two_names_of_one_group_for_one_upload_are_one_release():
     short = "Film.2024.2160p.UHD.BluRay.DV.x265-GRP"
     long = "Film.2024.2160p.UHD.BluRay.DV.HDR.x265-GRP"
-    one, two, three = _attached(
+    one, two, three, four = _attached(
         _row(short, "one"),
         _row(long, "two", at=86400 * 30),
         _row(short, "three", size=SIZE + 1),
+        _row(long, "four", size=SIZE + 2),
     )
 
-    assert one["_meta"]["hdr"] == two["_meta"]["hdr"] == ["Dolby Vision", "HDR10"]
-    assert three["_meta"]["hdr"] == ["Dolby Vision"]
-    assert _groups([one, two, three]) == [["one", "two"], ["three"]]
+    # Each name keeps what it says: a listing that states a group never
+    # takes another parse.
+    assert one["_meta"]["hdr"] == three["_meta"]["hdr"] == ["Dolby Vision"]
+    assert two["_meta"]["hdr"] == ["Dolby Vision", "HDR10"]
+    assert not any(ADOPTED_KEY in row["_meta"] for row in (one, two, three, four))
+    # One listing of each is the same upload, so the two names are one
+    # release: every listing of both, not just those two.
+    assert _groups([one, two, three, four]) == [["one", "two", "three", "four"]]
+    # Without that upload they are two releases, as the rule has it.
+    assert _groups([two, three]) == [["two"], ["three"]]
+
+
+def test_another_groups_name_at_the_same_size_is_left_alone():
+    real = "Show.S01E01.Episode.Name.2160p.HMAX.WEB-DL.DDP5.1.HDR.x265-NTb"
+    repost = "Show-S01E01-Episode.Name-WEBDL-2160p-x265-EAC3-5.1-AsmoFuscated"
+    other = "Show.S01E01.2160p.HMAX.WEBRip.DDP5.1.x264-OTHER"
+    rows = _attached(
+        _row(real, "real"), _row(repost, "repost", at=40), _row(other, "other", at=80)
+    )
+
+    assert [row["_meta"]["group"] for row in rows] == ["NTb", "AsmoFuscated", "OTHER"]
+    assert not any(ADOPTED_KEY in row["_meta"] for row in rows)
+    assert _groups(rows) == [["real"], ["repost"], ["other"]]
 
 
 @pytest.mark.parametrize(
@@ -114,56 +135,51 @@ def test_a_round_size_or_no_size_proves_nothing():
         assert not any(ADOPTED_KEY in row["_meta"] for row in rows), size
 
 
-def test_the_group_the_list_knows_wins_over_a_reposters_tag():
-    real = "Show.S01E01.Episode.Name.2160p.HMAX.WEB-DL.DDP5.1.HDR.x265-NTb"
-    repost = "Show-S01E01-Episode.Name-WEBDL-2160p-x265-EAC3-5.1-AsmoFuscated"
-    junk = "Show.S01E02.1080p.WEB.H264-NTb_mp4"
+def test_a_group_cut_short_takes_the_full_group_and_a_junk_tail_gives_way():
     rows = _attached(
-        _row(repost, "repost"),
-        _row(real, "real", at=86400),
-        # NTb is on other names of the list; the reposter's tag on this one.
-        _row("Show.S01E01.1080p.HMAX.WEB-DL.DDP5.1.H.264-NTb", "hd", size=SIZE + 5),
+        # "-GUA" is "-GUACAMOLE" cut short: same upload, same minute.
+        _row("Film.2009.SPECIAL.EDITION.2160p.UHD.BluRay.x265-GUA", "cut"),
+        _row("Film.2009.SPECIAL.EDITION.2160p.UHD.BluRay.x265-GUACAMOLE", "full", at=9),
+        # "-NTb_mp4" is the longer name, and still the one that gives way:
+        # the list knows NTb from its other names.
         _row("Show.S01E02.1080p.WEB.H264-NTb", "next", size=SIZE + 9),
-        _row(junk, "junk", size=SIZE + 9, at=30),
+        _row("Show.S01E02.1080p.WEB.H264-NTb_mp4", "junk", size=SIZE + 9, at=30),
+        _row("Show.S01E01.1080p.HMAX.WEB-DL.DDP5.1.H.264-NTb", "hd", size=SIZE + 5),
+        # Not the start of the other group: two releases.
+        _row("Film.2014.2160p.REMUX.HEVC-FraMeSToR.D", "fra", size=SIZE + 77),
+        _row("Film.2014.2160p.REMUX.HEVC-FraMeSToR.DUAL-Rick", "rick", size=SIZE + 77),
     )
+    by_link = {row["link"]: row["_meta"] for row in rows}
 
-    assert rows[0]["_meta"]["group"] == "NTb"
-    assert rows[0]["_meta"]["network"] == rows[1]["_meta"]["network"]
-    assert ADOPTED_KEY not in rows[1]["_meta"]
-    # "-NTb_mp4" is the longer name, and still the one that gives way.
-    assert rows[4]["_meta"]["group"] == "NTb"
-    assert ADOPTED_KEY not in rows[3]["_meta"]
+    assert by_link["cut"]["group"] == by_link["full"]["group"] == "GUACAMOLE"
+    assert by_link["junk"]["group"] == by_link["next"]["group"] == "NTb"
+    assert ADOPTED_KEY not in by_link["next"] and ADOPTED_KEY not in by_link["full"]
+    assert by_link["fra"]["group"] != by_link["rick"]["group"]
+    assert ADOPTED_KEY not in by_link["fra"] and ADOPTED_KEY not in by_link["rick"]
 
 
-def test_one_upload_has_every_tag_any_of_its_names_states():
-    remux = "Film.2023.BluRay.2160p.HDR.DTS-HD.AC3.HEVC.REMUX-GRP"
-    plain = "Film.2023.BluRay.2160p.DV.HEVC-GRP"
-    proper = "Film 2023 PROPER BluRay 2160p HEVC-GRP"
+def test_a_cut_name_never_changes_which_episode_a_row_is():
     rows = _attached(
-        _row(plain, "plain"), _row(remux, "remux", at=86400), _row(proper, "proper")
+        _row("Show.Name.S01E1", "one"),
+        _row("Show.Name.S01E10.1080p.WEB-DL.x264-GRP", "ten", at=5),
+        _row("Film.Name.2019.720p.BluRay.H264", "film", size=SIZE + 3),
+        _row("Film.Name.2019.720p.BluRay.H264-20-40", "odd", size=SIZE + 3, at=5),
     )
 
-    for row in rows:
-        meta = row["_meta"]
-        # REMUX, both ranges, the audio and the PROPER: none is lost to a
-        # name that leaves it out.
-        assert meta["quality"].lower() == "bluray remux", row["title"]
-        assert meta["hdr"] == ["Dolby Vision", "HDR10"]
-        assert "DTS" in meta["audio"] and "DD" in meta["audio"]
-        assert meta["proper"] is True
-        assert meta["group"] == "GRP"
-    assert _groups(rows) == [["plain", "remux", "proper"]]
+    assert not any(ADOPTED_KEY in row["_meta"] for row in rows)
+    identity = rows[0]["_meta"]["ptt_identity"]
+    assert identity["episodes"] == [1]
+    assert not rows[2]["_meta"]["ptt_identity"]["episodes"]
 
 
-def test_names_that_contradict_each_other_keep_the_leading_names_value():
-    low = "Film.2021.1080p.BluRay.x264.DTS-GRP"
-    high = "Film.2021.2160p.UHD.BluRay.x265.HDR.DTS-GRP"
-    rows = _attached(_row(low, "low"), _row(high, "high", at=86400))
+def test_a_name_with_no_group_between_two_groups_takes_neither():
+    bare, _one, _two = _attached(
+        _row("Film 2021 1080p", "bare"),
+        _row("Film.2021.1080p.BluRay.x264-AAA", "a", at=86400),
+        _row("Film.2021.1080p.BluRay.x264-BBB", "b", at=2 * 86400),
+    )
 
-    # One upload cannot be both: the fuller name's resolution and codec
-    # stand for both rows.
-    assert {row["_meta"]["resolution"] for row in rows} == {"2160p"}
-    assert len({row["_meta"]["codec"] for row in rows}) == 1
+    assert bare["_meta"]["group"] == "" and ADOPTED_KEY not in bare["_meta"]
 
 
 def test_the_same_rows_in_any_order_come_to_the_same_parses():
@@ -172,14 +188,14 @@ def test_the_same_rows_in_any_order_come_to_the_same_parses():
     names = [
         "Film.2023.BluRay.2160p.DV.HEVC-GRP",
         "Film.2023.BluRay.2160p.HDR.DTS-HD.AC3.HEVC.REMUX-GRP",
-        "Film 2023 BluRay 2160p HEVC-GRP",
-        "Film.2023.BluRay.2160p.HEVC",
+        "Film 2023 BluRay 2160p HEVC",
+        "Film.2023.BluRay.2160p.HEVC.DTS",
         "Film.2023.BluRay.2160p.DV.HEVC-OTHER",
     ]
 
-    def parses(order):
+    def outcome(order):
         rows = _attached(*[_row(names[at], str(at), at=at * 5) for at in order])
-        return {
+        parses = {
             row["link"]: (
                 row["_meta"]["group"],
                 row["_meta"]["quality"],
@@ -188,13 +204,14 @@ def test_the_same_rows_in_any_order_come_to_the_same_parses():
             )
             for row in rows
         }
+        return parses, sorted(sorted(group) for group in _groups(rows))
 
-    expected = parses(range(len(names)))
+    expected = outcome(range(len(names)))
     shuffler = random.Random(5)
     for _ in range(20):
         order = list(range(len(names)))
         shuffler.shuffle(order)
-        assert parses(order) == expected
+        assert outcome(order) == expected
 
 
 def test_names_with_no_group_that_already_parse_alike_are_still_one_row():
@@ -210,15 +227,24 @@ def test_names_with_no_group_that_already_parse_alike_are_still_one_row():
 def test_a_size_shown_in_gigabytes_and_turned_back_proves_nothing():
     short = "Film.2024.2160p.UHD.BluRay.DV.x265-GRP"
     long = "Film.2024.2160p.UHD.BluRay.DV.HDR.x265-GRP"
-    for size in (int(4.37 * 1024**3), int(512.3 * 1024**2), round(81.5 * 1024**3)):
-        rows = _attached(_row(short, "one", size=size), _row(long, "two", size=size))
+    cut_name = "Film.2024.2160p.UHD.BluRay.DV.HDR.x265"
+    for size in (int(4.37 * 1024**3), int(512.3 * 1024**2), 512300000):
+        rows = _attached(
+            _row(short, "one", size=size),
+            _row(long, "two", size=size),
+            _row(cut_name, "cut", size=size),
+        )
 
-        assert not any(ADOPTED_KEY in row["_meta"] for row in rows), size
+        assert rows[2]["_meta"]["group"] == "", size
+        assert _groups(rows) == [["one"], ["two"], ["cut"]], size
     # To the kilobyte is exact enough.
     rows = _attached(
-        _row(short, "one", size=11147613000), _row(long, "two", size=11147613000)
+        _row(short, "one", size=11147613000),
+        _row(long, "two", size=11147613000),
+        _row(cut_name, "cut", size=11147613000),
     )
-    assert rows[0]["_meta"]["hdr"] == ["Dolby Vision", "HDR10"]
+    assert rows[2]["_meta"]["group"] == "GRP"
+    assert len(_groups(rows)) == 1
 
 
 def test_a_name_with_no_group_takes_the_named_listings_parse():
@@ -241,9 +267,10 @@ def test_listings_that_end_with_no_group_are_still_listed_together():
 
     assert not full["_meta"]["group"]
     assert cut["_meta"]["codec"] == full["_meta"]["codec"] != ""
-    # Not the same name, but one payload: one picker row. The cut name at
-    # another size is listed on its own.
-    assert _groups([cut, full, apart]) == [["cut", "full"], ["apart"]]
+    # Not the same name, but one upload: one picker row. The cut name at
+    # another size is the cut name's release too, so it is listed with them.
+    assert apart["_meta"]["codec"] == ""
+    assert _groups([cut, full, apart]) == [["cut", "full", "apart"]]
 
 
 def test_a_row_keeps_its_own_name_and_container():
@@ -255,7 +282,8 @@ def test_a_row_keeps_its_own_name_and_container():
     assert cut["_meta"]["container"] == "mp4"
     assert full["_meta"]["container"] == "mkv"
     assert cut["title"].endswith("H.264.mp4")
-    assert _groups([cut, full]) == [["cut"], ["full"]]
+    # One exact size is one file, whatever extension each name gives it.
+    assert _groups([cut, full]) == [["cut", "full"]]
 
 
 def test_a_second_pass_changes_nothing_and_does_not_spread_the_parse():
@@ -292,3 +320,35 @@ def test_a_season_pack_row_and_a_crowd_of_names_are_left_alone():
         ]
     )
     assert not any(ADOPTED_KEY in row["_meta"] for row in crowd)
+
+
+def test_what_was_read_for_one_name_reaches_the_uploads_other_names():
+    cut_name = FULL[: -len("-FLUX")]
+    rows = _attached(_row(cut_name, "cut"), _row(FULL, "full", at=40))
+    assert rows[0]["_meta"]["audio"] == rows[1]["_meta"]["audio"] == ["DD+"]
+
+    # MediaInfo read under the full name says the track has Atmos.
+    nfo_audio._remember(
+        filter_module._name_form_key(FULL), ["Atmos", "DD+"], "5.1", exact=True
+    )
+    filter_module.attach_metadata(rows)
+
+    assert rows[0]["_meta"]["audio"] == rows[1]["_meta"]["audio"] == ["Atmos", "DD+"]
+    assert _groups(rows) == [["cut", "full"]]
+    # A further pass changes nothing.
+    before = [dict(row["_meta"]) for row in rows]
+    nfo_audio._remember("some other name", ["DTS"], "5.1", exact=True)
+    filter_module.attach_metadata(rows)
+    assert [row["_meta"] for row in rows] == before
+
+
+def test_a_read_made_under_the_cut_name_reaches_the_full_name():
+    cut_name = FULL[: -len("-FLUX")]
+    nfo_audio._remember(
+        filter_module._name_form_key(cut_name), ["Atmos", "DD+"], "5.1", exact=True
+    )
+    rows = _attached(_row(cut_name, "cut"), _row(FULL, "full", at=40))
+
+    assert rows[0]["_meta"]["group"] == "FLUX"
+    assert rows[0]["_meta"]["audio"] == rows[1]["_meta"]["audio"] == ["Atmos", "DD+"]
+    assert _groups(rows) == [["cut", "full"]]

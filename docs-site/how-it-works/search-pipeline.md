@@ -215,13 +215,17 @@ flowchart TD
 
 Rows are only compared when they share the parsed release profile, the title
 and the episode, and each distinct name is placed once, so a list of 2,500
-rows is grouped in a few milliseconds. Rows with no release group are grouped
-by name instead (`release_subject.name_form_key`); `same_release` itself
-still refuses them.
+rows is grouped in a few milliseconds. The grouping does not depend on the
+order of the rows: a name that fits two releases goes with the one on more
+rows. Rows with no release group are grouped by name instead
+(`release_subject.name_form_key`); `same_release` itself still refuses them.
+Two releases of one group that share an upload (the same film or episode at
+the same exact size) are joined whole.
 
 The metadata pass (`filter._attach_metadata`: parse, unify spellings, recover
-a group the list knows, give listings of one upload one parse in
-`filter_payload`, apply NFO and MediaInfo facts, share Atmos) marks the rows
+a group the list knows, give a listing that lost its group the parse of its
+upload's name in `filter_payload`, apply NFO and MediaInfo facts, share
+Atmos) marks the rows
 it handled. The requested-item rules and `filter_results` ask for it again
 with the same rows and return at once. It runs again when a row is new, when
 two lists were joined, or when `nfo_audio.known_version()` changed.

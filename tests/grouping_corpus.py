@@ -116,16 +116,19 @@ def reference_groups(rows):
 
     The rule is not transitive, so the outcome depends on the order rows
     are taken in. They are taken as ``release_index`` documents: the name
-    and parse carried by the most rows first (``_commonest_first``). The
-    groups come back in list order, each with its rows in list order.
+    and parse carried by the most rows first (``_commonest_first``). Then
+    releases that share an upload are joined (``_join_shared_uploads``).
+    The groups come back in list order, each with its rows in list order.
     """
     position = {id(row): at for at, row in enumerate(rows)}
+    linked = _linked_names(rows)
     groups = []
-    for row in _commonest_first(rows):
+    for row in _commonest_first(rows, linked):
         if not row.get("_season_pack"):
             for group in groups:
                 if all(
-                    not member.get("_season_pack") and _plainly_the_same(member, row)
+                    not member.get("_season_pack")
+                    and _plainly_the_same(member, row, linked)
                     for member in group
                 ):
                     group.append(row)
@@ -134,13 +137,80 @@ def reference_groups(rows):
                 groups.append([row])
         else:
             groups.append([row])
+    groups = _join_shared_uploads(groups)
     for group in groups:
         group.sort(key=lambda row: position[id(row)])
     groups.sort(key=lambda group: position[id(group[0])])
     return groups
 
 
-def _commonest_first(rows):
+def _linked_names(rows):
+    """For names with no group: the first name of the set each belongs to.
+
+    A listing that took its parse from another name is one upload with it,
+    and every listing of a name is that name's release, so names linked
+    that way are one set.
+    """
+    from resources.lib.release_subject import name_form_key
+
+    sets = []
+    for row in rows:
+        meta = row.get("_meta") or {}
+        if meta.get("group"):
+            continue
+        pair = {name_form_key(row.get("title")), meta.get("parse_from_payload")}
+        pair.discard(None)
+        pair.discard("")
+        touching = [one for one in sets if one & pair]
+        for one in touching:
+            sets.remove(one)
+            pair |= one
+        sets.append(pair)
+    return {name: min(one) for one in sets for name in one}
+
+
+def _join_shared_uploads(groups):
+    """Join groups that hold listings of one upload under one group's name.
+
+    Two rows with the same release group, the same exact size in bytes
+    (not a size an indexer rounded) and the same film or episode.
+    """
+    from resources.lib.filter_payload import exact_size, item_of, same_item
+    from resources.lib.release_match import title_key
+
+    def upload(row):
+        group = title_key((row.get("_meta") or {}).get("group"))
+        if not group or row.get("_season_pack") or not exact_size(row):
+            return None
+        return group, exact_size(row)
+
+    groups = [list(group) for group in groups]
+    merged = True
+    while merged:
+        merged = False
+        seen = {}
+        for number, group in enumerate(groups):
+            for row in group:
+                key = upload(row)
+                if key is None:
+                    continue
+                for other_number, other in seen.get(key, ()):
+                    if other_number != number and same_item(
+                        item_of(row), item_of(other)
+                    ):
+                        groups[other_number].extend(group)
+                        del groups[number]
+                        merged = True
+                        break
+                if merged:
+                    break
+                seen.setdefault(key, []).append((number, row))
+            if merged:
+                break
+    return groups
+
+
+def _commonest_first(rows, linked):
     """``rows`` ordered by how many rows read exactly as they do, most first.
 
     What a row reads as is everything the rule looks at: its parsed release
@@ -163,8 +233,8 @@ def _commonest_first(rows):
                 return (profile, repr((identity, container, upscaled)))
         except Exception:  # pylint: disable=broad-except
             return ("unreadable", id(row))
-        taken = meta.get("parse_from_payload")
-        return ("no group", taken or name_form_key(row.get("title")), repr(container))
+        name = name_form_key(row.get("title"))
+        return ("no group", linked.get(name, name), repr(container))
 
     readings = [reading(row) for row in rows]
     counts = collections.Counter(readings)
@@ -175,12 +245,12 @@ def _commonest_first(rows):
     return [rows[at] for at in order]
 
 
-def _plainly_the_same(member, row):
+def _plainly_the_same(member, row, linked):
     """The release rule, plus the one thing it leaves to the grouping.
 
     Two names with a group are ``release_match.same_release``. Two names
     with no group are one release when they are the same name in any
-    spelling (or took their parse from the same name, ``filter_payload``),
+    spelling, or names ``linked`` by a shared upload (``_linked_names``),
     unless both name a container and the containers differ.
     """
     from resources.lib.release_match import same_release
@@ -200,9 +270,8 @@ def _plainly_the_same(member, row):
         return False
 
     def name_of(one):
-        # A listing that took another's parse goes by that listing's name.
-        taken = (one.get("_meta") or {}).get("parse_from_payload")
-        return taken or name_form_key(one.get("title"))
+        name = name_form_key(one.get("title"))
+        return linked.get(name, name)
 
     return bool(name_of(member)) and name_of(member) == name_of(row)
 

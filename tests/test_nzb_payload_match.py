@@ -166,9 +166,21 @@ def test_a_complete_repost_of_a_cut_short_pick_is_not_a_pack():
     assert not holds_more(complete, cut_short)
     # The same files listed twice in one NZB are not a pack either.
     assert not holds_more(_payload(_nzb(volumes[:6] * 2, post="x")), cut_short)
-    # Files that name no episode cannot show a pack.
+
+
+def test_a_pack_whose_files_name_no_episode_is_told_by_what_else_it_holds():
+    # Obfuscated subjects, or an anime batch numbered " - 01": as much
+    # again in files the pick does not have is a pack.
     plain = [("{:08x}".format(n), _sizes(n, 400)) for n in range(4)]
-    assert not holds_more(_payload(_nzb(plain)), _payload(_nzb(plain[:1], post="p")))
+    one = _payload(_nzb(plain[:1], post="p"))
+    assert holds_more(_payload(_nzb(plain)), one)
+    assert holds_more(_payload(_nzb(plain[:2])), one)
+    # The pick's file and extras that come to less than the pick: a copy.
+    extras = [("{:08x}".format(9), _sizes(9, 150))]
+    assert not holds_more(_payload(_nzb(plain[:1] + extras)), one)
+    # "1x02" names an episode as "S01E02" does.
+    files = [("show.1x0{}.mkv".format(n), _sizes(n, 400)) for n in (1, 2, 3)]
+    assert _payload(_nzb(files))[2] == frozenset(((1, 1), (1, 2), (1, 3)))
 
 
 @pytest.fixture(name="collect")

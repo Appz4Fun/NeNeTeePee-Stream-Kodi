@@ -362,6 +362,21 @@ def _tag_run_group(block):
     return ""
 
 
+def _hyphen_group(name):
+    """The "-GROUP" a name or a tag block ends with, read as any name's is.
+
+    Trailing indexer tags are dropped first ("-GRP-Obfuscated") and
+    hyphenated tags are not split ("DTS-X", "DD-EX", "WEB-DL").
+    """
+    previous = None
+    while previous != name:
+        previous = name
+        name = _TRAILING_TAG.sub("", name)
+    match = _GROUP_AT_END.search(_without_hyphenated_tags(name))
+    group = _group_candidate(match.group(1)) if match else ""
+    return group if len(group) > 1 else ""
+
+
 def _manager_block(name):
     """The tag block of a library manager's file name, or None.
 
@@ -434,11 +449,7 @@ def detect_release_group(title, parsed_group=""):
         # tag, or what follows its last hyphen ("...h264-EDITH"). Outside
         # it the name is "Show - S01E02 - Episode Title", and a one-word
         # title after that last hyphen is not one.
-        group = _tag_run_group(block)
-        if group:
-            return group
-        hyphened = _BRACKET_BLOCK_AT_END.search(name)
-        return _group_candidate(hyphened.group(2)) if hyphened else ""
+        return _tag_run_group(block) or _hyphen_group(block)
     previous = None
     while previous != name:
         previous = name
