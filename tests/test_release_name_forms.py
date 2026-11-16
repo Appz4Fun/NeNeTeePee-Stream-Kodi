@@ -302,6 +302,29 @@ def test_a_trailing_word_is_the_group_when_the_list_knows_it_as_one():
     assert _list_groups(TIGOLE, TIGOLE.replace(".", " ")) == ["", ""]
 
 
+def test_a_spelling_that_parses_the_group_gives_it_to_the_others():
+    # "-DNU-TAoE" parses as a group; the dotted spelling has none. It takes
+    # the group from its other spelling, not the last word alone from rows
+    # of other names that end in "TAoE".
+    hyphen = "Show.S02E01.1080p.WEB.x265.EAC3.5.1.Atmos-DNU-TAoE"
+    dotted = "Show.S02E01.1080p.WEB.x265.EAC3.5.1.Atmos.DNU.TAoE"
+    others = [
+        "Show.S02E02.1080p.WEB.x265.EAC3.5.1-TAoE",
+        "Show.S02E03.1080p.WEB.x265.EAC3.5.1-TAoE",
+    ]
+
+    groups = _list_groups(dotted, hyphen, *others)
+
+    assert groups[0] == groups[1] == parse_title_metadata(hyphen)["group"] != "TAoE"
+
+
+def test_spellings_that_tie_keep_the_one_written_with_capitals():
+    upper = "Movie.2020.1080p.BluRay.x264-CONTRiBUTiON"
+
+    for names in ((upper, upper.lower()), (upper.lower(), upper)):
+        assert _list_groups(*names) == ["CONTRiBUTiON", "CONTRiBUTiON"]
+
+
 def test_a_trailing_word_the_list_does_not_know_stays_a_word():
     known = ["Film.2023.1080p.BluRay.x265-German", "Film.2023.720p.BluRay.x265-German"]
     # A language, a tag and a word no row carries as its group.

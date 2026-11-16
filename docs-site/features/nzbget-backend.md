@@ -299,14 +299,16 @@ size in bytes are one upload when they name the same film or episode, or
 when one name is the start of the other and both were posted within two
 minutes. Then:
 
-- a listing with no group takes the named listing's group and tags, and so
-  does one whose group was cut short (`-GUA` for `-GUACAMOLE`). Between two
-  such groups the one the rest of the results know better is used, so `-GRP`
-  is not replaced by `-GRP_mp4`;
-- two names from one group keep their own tags, and their releases become
-  one release: every listing of both names, in one picker row;
-- a listing never takes another group's name. Two groups at one exact size
-  stay two releases.
+- a listing with no group takes the named listing's group. A name cut
+  short takes the full name's tags too; any other name keeps the tags it
+  states, so `...NL-RetailSub.REMUX` stays a REMUX;
+- two names from one group, or a group and its cut (`-GUA` beside
+  `-GUACAMOLE`), keep their own tags, and their releases become one
+  release: every listing of both names, in one picker row. A listing far
+  from its release's usual size, or a name that fits two encodes, joins
+  nothing;
+- a listing that states a group is never given another, and two different
+  groups at one exact size stay two releases.
 
 A size an indexer rounded (a whole number of megabytes, or a figure like
 4.37 GB) proves nothing and is ignored. See

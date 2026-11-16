@@ -27,21 +27,24 @@ from resources.lib.upload_count import count_uploads
 #   ("HDR10x265", once read as season 10 episode 265 and dropped from a
 #   film search), ATV as Apple TV+, and a trailing word the list knows as
 #   a group (207 rows).
-#   6476 / 919 / 22: only a listing that lost its group takes another
-#   name's parse, and never from another group; two names of one group for
-#   one upload keep their parses and their releases are joined whole. Sizes
-#   an indexer rounded prove nothing. The grouping no longer depends on the
-#   rows' order. (Listings of two different groups at one size were joined
-#   for a while: 7 split uploads, but a real group could be replaced.)
+#   6490 / 925 / 28: a listing that states a group is never changed. One
+#   with no group takes the group of the named listing it is an upload of
+#   (its whole parse when its name is a cut of that one, else it keeps its
+#   own tags). Two names of one group for one upload, or a group and its
+#   cut, are joined as whole releases, with guards against indirect and
+#   odd-size links. Sizes an indexer rounded prove nothing. The grouping no
+#   longer depends on the rows' order. (Sharing a whole parse between named
+#   listings got to 7 split uploads, but replaced real groups and split
+#   releases from their own other copies.)
 EXPECTED = {
     "rows": 41446,
     "shown": 39733,
-    "picker_rows": 6476,
-    "groupless_rows": 2530,
-    "groupless_picker_rows": 919,
+    "picker_rows": 6490,
+    "groupless_rows": 2549,
+    "groupless_picker_rows": 925,
     "uploads_listed_twice": 7714,
-    "uploads_split": 22,
-    "multi_copy_rows": 4315,
+    "uploads_split": 28,
+    "multi_copy_rows": 4325,
 }
 
 

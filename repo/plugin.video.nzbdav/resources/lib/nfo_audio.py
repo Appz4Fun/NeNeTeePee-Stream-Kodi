@@ -579,10 +579,11 @@ def apply_known(rows, key_of, derived_keys=(), other_names=None):
     (per-row caches built from its metadata). Returns how many rows changed.
 
     ``other_names`` maps ``id(row)`` to the keys of the other names the
-    row's upload is listed under (``filter_payload``). A row nothing was
-    read for under its own name takes what was read for the first of those
-    that has an answer: one upload has one set of audio tracks, whichever
-    name the read was made under.
+    row's upload is listed under (``filter_payload``). Where nothing was
+    read for the row's own name (or the read failed, or told nothing of the
+    audio), it takes what was read for the first of those that has an
+    answer: one upload has one set of audio tracks, whichever name the read
+    was made under.
     """
     changed = 0
     for row in rows:
@@ -590,16 +591,19 @@ def apply_known(rows, key_of, derived_keys=(), other_names=None):
         title = row.get("title") if isinstance(row, dict) else None
         if not isinstance(meta, dict) or not isinstance(title, str):
             continue
-        entry = _known(key_of(title))
-        if not entry and other_names:
-            for name in other_names.get(id(row), ()):
-                entry = _known(name)
-                if entry:
-                    break
-        if not entry:
-            continue
-        audio_changed = bool(entry["audio"]) and _apply_audio(meta, entry)
-        if _apply_video(meta, entry) or audio_changed:
+        keys = [key_of(title)]
+        if other_names:
+            keys.extend(other_names.get(id(row), ()))
+        entries = [entry for entry in map(_known, keys) if entry]
+        # The first that says something, of the audio and of the video: a
+        # read that failed, or told only one of the two, does not stand in
+        # the way of another name's answer.
+        heard = next((entry for entry in entries if entry["audio"]), None)
+        seen = next(
+            (entry for entry in entries if isinstance(entry.get("video"), dict)), None
+        )
+        audio_changed = heard is not None and _apply_audio(meta, heard)
+        if (seen is not None and _apply_video(meta, seen)) or audio_changed:
             for name in derived_keys:
                 row.pop(name, None)
             changed += 1

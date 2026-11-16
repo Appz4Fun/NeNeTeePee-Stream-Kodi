@@ -145,69 +145,121 @@ def reference_groups(rows):
 
 
 def _linked_names(rows):
-    """For names with no group: the first name of the set each belongs to.
+    """For names with no group: the name each is listed under.
 
     A listing that took its parse from another name is one upload with it,
-    and every listing of a name is that name's release, so names linked
-    that way are one set.
+    and every listing of a name is that name's release. So a name whose
+    rows took from one other name only is one release with it. A name
+    whose rows took from two says too little: it is left alone here, and
+    ``_listed_under`` sends each such row with the name it took from.
     """
     from resources.lib.release_subject import name_form_key
 
-    sets = []
+    took = collections.defaultdict(set)
     for row in rows:
         meta = row.get("_meta") or {}
-        if meta.get("group"):
+        source = meta.get("parse_from_payload")
+        if not meta.get("group") and isinstance(source, str) and source:
+            took[name_form_key(row.get("title"))].add(source)
+    sets = []
+    for name, sources in took.items():
+        if len(sources) != 1:
             continue
-        pair = {name_form_key(row.get("title")), meta.get("parse_from_payload")}
-        pair.discard(None)
-        pair.discard("")
+        pair = {name} | sources
         touching = [one for one in sets if one & pair]
         for one in touching:
             sets.remove(one)
             pair |= one
         sets.append(pair)
-    return {name: min(one) for one in sets for name in one}
+    linked = {name: min(one) for one in sets for name in one}
+    linked[_AMBIGUOUS] = {name for name, sources in took.items() if len(sources) > 1}
+    return linked
+
+
+_AMBIGUOUS = object()
+
+
+def _listed_under(row, linked):
+    """The name a row with no group is listed under (see ``_linked_names``)."""
+    from resources.lib.release_subject import name_form_key
+
+    name = name_form_key(row.get("title"))
+    source = (row.get("_meta") or {}).get("parse_from_payload")
+    if name in linked[_AMBIGUOUS] and isinstance(source, str) and source:
+        name = source
+    return linked.get(name, name)
 
 
 def _join_shared_uploads(groups):
-    """Join groups that hold listings of one upload under one group's name.
+    """Join groups that hold listings of one upload of a group.
 
-    Two rows with the same release group, the same exact size in bytes
-    (not a size an indexer rounded) and the same film or episode.
+    Two rows are one upload when they have the same exact size in bytes
+    (not a size an indexer rounded) and either the same release group and
+    the same film or episode, or groups one the start of the other and
+    names one the other cut short, posted together. A row far from its own
+    group's usual size joins nothing, and groups are joined only when each
+    of them shares an upload with every other one of the set.
     """
-    from resources.lib.filter_payload import exact_size, item_of, same_item
+    import statistics
+
+    from resources.lib.filter_payload import (
+        cut_of_one_upload,
+        exact_size,
+        item_of,
+        same_item,
+    )
     from resources.lib.release_match import title_key
 
-    def upload(row):
-        group = title_key((row.get("_meta") or {}).get("group"))
-        if not group or row.get("_season_pack") or not exact_size(row):
-            return None
-        return group, exact_size(row)
+    def group_of(row):
+        return title_key((row.get("_meta") or {}).get("group"))
 
-    groups = [list(group) for group in groups]
-    merged = True
-    while merged:
-        merged = False
-        seen = {}
-        for number, group in enumerate(groups):
-            for row in group:
-                key = upload(row)
-                if key is None:
-                    continue
-                for other_number, other in seen.get(key, ()):
-                    if other_number != number and same_item(
-                        item_of(row), item_of(other)
-                    ):
-                        groups[other_number].extend(group)
-                        del groups[number]
-                        merged = True
-                        break
-                if merged:
-                    break
-                seen.setdefault(key, []).append((number, row))
-            if merged:
-                break
-    return groups
+    def usable(row, group):
+        if not group_of(row) or row.get("_season_pack") or not exact_size(row):
+            return False
+        if item_of(row) is None:
+            return False
+        sizes = [int(one["size"]) for one in group if str(one.get("size")).isdigit()]
+        sizes = [size for size in sizes if size > 0]
+        if len(sizes) < 3:
+            return True
+        usual = statistics.median(sizes)
+        return usual / 1.35 <= exact_size(row) <= usual * 1.35
+
+    def one_upload(row, other):
+        left, right = group_of(row), group_of(other)
+        if left == right:
+            return same_item(item_of(row), item_of(other))
+        if left.startswith(right) or right.startswith(left):
+            return cut_of_one_upload(row, other)
+        return False
+
+    by_size = collections.defaultdict(list)
+    for number, group in enumerate(groups):
+        for row in group:
+            if usable(row, group):
+                by_size[exact_size(row)].append((number, row))
+    shared = set()
+    for listed in by_size.values():
+        for number, row in listed:
+            for other, other_row in listed:
+                if number < other and one_upload(row, other_row):
+                    shared.add((number, other))
+    sets = []
+    for pair in shared:
+        pair = set(pair)
+        touching = [one for one in sets if one & pair]
+        for one in touching:
+            sets.remove(one)
+            pair |= one
+        sets.append(pair)
+    out = [list(group) for group in groups]
+    for one in sets:
+        ordered = sorted(one)
+        if all((a, b) in shared for a in ordered for b in ordered if a < b):
+            for number in ordered[1:]:
+                out[ordered[0]].extend(out[number])
+                out[number] = []
+    return [group for group in out if group]
 
 
 def _commonest_first(rows, linked):
@@ -220,7 +272,6 @@ def _commonest_first(rows, linked):
     """
     from resources.lib import fallback_streams as _fs
     from resources.lib.release_match import profile_group, release_profile
-    from resources.lib.release_subject import name_form_key
 
     def reading(row):
         meta = row.get("_meta") or {}
@@ -233,8 +284,7 @@ def _commonest_first(rows, linked):
                 return (profile, repr((identity, container, upscaled)))
         except Exception:  # pylint: disable=broad-except
             return ("unreadable", id(row))
-        name = name_form_key(row.get("title"))
-        return ("no group", linked.get(name, name), repr(container))
+        return ("no group", _listed_under(row, linked), repr(container))
 
     readings = [reading(row) for row in rows]
     counts = collections.Counter(readings)
@@ -254,7 +304,6 @@ def _plainly_the_same(member, row, linked):
     unless both name a container and the containers differ.
     """
     from resources.lib.release_match import same_release
-    from resources.lib.release_subject import name_form_key
 
     def unnamed(one):
         meta = one.get("_meta") or {}
@@ -269,11 +318,8 @@ def _plainly_the_same(member, row, linked):
     if left_container and right_container and left_container != right_container:
         return False
 
-    def name_of(one):
-        name = name_form_key(one.get("title"))
-        return linked.get(name, name)
-
-    return bool(name_of(member)) and name_of(member) == name_of(row)
+    under = _listed_under(member, linked)
+    return bool(under) and under == _listed_under(row, linked)
 
 
 def reference_upload_count(rows):

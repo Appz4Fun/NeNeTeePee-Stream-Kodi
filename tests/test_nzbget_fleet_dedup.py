@@ -2092,9 +2092,13 @@ def test_failed_history_read_leaves_the_snapshot_unknown(_fleet_env):
     ), patch(
         _APPEND, return_value=(1, None)
     ):
-        submit_fleet(ctx, "pick", "T", "k")
+        submit_fleet(ctx, "pick", "T", "unread-history")
     assert ctx.preexisting_successes is None
-    snapshot.assert_not_called()
+    # This submit's own key only: the patch is module-wide, and a worker
+    # thread an earlier test abandoned can still reach it while it stands
+    # (seen once as a failure in a full-suite run, never alone).
+    own = [call for call in snapshot.call_args_list if "unread-history" in call.args]
+    assert not own
 
 
 def test_append_landing_after_cancel_skips_the_veto_probe():
