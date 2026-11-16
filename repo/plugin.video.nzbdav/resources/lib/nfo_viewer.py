@@ -95,7 +95,6 @@ _FALLBACK_ROWS = 18
 
 _TEXT_COLOR = "D4D4D8"
 _CHECK_COLOR = "6B7280"
-_NEW_COLOR = "FFFFFF"
 _SLOT_COLORS = {
     doc_attributes.HDR: "FBBF24",
     doc_attributes.CODEC: "94A3B8",
@@ -244,15 +243,15 @@ def slot_color(slot, text):
 def attribute_words(attributes, check):
     """The attributes as ``text_image.words_png`` words.
 
-    Each attribute in its picker color, then small: ``check`` when the
-    listing's name already says it, else NEW.
+    Each attribute in its picker color, then small: a grey ``check`` when
+    the listing's name already says it, else NEW in the attribute's color.
     """
     words = []
     for attribute in attributes:
         color = slot_color(attribute["slot"], attribute["text"])
         words.append((attribute["text"], color, False))
         if attribute["new"]:
-            words.append((_string(30781), _NEW_COLOR, True))
+            words.append((_string(30781), color, True))
         else:
             words.append((check, _CHECK_COLOR, True))
     return words
@@ -275,7 +274,7 @@ def attribute_label(attributes):
         color = slot_color(attribute["slot"], attribute["text"])
         part = "[COLOR FF{}]{}[/COLOR]".format(color, _plain(attribute["text"]))
         if attribute["new"]:
-            part += " [COLOR FF9CA3AF]{}[/COLOR]".format(_string(30781).lower())
+            part += " [COLOR FF{}]{}[/COLOR]".format(color, _string(30781).lower())
         parts.append(part)
     return "     ".join(parts)
 

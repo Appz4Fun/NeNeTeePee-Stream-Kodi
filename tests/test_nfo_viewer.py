@@ -322,9 +322,10 @@ def test_the_page_and_the_attributes_are_drawn_as_images(tmp_path):
     with open(strip.setImage.call_args.args[0], "rb") as handle:
         width, height, _depth, palette, _rows_ = _decode(handle.read())
     assert (width, height) == (1275, 32)
-    # Resolution purple, codec grey, the check grey, audio pink, NEW white.
+    # Resolution purple, the check grey, audio pink with its NEW in the same
+    # pink: no color is there for NEW alone.
     assert (0xA7, 0x8B, 0xFA) in palette and (0xE8, 0x79, 0xA8) in palette
-    assert (0xFF, 0xFF, 0xFF) in palette and (0x6B, 0x72, 0x80) in palette
+    assert (0x6B, 0x72, 0x80) in palette and (0xFF, 0xFF, 0xFF) not in palette
 
 
 def test_what_is_drawn_is_as_large_as_the_screen_asks(tmp_path):
@@ -497,7 +498,7 @@ def test_without_the_font_the_skins_text_box_shows_the_page(tmp_path):
     )
     assert viewer.getProperty("attributes") == (
         "[COLOR FFA78BFA]2160p[/COLOR]     [COLOR FF94A3B8]H265[/COLOR]     "
-        "[COLOR FFE879A8]DD+ 5.1[/COLOR] [COLOR FF9CA3AF]new[/COLOR]     "
+        "[COLOR FFE879A8]DD+ 5.1[/COLOR] [COLOR FFE879A8]new[/COLOR]     "
         "[COLOR FFC084FC]WEB-DL[/COLOR]     [COLOR FF34D399]GRP[/COLOR]"
     )
     viewer.getControl(20).setImage.assert_not_called()
