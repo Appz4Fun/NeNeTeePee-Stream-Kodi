@@ -230,6 +230,14 @@ it handled. The requested-item rules and `filter_results` ask for it again
 with the same rows and return at once. It runs again when a row is new, when
 two lists were joined, or when `nfo_audio.known_version()` changed.
 
+Parsing a name is the slow part of a first open (about half a millisecond a
+name on a desktop, ten times that on a TV box). `parse_store` keeps what each
+name parsed to in `parsed_names.json` in the profile folder, so a name seen in
+an earlier search is not parsed again: 8,000 names at most, the least
+recently used dropped first, and the file is thrown away when the add-on's
+code changes. Only what a name parses to is kept; what later steps add from
+other names or an NFO is worked out again for each list.
+
 `upload_count.count_copies` counts a release's separate uploads for both the
 ranking and the picker. It keeps the counted uploads of a size sorted by
 date and compares a listing only with those inside its two-minute window.

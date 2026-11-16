@@ -296,6 +296,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A first search of names seen before opens much faster.** Parsed release
+  names are kept in `parsed_names.json` in the add-on's profile folder, up to
+  8,000 names (about 5 MB), the least recently used dropped first, and thrown
+  away when the add-on is updated. A search after its cache entry expired, or
+  a search of the next episode, parses only names it has not seen: on 23 real
+  searches, first opens went from 23.3 s to 9.5 s in total on the development
+  machine.
+- **A cached open lists exactly what the first open listed.** A group read
+  from the list's other names now reaches every spelling of the name in the
+  same pass, so reading a search back from the cache no longer finds a
+  group or two the first open missed.
+- **A list is grouped once per open.** Grouping the same rows again (for the
+  picker rows and the NZBGet backups) reuses the grouping made for the
+  ranking: cached opens about 10% faster.
+
 - **A row's tags share one label.** `HYBRID` (or `UPSCALE`), `REPACK` and the
   new `NFO` and `MEDIAINFO` tags follow each other under the name, two spaces
   apart, in both picker views. Each had a column of its own before, and the

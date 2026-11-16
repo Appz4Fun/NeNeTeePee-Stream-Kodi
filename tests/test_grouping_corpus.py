@@ -9,6 +9,7 @@ here with the reason in the commit.
 """
 
 import gzip
+import json
 import random
 
 import grouping_corpus
@@ -38,15 +39,17 @@ from resources.lib.upload_count import count_uploads
 #   releases from their own other copies.)
 #   6535 / 970: a name with no group listed at sizes far apart (1.35x
 #   between neighbours) is one row per size range, NOGRP-A, NOGRP-B, ...
+#   6534 / 969: a group recovered from the list reaches the name's other
+#   spellings in the same pass, so a cached open lists what the first did.
 EXPECTED = {
     "rows": 41446,
     "shown": 39733,
-    "picker_rows": 6535,
-    "groupless_rows": 2549,
-    "groupless_picker_rows": 970,
+    "picker_rows": 6534,
+    "groupless_rows": 2547,
+    "groupless_picker_rows": 969,
     "uploads_listed_twice": 7714,
     "uploads_split": 28,
-    "multi_copy_rows": 4336,
+    "multi_copy_rows": 4335,
 }
 
 
@@ -149,3 +152,24 @@ def test_the_order_the_rows_arrive_in_changes_nothing():
         shuffler.shuffle(rows)
 
         assert outcome(grouping_corpus.open_picker(search, rows)) == expected
+
+
+def test_a_cached_open_lists_exactly_what_the_first_open_listed(opened):
+    # A search read back from the cache carries the parses the first open
+    # made, without the mark of its pass: the pass runs again over them.
+    keep = ("title", "size", "pubdate", "indexer", "link", "usenetdate")
+    keep += ("poster", "password", "_meta")
+    for one in opened:
+        rows = [
+            {key: value for key, value in row.items() if key in keep}
+            for row in one.rows
+        ]
+        rows = json.loads(json.dumps(rows))
+        again = grouping_corpus.open_picker(one.search, rows)
+
+        assert grouping_corpus.partition(again.groups) == grouping_corpus.partition(
+            one.groups
+        ), one.search.name
+        assert [row["_meta"] for row in again.filtered] == [
+            row["_meta"] for row in one.filtered
+        ], one.search.name

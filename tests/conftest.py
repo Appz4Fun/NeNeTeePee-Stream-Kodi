@@ -96,14 +96,14 @@ def _suppress_readahead_daemon(request):
 
 @pytest.fixture(autouse=True)
 def _isolated_nzbget_submit_ledger():
-    """Give every test its own NZBGet resubmit ledger, NZB cache, and search cache.
+    """Give every test its own NZBGet ledger, NZB cache, search cache and parse store.
 
     The mocked ``translatePath`` returns one shared path for the whole run, so
     without this a fleet test's sends would make a later test skip backups,
     and one test's cached search would answer a later test's search.
     """
     from resources.lib import cache as search_cache
-    from resources.lib import nzb_cache, nzbget_submit_ledger
+    from resources.lib import nzb_cache, nzbget_submit_ledger, parse_store
 
     # Outside tmp_path: some tests assert their tmp_path stays empty.
     state = tempfile.mkdtemp(prefix="nzbdav-test-state-")
@@ -117,9 +117,18 @@ def _isolated_nzbget_submit_ledger():
             nzbget_submit_ledger, "_path", return_value=path
         ), patch.object(nzb_cache, "_cache_dir", return_value=cache_dir), patch.object(
             search_cache, "_get_cache_dir", return_value=search_dir
+        ), patch.object(
+            # Its own file too: some tests point the search cache at a
+            # folder whose parent other tests share.
+            parse_store,
+            "_store_path",
+            return_value=os.path.join(state, "parsed_names.json"),
         ):
+            # Parsed names kept by an earlier test are not this test's.
+            parse_store.forget()
             yield
     finally:
+        parse_store.forget()
         shutil.rmtree(state, ignore_errors=True)
 
 

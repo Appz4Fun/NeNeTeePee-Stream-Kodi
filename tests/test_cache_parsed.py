@@ -344,12 +344,14 @@ def test_an_entry_from_another_build_is_parsed_once_then_stored(mock_search, cac
         data["parser"] = "another-build"
         path.write_text(json.dumps(data), encoding="utf-8")
 
-        # The first open after the update parses again and stores the result.
+        # The entry's parses are dropped. The names are not parsed again: this
+        # build already parsed them, and kept them (``parse_store``).
         _script_play_search_results("movie", "Some Movie", kwargs, MagicMock())
-        assert parse.call_count == 6
-        # Every later open reads it back.
+        assert parse.call_count == 3
+        assert _entry(cache_dir)[1]["parser"] == cache_module._parser_stamp()
+        # Every later open reads them back from the entry.
         _script_play_search_results("movie", "Some Movie", kwargs, MagicMock())
-        assert parse.call_count == 6
+        assert parse.call_count == 3
 
     assert mock_search.call_count == 1
 
