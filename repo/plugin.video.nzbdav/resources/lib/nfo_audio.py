@@ -799,7 +799,7 @@ def without_keys(text, link):
     """
     text = str(text or "")
     for name, value in link_key(link).items():
-        if len(value) >= _MIN_KEY_LENGTH or name == "apikey":
+        if len(value) >= _MIN_KEY_LENGTH or (name == "apikey" and len(value) >= 6):
             text = text.replace(value, "REDACTED")
     return redact_text(text)
 
