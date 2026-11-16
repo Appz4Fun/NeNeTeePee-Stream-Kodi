@@ -448,7 +448,10 @@ def test_compact_rows_keep_dl_copies_and_focus_bar():
         labels = [c.findtext("label") for c in layout.findall("control")]
         assert "$INFO[ListItem.Property(available)]" in labels
         assert "$INFO[ListItem.Property(copies)]" in labels
-        assert "$INFO[ListItem.Property(filter_reason)]" in labels
+        # The filter reason follows the tags, in their label.
+        assert any(
+            "ListItem.Property(filter_reason)" in (label or "") for label in labels
+        )
     focused = compact_list.find("focusedlayout")
     bars = [
         c
@@ -659,12 +662,14 @@ def test_skin_draws_the_strike_and_the_repack_slot_in_every_row_layout():
                 control.findtext("label"): control
                 for control in layout.findall("control[@type='label']")
             }
-            hybrid = slots["$INFO[ListItem.Property(hybrid)]"]
-            repack = slots["$INFO[ListItem.Property(repack)]"]
             container_slot = slots["$INFO[ListItem.Property(container)]"]
-            end = int(hybrid.findtext("left")) + int(hybrid.findtext("width"))
-            assert end <= int(repack.findtext("left"))
-            end = int(repack.findtext("left")) + int(repack.findtext("width"))
+            # REPACK is one of the row's tags, which share one label.
+            (tags,) = [
+                control
+                for label, control in slots.items()
+                if label.startswith("$INFO[ListItem.Property(tags)]")
+            ]
+            end = int(tags.findtext("left")) + int(tags.findtext("width"))
             assert end <= int(container_slot.findtext("left"))
 
 

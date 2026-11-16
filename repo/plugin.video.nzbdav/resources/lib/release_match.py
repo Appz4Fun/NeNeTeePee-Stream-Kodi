@@ -42,6 +42,8 @@ _STRING_FIELDS = (
     "edition",
     "group",
 )
+# Where the group sits in a ``release_profile`` tuple.
+_GROUP_AT = _STRING_FIELDS.index("group")
 _SET_FIELDS = ("hdr", "audio")
 _FLAG_FIELDS = ("proper", "repack")
 # Per-row cache of (title, profile): sorting compares one row many times.
@@ -206,6 +208,11 @@ def release_profile(row):
     return profile
 
 
+def profile_group(profile):
+    """The release group in a ``release_profile``, "" when the name has none."""
+    return profile[_GROUP_AT][1]
+
+
 def _movie_years_match(pick, row):
     """For a movie pick, both parsed years must be equal -- absent included.
 
@@ -261,7 +268,7 @@ def same_release(pick, row):
         # The cached profile comparison is cheap and rejects most pairs, so it
         # runs before the content gate.
         profile = release_profile(pick)
-        if not dict(profile)["group"] or profile != release_profile(row):
+        if not profile_group(profile) or profile != release_profile(row):
             return False
         if _containers_conflict(pick, row) or _titles_differ(pick, row):
             return False

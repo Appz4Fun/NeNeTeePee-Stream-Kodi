@@ -1523,6 +1523,18 @@
 					<default>false</default>
 					<control type="toggle"/>
 				</setting>
+				<setting id="nfo_text_size" type="integer" label="30782" help="30783">
+					<level>0</level>
+					<default>0</default>
+					<constraints>
+						<options>
+							<option label="30784">0</option>
+							<option label="30785">1</option>
+							<option label="30786">2</option>
+						</options>
+					</constraints>
+					<control type="list" format="string"/>
+				</setting>
 			</group>
 		</category>
 		<category id="sorting" label="30062" help="30362">

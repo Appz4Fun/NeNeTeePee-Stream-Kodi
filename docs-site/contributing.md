@@ -79,6 +79,25 @@ The test suite mocks Kodi's `xbmc*` modules in `tests/conftest.py` (via
 usually patch module-bound Kodi imports. Add focused tests near the behavior
 you change, especially around the resolve, poll, proxy, and fallback paths.
 
+### Checking a grouping or ranking change
+
+`tests/grouping_corpus.py` holds what 23 real searches returned (12 films, 11
+episodes, 41,446 rows) and runs each as a picker open. The fixture keeps each
+row's release name, size, dates and password flag; links, indexer names and
+posters are replaced, so it carries no key, host or private name.
+
+`tests/test_grouping_corpus.py` pins the numbers a change is judged by:
+picker rows, names with no group, and uploads shown as two or more rows. A
+refactor must leave them alone. A change meant to group better moves them:
+write the new values there with one line saying why. The same test holds
+`release_index` to the release rule applied pair by pair.
+
+Run the corpus by hand for a per-search table and timings:
+
+```bash
+uv run --with-requirements requirements-dev.txt --no-project python tests/grouping_corpus.py
+```
+
 ## Where to start reading
 
 - Architecture and module map: [How it works](how-it-works/architecture.md).

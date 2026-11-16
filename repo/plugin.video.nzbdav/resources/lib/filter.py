@@ -3,9 +3,11 @@
 
 """Result filtering and sorting using PTT for title parsing."""
 
+import collections
 import datetime
-import functools
+import itertools
 import math
+import os
 import re
 import statistics
 import time
@@ -16,7 +18,7 @@ import xbmc
 import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kodi imports are the repo convention; tests patch <mod>.xbmcaddon and the thread-safety contract tests forbid its use on no-getter paths)
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
-from resources.lib import nfo_audio, telemetry
+from resources.lib import nfo_audio, release_index, telemetry
 from resources.lib.filter_atmos import share_atmos
 from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
@@ -52,6 +54,8 @@ from resources.lib.filter_options import (
 from resources.lib.filter_options import (
     RESOLUTION_SETTINGS as _RESOLUTION_SETTINGS,
 )
+from resources.lib.filter_payload import ADOPTED_KEY as _ADOPTED_KEY
+from resources.lib.filter_payload import group_names, unify_one_payload
 from resources.lib.filter_remux import (
     DEFAULT_REMUX_GROUPS,
     compile_remux_tiers,
@@ -60,9 +64,14 @@ from resources.lib.filter_remux import (
     remux_group_rank,
     remux_priority,
 )
-from resources.lib.filter_tags import supplement_metadata
+from resources.lib.filter_tags import (
+    restore_glued_tags,
+    supplement_metadata,
+    trailing_word,
+)
 from resources.lib.filter_upscale import is_ai_upscale
-from resources.lib.upload_count import count_uploads
+from resources.lib.release_subject import name_form_key as _name_form_key
+from resources.lib.upload_count import count_copies
 
 # Re-exported so ``resources.lib.filter.<name>`` keeps resolving for callers
 # and tests after the fallback parser, groups dialog, and metadata
@@ -268,7 +277,10 @@ def parse_title_metadata(title):
     from resources.lib.release_match import variant_tags
     from resources.lib.release_subject import release_name_from_subject
 
-    title = release_name_from_subject(title)
+    name = release_name_from_subject(title)
+    # "HDR10x265": the parser reads season 10, episode 265 unless the lost
+    # separator is put back first.
+    title = restore_glued_tags(name)
     try:
         from resources.lib.ptt import parse_title
 
@@ -303,7 +315,9 @@ def parse_title_metadata(title):
         # "m1080p": a smaller encode posted beside the full-size one.
         variant = variant + ["mini"]
     variant = sorted(variant)
-    identity = _ptt_identity(title, parsed)
+    # Keyed on the name as listed: that is what the stored identity is
+    # looked up by (``fallback_streams._stored_ptt_identity``).
+    identity = _ptt_identity(name, parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
         # PTT returned empty, try fallback
@@ -546,7 +560,9 @@ def _resolve_result_meta(result, parsed_by_title):
     meta = result.get("_meta")
     title = result["title"]
     if _has_filter_metadata_shape(meta):
-        if title not in parsed_by_title:
+        # A parse taken from another listing of the row's payload is this
+        # row's alone, not what its name parses to.
+        if title not in parsed_by_title and not meta.get(_ADOPTED_KEY):
             parsed_by_title[title] = meta
         return meta
     cached_meta = parsed_by_title.get(title)
@@ -565,27 +581,6 @@ _META_DERIVED_ROW_KEYS = (
     "_fallback_title_tokens",
     "_fallback_title_tokens_title",
 )
-
-
-@functools.lru_cache(maxsize=4096)
-def _name_form_key(title):
-    """The release name with case and punctuation removed.
-
-    Indexers list one release under several spellings: dots, spaces or
-    underscores between words, a hyphen or a dot before the group, a plus sign
-    kept or replaced (``DD+7.1`` / ``DD_7.1``, ``HDR10+`` / ``HDR10_``). Every
-    spelling of a name has the same key.
-    """
-    from resources.lib.release_subject import (
-        release_name_from_subject,
-        without_media_extension,
-    )
-
-    name = without_media_extension(release_name_from_subject(title))
-    name = name.casefold().replace("'", "").replace("\u2019", "")
-    # Every letter and digit counts, in any script: an ASCII-only key gave two
-    # Chinese titles with the same year and tags one key, and one release.
-    return " ".join("".join(ch if ch.isalnum() else " " for ch in name).split())
 
 
 def _parse_detail(meta):
@@ -649,6 +644,40 @@ def _parses_agree(meta, best_meta):
     return comparable(meta) == comparable(best_meta)
 
 
+def _leading_spelling(spellings, known):
+    """The rows of the spelling whose parse the other spellings take.
+
+    The most detailed parse. Among equals the one whose group more names of
+    the list carry (``known()`` maps a group to that number): "HONE" over
+    "DiscoD HONE", "PsychoLogic" over "PsychoLogic arc", and "Goki-TAoE"
+    over "Goki" where the list has "GokiTAoE". Then the spelling more
+    indexers list, then the one that sorts first, which is the one written
+    with capitals ("Movie.2020-GRP" before "movie.2020-grp"): the same
+    spelling whatever order the rows are in.
+    """
+    from resources.lib.release_match import title_key
+
+    details = {
+        title: _parse_detail(same[0]["_meta"]) for title, same in spellings.items()
+    }
+    most = max(details.values())
+    leading = [same for title, same in spellings.items() if details[title] == most]
+    if len(leading) == 1:
+        return leading[0]
+    counts = known()
+    best = None
+    for same in leading:
+        group = title_key(same[0]["_meta"].get("group"))
+        rank = (counts.get(group, 0), len(same))
+        if (
+            best is None
+            or rank > best[0]
+            or (rank == best[0] and same[0]["title"] < best[1][0]["title"])
+        ):
+            best = (rank, same)
+    return best[1]
+
+
 def _unify_name_forms(rows):
     """Give every spelling of one release name the same parsed metadata.
 
@@ -660,6 +689,14 @@ def _unify_name_forms(rows):
     case and punctuation are removed all take the most detailed parse among
     them (``_parse_detail``).
     """
+    counted = []
+
+    def known():
+        # Read from the parses as they are before any spelling is changed.
+        if not counted:
+            counted.append(group_names(rows))
+        return counted[0]
+
     forms = {}
     for row in rows:
         if not isinstance(row, dict):
@@ -667,13 +704,17 @@ def _unify_name_forms(rows):
         title = row.get("title")
         if not isinstance(title, str) or not isinstance(row.get("_meta"), dict):
             continue
+        if row["_meta"].get(_ADOPTED_KEY):
+            # Settled by its payload (``filter_payload``): the same name at
+            # another size is another upload, and must not take this parse.
+            continue
         key = _name_form_key(title)
         if key:
             forms.setdefault(key, {}).setdefault(title, []).append(row)
     for spellings in forms.values():
         if len(spellings) < 2:
             continue
-        best = max(spellings.values(), key=lambda same: _parse_detail(same[0]["_meta"]))
+        best = _leading_spelling(spellings, known)
         best_meta = best[0]["_meta"]
         for same in spellings.values():
             if same is best or _parses_agree(same[0]["_meta"], best_meta):
@@ -684,21 +725,129 @@ def _unify_name_forms(rows):
                     row.pop(key, None)
 
 
+# Set on every row by one pass of ``_attach_metadata``: the pass's own token.
+ATTACHED_KEY = "_attached"
+# The passes this run made: token -> ``nfo_audio.known_version`` at the time.
+# A token carries a random part, so one read back from another run (a row
+# copied through the search cache) is never taken for one of ours.
+_ATTACH_RUN = "{:012x}".format(int.from_bytes(os.urandom(6), "big"))
+_ATTACH_NUMBERS = itertools.count(1)
+_ATTACH_PASSES = collections.OrderedDict()
+_ATTACH_PASSES_KEPT = 64
+
+
+# A group must be on this many other rows of the list for a trailing word
+# to be read as it.
+_LIST_GROUP_ROWS = 2
+
+
+def _recover_list_groups(rows):
+    """Read a trailing word as the group when the list knows it as one.
+
+    ``Show.S01.1080p.BluRay.x265.AAC.7.1.Japanese.Tigole`` ends in a word
+    the name alone cannot tell from a language or a title word
+    (``filter_tags.trailing_word``). When at least ``_LIST_GROUP_ROWS`` other
+    rows of the same result list parse that word as their group, it is this
+    row's group too. Returns how many rows gained one.
+    """
+    from resources.lib.release_match import title_key
+
+    known = collections.Counter()
+    bare = []
+    for row in rows:
+        meta = row.get("_meta") if isinstance(row, dict) else None
+        if not isinstance(meta, dict) or not isinstance(row.get("title"), str):
+            continue
+        group = title_key(meta.get("group"))
+        if group:
+            known[group] += 1
+        else:
+            bare.append((row, meta))
+    if not known:
+        return 0
+    changed = 0
+    for row, meta in bare:
+        word = trailing_word(row["title"])
+        if word and known[title_key(word)] >= _LIST_GROUP_ROWS:
+            meta["group"] = word
+            for key in _META_DERIVED_ROW_KEYS:
+                row.pop(key, None)
+            changed += 1
+    return changed
+
+
+def _attached_already(results):
+    """Whether one pass that still stands attached every row of ``results``.
+
+    True when all the named rows carry the token of the same pass and their
+    parse. Rows from two passes (two provider answers joined into one list)
+    or a row added since need the pass again: spellings are unified and
+    Atmos shared across the whole list.
+    """
+    token = None
+    for result in results:
+        if not isinstance(result, dict) or "title" not in result:
+            continue
+        mark = result.get(ATTACHED_KEY)
+        if mark is None or not isinstance(result.get("_meta"), dict):
+            return False
+        if token is None:
+            token = mark
+        elif mark != token:
+            return False
+    if token is None:
+        return False
+    # ...and nothing was learned of any release's audio or video since.
+    return _ATTACH_PASSES.get(token) == nfo_audio.known_version()
+
+
 def _attach_metadata(results):
     """Parse every row's title into ``_meta`` and unify name spellings.
 
     Then the audio a release's NFO named is added (``nfo_audio``), and last,
     a WEB-DL whose name leaves Atmos out takes it from a labelled copy of the
     same source in ``results`` (``filter_atmos``).
+
+    One picker open asks for this up to four times: when the provider
+    answers, in the rules that keep the requested film or episode, and in
+    ``filter_results``. The first pass marks its rows and the others return
+    at once. A later pass over the same rows, or over some of them, changes
+    nothing: a spelling already unified stays unified and a row that took
+    Atmos keeps it. What can change the outcome is new knowledge of a
+    release's audio or video (an NFO or MediaInfo read since), and a pass
+    only stands while ``nfo_audio.known_version`` is what it was.
     """
+    if _attached_already(results):
+        return
+    known = nfo_audio.known_version()
     parsed_by_title = {}
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
     _unify_name_forms(results)
-    # What a release's NFO said of its audio, once it has been read.
-    nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS)
+    # After the spellings: one that parses a group ("-DNU-TAoE") gives it to
+    # the others, and only a name with no group in any spelling is asked
+    # whether its last word is a group the list knows.
+    _recover_list_groups(results)
+    # A listing that lost its group takes the parse of its upload's name.
+    other_names = unify_one_payload(
+        results,
+        _parse_detail,
+        _meta_for_spelling,
+        _parses_agree,
+        _META_DERIVED_ROW_KEYS,
+    )
+    # What a release's NFO said of its audio, once it has been read: for its
+    # own name, or for another name its upload is listed under.
+    nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS, other_names)
     share_atmos(results, _META_DERIVED_ROW_KEYS)
+    token = "{}-{}".format(_ATTACH_RUN, next(_ATTACH_NUMBERS))
+    _ATTACH_PASSES[token] = known
+    while len(_ATTACH_PASSES) > _ATTACH_PASSES_KEPT:
+        _ATTACH_PASSES.popitem(last=False)
+    for result in results:
+        if isinstance(result, dict) and "title" in result:
+            result[ATTACHED_KEY] = token
 
 
 def learn_nfo_audio(rows, settings_getter):
@@ -707,7 +856,8 @@ def learn_nfo_audio(rows, settings_getter):
     ``rows`` are the filtered rows in the picker's order. True when an NFO
     named audio that was not known: the caller then runs ``filter_results``
     again, which adds it to the rows and sorts them afresh
-    (``nfo_audio.learn_for_top``).
+    (``nfo_audio.learn_for_top``). What was learned changes
+    ``nfo_audio.known_version``, so that second run does the whole pass.
     """
     return nfo_audio.learn_for_top(
         rows, _name_form_key, settings_getter, describe=release_identity
@@ -1405,6 +1555,9 @@ def _sort_results(results, settings):
         2 = Size (smallest first)
         3 = Age (newest first) -- pubdate descending
         4 = Age (oldest first) -- pubdate ascending
+
+    Relevance groups the rows into releases once (``release_index``); the
+    copy counts and the odd-size check both read that grouping.
     """
     spec = _SORT_SPECS.get(settings["sort_order"])
     if spec is not None:
@@ -1413,9 +1566,9 @@ def _sort_results(results, settings):
     relevance_key = _make_relevance_key(
         settings.get("remux_tiers", DEFAULT_REMUX_GROUPS)
     )
-    key = _with_single_copy_last(results, relevance_key)
-    ordered = _break_ties_by_copies(sorted(results, key=key), key)
-    return _demote_size_outliers(ordered)
+    index = release_index.build(results)
+    key = _with_copies(relevance_key, _nzb_copy_counts(results, index))
+    return _demote_size_outliers(sorted(results, key=key), index)
 
 
 # Where the single-copy element goes in the relevance key: after resolution,
@@ -1424,25 +1577,34 @@ def _sort_results(results, settings):
 _SINGLE_COPY_KEY_INDEX = 4
 
 
-def _with_single_copy_last(rows, relevance_key):
-    """``relevance_key`` plus one element: a release listed once ranks late.
+def _with_copies(relevance_key, counts):
+    """``relevance_key`` with the release's copy count added in two places.
 
-    A real release is listed by several indexers; what shows up as one NZB
-    from one indexer is usually a mislabelled or stray post, and it reached
-    the top of a resolution whenever its name carried a better HDR, REMUX or
-    audio tag than the well-listed releases. A release with a single NZB in
-    ``rows`` (counted with the same-release rule, ``_nzb_copy_counts``) now
-    ranks below every release of its resolution that has two or more, and
-    above the releases with no group and the upscales. CiNEPHiLES and
-    FraMeSToR stay pinned first whatever their count. When every release of
-    a resolution has one copy, nothing changes.
+    * A release listed once ranks late. A real release is listed by several
+      indexers; what shows up as one NZB from one indexer is usually a
+      mislabelled or stray post, and it reached the top of a resolution
+      whenever its name carried a better HDR, REMUX or audio tag than the
+      well-listed releases. A release with a single NZB (``counts``, from
+      ``_nzb_copy_counts``) ranks below every release of its resolution that
+      has two or more, and above the releases with no group and the
+      upscales. CiNEPHiLES and FraMeSToR stay pinned first whatever their
+      count. When every release of a resolution has one copy, nothing
+      changes.
+    * Among rows that tie on everything before size (resolution, pinned
+      group, HDR, REMUX, audio tier, group tier), more copies rank first,
+      then the larger size as before. A stable sort keeps the original
+      order when both tie.
     """
-    counts = _nzb_copy_counts(rows)
 
     def _key(row):
         base = relevance_key(row)
-        single = 0 if counts.get(id(row), 1) > 1 else 1
-        return base[:_SINGLE_COPY_KEY_INDEX] + (single,) + base[_SINGLE_COPY_KEY_INDEX:]
+        copies = counts.get(id(row), 1)
+        return (
+            base[:_SINGLE_COPY_KEY_INDEX]
+            + (0 if copies > 1 else 1,)
+            + base[_SINGLE_COPY_KEY_INDEX:-1]
+            + (-copies, base[-1])
+        )
 
     return _key
 
@@ -1463,75 +1625,27 @@ def _row_size(row):
         return 0
 
 
-def _release_copies_key(row):
-    """Rows with equal keys are listings of one release, or None when unknown.
+def _sized_copies(ordered, index):
+    """For each release with enough sized copies, their positions in ``ordered``.
 
-    The same fields the same-release rule compares: the parsed release
-    profile (which needs a group) and what the release is of.
+    The releases are ``index``'s groups, so a copy is measured against the
+    rows the picker lists with it: a ``.mkv`` and a ``.mp4`` both named, or a
+    1990 film and its 2020 remake, are separate releases there and an
+    ordinary copy of one is never an odd copy of the other. Season packs and
+    rows without a size are left out.
     """
-    from resources.lib import fallback_streams as _fs
-    from resources.lib.release_match import release_profile, title_key
-
-    if not isinstance(row, dict) or row.get("_season_pack"):
-        return None
-    try:
-        profile = release_profile(row)
-        if not dict(profile).get("group"):
-            return None
-        title, _year, seasons, episodes, part = _fs._release_identity(row)
-    except Exception:  # pylint: disable=broad-except
-        return None
-    # The year is left out on purpose: the same-release rule lets a name
-    # without a year match one with it ("Show.S02E01" / "Show.2022.S02E01").
-    return (profile, title_key(title), tuple(seasons), tuple(episodes), part)
-
-
-def _split_where_named_apart(ordered, buckets, value_of):
-    """Yield each bucket of row indexes, split where its rows name a value apart.
-
-    A bucket whose rows name two or more different values (``value_of(row)``,
-    empty when the row names none) is split by value, the rows naming none on
-    their own; any other bucket is left whole.
-    """
-    for indexes in buckets:
-        by_value = {}
-        for index in indexes:
-            by_value.setdefault(value_of(ordered[index]), []).append(index)
-        if len([value for value in by_value if value]) < 2:
+    position = {id(row): at for at, row in enumerate(ordered)}
+    for group in index.groups:
+        if len(group) < _SIZE_OUTLIER_MIN_COPIES or group[0].get("_season_pack"):
+            continue
+        indexes = sorted(
+            position[id(row)] for row in group if id(row) in position and _row_size(row)
+        )
+        if len(indexes) >= _SIZE_OUTLIER_MIN_COPIES:
             yield indexes
-        else:
-            yield from by_value.values()
 
 
-def _named_container(row):
-    meta = row.get("_meta")
-    container = meta.get("container") if isinstance(meta, dict) else ""
-    return str(container or "").casefold()
-
-
-def _named_year(row):
-    from resources.lib import fallback_streams as _fs
-
-    try:
-        return _fs._release_identity(row)[1] or 0
-    except Exception:  # pylint: disable=broad-except
-        return 0
-
-
-def _size_buckets(ordered, buckets):
-    """The copy buckets whose sizes may share a median.
-
-    ``_release_copies_key`` leaves out what the same-release rule lets an
-    unknown value match: the container and the year. Two *known* different
-    values are different releases, though (a ``.mkv`` and a ``.mp4``, a 1990
-    film and its 2020 remake), and an ordinary copy of one must not read as an
-    odd copy of the other, so such buckets are split.
-    """
-    buckets = _split_where_named_apart(ordered, buckets, _named_container)
-    return _split_where_named_apart(ordered, buckets, _named_year)
-
-
-def _demote_size_outliers(ordered):
+def _demote_size_outliers(ordered, index=None):
     """Move oddly sized copies of a release below its normally sized ones.
 
     One release name can cover very different posts: a 10 GB episode listed
@@ -1541,227 +1655,60 @@ def _demote_size_outliers(ordered):
     ``_SIZE_OUTLIER_FACTOR`` away from the median size of its release is
     marked ``_size_outlier`` and moved to just after the release's last
     normally sized copy; everything else keeps its order.
+
+    ``index`` is the ``release_index`` of these rows when the caller has
+    one; it is built from ``ordered`` otherwise.
     """
-    copies = {}
-    for index, row in enumerate(ordered):
+    for row in ordered:
         if isinstance(row, dict):
             row.pop("_size_outlier", None)
-        key = _release_copies_key(row)
-        if key is not None and _row_size(row):
-            copies.setdefault(key, []).append(index)
+    if index is None:
+        index = release_index.build(ordered)
     follow = {}
     moved = set()
-    for indexes in _size_buckets(ordered, copies.values()):
-        if len(indexes) < _SIZE_OUTLIER_MIN_COPIES:
-            continue
+    for indexes in _sized_copies(ordered, index):
         median = statistics.median(_row_size(ordered[i]) for i in indexes)
         low, high = median / _SIZE_OUTLIER_FACTOR, median * _SIZE_OUTLIER_FACTOR
         normal = [i for i in indexes if low <= _row_size(ordered[i]) <= high]
         if not normal or len(normal) == len(indexes):
             continue
         anchor = normal[-1]
-        for index in indexes:
-            if low <= _row_size(ordered[index]) <= high:
+        for index_at in indexes:
+            if low <= _row_size(ordered[index_at]) <= high:
                 continue
-            ordered[index]["_size_outlier"] = True
-            if index < anchor:
-                follow.setdefault(anchor, []).append(index)
-                moved.add(index)
+            ordered[index_at]["_size_outlier"] = True
+            if index_at < anchor:
+                follow.setdefault(anchor, []).append(index_at)
+                moved.add(index_at)
     if not moved:
         return ordered
     result = []
-    for index, row in enumerate(ordered):
-        if index in moved:
+    for index_at, row in enumerate(ordered):
+        if index_at in moved:
             continue
         result.append(row)
-        result.extend(ordered[i] for i in follow.get(index, ()))
+        result.extend(ordered[i] for i in follow.get(index_at, ()))
     return result
 
 
-def _is_release_copy(target, row):
-    """Whether ``row`` is another NZB of ``target``'s release.
-
-    The same rule as NZBGet duplicate backups:
-    ``release_match.same_release`` alone, so the picker and the backups count
-    the same NZBs. A row without a parsed group never groups, not even with a
-    listing of the identical name. A season pack only groups with season
-    packs and an episode only with episodes.
-    """
-    if bool(target.get("_season_pack")) != bool(row.get("_season_pack")):
-        return False
-    from resources.lib.release_match import same_release
-
-    return same_release(target, row)
-
-
-def _fold_meta_value(value):
-    return str(value or "").strip().casefold()
-
-
-def _copy_prefilter_key(row):
-    """What ``same_release`` requires equal before it looks at the content.
-
-    The row's ``release_match.release_profile`` itself, so this can never
-    separate two rows the rule accepts (a hand-kept subset once bucketed
-    "Remux" and "BluRay.Remux" apart after the rule had learned they are one
-    source, and each copy counted as a release listed once). Rows with
-    different keys can never be the same release, so only rows sharing a key
-    are compared. None for a row with no parsed group, which the rule never
-    groups.
-    """
-    from resources.lib.release_match import release_profile
-
-    if not isinstance(row.get("_meta"), dict):
-        return None
-    try:
-        profile = release_profile(row)
-    except Exception:  # pylint: disable=broad-except
-        return None
-    if not dict(profile).get("group"):
-        return None
-    return (bool(row.get("_season_pack")),) + profile
-
-
-_SEASONS_CLASS = ("seasons", (), ())
-
-
-def _content_class(row):
-    """Which rows ``same_release``'s content gate can ever accept for ``row``.
-
-    From the cached release identity ``(title, year, seasons, episodes,
-    part)``:
-
-    * ``("episode", episodes, seasons)`` for a row naming episodes. The gate
-      rejects any pair whose episode sets differ in presence or value, and
-      with episodes on both sides no phantom-season collapse applies, so the
-      seasons must match too.
-    * ``("movie", year, ())`` for a row with no seasons and no episodes. As a
-      pick, a movie needs the candidate's exact year (absent included); as a
-      candidate of a season-only row it needs the same year for the phantom
-      collapse. Movies of other years never match it.
-    * ``("seasons", (), ())`` for a row with seasons but no episodes (a season pack,
-      or a movie whose group mis-parsed as a season). It can match a movie of
-      its year through the collapse and a season row of any year, so it is
-      compared with every movie and season row under its profile.
-
-    Every class is a 3-tuple so the keys stay uniform.
-    """
-    from resources.lib import fallback_streams as _fs
-
-    try:
-        _title, year, seasons, episodes, _part = _fs._release_identity(row)
-    except Exception:  # pylint: disable=broad-except
-        return _SEASONS_CLASS
-    if episodes:
-        return ("episode", tuple(episodes), tuple(seasons))
-    if seasons:
-        return _SEASONS_CLASS
-    return ("movie", year, ())
-
-
-def _peer_candidates(buckets):
-    """For buckets sharing one profile, map each to the buckets to compare.
-
-    Uses ``_content_class``: episodes meet the same episode, movies meet
-    movies of their year plus season rows, and season rows meet every movie
-    and season row. Without this, every episode of a whole-show search, or
-    every movie a group posted, would be compared pairwise.
-    """
-    by_class = {}
-    for bucket in buckets:
-        by_class.setdefault(_content_class(bucket[0]), []).append(bucket)
-    seasons = by_class.get(_SEASONS_CLASS, [])
-    movies = [b for key, group in by_class.items() if key[0] == "movie" for b in group]
-    candidates = []
-    for key, group in by_class.items():
-        if key[0] == "episode":
-            peers = group
-        elif key[0] == "movie":
-            peers = group + seasons
-        else:
-            peers = movies + seasons
-        candidates.extend((bucket, peers) for bucket in group)
-    return candidates
-
-
-def _nzb_copy_counts(rows):
+def _nzb_copy_counts(rows, index=None):
     """Map ``id(row)`` to how many NZBs of its release ``rows`` hold.
 
-    Each title counts the NZBs it accepts itself. ``same_release`` is not
-    transitive (a yearless episode matches both a 2005 and a 2023 reboot that
-    reject each other), so no group of rows shares one representative's count.
+    A release is a group of ``release_index`` (``index`` when the caller has
+    built it for these rows), so every spelling of a release carries the
+    same count, and it is the count the picker shows for that row. A
+    groupless row counts only itself.
 
-    Three shortcuts keep that cheap without changing the answer. Rows with the
-    identical title are bucketed, because ``same_release`` reads only the
-    title and the metadata parsed from it. A bucket is only compared with
-    buckets sharing ``_copy_prefilter_key``, and among those only with the
-    content ``_peer_candidates`` allows. A groupless row counts only itself.
-    A count is the separate uploads among the distinct NZB links of every
-    bucket the title accepts (``upload_count.count_uploads``): several
-    indexers listing one upload count once, a link listed twice counts once
-    and a row without a link adds nothing (every row counts at least 1).
+    A count is the separate uploads among the distinct NZB links of the
+    release (``upload_count.count_copies``): several indexers listing one
+    upload count once, a link listed twice counts once and a row without a
+    link adds nothing (every row counts at least 1).
     """
-    buckets = {}
-    for row in rows:
-        key = (bool(row.get("_season_pack")), str(row.get("title") or ""))
-        buckets.setdefault(key, []).append(row)
-    profiles = {}
-    for bucket in buckets.values():
-        prefilter = _copy_prefilter_key(bucket[0])
-        if prefilter is not None:
-            profiles.setdefault(prefilter, []).append(bucket)
-    counts = {id(row): 1 for row in rows}
-    for profile_buckets in profiles.values():
-        for bucket, peers in _peer_candidates(profile_buckets):
-            listed = list(bucket)
-            for other in peers:
-                if other is not bucket and _is_release_copy(bucket[0], other[0]):
-                    listed.extend(other)
-            by_link = {}
-            for row in listed:
-                if row.get("link"):
-                    by_link.setdefault(row["link"], row)
-            copies = max(1, count_uploads(by_link.values()))
-            for row in bucket:
-                counts[id(row)] = copies
+    if index is None:
+        index = release_index.build(rows)
+    counts = {}
+    for group in index.groups:
+        copies = count_copies(group) if len(group) > 1 else 1
+        for row in group:
+            counts[id(row)] = copies
     return counts
-
-
-def _break_ties_by_copies(ordered, relevance_key):
-    """Rank more NZB copies of a release above size among top-tier ties.
-
-    ``ordered`` is already sorted by ``relevance_key``, whose last element is
-    size. Each run of rows that ties on everything before size (resolution,
-    pinned group, HDR, REMUX, audio tier, group tier) is re-sorted by copy
-    count, most first, then by size as before. A stable sort keeps the
-    original order when both tie. Copies are counted within the run.
-    same_release requires equal resolution, HDR, audio, HYBRID and group, so
-    a release's copies share a run except in the rare split (REMUX priority
-    reads "REMUX" from the raw title), where each side is counted within its
-    own run.
-    """
-    if len(ordered) < 2:
-        return ordered
-    keys = [relevance_key(row) for row in ordered]
-    result = []
-    start = 0
-    total = len(ordered)
-    while start < total:
-        prefix = keys[start][:-1]
-        end = start + 1
-        while end < total and keys[end][:-1] == prefix:
-            end += 1
-        result.extend(_order_by_copies(ordered[start:end], keys[start:end]))
-        start = end
-    return result
-
-
-def _order_by_copies(run, run_keys):
-    """Stable-sort one tied run by copy count (most first), then size key."""
-    if len(run) < 2:
-        return run
-    copies = _nzb_copy_counts(run)
-    ranked = sorted(
-        zip(run, run_keys), key=lambda pair: (-copies[id(pair[0])], pair[1][-1])
-    )
-    return [row for row, _key in ranked]

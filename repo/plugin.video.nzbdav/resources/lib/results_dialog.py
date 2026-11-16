@@ -5,14 +5,18 @@
 
 import re
 
+import xbmc
 import xbmcaddon
 import xbmcgui
 
+from resources.lib import doc_fetch, nfo_viewer, release_docs
 from resources.lib.filter_audio import audio_label
 from resources.lib.http_util import format_size as _format_size
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
 from resources.lib.name_width import strike_percent
+from resources.lib.picker_colors import RES_COLORS as _RES_COLORS
+from resources.lib.picker_colors import SRC_COLORS as _SRC_COLORS
 from resources.lib.release_display import (
     HYBRID_LABEL,
     UPSCALE_LABEL,
@@ -21,29 +25,11 @@ from resources.lib.release_display import (
     display_name,
     dynamic_range,
 )
+from resources.lib.release_subject import name_form_key
 from resources.lib.release_supersede import revision_label, superseded_rows
 from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
-from resources.lib.upload_count import count_uploads
-
-# Color constants matching the mockup
-_RES_COLORS = {
-    "4320p": "FFA78BFA",
-    "2160p": "FFA78BFA",
-    "1440p": "FF60A5FA",
-    "1080p": "FF60A5FA",
-    "720p": "FF4ADE80",
-    "480p": "FFFBBF24",
-}
-
-_SRC_COLORS = {
-    "BluRay REMUX": "FF60A5FA",
-    "REMUX": "FF60A5FA",
-    "BluRay": "FF4ADE80",
-    "WEB-DL": "FFC084FC",
-    "WEBRip": "FFF0ABFC",
-    "HDTV": "FFFDE68A",
-}
+from resources.lib.upload_count import count_copies
 
 _SRC_SHORT = {
     "BluRay REMUX": "REMUX",
@@ -66,6 +52,8 @@ _BG_A = "FF0C0C10"
 _BG_B = "FF141417"
 _AVAILABLE_LABEL = "DL"
 
+ACTION_MOVE_LEFT = 1
+ACTION_MOVE_RIGHT = 2
 ACTION_SELECT = 7
 ACTION_PREVIOUS_MENU = 10
 ACTION_NAV_BACK = 92
@@ -73,6 +61,10 @@ ACTION_CONTEXT_MENU = 117
 
 LIST_ID = 50
 COMPACT_LIST_ID = 51
+# Kodi shows the active view's list one frame after ``view`` is set, and a
+# list that is not shown yet cannot take the focus (``_focus_list``).
+_FOCUS_TRIES = 25
+_FOCUS_WAIT_MS = 20
 
 VIEW_LIST = "list"
 VIEW_COMPACT = "compact"
@@ -142,10 +134,46 @@ def _named_item(label, replaced_by, column_width):
     return item
 
 
+def _docs_tag(rows):
+    """NFO and MEDIAINFO, for a release the viewer has one to show for.
+
+    ``rows`` are a release's listings, lead first. A tag is there when the
+    text is kept or, for an NFO, when a listing links to one
+    (``doc_fetch.offered``): Left or Right opens the viewer on it.
+    """
+    title = rows[0].get("title") if rows else ""
+    if not isinstance(title, str) or not title:
+        return ""
+    found = doc_fetch.offered(rows, name_form_key(title))
+    return "  ".join(
+        _c(release_docs.LABELS[kind], release_docs.COLORS[kind])
+        for kind, has in zip(release_docs.KINDS, found)
+        if has
+    )
+
+
+def _tags(rows):
+    """A release's tags in one label: HYBRID or UPSCALE, REPACK or PROPER,
+    NFO and MEDIAINFO, the ones that apply, two spaces apart.
+
+    ``rows`` are the release's listings, lead first. The tags share a label
+    under the name: a row has no room for a column per tag.
+    """
+    meta = rows[0].get("_meta") if rows and isinstance(rows[0], dict) else None
+    meta = meta if isinstance(meta, dict) else {}
+    tags = (
+        _attribute_tag(meta),
+        _c(revision_label(meta), _REVISION_COLOR),
+        _docs_tag(rows),
+    )
+    return "  ".join(tag for tag in tags if tag)
+
+
 def _build_result_item(result, row_index, replaced_by=""):
     """Build a styled ListItem for a single search result row."""
     li = _named_item(_row_label(result), replaced_by, _LIST_NAME_WIDTH)
     _set_result_properties(li, result)
+    li.setProperty("tags", _tags([result]))
     # Alternating row background
     li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
     return li
@@ -205,7 +233,8 @@ def _set_result_properties(li, result):
     li.setProperty("size", _c(_format_size(result.get("size")), "FFA1A1AA"))
     li.setProperty("age", _c(result.get("age", ""), "FF6B7280"))
     li.setProperty("indexer", _c(result.get("indexer", ""), "FF4A9EFF"))
-    li.setProperty("group", _c(meta.get("group", ""), "FF34D399"))
+    group = meta.get("group", "") or result.get("_nogroup_label", "")
+    li.setProperty("group", _c(group, "FF34D399" if meta.get("group") else "FFA1A1AA"))
 
     if result.get("_available"):
         li.setProperty("available", _available_text())
@@ -436,7 +465,7 @@ def _build_group_item(group, row_index, replaced_by=""):
     the copy count, an any-copy DL mark, and the side-panel properties the skin
     reads from the focused item (``Container(51).ListItem.Property(...)``).
     The copy count is the separate uploads among the group's listings
-    (``upload_count.count_uploads``); the panel gives the listings too.
+    (``upload_count.count_copies``); the panel gives the listings too.
     ``replaced_by`` is the tag of a listed REPACK or PROPER of this release:
     the row is struck through and the panel says why.
     """
@@ -446,6 +475,7 @@ def _build_group_item(group, row_index, replaced_by=""):
     recorder = _PropertyRecorder(item)
     _set_result_properties(recorder, lead)
     item.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
+    item.setProperty("tags", _tags(group))
     count = len(group)
     indexers = []
     for row in group:
@@ -457,7 +487,7 @@ def _build_group_item(group, row_index, replaced_by=""):
         item.setProperty("available", _available_text())
     # Several indexers list one upload: the row counts separate uploads, and
     # the panel says how many listings and indexers they came from.
-    uploads = count_uploads(group) if count > 1 else 1
+    uploads = count_copies(group) if count > 1 else 1
     if uploads > 1:
         item.setProperty("copies", _c(_fmt(30479, uploads), _COPIES_CHIP_COLOR))
         if uploads == count:
@@ -518,6 +548,7 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         self.show_all = not _provider_only(self.results) and bool(self.all_results)
         self.selected_result = None
         self._closing = False
+        self._viewing = False
         self._ok_hold = OkHold(self._show_all, self._select_focused)
         super().__init__(*args)
 
@@ -569,7 +600,7 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
             )
         else:
             self.setProperty("filter_info", _fmt(30112, len(active), self.total_count))
-        hints = self._footer_hints()
+        hints = "{}     {}".format(_string(30773), self._footer_hints())
         if self.all_results and self._ok_hold.available:
             hints += "     " + _string(30477)
         self.setProperty("footer_hints", hints)
@@ -593,12 +624,34 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
             return self._entries[pos]
         return None
 
+    def _focused_id(self):
+        """The focused control's id, or None when nothing has the focus."""
+        try:
+            return self.getFocusId()
+        except RuntimeError:
+            return None
+
+    def _focus_list(self):
+        """Give the active view's list the focus, once Kodi shows it.
+
+        Which list is shown follows the ``view`` property, and Kodi only
+        acts on that with its next frame. A short list is built before that
+        frame is drawn; the list is then still hidden, refuses the focus,
+        and every key would go nowhere. So the focus is asked for until the
+        list has it, for half a second at most.
+        """
+        for _ in range(_FOCUS_TRIES):
+            self.setFocusId(self._list_id)
+            if self._closing or self._focused_id() == self._list_id:
+                return
+            xbmc.sleep(_FOCUS_WAIT_MS)
+
     def onInit(self):
         """Populate the dialog with results data."""
         if self.all_results:
             self._ok_hold.start()
         self._populate()
-        self.setFocusId(self._list_id)
+        self._focus_list()
 
     def _toggle_show_all(self):
         """Flip views, repopulate, and re-focus the same row by identity.
@@ -631,6 +684,25 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         self.selected_result = group_pick(entry) if entry else None
         self.close()
 
+    def _open_viewer(self):
+        """Show the focused release's NFO and MediaInfo (``nfo_viewer``).
+
+        The viewer may read texts that were not kept before, so the row's
+        NFO and MEDIAINFO tags are set afresh when it closes.
+        """
+        entry = self._focused_entry()
+        if self._closing or self._viewing or not entry:
+            return
+        self._viewing = True
+        try:
+            nfo_viewer.show(entry, self._active_results())
+            item = self.getControl(self._list_id).getSelectedItem()
+            if item is None or self._focused_entry() is not entry:
+                return
+            item.setProperty("tags", _tags(entry))
+        finally:
+            self._viewing = False
+
     def _show_all(self):
         """A held OK always turns off filters, including when they are already off."""
         if not self._closing and self.all_results and not self.show_all:
@@ -656,10 +728,13 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         action_id = action.getId()
         if action_id in (ACTION_SELECT,):
             if (
-                self.getFocusId() == self._list_id
+                self._focused_id() == self._list_id
                 and not self._ok_hold.defer_selection()
             ):
                 self._select_focused()
+        elif action_id in (ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT):
+            if self._focused_id() == self._list_id:
+                self._open_viewer()
         elif action_id in (ACTION_PREVIOUS_MENU, ACTION_NAV_BACK):
             self._cancel()
         elif action_id in (ACTION_CONTEXT_MENU, 0xF043):

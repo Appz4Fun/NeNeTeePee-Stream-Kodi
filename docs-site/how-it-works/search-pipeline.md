@@ -194,6 +194,46 @@ rule isn't transitive. The group keeps the position of its best-ranked copy, and
 selecting it plays the first copy with a **DL** tag, otherwise that best-ranked
 copy. **List** (`results_view` `1`) skips the grouping.
 
+### One grouping, four readers
+
+`release_index.build` groups a result list once, and everything that needs to
+know which rows are one release reads that grouping:
+
+```mermaid
+flowchart TD
+    P[filter._attach_metadata<br>once per list] --> X[release_index.build]
+    X --> C[Copy counts:<br>single copy last, more copies first]
+    X --> O[Odd-size check:<br>a copy 1.35x off its release's median]
+    X --> R[Picker rows:<br>results_groups.release_groups]
+    X --> B[NZBGet backups:<br>router_play._same_release_backups]
+
+    classDef step fill:#1E1E2E,stroke:#4A9EFF,color:#FFFFFF
+    classDef reader fill:#151520,stroke:#34D399,color:#FFFFFF
+    class P,X step
+    class C,O,R,B reader
+```
+
+Rows are only compared when they share the parsed release profile, the title
+and the episode, and each distinct name is placed once, so a list of 2,500
+rows is grouped in a few milliseconds. The grouping does not depend on the
+order of the rows: a name that fits two releases goes with the one on more
+rows. Rows with no release group are grouped by name instead
+(`release_subject.name_form_key`); `same_release` itself still refuses them.
+Two releases of one group that share an upload (the same film or episode at
+the same exact size) are joined whole.
+
+The metadata pass (`filter._attach_metadata`: parse, unify spellings, recover
+a group the list knows, give a listing that lost its group the parse of its
+upload's name in `filter_payload`, apply NFO and MediaInfo facts, share
+Atmos) marks the rows
+it handled. The requested-item rules and `filter_results` ask for it again
+with the same rows and return at once. It runs again when a row is new, when
+two lists were joined, or when `nfo_audio.known_version()` changed.
+
+`upload_count.count_copies` counts a release's separate uploads for both the
+ranking and the picker. It keeps the counted uploads of a size sorted by
+date and compares a listing only with those inside its two-minute window.
+
 ## Progress while it searches
 
 On the TMDBHelper RunScript path, `search_dialog.open_progress` shows the

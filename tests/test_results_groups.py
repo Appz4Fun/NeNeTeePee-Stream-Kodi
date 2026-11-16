@@ -72,7 +72,7 @@ def test_release_rule_alone_decides_even_for_same_name_rows():
     # The shared rule can keep same-name rows apart (no parsed group, say);
     # the picker must not group them on the name alone.
     rows = [_row(ALPHA, "a1"), _row(ALPHA, "a2")]
-    with patch("resources.lib.results_groups._is_release_copy", return_value=False):
+    with patch("resources.lib.release_match.same_release", return_value=False):
         groups = release_groups(rows)
 
     assert _links(groups) == [["a1"], ["a2"]]
@@ -89,7 +89,7 @@ def test_a_row_must_match_every_member_not_just_the_lead():
         return {lead["title"], row["title"]} != {old, new}
 
     rows = [_row(yearless, "y"), _row(old, "o"), _row(new, "n")]
-    with patch("resources.lib.results_groups._is_release_copy", side_effect=fake_copy):
+    with patch("resources.lib.release_match.same_release", side_effect=fake_copy):
         groups = release_groups(rows)
 
     assert _links(groups) == [["y", "o"], ["n"]]
@@ -103,7 +103,7 @@ def test_identical_titles_are_compared_once():
         return True
 
     rows = [_row(ALPHA, "a{}".format(i)) for i in range(5)]
-    with patch("resources.lib.results_groups._is_release_copy", side_effect=fake_copy):
+    with patch("resources.lib.release_match.same_release", side_effect=fake_copy):
         groups = release_groups(rows)
 
     assert _links(groups) == [["a0", "a1", "a2", "a3", "a4"]]
@@ -114,18 +114,45 @@ def test_rows_with_different_profiles_are_never_compared():
     rows = [
         _row("Movie.2024.1080p.WEB-DL.H264-GRP{}".format(i), str(i)) for i in range(300)
     ]
-    with patch("resources.lib.results_groups._is_release_copy") as copy:
+    with patch("resources.lib.release_match.same_release") as copy:
         groups = release_groups(rows)
 
     assert len(groups) == 300
     copy.assert_not_called()
 
 
-def test_a_row_without_a_group_stays_alone():
+def test_rows_without_a_group_are_listed_together_by_name():
     title = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264"
-    rows = [_row(title, "x1"), _row(title, "x2")]
+    rows = [
+        _row(title, "x1"),
+        _row(ALPHA, "a1"),
+        _row(title.replace(".", " "), "x2"),
+        _row(title.replace("1080p", "720p"), "y1"),
+        _row(title.lower(), "x3"),
+    ]
 
-    assert _links(release_groups(rows)) == [["x1"], ["x2"]]
+    # One name in three spellings is one row; another name, or the same
+    # name with a group, is not part of it.
+    assert _links(release_groups(rows)) == [["x1", "x2", "x3"], ["a1"], ["y1"]]
+
+
+def test_a_groupless_name_in_two_containers_is_two_rows():
+    title = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264"
+    rows = [
+        _row(title + ".mkv", "m1"),
+        _row(title, "n1"),
+        _row(title + ".mp4", "p1"),
+        _row(title + ".mkv", "m2"),
+    ]
+
+    # The name that states no container goes with the first that does.
+    assert _links(release_groups(rows)) == [["m1", "n1", "m2"], ["p1"]]
+
+
+def test_a_name_that_is_all_punctuation_is_never_listed_with_another():
+    rows = [_row("...", "d1"), _row("---", "d2"), _row("", "d3"), _row("", "d4")]
+
+    assert len(release_groups(rows)) == 4
 
 
 def test_group_pick_prefers_an_already_downloaded_copy():
@@ -142,7 +169,7 @@ def test_distinct_episodes_of_one_group_are_never_compared():
         for s in range(1, 13)
         for e in range(1, 26)
     ]
-    with patch("resources.lib.results_groups._is_release_copy") as copy:
+    with patch("resources.lib.release_match.same_release") as copy:
         groups = release_groups(rows)
 
     assert len(groups) == 300

@@ -480,10 +480,12 @@ def _second_line(layout):
 
 @pytest.mark.parametrize("list_id", ["50", "51"])
 def test_every_row_layout_has_a_hybrid_slot_that_overlaps_nothing(list_id):
+    # HYBRID is one of the row's tags: they share the ``tags`` label, with
+    # REPACK, NFO and MEDIAINFO, right after the source.
     for layout in _layouts(list_id):
         line = _second_line(layout)
         names = [name for _left, _width, name in line]
-        assert names[names.index("quality") + 1] == "hybrid"
+        assert names[names.index("quality") + 1] == "tags"
         for (left, width, name), (next_left, _w, _n) in zip(line, line[1:]):
             assert left + width <= next_left, name
 

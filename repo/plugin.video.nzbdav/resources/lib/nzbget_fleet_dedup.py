@@ -17,6 +17,15 @@ backup, so this module collapses them before submission:
   postings share none. A byte-identical repost with 0% shared IDs is a
   DIFFERENT posting and the best kind of backup, so it is kept.
 
+* **Same files** (after fetch, no article read): an NZB gives the size of
+  every segment, and a repost of the same files gives the same sizes in the
+  same order (``posting_payload``). Two postings whose matching files make
+  up 90% of the smaller one's bytes hold the same files. A backup that is
+  such a twin of the pick goes ahead of the other backups; a backup that
+  holds the pick's files among a good deal of other files (``holds_more``)
+  is a pack listed under the release's name, and is not sent as a copy of
+  it.
+
 Release identity (``release_match.same_release``) uses size only when neither
 row names a group: postings of one release can differ by GBs.
 """
@@ -160,6 +169,104 @@ def same_listing(left, right):
     return not _told_apart(left, right)
 
 
+class PostingFingerprint(array):
+    """A posting fingerprint that also carries what its files are.
+
+    The ``array('I')`` of article CRC32s every caller compares, plus
+    ``payload`` (``posting_payload``'s value for the same NZB, or None).
+    """
+
+    payload = None
+
+
+# Matching files must make up this share of the smaller posting's bytes for
+# two postings to hold the same files. One shared file never does: unrelated
+# posts share a sample or a proof picture.
+SAME_FILES_SHARE = 0.9
+# Two postings of the same files differ by their repair data at most.
+_TWIN_SIZE_FACTOR = 1.1
+# A posting this many times the pick's size that holds the pick's files is a
+# pack, not a copy (``filter._SIZE_OUTLIER_FACTOR``).
+_PACK_SIZE_FACTOR = 1.35
+
+
+def posting_payload(files):
+    """What ``nzb_fingerprint_scan.FileSizes.files`` says of a posting.
+
+    ``(bytes, {signature: bytes}, episodes)``: the bytes of every file that
+    is not repair data; of each file whose segment sizes identify it, the
+    bytes under its signature (two equal files add up); and the episodes
+    its files' subjects name. None when no file can be identified, as for a
+    posting cut into articles of one fixed size.
+    """
+    total = 0
+    known = {}
+    episodes = set()
+    for size, signature, is_par2, episode in files or ():
+        if is_par2:
+            continue
+        total += size
+        if signature is not None:
+            known[signature] = known.get(signature, 0) + size
+        if episode is not None:
+            episodes.add(episode)
+    if not known or total <= 0:
+        return None
+    return total, known, frozenset(episodes)
+
+
+def _shared_bytes(left, right):
+    """The bytes of the files two payloads both hold."""
+    small, large = (left, right) if len(left[1]) <= len(right[1]) else (right, left)
+    return sum(
+        min(size, large[1][signature])
+        for signature, size in small[1].items()
+        if signature in large[1]
+    )
+
+
+def same_files(left, right):
+    """Whether two postings hold the same files (``posting_payload`` values).
+
+    Their matching files make up ``SAME_FILES_SHARE`` of the smaller one's
+    bytes and the two are about one size. False when either is unknown.
+    """
+    if not left or not right:
+        return False
+    small, large = sorted((left[0], right[0]))
+    return (
+        large <= small * _TWIN_SIZE_FACTOR
+        and _shared_bytes(left, right) >= SAME_FILES_SHARE * small
+    )
+
+
+def holds_more(posting, pick):
+    """Whether ``posting`` is a pack that holds ``pick`` among other things.
+
+    A season pack listed under one episode's name: nearly all of the pick's
+    bytes are in it and it is ``_PACK_SIZE_FACTOR`` times the pick's size
+    or more. What the extra is decides:
+
+    * its files name two or more episodes: a pack;
+    * its files name one episode: not a pack, however large. A pick whose
+      own NZB was cut short is smaller than a complete repost of the same
+      files, and that repost is the copy to keep;
+    * its files name no episode (obfuscated subjects, anime numbering): a
+      pack when the files the pick does not have come to as much as the
+      pick again.
+
+    False when either payload is unknown.
+    """
+    if not posting or not pick:
+        return False
+    shared = _shared_bytes(posting, pick)
+    if posting[0] < pick[0] * _PACK_SIZE_FACTOR or shared < SAME_FILES_SHARE * pick[0]:
+        return False
+    if posting[2]:
+        return len(posting[2]) > 1
+    return posting[0] - shared >= pick[0]
+
+
 def posting_fingerprint(nzb_bytes):
     """``posting_fingerprint_file`` for an NZB already in memory.
 
@@ -183,19 +290,20 @@ def _fast_fingerprint(path):
     """
     from resources.lib.xml_safety import ParseError, UnsafeXmlError, check_well_formed
 
+    sizes = nzb_fingerprint_scan.FileSizes()
     try:
         if hasattr(path, "read"):
             try:
-                found = nzb_fingerprint_scan.scan_fingerprint(path)
+                found = nzb_fingerprint_scan.scan_fingerprint(path, sizes)
             finally:
                 path.seek(0)
         else:
             with open(path, "rb") as stream:
-                found = nzb_fingerprint_scan.scan_fingerprint(stream)
+                found = nzb_fingerprint_scan.scan_fingerprint(stream, sizes)
         if found is nzb_fingerprint_scan.UNUSUAL:
             return found
         check_well_formed(path)
-        return found
+        return _with_payload(found, sizes)
     except (ParseError, UnsafeXmlError):
         return None
     except (OSError, ValueError):
@@ -238,11 +346,19 @@ def posting_fingerprint_file(path):
 _FINGERPRINT_LOCK = threading.Lock()
 
 
+def _with_payload(hashes, sizes):
+    """``hashes`` as a ``PostingFingerprint`` carrying ``sizes``' payload."""
+    fingerprint = PostingFingerprint("I", hashes)
+    fingerprint.payload = posting_payload(sizes.files)
+    return fingerprint
+
+
 def _walked_fingerprint(path):
     """``posting_fingerprint_file`` by the XML parser (see there)."""
     from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_iterparse
 
     hashes = array("I")
+    sizes = nzb_fingerprint_scan.FileSizes()
     stack = []
     names = []
     try:
@@ -250,12 +366,22 @@ def _walked_fingerprint(path):
             if event == "start":
                 stack.append(elem)
                 names.append(_local_name(elem.tag))
+                if names == _FILE_PATH:
+                    subject = str(elem.get("subject") or "")
+                    sizes.open_file(subject.encode("utf-8", "replace"))
                 continue
             stack.pop()
-            if names.pop() == "segment" and names == _SEGMENT_PATH:
+            name = names.pop()
+            if name == "segment" and names == _SEGMENT_PATH:
                 msgid = (elem.text or "").strip().strip("<>").lower()
                 if msgid:
                     hashes.append(zlib.crc32(msgid.encode("utf-8")))
+                # Digits and nothing else, as the fast read takes them.
+                size = str(elem.get("bytes") or "")
+                digits = size.isascii() and size.isdigit()
+                sizes.add([size.encode("ascii")] if digits else [], 1)
+            elif name == "file" and names == _FILE_PATH[:-1]:
+                sizes.close_file()
             if stack:
                 # Detach, not just clear: an emptied child still sits in its
                 # parent until the parent ends. Each parent then holds at most
@@ -263,11 +389,13 @@ def _walked_fingerprint(path):
                 stack[-1].remove(elem)
     except (OSError, ParseError, UnsafeXmlError, ValueError):
         return None
-    return hashes if hashes else None
+    return _with_payload(hashes, sizes) if hashes else None
 
 
 # The ancestors of a real NZB segment: <nzb><file><segments><segment>.
 _SEGMENT_PATH = ["nzb", "file", "segments"]
+# A real NZB file element: <nzb><file>.
+_FILE_PATH = ["nzb", "file"]
 
 
 def _local_name(tag):
@@ -344,6 +472,8 @@ class FleetDedup:
         # Optional zero-arg callable: True once Kodi is shutting down (vs a
         # user cancel) -- late appends are then left to finish, not deleted.
         self.aborted = None
+        # What the pick's files are (``posting_payload``), once it is fetched.
+        self._pick_payload = None
 
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.
@@ -396,6 +526,18 @@ class FleetDedup:
         """
         if isinstance(row, dict):
             self._listings.append(row)
+
+    def note_pick(self, fingerprint):
+        """Remember what the pick's files are, to compare backups with."""
+        self._pick_payload = getattr(fingerprint, "payload", None)
+
+    def twin_of_pick(self, fingerprint):
+        """Whether a backup holds the same files as the pick, posted anew."""
+        return same_files(getattr(fingerprint, "payload", None), self._pick_payload)
+
+    def pack_around_pick(self, fingerprint):
+        """Whether a backup is a pack that holds the pick among other files."""
+        return holds_more(getattr(fingerprint, "payload", None), self._pick_payload)
 
     def known_posting(self, fingerprint):
         """Whether ``fingerprint`` is the same posting as one sent or kept."""

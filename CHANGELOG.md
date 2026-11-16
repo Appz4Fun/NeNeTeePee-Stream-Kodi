@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Search progress window between play and the picker, with per-indexer results and failures; episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
+| [Unreleased](#unreleased--main) | on `main` | NFO and MediaInfo viewer in the picker (Left or Right on a release), with `NFO` and `MEDIAINFO` tags on the rows; One row per upload in the picker: names with no group listed together, a cut-short or re-named listing takes its upload's tags, a picker open in about half the time; Search progress window between play and the picker, with per-indexer results and failures; episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -68,6 +68,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased][] — main
 
 ### Added
+
+- **Read a release's NFO and MediaInfo from the picker.** Left or Right on a
+  release opens a viewer over the list
+  ([NFO and MediaInfo viewer](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/nfo-viewer/)):
+    - One tab per unique text. Indexers mostly carry the very same NFO, so
+      identical texts share a tab that lists every indexer carrying it.
+    - The text is drawn with the add-on's own terminal font, so NFO art lines
+      up on any skin, and is paged for the screen: the header says how many
+      pages there are, and Up and Down turn them.
+    - Under the text, what it says of the release (resolution, dynamic range,
+      codec, audio, source, group), each with a check when the listing's name
+      already says it or a small NEW when the text is where it comes from.
+    - Rows of the picker carry `NFO` and `MEDIAINFO` tags for what there is
+      to open, beside `HYBRID` and `REPACK`, and the bottom bar lists the
+      shortcut.
+    - What the search already read is shown at once. Each other indexer that
+      lists the release is asked once, when the viewer opens, and never again
+      for that release.
+
+- **Listings of one upload are one picker row, however the indexers named
+  them.** A search listed the same files several times: under a name one
+  indexer cut short (`...H.265` for `...H.265-FLUX`), under one with a tag
+  dropped (`DV` for `DV.HDR`), under the bare title, and under names with no
+  release group, which were never grouped at all. On 23 real searches a third
+  of the picker was names with no group. Now:
+    - Listings with no release group that carry the same name, in any
+      spelling, are one release: one row with its copy count, ranked and
+      size-checked as one, each a backup of the other on the NZBGet backend.
+      Where one such name is listed at sizes far apart (more than 1.35x
+      between neighbours), each size range is its own row, labelled
+      `NOGRP-A` for the largest posts, `NOGRP-B` and so on.
+      A name with no group still never joins a release that has one.
+    - Listings with the same exact size in bytes are one upload when they
+      name the same film or episode, or when one name is the start of the
+      other and both were posted within two minutes. A listing with no
+      group takes the group of the named listing it is an upload of (and
+      its whole parse when its name is that one cut short); it keeps every
+      tag it states otherwise. Two names from one group for one upload
+      (`DV` here, `DV.HDR` there), or a group and its cut (`-GUA` beside
+      `-GUACAMOLE`), become one row with every listing of both names. A
+      listing that states a group is never changed, and a size an indexer
+      rounded is ignored.
+    - A trailing word after a language (`...AAC.7.1.Japanese.Tigole`) is the
+      group when two or more other listings of the search carry it as theirs,
+      and a library manager's file name
+      (`Show - S01E02 - Title[WEBDL-1080p.AC3.h264.EDITH]`) is read from its
+      bracketed tags.
+
+  On those 23 searches the picker went from 8,450 rows to 6,490, and uploads
+  shown as two or more rows from 611 to 28.
+
+- **A backup that holds your pick's own files is sent first, and a pack under
+  the release's name is not sent** (NZBGet backend). An NZB gives every
+  segment's size, and a repost of the same files gives the same sizes in the
+  same order. While it reads a fetched NZB's Message-IDs the add-on now
+  gathers those sizes too. A backup whose matching files make up 90% of the
+  smaller posting's bytes holds the same files and goes ahead of the other
+  backups (sent first, and given the highest backup score on a server that
+  fails over by score); one that holds the pick's files among other
+  episodes, at 1.35 times its size or more, is a pack (a season listed as
+  one episode) and is left out, counted in the dialog as
+  `1 pack under this name`. A larger posting of the same single episode is a
+  complete copy and is kept. A posting cut into articles of one fixed size
+  says nothing and is sent as before.
 
 - **A search progress window replaces the corner spinner between play and the
   release list.** It follows five stages live: the title with its season,
@@ -232,6 +296,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A row's tags share one label.** `HYBRID` (or `UPSCALE`), `REPACK` and the
+  new `NFO` and `MEDIAINFO` tags follow each other under the name, two spaces
+  apart, in both picker views. Each had a column of its own before, and the
+  row has no room for two more.
+
+- **A cached picker open takes about half the time.** Which listings are the
+  same release was worked out by three pieces of code, each with its own
+  shortcut, and the metadata pass ran up to four times per open. A result
+  list is now grouped once, and the copy counts, the odd-size check, the
+  picker rows and the NZBGet backups all read that grouping; the metadata
+  pass runs once per list and again only when a row is new or an NFO told
+  something since. One name reposted hundreds of times at one size no longer
+  slows a search: its uploads are counted without comparing every pair. On
+  23 real searches, cached opens went from 2,964 ms to 1,471 ms in total on
+  the development machine, and the slowest from 454 ms to 90 ms.
+- **Every listing of a release is ranked by one copy count**, the count its
+  picker row shows. Two spellings of one name could be ranked with 25 and 26
+  copies, and a name with no year could count the copies of two shows. A
+  name that fits two releases now goes with the one more indexers list, and
+  the picker rows no longer depend on the order the results arrived in.
+- **An oddly sized copy is measured against the rows the picker lists with
+  it**, where the size check kept a looser grouping of its own.
+
 - **The download dialog says how far an unpack is and how long is left.**
   NZBGet reports no percent for an unpack, so the dialog showed only
   `unpacking` and the time so far, for ten minutes on a 77 GB remux. It now
@@ -351,6 +438,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compacted columns were resized so these fit without being cut off.
 
 ### Fixed
+
+- **The picker's list always takes the keyboard focus.** Kodi shows the list
+  of the active view one frame after the picker opens. A short result list
+  was ready before that frame, the list refused the focus while still hidden,
+  and no key reached it: neither the arrows nor Enter. The picker now asks
+  for the focus until the list has it.
+
+- **A release tagged `HDR10x265` no longer disappears from a film search.**
+  A tag run into the codec (`HDR10x265`, `HDR10H.265`, `DV.HDRH.265`,
+  `AtmosH.264`) lost its separator on the way from the indexer. The tag and
+  the codec were not read, and `HDR10x265` parsed as season 10, episode 265,
+  so a film search dropped the row as a TV episode. The separator is put back
+  before the name is parsed; a glued `HDR10` is HDR10+, as is `HDR10..x265`.
+- **`ATV` is Apple TV+.** A release named with `ATV` and one named with
+  `ATVP` are the same service, and now the same release.
+- **A one-word episode title is not a release group** in a library manager's
+  file name (`Show - S08E08 - Grizzly[WEBDL-1080p.AAC.h264.FLUX]` is FLUX).
 
 - **An episode opened from a skin's own TMDBHelper gets the right season and
   episode.** The Bingie skin opens titles through its own copy of TMDBHelper,

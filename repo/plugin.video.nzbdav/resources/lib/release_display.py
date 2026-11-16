@@ -373,7 +373,12 @@ def display_name(result):
     if not (meta.get("resolution") or meta.get("quality")):
         return cleaned
     out = _heading(cleaned, title, identity, meta) + " " + _specs(cleaned, meta)
-    group = _collapse(meta.get("group"))
+    group = _collapse(meta.get("group")) or result.get(SIZE_LABEL_KEY) or ""
     if group:
         out += "-" + group
     return out.strip()
+
+
+# ``release_index.SIZE_LABEL_KEY``: "NOGRP-A", "NOGRP-B" on rows with no group
+# whose name is listed at sizes far apart.
+SIZE_LABEL_KEY = "_nogroup_label"

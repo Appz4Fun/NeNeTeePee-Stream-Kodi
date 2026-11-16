@@ -171,6 +171,172 @@ def test_hdr10_with_a_replaced_plus_sign(title, plus):
     assert ("HDR10+" in parse_title_metadata(title)["hdr"]) is plus
 
 
+@pytest.mark.parametrize(
+    "title, hdr, audio, codec",
+    [
+        # The plus sign and the dot after it were lost together.
+        (
+            "Movie.2020.UHD.BluRay.1080p.DDP.5.1.DoVi.HDR10x265-GRP",
+            ["Dolby Vision", "HDR10+"],
+            ["DD+"],
+            "x265/HEVC",
+        ),
+        (
+            "Movie 2020 UHD BluRay 2160p DV HDR10H.265-GRP",
+            ["Dolby Vision", "HDR10+"],
+            [],
+            "x265/HEVC",
+        ),
+        # The plus sign became a dot.
+        (
+            "Movie.2020.UHD.BluRay.1080p.DDP.5.1.HDR10..x265-GRP",
+            ["HDR10+"],
+            ["DD+"],
+            "x265/HEVC",
+        ),
+        # Another tag only gets its separator back.
+        (
+            "Movie.2020.2160p.WEB-DL.DDP5.1.DV.HDRH.265-GRP",
+            ["Dolby Vision", "HDR10"],
+            ["DD+"],
+            "x265/HEVC",
+        ),
+        (
+            "Movie.2020.720p.AMZN.WEB-DL.DDP5.1.AtmosH.264-GRP",
+            ["SDR"],
+            ["Atmos", "DD+"],
+            "x264/AVC",
+        ),
+        # Words that only end like a tag are left alone.
+        (
+            "Movie.2020.1080p.WEB-DL.ThunderDVx264-GRP",
+            ["SDR"],
+            [],
+            "",
+        ),
+    ],
+)
+def test_a_tag_run_into_the_codec_is_read_apart(title, hdr, audio, codec):
+    meta = parse_title_metadata(title)
+
+    assert (meta["hdr"], meta["audio"], meta["codec"]) == (hdr, audio, codec)
+    assert meta["group"] == "GRP"
+
+
+def test_the_glued_and_the_plain_spelling_are_one_release():
+    groups = _groups(
+        [
+            "Movie.2020.UHD.BluRay.1080p.DDP.5.1.DoVi.HDR10+.x265-GRP",
+            "Movie 2020 UHD BluRay 1080p DDP 5 1 DoVi HDR10x265-GRP",
+            "Movie.2020.UHD.BluRay.1080p.DDP.5.1.DoVi.HDR10..x265-GRP",
+        ]
+    )
+    assert len(groups) == 1
+
+
+def test_apple_tv_is_one_service_under_either_tag():
+    from resources.lib.filter_tags import detect_network
+
+    assert detect_network("Show.S01E01.1080p.ATV.WEB-DL.DDP5.1.H.264-GRP") == "ATVP"
+    assert detect_network("Show.S01E01.1080p.ATVP.WEB-DL.DDP5.1.H.264-GRP") == "ATVP"
+    groups = _groups(
+        [
+            "Show.S01E01.1080p.ATV.WEB-DL.DDP5.1.Atmos.H.264-GRP",
+            "Show.S01E01.1080p.ATVP.WEB-DL.DDP5.1.Atmos.H.264-GRP",
+        ]
+    )
+    assert len(groups) == 1
+
+
+@pytest.mark.parametrize(
+    "title, group",
+    [
+        # A library manager's file name: the tag block ends with the group.
+        ("Alone - S12E04 - Finding A Foothold[WEBDL-1080p.AC3.h264.RAWR]", "RAWR"),
+        ("Show - S06E11 - Las Vegas (Part 1)[HDTV-720p.AC3.x264.MOMENTUM]", "MOMENTUM"),
+        ("Show - S02E07 - Tricks of the Trade[WEBDL-1080p.AAC.h264.Q0SWEB]", "Q0SWEB"),
+        ("Show - S08E17 - The Water[WEBDL-2160p.EAC3 Atmos.h265.crab]", "crab"),
+        # The group after a hyphen inside the block.
+        ("Show - S01E02 - Title [WEBDL-1080p.AC3.h264-EDITH]", "EDITH"),
+        ("Film (2020) [Bluray-2160p.DV.HDR10.DDP5.1.h265-FLUX]", "FLUX"),
+        ("Show - S01E02 - Title [WEBDL-1080p]", ""),
+        ("Show - S01E02 - Title [WEBDL-1080p.h264-EDITH-Obfuscated]", "EDITH"),
+        # A hyphenated tag is not a group.
+        ("Film (2020) [Bluray-2160p.h265.DTS-X]", ""),
+        ("Film (2020) [WEBDL-1080p.h264.DTS-ES]", ""),
+        # No group in the block: it ends in a tag.
+        ("Show - S02E01 - Welcome[WEBDL-1080p.AAC.h264]", ""),
+        ("Show - S02E01 - Welcome[WEBDL-1080p.AAC.h264.German]", ""),
+        # A one-word episode title before the block is not the group.
+        ("Alone - S08E08 - Grizzly[WEBDL-1080p.AAC.h264.FLUX]", "FLUX"),
+        ("Show - S01E01 - Pilot [Bluray-1080p.DTS.x264]", ""),
+        # Not a tag block: no resolution in it.
+        ("Dark.(2018).S03.2160p.SDR.WEB-DL.x265.10bit.HEVC.[ENG.GERM]", ""),
+        # Another block that holds a resolution and ends with the group.
+        ("Film (2020) [1080p.BluRay.x264.DTS.GRP]", "GRP"),
+    ],
+)
+def test_the_group_at_the_end_of_a_bracketed_tag_block(title, group):
+    assert parse_title_metadata(title)["group"] == group
+
+
+TIGOLE = "Film.2023.2160p.BluRay.x265.HEVC.10bit.HDR.AAC.7.1.Japanese.Tigole"
+
+
+def _list_groups(*titles):
+    rows = [_row(title) for title in titles]
+    flt.attach_metadata(rows)
+    return [row["_meta"]["group"] for row in rows]
+
+
+def test_a_trailing_word_is_the_group_when_the_list_knows_it_as_one():
+    known = [
+        "Film.2023.1080p.BluRay.x265.HEVC.10bit.AAC.7.1-Tigole",
+        "Other.2019.1080p.BluRay.x265.HEVC.10bit.AAC.5.1-Tigole",
+    ]
+    assert parse_title_metadata(TIGOLE)["group"] == ""
+
+    assert _list_groups(TIGOLE, *known) == ["Tigole"] * 3
+    # Two other rows must carry it: one could be a slip of the parser.
+    assert _list_groups(TIGOLE, known[0]) == ["", "Tigole"]
+    assert _list_groups(TIGOLE, TIGOLE.replace(".", " ")) == ["", ""]
+
+
+def test_a_spelling_that_parses_the_group_gives_it_to_the_others():
+    # "-DNU-TAoE" parses as a group; the dotted spelling has none. It takes
+    # the group from its other spelling, not the last word alone from rows
+    # of other names that end in "TAoE".
+    hyphen = "Show.S02E01.1080p.WEB.x265.EAC3.5.1.Atmos-DNU-TAoE"
+    dotted = "Show.S02E01.1080p.WEB.x265.EAC3.5.1.Atmos.DNU.TAoE"
+    others = [
+        "Show.S02E02.1080p.WEB.x265.EAC3.5.1-TAoE",
+        "Show.S02E03.1080p.WEB.x265.EAC3.5.1-TAoE",
+    ]
+
+    groups = _list_groups(dotted, hyphen, *others)
+
+    assert groups[0] == groups[1] == parse_title_metadata(hyphen)["group"] != "TAoE"
+
+
+def test_spellings_that_tie_keep_the_one_written_with_capitals():
+    upper = "Movie.2020.1080p.BluRay.x264-CONTRiBUTiON"
+
+    for names in ((upper, upper.lower()), (upper.lower(), upper)):
+        assert _list_groups(*names) == ["CONTRiBUTiON", "CONTRiBUTiON"]
+
+
+def test_a_trailing_word_the_list_does_not_know_stays_a_word():
+    known = ["Film.2023.1080p.BluRay.x265-German", "Film.2023.720p.BluRay.x265-German"]
+    # A language, a tag and a word no row carries as its group.
+    for name in (
+        "Film.2023.2160p.BluRay.x265.DTS.German",
+        "Film.2023.2160p.BluRay.German.x265",
+        "Film.2023.2160p.BluRay.x265.DTS.Bonus.Extras",
+        "Film.German",
+    ):
+        assert _list_groups(name, *known)[0] == "", name
+
+
 def test_a_v2_re_release_is_not_a_copy_of_the_first():
     groups = _groups(
         [
