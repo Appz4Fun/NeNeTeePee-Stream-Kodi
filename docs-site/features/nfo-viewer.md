@@ -44,7 +44,8 @@ release, and tells you when none has anything.
   with the box and block characters of the old PC character set. Kodi skins
   seldom have a monospace font, and an add-on cannot bring its own into a
   skin, so the add-on draws the text itself, with its own font, into an image.
-  It looks the same on every skin.
+  It looks the same on every skin. The font is Terminus, by Dimitar
+  Toshkov Zhekov, under the SIL Open Font License 1.1.
 - **What the text says of the release, underneath.** Resolution, dynamic
   range, video codec, audio, source and release group, in the picker's
   colors. Each has a small mark: a check when the listing's name already
