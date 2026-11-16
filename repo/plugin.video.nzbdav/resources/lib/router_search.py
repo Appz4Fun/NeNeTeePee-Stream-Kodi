@@ -17,6 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import xbmc
 
+from resources.lib import search_progress
 from resources.lib.http_util import pubdate_to_epoch
 from resources.lib.hydra import _DEFAULT_HYDRA_URL, _SEARCH_UPLOADS_KEY
 from resources.lib.nzbdav_api import completed_jobs_lookup_done
@@ -111,6 +112,11 @@ def _build_provider_jobs(
     return provider_jobs
 
 
+def _progress_name(provider_key, provider_label):
+    """A provider's name as the search progress window words it."""
+    return "direct indexers" if provider_key == "direct indexers" else provider_label
+
+
 def _run_one_provider(provider_key, _provider_label, search_func, args, kwargs):
     """Run a single provider search, emitting stage logs + timing telemetry."""
     import resources.lib.router as _router
@@ -127,9 +133,15 @@ def _run_one_provider(provider_key, _provider_label, search_func, args, kwargs):
                 provider_key, len(results or []), bool(error)
             )
         )
+        search_progress.provider_finished(
+            _progress_name(provider_key, _provider_label), len(results or []), error
+        )
         return results, error
-    except Exception:
+    except Exception as failure:
         provider_failed = True
+        search_progress.provider_finished(
+            _progress_name(provider_key, _provider_label), 0, str(failure)
+        )
         raise
     finally:
         _router.telemetry.log_timing(

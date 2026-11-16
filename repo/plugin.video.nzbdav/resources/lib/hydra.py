@@ -3,12 +3,14 @@
 
 """NZBHydra2 Newznab API client."""
 
+import time
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urlparse
 
 import xbmc
 import xbmcaddon
 
+from resources.lib import hydra_history, search_progress
 from resources.lib.http_util import (
     calculate_age as _calculate_age,
 )
@@ -263,6 +265,8 @@ def _fetch_hydra_with_fallback(base_url, plan, title, has_provider_caps):
         xbmc.LOGDEBUG,
     )
 
+    started = time.monotonic()
+    sent = plan.primary
     results, error = _fetch_planned_hydra_results(
         base_url, plan.primary, "Hydra search request failed"
     )
@@ -271,9 +275,14 @@ def _fetch_hydra_with_fallback(base_url, plan, title, has_provider_caps):
 
     fallback = _select_hydra_fallback(plan, title, has_provider_caps)
     if not results and fallback:
+        search_progress.search_retry()
+        started = time.monotonic()
+        sent = fallback
         results, error = _run_hydra_fallback(base_url, fallback, redact_url)
         if error:
             return [], error
+    # For the search progress window: which indexers answered, and how.
+    hydra_history.report_indexers(base_url, sent, time.monotonic() - started)
     return results, None
 
 

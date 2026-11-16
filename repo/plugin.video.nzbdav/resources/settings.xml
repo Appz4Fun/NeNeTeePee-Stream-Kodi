@@ -1574,6 +1574,13 @@
 					<control type="toggle"/>
 				</setting>
 			</group>
+			<group id="3" label="30768">
+				<setting id="search_progress_window" type="boolean" label="30766" help="30767">
+					<level>0</level>
+					<default>true</default>
+					<control type="toggle"/>
+				</setting>
+			</group>
 		</category>
 		<category id="advanced" label="30067" help="30363">
 			<group id="1" label="30068">

@@ -12,6 +12,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 import xbmc
 import xbmcaddon
 
+from resources.lib import search_progress
 from resources.lib.http_util import (
     calculate_age as _calculate_age,
 )
@@ -462,6 +463,21 @@ def _search_one_indexer(indexer, query, max_results):
     return results, None
 
 
+def _report_indexer(indexer, results, error, seconds=None):
+    """Tell the search progress window how one indexer answered."""
+    search_progress.indexer_report(
+        [
+            {
+                "name": str(indexer.get("label") or ""),
+                "ok": not error,
+                "count": len(results or []),
+                "ms": None if seconds is None else int(seconds * 1000),
+                "error": error or "",
+            }
+        ]
+    )
+
+
 def search_direct_indexers(
     query,
     indexers=None,
@@ -484,10 +500,18 @@ def search_direct_indexers(
     errors = []
 
     def worker(indexer):
-        return _search_one_indexer(indexer, query, max_results)
+        started = time.monotonic()
+        results, error = _search_one_indexer(indexer, query, max_results)
+        _report_indexer(indexer, results, error, time.monotonic() - started)
+        return results, error
 
-    for _indexer, results, error in _run_indexer_fanout(indexers, worker):
+    search_progress.indexers_expected(
+        [str(indexer.get("label") or "") for indexer in indexers]
+    )
+    for indexer, results, error in _run_indexer_fanout(indexers, worker):
         if error:
+            # Also the one that timed out, whose worker has not reported.
+            _report_indexer(indexer, None, error)
             errors.append(error)
             xbmc.log("NeNeTeePee-Stream-Kodi: {}".format(error), xbmc.LOGWARNING)
             continue

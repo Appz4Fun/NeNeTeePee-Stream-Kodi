@@ -60,7 +60,7 @@ from urllib.parse import urlsplit
 import xbmc
 import xbmcvfs
 
-from resources.lib import mediainfo_audio, mediainfo_video
+from resources.lib import mediainfo_audio, mediainfo_video, search_progress
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
@@ -899,14 +899,23 @@ def _fetch_mediainfo(key, link, title):
         )
         _remember(key, [], "", failed=True)
         _pause_host(host)
+        search_progress.details_result(
+            host, search_progress.MEDIAINFO, search_progress.REFUSED
+        )
         return False, {}, what
     if what == mediainfo_audio.NO_API:
         _note_rest(host, False)
         return None, {}, what
     if what == mediainfo_audio.FAILED:
+        search_progress.details_result(
+            host, search_progress.MEDIAINFO, search_progress.FAILED
+        )
         return None, {}, what
     _note_rest(host, True)
     if what != mediainfo_audio.TRACKS:
+        search_progress.details_result(
+            host, search_progress.MEDIAINFO, search_progress.NOTHING
+        )
         return None, {}, what
     video = mediainfo_video.from_reply(body)
     if video:
@@ -917,6 +926,11 @@ def _fetch_mediainfo(key, link, title):
             xbmc.LOGINFO,
         )
     found = mediainfo_audio.merge_tracks(tracks)
+    search_progress.details_result(
+        host,
+        search_progress.MEDIAINFO,
+        search_progress.READ if found["audio"] or video else search_progress.NOTHING,
+    )
     if not found["audio"]:
         return None, video, what
     _remember(key, found["audio"], found["channels"], exact=True, video=video)
@@ -1017,8 +1031,14 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
             xbmc.LOGINFO,
         )
         _remember_no_audio(key, video, failed=True)
-        if getattr(exc, "code", None) in _REFUSAL_STATUSES:
+        refused = getattr(exc, "code", None) in _REFUSAL_STATUSES
+        if refused:
             _pause_host(_host(url))
+        search_progress.details_result(
+            _host(url),
+            search_progress.NFO,
+            search_progress.REFUSED if refused else search_progress.FAILED,
+        )
         return bool(video)
     error = _error_code(text)
     if error is not None and error not in _NO_NFO_CODES:
@@ -1032,6 +1052,9 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
         _remember_no_audio(key, video, failed=True)
         if _is_refusal_code(error):
             _pause_host(_host(url))
+        search_progress.details_result(
+            _host(url), search_progress.NFO, search_progress.REFUSED
+        )
         return bool(video)
     text = _HTML_BREAK.sub("\n", text)
     whose = whose_nfo(text, title, describe)
@@ -1043,6 +1066,9 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
             xbmc.LOGINFO,
         )
         _remember_no_audio(key, video)
+        search_progress.details_result(
+            _host(url), search_progress.NFO, search_progress.NOTHING
+        )
         return bool(video)
     found = audio_from_nfo(text)
     if not video and names_release(text, title):
@@ -1063,7 +1089,13 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
         ),
         xbmc.LOGINFO,
     )
-    return bool(found["audio"]) or bool(video)
+    told = bool(found["audio"]) or bool(video)
+    search_progress.details_result(
+        _host(url),
+        search_progress.NFO,
+        search_progress.READ if told else search_progress.NOTHING,
+    )
+    return told
 
 
 def _first_host(nfo_urls, ref):
@@ -1084,11 +1116,13 @@ def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=No
     try:
         limit = _releases_setting(settings_getter)
         if limit <= 0:
+            search_progress.details_skipped(turned_off=True)
             return False
         candidates = _candidates(rows, key_of, limit)
     except Exception:  # pylint: disable=broad-except
         return False
     if not candidates:
+        search_progress.details_skipped()
         return False
     results = []
 
@@ -1111,9 +1145,11 @@ def learn_for_top(rows, key_of, settings_getter, wait=_WAIT_SECONDS, describe=No
         threading.Thread(target=_work, args=(batch,), daemon=True)
         for batch in by_host.values()
     ]
+    search_progress.details_started(len(candidates), list(by_host))
     for thread in threads:
         thread.start()
     deadline = time.monotonic() + max(0.0, wait)
     for thread in threads:
         thread.join(max(0.0, deadline - time.monotonic()))
+    search_progress.details_finished()
     return any(results)
