@@ -203,6 +203,25 @@ def test_identical_texts_share_a_tab_that_names_every_indexer():
     assert tabs[0]["hosts"] == ["c.example", "a.example", "b.example"]
 
 
+def test_an_nfo_an_indexer_mis_decoded_shares_the_tab_and_shows_repaired():
+    good = "Kido and Yoshida search Müller's apartment\n"
+    garbled = good.encode("utf-8").decode("cp437")
+    assert garbled != good
+    release_docs.keep(KEY, release_docs.NFO, "a.example", garbled)
+    release_docs.keep(KEY, release_docs.NFO, "b.example", good)
+
+    tabs = release_docs.tabs(release_docs.load(KEY))
+
+    assert len(tabs) == 1 and tabs[0]["hosts"] == ["a.example", "b.example"]
+    assert tabs[0]["text"].strip() == good.strip()
+
+
+def test_real_nfo_art_is_not_repaired():
+    art = "╔═══╗\n║ █▓ ║\n╚═══╝ Müller"
+    assert release_docs.repaired(art) == art
+    assert release_docs.repaired("plain") == "plain"
+
+
 # --- asking the indexers ----------------------------------------------------
 
 _MEDIAINFO_PATH = "/api/v1/releases/{}/mediainfo".format(_ID)

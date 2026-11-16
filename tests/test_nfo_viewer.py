@@ -185,20 +185,20 @@ def test_words_that_do_not_fit_are_left_out():
 
 def test_the_page_follows_the_screen():
     assert nfo_viewer.geometry(1920, 1080) == {
-        "scale": 2,
-        "columns": 80,
-        "rows": 23,
+        "scale": 1,
+        "columns": 160,
+        "rows": 46,
         "pixels": 1.0,
     }
     # Twice the pixels: the same page, drawn twice as fine.
     four_k = nfo_viewer.geometry(3840, 2160)
-    assert (four_k["scale"], four_k["columns"], four_k["rows"]) == (4, 80, 23)
-    # In between and below: the largest text that still shows 80 columns.
-    assert nfo_viewer.geometry(2560, 1440)["rows"] == 30
+    assert (four_k["scale"], four_k["columns"], four_k["rows"]) == (2, 160, 46)
+    # In between and below: one font pixel per pixel, 80 columns at least.
+    assert nfo_viewer.geometry(2560, 1440)["rows"] == 61
     small = nfo_viewer.geometry(1280, 720)
     assert (small["scale"], small["columns"], small["rows"]) == (1, 106, 30)
     for odd in ((None, None), (0, 0), ("wide", "tall")):
-        assert nfo_viewer.geometry(*odd)["rows"] == 23
+        assert nfo_viewer.geometry(*odd)["rows"] == 46
 
 
 def test_a_tab_is_as_tall_as_its_list_of_indexers():
@@ -363,13 +363,13 @@ def test_left_and_right_change_the_tab_and_wrap(tmp_path):
 
 
 def test_up_and_down_turn_the_page_and_stop_at_the_ends(tmp_path):
-    long_nfo = NAME + "\n" + "\n".join("line {}".format(n) for n in range(50))
+    long_nfo = NAME + "\n" + "\n".join("line {}".format(n) for n in range(100))
     release_docs.keep(KEY, release_docs.NFO, "hub.example", long_nfo)
     viewer = _viewer(tmp_path)
     with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
 
-    # 51 lines at 23 to the page: Down twice shows it all.
+    # 101 lines at 46 to the page: Down twice shows it all.
     assert viewer.getProperty("page") == "Page 1 / 3"
     assert viewer.getProperty("hints") == "[Up/Down] Page"
     _press(viewer, nfo_viewer.ACTION_MOVE_UP)

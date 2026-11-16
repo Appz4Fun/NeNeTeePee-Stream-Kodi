@@ -144,9 +144,9 @@ def geometry(screen_width, screen_height):
     ``{"scale", "columns", "rows", "pixels"}``: every font pixel is ``scale``
     screen pixels, a page is ``columns`` by ``rows`` characters, and
     ``pixels`` is how many screen pixels one window coordinate is. The scale
-    is the largest that still shows an NFO's 80 columns, so the text is as
-    large on a 4K screen as on a 1080p one, and a screen in between shows
-    more of it per page.
+    is one font pixel per pixel of a 1080-line screen, so the text is as
+    large on a 4K screen as on a 1080p one, about the size of the skin's
+    small text, and a whole NFO mostly fits on one page.
     """
     try:
         pixels = min(float(screen_width) / 1920.0, float(screen_height) / 1080.0)
@@ -156,7 +156,9 @@ def geometry(screen_width, screen_height):
         pixels = 1.0
     width = int(_TEXT_WIDTH * pixels + 0.001)
     height = int(_TEXT_HEIGHT * pixels + 0.001)
-    scale = width // (_NFO_COLUMNS * text_image.GLYPH_WIDTH)
+    # One font pixel per GUI pixel at 1080 lines: the size of a skin's own
+    # small text. Never larger than still shows an NFO's 80 columns.
+    scale = min(int(pixels + 0.5), width // (_NFO_COLUMNS * text_image.GLYPH_WIDTH))
     scale = min(text_image.MAX_SCALE, max(1, scale))
     return {
         "scale": scale,
@@ -491,6 +493,8 @@ class NfoViewer(
         # Kodi keeps a drawn image by its path: the name says all it shows.
         words = attribute_words(attributes, text_image.check_mark(self._font))
         width = int(_ATTRIBUTES_WIDTH * view["pixels"])
+        # The footer keeps the size of the skin's labels around it.
+        scale = min(text_image.MAX_SCALE, max(1, int(2 * view["pixels"] + 0.5)))
         said = hashlib.sha1(  # nosec B324
             repr((words, width, scale)).encode("utf-8", "replace")
         ).hexdigest()[:20]

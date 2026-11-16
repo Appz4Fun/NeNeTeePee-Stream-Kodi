@@ -295,8 +295,27 @@ def forget_all():
         del _LOADED[:]
 
 
+def repaired(text):
+    """``text`` with UTF-8 read as the old PC character set undone.
+
+    Some indexers serve a UTF-8 NFO decoded as CP437, so "Müller" arrives as
+    "M\u251c\u255dller". When the whole text turns back into valid UTF-8 that
+    way, that is what it was; real NFO art does not survive the round trip
+    (its box characters are not valid UTF-8), so it is left as it is.
+    """
+    if not text or all(ord(char) < 0x80 for char in text):
+        return text
+    try:
+        fixed = text.encode("cp437").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError):
+        return text
+    return fixed
+
+
 def _same_text_key(text):
-    """A key equal for two copies of one text, whatever their line endings."""
+    """A key equal for two copies of one text, whatever their line endings
+    or an indexer's mis-decoding."""
+    text = repaired(text)
     lines = [line.rstrip() for line in text.replace("\r\n", "\n").split("\n")]
     while lines and not lines[0]:
         lines.pop(0)
@@ -327,7 +346,7 @@ def tabs(record, indexers_of=None):
                 {
                     "kind": doc["kind"],
                     "same": same,
-                    "text": doc["text"],
+                    "text": repaired(doc["text"]),
                     "hosts": [doc["host"]],
                 }
             )
