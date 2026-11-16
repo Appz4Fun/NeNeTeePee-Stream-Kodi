@@ -352,3 +352,16 @@ def test_nothing_to_draw_on_still_gives_a_working_session(home):
     assert session.text("heading") == "Finding sources"
     session.close()
     assert sp.active() is None
+
+
+def test_a_cancel_pressed_after_the_last_tick_is_seen_on_close():
+    session = sp.Session()
+    surface = _Surface()
+    painter = search_dialog._Painter(session, surface)
+    painter._tick()
+    surface.cancel = True
+
+    painter.close()
+
+    assert session.cancelled()
+    assert surface.closed == 1

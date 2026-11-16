@@ -5,6 +5,37 @@ search step by step until the release list opens. It replaces the small busy
 indicator earlier versions showed in the corner, so a slow indexer no longer
 looks like a frozen screen.
 
+![The search progress window following a search for Metropolis (1927), from pressing play to the release list](../images/search-progress.gif)
+
+*Recorded in a test Kodi against a stand-in NZBHydra2 with two failing
+indexers and three that offer NFO or MediaInfo details.*
+
+## How a search moves through the stages
+
+```mermaid
+flowchart TD
+    play([Press play]) --> id[Identify the title<br/>title, season, episode, IDs]
+    id --> search[Search<br/>NZBHydra2, Prowlarr or direct indexers]
+    search --> idx[Indexer responses<br/>results, times, failures]
+    idx --> details[Release details<br/>NFO and MediaInfo of the top releases]
+    details --> prepare[Prepare the list<br/>filter, sort, check downloads]
+    prepare --> picker([Release list])
+    id -. Cancel .-> stop([Stops quietly])
+    search -. Cancel .-> stop
+    details -. turned off or nothing new .-> prepare
+    prepare -. Auto-select on .-> playbest([Plays the best match])
+
+    classDef stage fill:#151520,stroke:#4A9EFF,color:#FFFFFF
+    classDef endpoint fill:#1E1E2E,stroke:#34D399,color:#FFFFFF
+    classDef halt fill:#1E1E2E,stroke:#FBBF24,color:#FFFFFF
+    class id,search,idx,details,prepare stage
+    class play,picker,playbest endpoint
+    class stop halt
+```
+
+The colors match the window: blue for a stage in hand, green for the start
+and the finish, amber for a stop.
+
 ![Search progress window while release details are read](../images/search-progress.png)
 
 ## What each stage shows
@@ -43,7 +74,7 @@ refused*, or *failed*.
 - **NZBHydra2:** Hydra's search answer lists the merged results only, not
   which indexers it asked. Right after the search, the add-on reads Hydra's
   own record of that search from its search history: two small requests to
-  your Hydra, none to any indexer, and only while this window is showing. This needs **Keep history** on in Hydra's
+  your Hydra, none to any indexer, and only while this window is showing. The search waits at most 1.5 seconds for that record, so a slow Hydra never delays the release list. This needs **Keep history** on in Hydra's
   main settings (on by default). If Hydra's web interface requires a sign-in,
   or the history is off, the table instead lists the indexers named in the
   results, with their result counts, and the failures are not shown.

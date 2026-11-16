@@ -343,3 +343,34 @@ def test_the_entry_is_the_one_logged_when_the_search_was_sent(logged, found):
     with patch.object(hydra_history, "urlopen", side_effect=urlopen):
         entries = hydra_history.indexer_searches("http://h", _PARAMS, 3.0)
     assert bool(entries) is found
+
+
+def test_a_slow_hydra_never_holds_up_the_search():
+    import threading
+    import time as clock
+
+    session = _shown()
+    release = threading.Event()
+
+    def _slow(*_args, **_kwargs):
+        release.wait(5)
+        return [{"name": "Alpha", "ok": True, "count": 1, "ms": 1, "error": ""}]
+
+    with patch.object(hydra_history, "indexer_searches", side_effect=_slow):
+        started = clock.monotonic()
+        hydra_history.report_indexers("http://h", _PARAMS, 1.0, wait=0.2)
+        took = clock.monotonic() - started
+        # The search is over before the late answer comes: it is dropped.
+        session.search_finished([])
+        release.set()
+        clock.sleep(0.2)
+
+    assert took < 1.0
+    assert session.snapshot()["indexers"] == []
+
+
+@pytest.mark.parametrize("fraction", [".1", ".12", ".1234", ".123456789"])
+def test_any_length_of_fraction_is_read(fraction):
+    assert hydra_history._epoch("2026-11-16T07:19:07{}Z".format(fraction)) == (
+        pytest.approx(1794813547 + float("0" + fraction), abs=1e-6)
+    )

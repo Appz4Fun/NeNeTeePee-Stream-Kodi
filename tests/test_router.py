@@ -3140,6 +3140,51 @@ def test_handle_script_play_shows_no_error_after_a_cancel(
 
 @patch("xbmcaddon.Addon")
 @patch("resources.lib.search_dialog.SearchWindow")
+@patch("resources.lib.resolver.resolve_and_play")
+@patch("resources.lib.results_dialog.show_results_dialog")
+@patch("resources.lib.filter.filter_results")
+@patch("resources.lib.router._search_all_providers")
+@patch("resources.lib.router._tag_available")
+@patch("resources.lib.cache.get_cached", return_value=None)
+def test_handle_script_play_honours_a_cancel_seen_only_when_the_window_closes(
+    mock_cache,
+    mock_tag,
+    mock_search,
+    mock_filter,
+    mock_show,
+    mock_resolve_and_play,
+    mock_window,
+    mock_addon,
+):
+    """Cancel pressed after the drawing thread's last look: closing the
+    window reads it, and neither the picker nor auto-select goes ahead."""
+    from resources.lib import search_progress
+    from resources.lib.router import _handle_script_play
+
+    chosen = {"title": "The.Matrix.1999.mkv", "link": "http://hydra/nzb/x"}
+    mock_search.return_value = ([chosen], None)
+    mock_filter.return_value = ([chosen], [chosen])
+    window = mock_window.return_value
+    window.cancel_requested.side_effect = lambda: bool(
+        mock_filter.call_count
+    )  # pressed once filtering has started
+
+    for auto in ("false", "true"):
+        settings = {"auto_select_best": auto}
+        with patch(
+            "resources.lib.router._get_script_setting",
+            side_effect=lambda key, default="", _s=settings: _s.get(key, default),
+        ), patch.object(search_progress, "cancelled", return_value=False):
+            _handle_script_play(
+                {"type": "movie", "title": "The Matrix", "year": "1999"}
+            )
+
+    mock_show.assert_not_called()
+    mock_resolve_and_play.assert_not_called()
+
+
+@patch("xbmcaddon.Addon")
+@patch("resources.lib.search_dialog.SearchWindow")
 @patch("resources.lib.router._search_all_providers", return_value=([], None))
 @patch("resources.lib.cache.get_cached", return_value=None)
 def test_handle_script_play_reads_episode_labels_before_the_window_opens(

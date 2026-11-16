@@ -505,3 +505,21 @@ def test_the_direct_indexer_provider_is_named_in_words(session):
     session.provider_finished(sp.DIRECT_PROVIDER, 1)
     session.search_finished([{"indexer": "A"}])
     assert _stage(session, sp.SEARCH)["text"] == "1 results from Direct indexers"
+
+
+def test_a_read_after_the_wait_does_not_restart_the_stage(session):
+    session.details_started(1, ["a.example"])
+    session.details_finished()
+    session.sorting(3)
+
+    session.details_result("a.example", sp.NFO, sp.READ)
+
+    assert _stage(session, sp.DETAILS)["state"] == sp.DONE
+
+
+def test_a_search_with_no_provider_still_settles_the_title(session):
+    session.identified("movie", "Heat", year="1995")
+
+    session.search_finished([], "No search providers enabled.")
+
+    assert _stage(session, sp.IDENTIFY)["state"] == sp.DONE

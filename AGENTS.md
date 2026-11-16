@@ -169,6 +169,16 @@ The background service (`service.py`) runs `StreamProxy`. MP4 sources may be rew
 - Preserve Kodi shutdown behavior, playback failure paths, and proxy seeking.
 - Read `TODO.md` before changing stream proxy, fallback, or release architecture.
 
+## Visuals in PRs and docs
+
+The maintainer reads visually, so a good picture is part of the change. For any user-visible change (a dialog, the picker, a setting, a flow):
+
+- Show it. Attach a screenshot, or better an animated GIF of the flow, to the PR, and add it to the matching `docs-site/` page (which GitHub Pages publishes). Put images in `docs-site/images/`; keep a GIF short (about 10-20 s) and under about 2 MB. Look at every image before you attach it.
+- Draw flows and decisions as Mermaid charts in the docs and PR bodies; the docs site renders `mermaid` code fences. Prefer `flowchart TD` so the chart stays readable on a narrow page. Other charts and graphs are welcome wherever they explain something faster than prose.
+- Follow the design system: the docs use the Material theme in `mkdocs.yml` (deep purple, light and dark), and pictures of the add-on use its own skin palette (panels `#151520` / `#1E1E2E`, accent blue `#4A9EFF`, green `#34D399`, amber `#FBBF24`, red `#F87171`). Use the same colors in Mermaid `classDef`s.
+- Capture in a throwaway test Kodi, such as a VM with fake backends. Never show copyrighted content playing; use a public-domain film such as *Metropolis* (1927) or a test pattern.
+- Never show anything sensitive: no absolute paths from a development machine, usernames, hostnames, IP addresses, API keys, or the names of private indexers or servers. Use generic names (for example a user named "Viewer"), the CoreELEC layout (`/storage/.kodi/...`), and public indexer names, or black the detail out of the image.
+
 ## Change recipes
 
 ### Adding settings

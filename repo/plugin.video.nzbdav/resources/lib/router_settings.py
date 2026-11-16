@@ -75,6 +75,22 @@ def _open_search_progress():
         return None
 
 
+def _cancelled_on_close(progress):
+    """True when the viewer cancelled, up to the moment the window closed.
+
+    Call it after ``_close_loading_dialog``: a Cancel pressed just before the
+    window closed is only seen then. ``progress`` is a progress session, a
+    plain loading dialog, or ``None``.
+    """
+    import resources.lib.router as _router
+
+    cancelled = getattr(progress, "cancelled", None)
+    if not callable(cancelled) or cancelled() is not True:
+        return False
+    _router._script_play_stage("search cancelled by the viewer")
+    return True
+
+
 def _close_loading_dialog(dialog):
     """Close a loading dialog or progress session; safe to call more than once."""
     if dialog is None:

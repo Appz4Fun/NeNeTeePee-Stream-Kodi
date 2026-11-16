@@ -454,7 +454,8 @@ def _script_play_filter_autoselect_tag(
         search_progress.auto_selected()
         # resolve_and_play blocks on the download; drop the indicator first.
         _router._close_loading_dialog(loading)
-        _script_play_auto_select(params, filtered[0], filtered)
+        if not _router._cancelled_on_close(loading):
+            _script_play_auto_select(params, filtered[0], filtered)
         return None
 
     # Tag the all-rows superset so DL tags / completed-reuse stay valid for

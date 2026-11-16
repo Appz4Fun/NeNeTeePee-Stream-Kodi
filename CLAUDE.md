@@ -1,4 +1,12 @@
 @AGENTS.md
+
+## Visuals (Claude-specific)
+
+Follow [Visuals in PRs and docs](AGENTS.md#visuals-in-prs-and-docs). In addition:
+
+- Read every screenshot or GIF frame yourself before attaching it, and check the docs page renders (build with `just docs` and open the page in the built-in browser), including each Mermaid chart.
+- In a project thread, also send the images to the person with `SendUserFile` and attach them to your reply.
+
 @SECURITY.md
 
 ## Model routing policy (Claude-specific)

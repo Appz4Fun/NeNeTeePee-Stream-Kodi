@@ -426,6 +426,7 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
     def search_finished(self, rows, error=None):
         """The search is over: ``rows`` are its results, ``error`` why none."""
         rows = rows or []
+        self._identify_done()
         with self._lock:
             # A direct indexer that answers after the fan-out gave up on it
             # has its rows thrown away: its late report must change nothing.
@@ -470,7 +471,7 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 if name and name not in self._indexers:
                     self._indexers[name] = _indexer_row(name, WAITING)
             self._version += 1
-        self._indexers_stage()
+            self._indexers_stage()
 
     def indexer_report(self, entries):
         """How indexers answered: dicts of name, ok, count, ms and error.
@@ -504,7 +505,7 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
                 )
                 self._indexers[name] = row
             self._version += 1
-        self._indexers_stage()
+            self._indexers_stage()
 
     def _note_rows(self, rows):
         """Take the indexer names, hosts and counts the result rows carry."""
@@ -594,14 +595,16 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             row["media"].setdefault(kind, set()).add(outcome)
             row["media_hosts"].add(str(host or "").lower())
             self._version += 1
-            state = self._stages[DETAILS].state
-        if state == ACTIVE:
-            self._details_stage(ACTIVE)
+            # Under the lock, so a read landing as the wait ends cannot turn
+            # the finished stage back into a running one.
+            if self._stages[DETAILS].state == ACTIVE:
+                self._details_stage(ACTIVE)
 
     def details_finished(self):
         """The wait for the reads is over; slower ones finish unseen."""
-        if self._state(DETAILS) == ACTIVE:
-            self._details_stage(DONE)
+        with self._lock:
+            if self._stages[DETAILS].state == ACTIVE:
+                self._details_stage(DONE)
 
     def _indexer_name(self, host):
         host = str(host or "").lower()

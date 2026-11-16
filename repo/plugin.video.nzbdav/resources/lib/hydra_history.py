@@ -24,6 +24,7 @@ query, season and episode, and by being logged when this search was sent.
 """
 
 import json
+import threading
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -38,6 +39,8 @@ from resources.lib.http_util import HTTP_USER_AGENT, redact_text
 
 # The requests are to a Hydra that answered a search a moment ago.
 _TIMEOUT_SECONDS = 3
+# How long the search waits for the record before it carries on without it.
+_WAIT_SECONDS = 1.5
 # How many of the newest searches are looked through for the add-on's own.
 _RECENT_SEARCHES = 25
 # A search is ours when Hydra logged it this close to when it was sent, by
@@ -81,11 +84,12 @@ def _epoch(value):
         text = text[:-1] + "+00:00"
     head, dot, rest = text.partition(".")
     if dot:
-        # Python 3.8 reads at most six digits of a fraction.
+        # Python 3.8 reads a fraction of exactly three or six digits only.
         digits = len(rest) - len(rest.lstrip("0123456789"))
-        text = "{}.{}{}".format(head, rest[: min(digits, 6)], rest[digits:])
-        if digits == 0:
-            text = head + rest
+        fraction = rest[:digits][:6].ljust(6, "0")
+        text = (
+            "{}.{}{}".format(head, fraction, rest[digits:]) if digits else head + rest
+        )
     try:
         parsed = datetime.fromisoformat(text)
     except ValueError:
@@ -259,16 +263,33 @@ def indexer_searches(base_url, params, seconds):
     return _merge(details.get("indexerSearches"))
 
 
-def report_indexers(base_url, params, seconds):
+def report_indexers(base_url, params, seconds, wait=_WAIT_SECONDS):
     """Tell the search progress window how Hydra's indexers answered.
 
     Does nothing, and asks Hydra nothing, unless the add-on's window is
-    showing its indexer table and the search was not cancelled. Never
-    raises: the search's rows are already in hand, and this is narration.
+    showing its indexer table and the search was not cancelled. The record
+    is read on a daemon thread and this waits at most ``wait`` seconds for
+    it, so a slow Hydra never holds up the search's results: a later answer
+    is dropped by the window. Never raises.
     """
     session = search_progress.active()
     if session is None or not session.detailed or session.cancelled():
         return
+    reader = threading.Thread(
+        target=_read_and_report,
+        args=(base_url, params, seconds),
+        name="nzbdav-hydra-history",
+        daemon=True,
+    )
+    try:
+        reader.start()
+        reader.join(max(0.0, wait))
+    except Exception:  # pylint: disable=broad-except
+        return
+
+
+def _read_and_report(base_url, params, seconds):
+    """Read Hydra's record of the search and report it; never raises."""
     try:
         entries = indexer_searches(base_url, params, seconds)
     except Exception as error:  # pylint: disable=broad-except
