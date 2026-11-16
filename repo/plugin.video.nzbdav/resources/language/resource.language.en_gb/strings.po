@@ -2884,3 +2884,23 @@ msgstr ""
 msgctxt "#30781"
 msgid "NEW"
 msgstr ""
+
+msgctxt "#30782"
+msgid "NFO viewer text size"
+msgstr ""
+
+msgctxt "#30783"
+msgid "How large the NFO and MediaInfo viewer draws its text. Small fits the most on a page; Large shows an NFO's 80 columns across the page."
+msgstr ""
+
+msgctxt "#30784"
+msgid "Small"
+msgstr ""
+
+msgctxt "#30785"
+msgid "Medium"
+msgstr ""
+
+msgctxt "#30786"
+msgid "Large"
+msgstr ""

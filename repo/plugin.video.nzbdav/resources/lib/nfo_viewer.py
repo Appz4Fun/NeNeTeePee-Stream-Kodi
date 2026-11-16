@@ -138,7 +138,7 @@ def _art_in_plain_characters():
 _PLAIN_ART = _art_in_plain_characters()
 
 
-def geometry(screen_width, screen_height):
+def geometry(screen_width, screen_height, size=0):
     """How the text is drawn on a screen of this many pixels.
 
     ``{"scale", "columns", "rows", "pixels"}``: every font pixel is ``scale``
@@ -155,9 +155,18 @@ def geometry(screen_width, screen_height):
         pixels = 1.0
     width = int(_TEXT_WIDTH * pixels + 0.001)
     height = int(_TEXT_HEIGHT * pixels + 0.001)
-    # As small as the font draws cleanly: one font pixel per screen pixel,
-    # two from 5K up. Never larger than still shows an NFO's 80 columns.
-    scale = min(int(pixels / 2.5) + 1, width // (_NFO_COLUMNS * text_image.GLYPH_WIDTH))
+    # ``size`` is the setting: 0 small, as small as the font draws cleanly
+    # (one font pixel per screen pixel, two from 5K up); 1 medium, twice
+    # that; 2 large, an NFO's 80 columns across the page. Never larger than
+    # still shows those 80 columns.
+    widest = width // (_NFO_COLUMNS * text_image.GLYPH_WIDTH)
+    small = int(pixels / 2.5) + 1
+    try:
+        size = int(size)
+    except (TypeError, ValueError):
+        size = 0
+    scale = {1: 2 * small, 2: widest}.get(size, small)
+    scale = min(scale, widest)
     scale = min(text_image.MAX_SCALE, max(1, scale))
     return {
         "scale": scale,
@@ -686,6 +695,14 @@ def _screen_size():
     return 1920, 1080
 
 
+def _text_size(addon):
+    """The "NFO text size" setting: 0 small, 1 medium, 2 large."""
+    try:
+        return int(addon.getSetting("nfo_text_size") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
 def show(entry, active_rows=None):
     """Open the viewer on a picker entry (a release's rows, lead first).
 
@@ -704,7 +721,8 @@ def show(entry, active_rows=None):
     if not key:
         xbmcgui.Dialog().notification(addon_name(), _string(30780), time=3000)
         return False
-    addon_path = xbmcaddon.Addon("plugin.video.nzbdav").getAddonInfo("path")
+    addon = xbmcaddon.Addon("plugin.video.nzbdav")
+    addon_path = addon.getAddonInfo("path")
     cache = xbmcvfs.translatePath(_CACHE_PATH)
     _empty_cache(cache)
     viewer = NfoViewer(
@@ -718,7 +736,7 @@ def show(entry, active_rows=None):
         font=text_image.load_font(
             os.path.join(addon_path, "resources", "fonts", FONT_FILE)
         ),
-        geometry=geometry(*_screen_size()),
+        geometry=geometry(*_screen_size(), size=_text_size(addon)),
         white=os.path.join(
             addon_path, "resources", "skins", "Default", "media", "white.png"
         ),

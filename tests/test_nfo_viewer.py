@@ -799,3 +799,12 @@ def test_the_pickers_lists_keep_the_focus_on_left_and_right():
     assert (
         sum(label.startswith("$INFO[ListItem.Property(tags)]") for label in labels) == 4
     )
+
+
+def test_the_text_size_setting_picks_the_scale():
+    assert nfo_viewer.geometry(3840, 2160, size=0)["scale"] == 1
+    assert nfo_viewer.geometry(3840, 2160, size=1)["scale"] == 2
+    assert nfo_viewer.geometry(3840, 2160, size=2)["columns"] == 80
+    # 1080p: Medium already fills the 80 columns, Large stays there.
+    assert nfo_viewer.geometry(1920, 1080, size=2)["scale"] == 2
+    assert nfo_viewer.geometry(1920, 1080, size="odd")["scale"] == 1

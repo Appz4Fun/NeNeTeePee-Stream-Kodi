@@ -56,6 +56,13 @@ release, and tells you when none has anything.
 *This listing is named only `Metropolis.1927.2160p.DV`. Its NFO confirms
 2160p and Dolby Vision, and adds the rest.*
 
+## Text size
+
+**Settings > Filtering > NFO viewer text size** sets how large the text is
+drawn. **Small**, the default, uses one font pixel per screen pixel, so a 4K
+screen fits most of an NFO on one page. **Medium** is twice that. **Large**
+draws an NFO's 80 columns across the whole page.
+
 ## Keys
 
 | Key | What it does |
