@@ -296,6 +296,9 @@ def _script_play_search_results(
                 search_type, title, results, settings_getter=getter, **cache_kwargs
             )
     search_progress.search_finished(results, search_error)
+    if _script_play_cancelled():
+        # The viewer already left: no error dialog or "no results" toast.
+        return None
     if search_error:
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Search stage: provider error - {}").format(
@@ -354,6 +357,8 @@ def _script_play_search_filter_tag(  # pylint: disable=too-many-arguments
     # return / exception below.
     loading = progress if progress is not None else _router._open_search_progress()
     try:
+        if _script_play_cancelled():
+            return None
         results = _script_play_search_results(
             search_type,
             title,

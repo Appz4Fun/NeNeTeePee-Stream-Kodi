@@ -987,28 +987,33 @@ def _handle_script_play(params):
 
     _script_play_log_route(params, search_type, title, imdb)
 
+    # Read before the progress window opens: the focused-ListItem fallback
+    # probes InfoLabels such as Container(50).ListItem, which Kodi would
+    # resolve against the window's own list while it is up.
+    title, season, episode = _script_play_resolve_episode_args(
+        params, search_type, title, season, episode, imdb
+    )
+    if search_type == "episode":
+        params.update(title=title, season=season, episode=episode)
+    _attach_episode_context(params, params, title=title, season=season, episode=episode)
+
     # From here to the picker the search progress window says what is going
     # on (search_dialog). The finally closes it before the picker opens and
     # on every early return or exception.
     progress = _open_search_progress()
     try:
-        ids = dict(tmdb=tmdb_id, tvdb=tvdb, imdb=imdb)
         search_progress.identified(
-            search_type, title, year=year, season=season, episode=episode, **ids
-        )
-        title, season, episode = _script_play_resolve_episode_args(
-            params, search_type, title, season, episode, imdb
-        )
-        if search_type == "episode":
-            params.update(title=title, season=season, episode=episode)
-        _attach_episode_context(
-            params, params, title=title, season=season, episode=episode
+            search_type,
+            title,
+            year=year,
+            season=season,
+            episode=episode,
+            tmdb=tmdb_id,
+            tvdb=tvdb,
+            imdb=imdb,
         )
         pack_result = _season_pack_result(
             params.get("_episode_context"), settings_getter=_get_script_setting
-        )
-        search_progress.identified(
-            search_type, title, year=year, season=season, episode=episode, **ids
         )
 
         search_kwargs = dict(

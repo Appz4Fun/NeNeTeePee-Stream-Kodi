@@ -12,9 +12,10 @@ so a skin or Kodi build that refuses the window never stops a search.
 The window is shown, not run modally, and one short-lived thread draws it:
 the add-on's own thread is busy searching, often blocked on the network.
 That thread is the only one that touches the window while it is open. It
-also reads Cancel from a Home window property the Cancel button sets (on a
-click and on Back): Kodi runs that without the add-on's help, whereas a
-script callback would only arrive when the searching thread next yields.
+also reads Cancel from a Home window property the Cancel button and the Back
+action set: Kodi runs those without the add-on's help, so the window closes
+at once even while the searching thread waits on the network. Other keys
+reach ``onAction`` only when Kodi next delivers the add-on's callbacks.
 """
 
 import os
@@ -150,7 +151,7 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
             _home().clearProperty(CANCEL_PROPERTY)
 
     def onAction(self, action):  # pylint: disable=invalid-name
-        """Back, Escape and Stop cancel; nothing else closes the window."""
+        """Back, Escape and Stop cancel once delivered; nothing else closes it."""
         if action.getId() in _CANCEL_ACTIONS:
             self._canceled = True
 
@@ -214,19 +215,22 @@ class _Painter:
 
     def _run(self):
         monitor = xbmc.Monitor()
-        while not self._stop.wait(_TICK_SECONDS):
-            if bool(monitor.abortRequested()):
+        failed = False
+        while not self._stop.is_set():
+            if monitor.waitForAbort(_TICK_SECONDS) or self._stop.is_set():
                 return
             try:
                 self._tick()
             except Exception as exc:  # pylint: disable=broad-except
-                xbmc.log(
-                    "{}: search progress window stopped drawing: {}".format(
-                        search_progress.LOG_TAG, exc
-                    ),
-                    xbmc.LOGDEBUG,
-                )
-                return
+                # Keep going: Cancel is read on the next tick all the same.
+                if not failed:
+                    failed = True
+                    xbmc.log(
+                        "{}: search progress window could not be drawn: {}".format(
+                            search_progress.LOG_TAG, exc
+                        ),
+                        xbmc.LOGDEBUG,
+                    )
 
     def _tick(self):
         with self._lock:
@@ -271,10 +275,11 @@ def _open_window(session):
 
 
 def _open_surface(session, heading, detailed):
-    """The window when wanted and possible, else the corner indicator."""
+    """``(surface, is_window)``: the window when wanted and possible, else the
+    corner indicator (``surface`` None when neither opens)."""
     if detailed:
         try:
-            return _open_window(session)
+            return _open_window(session), True
         except Exception as exc:  # pylint: disable=broad-except
             xbmc.log(
                 "{}: search progress window unavailable, using Kodi's "
@@ -284,9 +289,9 @@ def _open_surface(session, heading, detailed):
     try:
         indicator = CornerIndicator(heading)
         indicator.open(session)
-        return indicator
+        return indicator, False
     except Exception:  # pylint: disable=broad-except
-        return None
+        return None, False
 
 
 def open_progress(heading, detailed=True):
@@ -303,7 +308,7 @@ def open_progress(heading, detailed=True):
         texts = {}
     session = search_progress.Session(texts)
     session.on_close(lambda: search_progress.deactivate(session))
-    surface = _open_surface(session, heading, detailed)
+    surface, session.detailed = _open_surface(session, heading, detailed)
     if surface is not None:
         painter = _Painter(session, surface)
         session.on_close(painter.close)

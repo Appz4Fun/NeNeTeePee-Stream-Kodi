@@ -480,3 +480,28 @@ def test_load_texts_reads_every_string_by_name():
     texts = sp.load_texts()
 
     assert set(texts) == set(sp.TEXT_IDS)
+
+
+def test_a_late_indexer_answer_after_the_search_changes_nothing(session):
+    session.search_started([sp.DIRECT_PROVIDER])
+    session.indexers_expected(["A", "B"])
+    session.indexer_report([{"name": "A", "ok": True, "count": 2, "ms": 300}])
+    session.indexer_report([{"name": "B", "ok": False, "error": "timed out"}])
+    # B's worker finishes after the fan-out gave up on it.
+    session.indexer_report([{"name": "B", "ok": True, "count": 5, "ms": 25000}])
+    session.search_finished([{"indexer": "A"}, {"indexer": "A"}])
+    session.indexer_report([{"name": "B", "ok": True, "count": 5, "ms": 25000}])
+    session.indexers_expected(["C"])
+
+    assert _stage(session, sp.INDEXERS)["state"] == sp.WARN
+    assert _row(session, "B")["result"] == "failed: timed out"
+    assert [row["name"] for row in session.snapshot()["indexers"]] == ["A", "B"]
+
+
+def test_the_direct_indexer_provider_is_named_in_words(session):
+    session.search_started([sp.DIRECT_PROVIDER])
+    assert _stage(session, sp.SEARCH)["text"] == "Waiting for Direct indexers"
+
+    session.provider_finished(sp.DIRECT_PROVIDER, 1)
+    session.search_finished([{"indexer": "A"}])
+    assert _stage(session, sp.SEARCH)["text"] == "1 results from Direct indexers"

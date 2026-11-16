@@ -2825,3 +2825,7 @@ msgstr ""
 msgctxt "#30768"
 msgid "Search Progress"
 msgstr ""
+
+msgctxt "#30769"
+msgid "Direct indexers"
+msgstr ""

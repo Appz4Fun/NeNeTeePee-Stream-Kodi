@@ -114,7 +114,9 @@ def _build_provider_jobs(
 
 def _progress_name(provider_key, provider_label):
     """A provider's name as the search progress window words it."""
-    return "direct indexers" if provider_key == "direct indexers" else provider_label
+    if provider_key == "direct indexers":
+        return search_progress.DIRECT_PROVIDER
+    return provider_label
 
 
 def _run_one_provider(provider_key, _provider_label, search_func, args, kwargs):

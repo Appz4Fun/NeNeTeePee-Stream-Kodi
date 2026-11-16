@@ -10,21 +10,24 @@ its history, so right after a search the add-on reads its own entry back:
 * ``GET /internalapi/history/searches/details/{id}`` for that search's
   indexers: name, success, result count, response time and error.
 
-This is read only for the search progress window (``search_progress``), and
-only while one is showing. It costs two or three small local requests with
-short timeouts, sends no indexer a request, and fails soft: a Hydra with its
-history turned off, or one that requires a sign-in for its web interface,
-simply yields nothing and the window counts the result rows instead.
+This is read only while the add-on's own search progress window is showing
+its indexer table (``search_progress``), and not after a cancel. It costs two
+or three small local requests with short timeouts, sends no indexer a request,
+and fails soft: a Hydra with its history turned off, or one that requires a
+sign-in for its web interface, simply yields nothing and the window counts
+the result rows instead.
 
-Hydra saves a search's indexer rows before it answers the search, so the
-entry is complete by the time it is read.
+Hydra logs a search when the request arrives and saves its indexer rows
+before it answers, so the entry is complete by the time it is read. The
+entry is told apart from other clients' searches by its source, IDs or
+query, season and episode, and by being logged when this search was sent.
 """
 
-import calendar
 import json
 import time
+from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from urllib.error import HTTPError, URLError
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 
@@ -36,13 +39,20 @@ from resources.lib.http_util import HTTP_USER_AGENT, redact_text
 # The requests are to a Hydra that answered a search a moment ago.
 _TIMEOUT_SECONDS = 3
 # How many of the newest searches are looked through for the add-on's own.
-_RECENT_SEARCHES = 10
-# A search is ours when Hydra logged it no longer ago than it took, plus
-# this much for the two clocks' one-second steps and the request itself.
-_SLACK_SECONDS = 15
+_RECENT_SEARCHES = 25
+# A search is ours when Hydra logged it this close to when it was sent, by
+# Hydra's own clock (its answer's Date header). Without that header the
+# device's clock is used, which may differ from Hydra's.
+_SLACK_SECONDS = 5
+_SLACK_SECONDS_LOCAL_CLOCK = 30
+# A history page or search record is a few kilobytes; more is not Hydra.
+_MAX_REPLY_BYTES = 2 * 1024 * 1024
+# Hydra names known clients from their user agent. These never are the add-on.
+_OTHER_CLIENTS = frozenset(
+    ("sonarr", "radarr", "lidarr", "readarr", "mylar", "lazylibrarian", "prowlarr")
+)
 _XSRF_COOKIE = "HYDRA-XSRF-TOKEN"
 _ALLOWED_SCHEMES = frozenset(("http", "https"))
-_REQUEST_ERRORS = (HTTPError, URLError, OSError, ValueError, TypeError)
 # The Newznab id parameters, and the identifier keys Hydra stores them under.
 _ID_KEYS = {
     "imdbid": ("IMDB", "TVIMDB"),
@@ -66,16 +76,23 @@ def _epoch(value):
         return value / 1000.0 if value > 1e11 else float(value)
     if not isinstance(value, str) or "T" not in value:
         return None
-    text = value.strip().rstrip("Z")
-    date, _, fraction = text.partition(".")
+    text = value.strip()
+    if text.endswith(("Z", "z")):
+        text = text[:-1] + "+00:00"
+    head, dot, rest = text.partition(".")
+    if dot:
+        # Python 3.8 reads at most six digits of a fraction.
+        digits = len(rest) - len(rest.lstrip("0123456789"))
+        text = "{}.{}{}".format(head, rest[: min(digits, 6)], rest[digits:])
+        if digits == 0:
+            text = head + rest
     try:
-        whole = time.strptime(date, "%Y-%m-%dT%H:%M:%S")
+        parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
-    seconds = calendar.timegm(whole)
-    if fraction.isdigit():
-        seconds += float("0." + fraction)
-    return seconds
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
 
 
 def _server_time(headers):
@@ -104,7 +121,10 @@ def _open_json(request):
     with urlopen(  # nosec B310 - scheme allowlist enforced above
         request, timeout=_TIMEOUT_SECONDS
     ) as response:
-        return json.load(response), _server_time(response.headers)
+        body = response.read(_MAX_REPLY_BYTES + 1)
+        if len(body) > _MAX_REPLY_BYTES:
+            raise ValueError("reply too large")
+        return json.loads(body.decode("utf-8")), _server_time(response.headers)
 
 
 def _post_json(url, payload):
@@ -135,6 +155,8 @@ def _is_ours(entry, params):
     """Whether a history entry is the search ``params`` describes."""
     if not isinstance(entry, dict) or entry.get("source") != "API":
         return False
+    if str(entry.get("userAgent") or "").strip().casefold() in _OTHER_CLIENTS:
+        return False
     for ours, theirs in (("season", "season"), ("ep", "episode")):
         if params.get(ours) not in (None, "") and not _same_number(
             params[ours], entry.get(theirs)
@@ -160,16 +182,20 @@ def _is_ours(entry, params):
     return not asked_by_id
 
 
-def _find_search(entries, params, seconds, now):
-    """The id of the newest history entry that is this search, or None."""
+def _find_search(entries, params, seconds, now, slack=_SLACK_SECONDS):
+    """The id of the newest history entry that is this search, or None.
+
+    Hydra logged it when the request arrived, ``seconds`` before the search
+    ended; ``now`` is a moment after that, by Hydra's clock when known.
+    """
+    expected = max(0.0, seconds)
     for entry in entries:
         if not _is_ours(entry, params):
             continue
         logged = _epoch(entry.get("time"))
         if logged is None:
             continue
-        age = now - logged
-        if -_SLACK_SECONDS <= age <= max(0.0, seconds) + _SLACK_SECONDS:
+        if abs((now - logged) - expected) <= slack:
             return entry.get("id")
     return None
 
@@ -215,8 +241,11 @@ def indexer_searches(base_url, params, seconds):
     entries = page.get("content") if isinstance(page, dict) else None
     if not isinstance(entries, list):
         return []
-    now = server_now if server_now is not None else time.time()
-    search_id = _find_search(entries, params or {}, seconds, now)
+    if server_now is not None:
+        now, slack = server_now, _SLACK_SECONDS
+    else:
+        now, slack = time.time(), _SLACK_SECONDS_LOCAL_CLOCK
+    search_id = _find_search(entries, params or {}, seconds, now, slack)
     if not isinstance(search_id, int) or isinstance(search_id, bool):
         return []
     details, _ = _open_json(
@@ -233,14 +262,16 @@ def indexer_searches(base_url, params, seconds):
 def report_indexers(base_url, params, seconds):
     """Tell the search progress window how Hydra's indexers answered.
 
-    Does nothing, and asks Hydra nothing, when no search is being shown.
-    Never raises: the search's rows are already in hand.
+    Does nothing, and asks Hydra nothing, unless the add-on's window is
+    showing its indexer table and the search was not cancelled. Never
+    raises: the search's rows are already in hand, and this is narration.
     """
-    if search_progress.active() is None:
+    session = search_progress.active()
+    if session is None or not session.detailed or session.cancelled():
         return
     try:
         entries = indexer_searches(base_url, params, seconds)
-    except _REQUEST_ERRORS as error:
+    except Exception as error:  # pylint: disable=broad-except
         xbmc.log(
             "{}: Hydra's per-indexer search record could not be read: {}".format(
                 search_progress.LOG_TAG, redact_text(str(error))
