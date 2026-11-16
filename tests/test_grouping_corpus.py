@@ -23,15 +23,19 @@ from resources.lib.upload_count import count_uploads
 #   6503 / 981 / 9: listings of one payload take one parse (a name cut
 #   short, or the same film or episode at a byte-equal size); 234 rows
 #   gained a group that way.
+#   6489 / 934 / 9, and 45 more rows shown: a tag run into the codec
+#   ("HDR10x265", once read as season 10 episode 265 and dropped from a
+#   film search), ATV as Apple TV+, and a trailing word the list knows as
+#   a group (207 rows).
 EXPECTED = {
     "rows": 41446,
-    "shown": 39688,
-    "picker_rows": 6503,
-    "groupless_rows": 2648,
-    "groupless_picker_rows": 981,
-    "uploads_listed_twice": 7707,
+    "shown": 39733,
+    "picker_rows": 6489,
+    "groupless_rows": 2531,
+    "groupless_picker_rows": 934,
+    "uploads_listed_twice": 7713,
     "uploads_split": 9,
-    "multi_copy_rows": 4323,
+    "multi_copy_rows": 4329,
 }
 
 

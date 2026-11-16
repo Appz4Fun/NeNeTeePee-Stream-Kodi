@@ -64,7 +64,11 @@ from resources.lib.filter_remux import (
     remux_group_rank,
     remux_priority,
 )
-from resources.lib.filter_tags import supplement_metadata
+from resources.lib.filter_tags import (
+    restore_glued_tags,
+    supplement_metadata,
+    trailing_word,
+)
 from resources.lib.filter_upscale import is_ai_upscale
 from resources.lib.release_subject import name_form_key as _name_form_key
 from resources.lib.upload_count import count_copies
@@ -273,7 +277,10 @@ def parse_title_metadata(title):
     from resources.lib.release_match import variant_tags
     from resources.lib.release_subject import release_name_from_subject
 
-    title = release_name_from_subject(title)
+    name = release_name_from_subject(title)
+    # "HDR10x265": the parser reads season 10, episode 265 unless the lost
+    # separator is put back first.
+    title = restore_glued_tags(name)
     try:
         from resources.lib.ptt import parse_title
 
@@ -308,7 +315,9 @@ def parse_title_metadata(title):
         # "m1080p": a smaller encode posted beside the full-size one.
         variant = variant + ["mini"]
     variant = sorted(variant)
-    identity = _ptt_identity(title, parsed)
+    # Keyed on the name as listed: that is what the stored identity is
+    # looked up by (``fallback_streams._stored_ptt_identity``).
+    identity = _ptt_identity(name, parsed)
 
     if not parsed.get("resolution") and not parsed.get("codec"):
         # PTT returned empty, try fallback
@@ -685,6 +694,46 @@ _ATTACH_PASSES = collections.OrderedDict()
 _ATTACH_PASSES_KEPT = 64
 
 
+# A group must be on this many other rows of the list for a trailing word
+# to be read as it.
+_LIST_GROUP_ROWS = 2
+
+
+def _recover_list_groups(rows):
+    """Read a trailing word as the group when the list knows it as one.
+
+    ``Show.S01.1080p.BluRay.x265.AAC.7.1.Japanese.Tigole`` ends in a word
+    the name alone cannot tell from a language or a title word
+    (``filter_tags.trailing_word``). When at least ``_LIST_GROUP_ROWS`` other
+    rows of the same result list parse that word as their group, it is this
+    row's group too. Returns how many rows gained one.
+    """
+    from resources.lib.release_match import title_key
+
+    known = collections.Counter()
+    bare = []
+    for row in rows:
+        meta = row.get("_meta") if isinstance(row, dict) else None
+        if not isinstance(meta, dict) or not isinstance(row.get("title"), str):
+            continue
+        group = title_key(meta.get("group"))
+        if group:
+            known[group] += 1
+        else:
+            bare.append((row, meta))
+    if not known:
+        return 0
+    changed = 0
+    for row, meta in bare:
+        word = trailing_word(row["title"])
+        if word and known[title_key(word)] >= _LIST_GROUP_ROWS:
+            meta["group"] = word
+            for key in _META_DERIVED_ROW_KEYS:
+                row.pop(key, None)
+            changed += 1
+    return changed
+
+
 def _attached_already(results):
     """Whether one pass that still stands attached every row of ``results``.
 
@@ -733,6 +782,7 @@ def _attach_metadata(results):
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
+    _recover_list_groups(results)
     _unify_name_forms(results)
     # Listings of one payload under different names take one parse.
     unify_one_payload(
