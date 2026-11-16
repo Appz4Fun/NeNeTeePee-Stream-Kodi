@@ -92,6 +92,12 @@ _TAGS_START = _pattern(
     r"(?:19|20)\d{2}|s\d{1,2}(?:e\d{1,3})*|\d{1,2}x\d{2,3}|\d{3,4}[pi]|[48]k"
 )
 
+# The parser drops a REPACK or PROPER written straight after an air date
+# ("Show.2026.11.12.REPACK.1080p"), so both are read here as well. A RERIP
+# is a REPACK to the parser, and stays one.
+_REPACK = _pattern(r"repack\d?|rerip")
+_PROPER = _pattern(r"proper")
+
 _CODEC_PATTERNS = tuple(
     (name, _pattern(expression))
     for name, expression in [
@@ -448,6 +454,19 @@ def main_track_channels(title, audio, quality="", parsed=""):
     return counts[0] if len(counts) == 1 else ""
 
 
+def detect_revision(title):
+    """``(repack, proper)``: whether the name carries each re-release tag.
+
+    As with HYBRID, only a tag after the year, episode or resolution counts;
+    before it, the word belongs to the title ("Proper.Villains.2019").
+    """
+    start = _TAGS_START.search(title)
+    if not start:
+        return False, False
+    after = start.end()
+    return bool(_REPACK.search(title, after)), bool(_PROPER.search(title, after))
+
+
 def detect_hybrid(title):
     """Whether the name carries the HYBRID tag.
 
@@ -537,6 +556,9 @@ def supplement_metadata(title, meta):
         title, meta["audio"], meta.get("quality", ""), meta.get("channels", "")
     )
     meta["hybrid"] = detect_hybrid(title)
+    repack, proper = detect_revision(title)
+    meta["repack"] = bool(meta.get("repack")) or repack
+    meta["proper"] = bool(meta.get("proper")) or proper
     # Every track's channel count, not only the main one shown in the picker:
     # "TrueHD.7.1.Atmos.DD5.1" and "...DD2.0" are different releases.
     meta["track_channels"] = detect_channels(title)

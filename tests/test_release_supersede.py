@@ -5,6 +5,7 @@ import copy
 
 import pytest
 from resources.lib.filter import parse_title_metadata
+from resources.lib.filter_tags import detect_revision
 from resources.lib.release_supersede import revision_label, superseded_rows
 
 PLAIN = "Alpha.2024.2160p.UHD.BluRay.REMUX.DV.HDR.TrueHD.7.1.Atmos.HEVC.HYBRID-GRPA"
@@ -98,10 +99,39 @@ def test_nothing_is_replaced_without_a_repack_in_the_list():
     assert not superseded_rows([])
 
 
-def test_a_season_pack_and_an_episode_do_not_replace_each_other():
+def test_a_repacked_season_pack_replaces_the_pack_and_no_episode():
+    pack = "Show.S02.1080p.WEB-DL.DDP5.1.H.264-GRPB"
+    repack = pack.replace(".1080p", ".REPACK.1080p")
+    rows = [
+        _row(repack, _season_pack={"x": 1}),
+        _row(pack, _season_pack={"x": 2}),
+        _row(EPISODE),
+    ]
+
+    assert _replaced(rows) == {pack: "REPACK"}
+
+
+def test_a_row_flagged_as_a_pack_and_one_that_is_not_never_match():
     pack = _row(EPISODE.replace(".1080p", ".REPACK.1080p"), _season_pack={"x": 1})
 
     assert not _replaced([pack, _row(EPISODE)])
+
+
+def test_a_daily_shows_repack_replaces_that_night_only():
+    night = "Show.2026.11.12.1080p.WEB.h264-GRPB"
+    other = "Show.2026.11.13.1080p.WEB.h264-GRPB"
+    # The tag straight after the date, where scene names put it.
+    repack = "Show.2026.11.12.REPACK.1080p.WEB.h264-GRPB"
+    proper = "Show.2026.11.12.PROPER.1080p.WEB.h264-GRPB"
+
+    assert _replaced([_row(repack), _row(night), _row(other)]) == {night: "REPACK"}
+    assert _replaced([_row(proper), _row(night), _row(other)]) == {night: "PROPER"}
+
+
+def test_the_repack_is_named_when_a_proper_replaces_the_release_too():
+    proper = PLAIN.replace("-GRPA", ".PROPER-GRPA")
+
+    assert _replaced([_row(proper), _row(REPACK), _row(PLAIN)]) == {PLAIN: "REPACK"}
 
 
 def test_synthetic_and_unreadable_rows_take_no_part():
@@ -118,14 +148,20 @@ def test_a_row_without_parsed_metadata_is_parsed_from_its_name():
     assert superseded_rows([repack, plain]) == {id(plain): "REPACK"}
 
 
-def test_the_rows_are_left_as_they_were():
+def test_the_rows_keep_their_own_tags_and_release_profile():
+    from resources.lib.release_match import release_profile
+
     rows = [_row(REPACK), _row(PLAIN)]
     before = copy.deepcopy([row["_meta"] for row in rows])
+    profiles = [release_profile(dict(row)) for row in rows]
 
-    superseded_rows(rows)
+    assert superseded_rows(rows)
 
     assert [row["_meta"] for row in rows] == before
-    assert rows[0]["_meta"]["repack"] is True
+    # The profile cached on each row is its own, tags included: the picker's
+    # grouping and the NZBGet backups read it after this.
+    assert [release_profile(row) for row in rows] == profiles
+    assert dict(profiles[0])["repack"] is True
 
 
 def test_revision_label():
@@ -133,3 +169,26 @@ def test_revision_label():
     assert revision_label({"proper": True}) == "PROPER"
     assert revision_label({"repack": False}) == ""
     assert revision_label(None) == ""
+
+
+@pytest.mark.parametrize(
+    "title,repack,proper",
+    [
+        ("Show.2026.11.12.REPACK.1080p.WEB.h264-GRP", True, False),
+        ("Show.2026.11.12.PROPER.1080p.WEB.h264-GRP", False, True),
+        ("Show.2026.11.12.1080p.WEB.h264.REPACK2-GRP", True, False),
+        ("Show.S01E02.RERIP.720p.HDTV.x264-GRP", True, False),
+        ("Show.S01E02.REAL.PROPER.720p.HDTV.x264-GRP", False, True),
+        ("Show.2026.11.12.1080p.WEB.h264-GRP", False, False),
+    ],
+)
+def test_the_tags_are_read_after_a_date_too(title, repack, proper):
+    meta = parse_title_metadata(title)
+
+    assert (meta["repack"], meta["proper"]) == (repack, proper)
+
+
+def test_a_title_word_before_the_year_is_not_a_tag_to_the_supplement():
+    assert detect_revision("Proper.Villains.2019.1080p.WEB.h264-GRP") == (False, False)
+    assert detect_revision("Alpha.2024.1080p.WEB.h264-REPACKERS") == (False, False)
+    assert detect_revision("no tags at all") == (False, False)

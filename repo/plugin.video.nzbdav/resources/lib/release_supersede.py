@@ -80,14 +80,21 @@ def _bucket_key(row):
 
 
 def _replacement(row, revised):
-    """The tag of the first of ``revised`` that replaces ``row``, or ""."""
+    """The tag of the row of ``revised`` that replaces ``row``, or "".
+
+    When a REPACK and a PROPER both replace it, the REPACK is named, as on a
+    single name that carries both tags.
+    """
     from resources.lib.release_match import same_release
 
     untagged = _untagged(row)
+    found = ""
     for fixed in revised:
         if same_release(untagged, _untagged(fixed)):
-            return revision_label(fixed.get("_meta"))
-    return ""
+            found = revision_label(fixed.get("_meta"))
+            if found == REPACK_LABEL:
+                break
+    return found
 
 
 def _candidates(rows):

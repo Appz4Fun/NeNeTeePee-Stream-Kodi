@@ -7,9 +7,9 @@ skin's font may not hold the combining stroke character. Kodi sizes no
 control to the text of a list row and tells an add-on nothing about a font,
 so the length of the line is worked out here.
 
-The widths are the average of four fonts Kodi skins use for their list
-text (Noto Sans, Kodi's own Arial, Inter and Netflix Sans), in thousandths
-of the font size, for the printable ASCII characters. Fonts and skins
+The widths are the average of four sans-serif fonts Kodi skins use for
+their list text (Noto Sans, Kodi's own Arial, Inter and one more), in
+thousandths of the font size, for the printable ASCII characters. Fonts and skins
 differ by a few percent, so the estimate leans long: a line a little past
 the last letter reads as struck through, one that stops short does not.
 """
