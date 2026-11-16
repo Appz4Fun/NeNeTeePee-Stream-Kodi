@@ -132,8 +132,8 @@ When you sort by **Relevance**, NeNeTeePee-Stream-Kodi ranks releases by this pr
 10. **NZB copies:** among releases still tied, the release with more NZBs in
    the results sorts first, so a pick has more backups if one NZB fails.
    Copies are counted with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release)
-   that NZBGet duplicate backups use, so a release with no group counts only
-   itself.
+   that NZBGet duplicate backups use, and every listing of a release is
+   ranked by the one count its picker row shows.
 11. **Size:** larger files win the final tie-break.
 
 #### How audio tags are read
@@ -389,9 +389,69 @@ your filters, the picker opens instead.
 Copies are grouped with the [same-release rule](nzbget-backend.md#what-counts-as-the-same-release):
 the same title and year or episode, and equal resolution, HDR, audio,
 channels, codec, quality (source), edition, PROPER/REPACK, HYBRID, 3D, dubbed,
-hardcoded-subtitle and cut tags, release group, and a daily show's air date. Language and soft-subtitle tags don't split a release, and a
-result with no release group is never grouped with another. How a name is
+hardcoded-subtitle and cut tags, release group, and a daily show's air date. Language and soft-subtitle tags don't split a release. How a name is
 spelled (dots, spaces, underscores, a replaced plus sign) never splits one.
+
+### How listings become one row
+
+Indexers do not agree on a release's name. One cuts it short, one drops a
+tag, one lists the bare title, and some names carry no group at all. Read one
+by one, those listings filled the list with rows that were the same files.
+
+![The same search before and after: nine rows become five](../images/picker-grouping.gif)
+
+Before a list is ranked, its names are read together:
+
+```mermaid
+flowchart TD
+    A[Every listing of the search] --> B[Parse each name]
+    B --> C[Spellings of one name<br>take the most detailed parse]
+    C --> D{Same exact size in bytes?}
+    D -- "and the same film or episode" --> E[One upload: one set of tags]
+    D -- "and one name is the other cut short,<br>posted within two minutes" --> E
+    D -- no --> F[Keeps its own tags]
+    E --> G{Has a release group?}
+    F --> G
+    G -- yes --> H[One row per release:<br>every parsed field equal]
+    G -- no --> I[One row per name]
+    H --> J[Copies counted, odd sizes last]
+    I --> J
+
+    classDef step fill:#1E1E2E,stroke:#4A9EFF,color:#FFFFFF
+    classDef ask fill:#151520,stroke:#FBBF24,color:#FFFFFF
+    classDef done fill:#151520,stroke:#34D399,color:#FFFFFF
+    class A,B,C,E,F step
+    class D,G ask
+    class H,I,J done
+```
+
+- **A name cut short.** `...DV.HDR.TrueHD.7.1.Atmos.HEVC` from one indexer
+  and `...HEVC-GRPA` from two others, the same size and minute: the short one
+  is the same upload, so it takes the group and joins the row.
+- **The same film or episode at one exact size.** Two encodes never come to
+  the same number of bytes, so `...1080p.WEB-DL.DDP5.1.H.264-GRPD` and
+  `...1080p WEB-DL H264-GRPD` at one size are one upload whenever they were
+  posted, and the fuller name's tags are used for both. A size that is a
+  round number of megabytes is ignored: an indexer that rounds could give two
+  encodes one size.
+- **Names with no group.** Listings of one name with no group are one row
+  with a copy count. Such a name never joins a release that has a group.
+- **A tag run into the codec.** `HDR10x265` and `AtmosH.264` lost a
+  separator on the way from the indexer. They are read as `HDR10+`, `x265`
+  and `Atmos`, `H.264`; the first used to parse as season 10, episode 265
+  and vanish from a film search.
+- **A group written without a hyphen.** A library manager's file name,
+  `Show - S01E02 - Title[WEBDL-1080p.AC3.h264.GRP]`, ends its bracketed tags
+  with the group. A trailing word after a language
+  (`...AAC.7.1.Japanese.GRPC`) is read as the group when two or more other
+  listings of the same search carry it as theirs.
+
+| Before | After |
+| --- | --- |
+| ![Nine rows from fourteen listings](../images/picker-grouping-before.png) | ![Five rows from fifteen listings](../images/picker-grouping-after.png) |
+
+The side panel still shows each listing's own name in grey, so you can see
+what was read from what.
 
 A copy whose size is far from the release's typical size, such as a 91 GB
 listing of a 10 GB episode, is listed last among the release's copies, so
