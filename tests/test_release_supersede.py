@@ -220,6 +220,11 @@ def test_revision_label_follows_the_parsed_flags():
         # A name whose first marker is its resolution: the title comes first.
         ("[Group] Keeping It Proper - 05 [1080p].mkv", ""),
         ("[Group] Show Repack - 05 (1080p) [12345678].mkv", ""),
+        ("[GRP] SHOW - 05 The Proper [1080p]", ""),
+        ("[Group] Show - 05 PROPER [1080p]", "proper"),
+        # Mixed case: a lowercase word is no tag before the format tags.
+        ("The.Show.S01E05.keeping.it.proper.720p.hdtv.x264-grp", ""),
+        ("Show.S01E05.720p.HDTV.x264.Proper-GRP", "proper"),
         # All in one case, capitals as well as none: judged by position alone.
         ("SHOW.S01E05.REPACK.720P.HDTV.X264-GRP", "repack"),
         ("SHOW.S01E05.A.PROPER.SEND.OFF.720P.HDTV.X264-GRP", ""),

@@ -549,6 +549,7 @@ def _is_revision_tag(name, match, cut, sure_cut, one_case):
     return _only_tags(name[match.end() : cut], False)
 
 
+_GROUP_SEPARATOR = re.compile(r"[\s._]")
 # A release name is far shorter, and carries one or two of these words. The
 # limits keep a hostile name from costing more than a glance.
 _REVISION_NAME_LIMIT = 512
@@ -577,12 +578,11 @@ def detect_revision(title):
         return ""
     cut, sure_cut = _format_tags_start(name, anchor)
     # A name whose first marker is its resolution has no year or episode to
-    # scan from: "[Group] Show - 05 REPACK (1080p)". Its case is read from
-    # the whole name; otherwise from the tags, which follow the marker.
-    whole = cut == anchor.start()
-    scan_from = 0 if whole else anchor.end()
-    cased = name if whole else name[anchor.end() :]
-    cased = cased.rpartition("-")[0] or cased
+    # scan from: "[Group] Show - 05 REPACK (1080p)".
+    scan_from = 0 if cut == anchor.start() else anchor.end()
+    # The name's case, read without the group that ends it ("-GRP").
+    head, hyphen, group = name.rpartition("-")
+    cased = head if hyphen and not _GROUP_SEPARATOR.search(group) else name
     one_case = not any(char.isupper() for char in cased) or not any(
         char.islower() for char in cased
     )

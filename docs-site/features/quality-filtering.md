@@ -437,11 +437,12 @@ which tag replaced it:
   codec, HYBRID and release group, and every other field of the
   [same-release rule](nzbget-backend.md#what-counts-as-the-same-release).
 - The word has to be written as a tag: in capitals, and either after the
-  resolution and source or before them with only other tags between. `Proper`
-  in an episode title or a guest's name, as in
-  `Show.S03E02.A.Proper.Send.Off.720p`, strikes nothing. A name written all
-  in one case can't be read by its capitals, so there the word is judged by
-  where it stands alone.
+  resolution and source or before them with only other tags between. In
+  another case (`x264.Proper-GRP`) it counts only after the resolution, with
+  nothing but tags after it. `Proper` in an episode title or a guest's name,
+  as in `Show.S03E02.A.Proper.Send.Off.720p`, strikes nothing. A name written
+  all in one case can't be read by its capitals, so there the word is judged
+  by where it stands alone.
 - When the picker can't tell whether a release's own `Proper` or `Repack` is
   a tag, that release is never struck through either.
 - Another group's PROPER strikes nothing. It is a different encode, not the
