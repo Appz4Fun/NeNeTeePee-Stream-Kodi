@@ -126,7 +126,8 @@ def test_backups_are_the_other_rows_of_the_picks_picker_row():
         _row("Show.2023.S01E01.1080p.WEB-DL.DDP5.1.H264-GRP", "n2"),
     ]
 
-    def backups(pick, listed=rows):
+    def backups(pick, listed=None):
+        listed = rows if listed is None else listed
         return [row["link"] for row in _same_release_backups(pick, listed)]
 
     # The yearless name is listed with the 2005 show, the first it meets: a
@@ -140,3 +141,28 @@ def test_backups_are_the_other_rows_of_the_picks_picker_row():
     # joins it: what the rule says of that pair, as before the index.
     assert backups(rows[3], rows[:3]) == ["n1", "y1"]
     assert backups(_row("Show.S01E01.1080p.WEB-DL.DDP5.1.H264", "g1")) == []
+
+
+def test_a_groupless_pick_is_backed_up_by_the_other_listings_of_its_name():
+    from resources.lib.router_play import _same_release_backups
+
+    name = "Show.S01E01.1080p.WEB-DL.DDP5.1.H264"
+    rows = [
+        _row(name, "u1"),
+        _row(name + "-GRP", "g1"),
+        _row(name.replace(".", " "), "u2"),
+        _row(name.replace("1080p", "720p"), "o1"),
+        _row(name, "big", size="60000000000"),
+        _row(name, "u3"),
+    ]
+    from resources.lib.filter import _demote_size_outliers
+
+    _demote_size_outliers(rows)
+
+    backups = [row["link"] for row in _same_release_backups(rows[0], rows)]
+
+    # Its own name first, then the other spelling; never the release that
+    # has a group, another resolution, or the copy twelve times its size.
+    assert backups == ["u3", "u2"]
+    # The rule itself still refuses a name with no group, pair by pair.
+    assert not release_match.same_release(rows[0], rows[5])

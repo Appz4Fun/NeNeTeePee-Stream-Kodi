@@ -20,8 +20,8 @@ def release_groups(rows):
     its group and the groups read in the same order as the plain list. The
     grouping is ``release_index.build``: a row joins the first group whose
     every member the release rule accepts it against, so the rule alone
-    decides, and a row with no group (or one that cannot be parsed) stays on
-    its own.
+    decides; rows with no release group are listed together when they carry
+    the same name, and a row that cannot be parsed stays on its own.
 
     Season-pack rows (the synthetic local pack included) are never grouped
     with anything here: the index groups them among themselves for the copy

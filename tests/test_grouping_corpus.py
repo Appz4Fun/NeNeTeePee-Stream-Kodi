@@ -16,21 +16,24 @@ import pytest
 from resources.lib import release_index
 from resources.lib.upload_count import count_uploads
 
-# What the 23 searches come to, in all.
+# What the 23 searches come to, in all. History:
+#   8450 picker rows, 2882 of them a name with no group, 611 uploads split
+#   across picker rows: the release rule alone.
+#   6676 / 1108 / 119: names with no group listed together by name.
 EXPECTED = {
     "rows": 41446,
     "shown": 39688,
-    "picker_rows": 8450,
+    "picker_rows": 6676,
     "groupless_rows": 2882,
-    "groupless_picker_rows": 2882,
+    "groupless_picker_rows": 1108,
     "uploads_listed_twice": 7702,
-    "uploads_split": 611,
-    "multi_copy_rows": 3928,
+    "uploads_split": 119,
+    "multi_copy_rows": 4364,
 }
 
 
-@pytest.fixture(scope="module")
-def opened():
+@pytest.fixture(scope="module", name="opened")
+def _opened():
     """Every search of the corpus, run once as a picker open."""
     return [grouping_corpus.open_picker(search) for search in grouping_corpus.load()]
 

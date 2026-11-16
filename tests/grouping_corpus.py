@@ -105,19 +105,16 @@ def open_picker(search, rows=None):
 def reference_groups(rows):
     """``rows`` grouped by the release rule alone, the slow and plain way.
 
-    A row joins the first group whose every member the rule accepts it
-    against (``release_match.same_release``), and a season pack never
-    groups. No keys, buckets or caches: this is what any faster grouping
-    has to equal.
+    A row joins the first group whose every member it is the same release
+    as (``_plainly_the_same``), and a season pack never groups. No keys,
+    buckets or caches: this is what any faster grouping has to equal.
     """
-    from resources.lib.release_match import same_release
-
     groups = []
     for row in rows:
         if not row.get("_season_pack"):
             for group in groups:
                 if all(
-                    not member.get("_season_pack") and same_release(member, row)
+                    not member.get("_season_pack") and _plainly_the_same(member, row)
                     for member in group
                 ):
                     group.append(row)
@@ -127,6 +124,32 @@ def reference_groups(rows):
         else:
             groups.append([row])
     return groups
+
+
+def _plainly_the_same(member, row):
+    """The release rule, plus the one thing it leaves to the grouping.
+
+    Two names with a group are ``release_match.same_release``. Two names
+    with no group are one release when they are the same name in any
+    spelling, unless both name a container and the containers differ.
+    """
+    from resources.lib.release_match import same_release
+    from resources.lib.release_subject import name_form_key
+
+    def unnamed(one):
+        meta = one.get("_meta") or {}
+        return not meta.get("group"), str(meta.get("container") or "").casefold()
+
+    (left_bare, left_container), (right_bare, right_container) = (
+        unnamed(member),
+        unnamed(row),
+    )
+    if not (left_bare and right_bare):
+        return same_release(member, row)
+    if left_container and right_container and left_container != right_container:
+        return False
+    name = name_form_key(member.get("title"))
+    return bool(name) and name == name_form_key(row.get("title"))
 
 
 def reference_upload_count(rows):

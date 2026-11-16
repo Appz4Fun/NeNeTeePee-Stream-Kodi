@@ -14,6 +14,7 @@ release name inside, and returns a normal release title unchanged.
 """
 
 import collections
+import functools
 import re
 
 _QUOTED = re.compile(r'"([^"]*)"')
@@ -277,3 +278,19 @@ def _richer(candidate, best):
         if (mine - theirs) - wrapped:
             return True
     return _detail(candidate) > _detail(best)
+
+
+@functools.lru_cache(maxsize=4096)
+def name_form_key(title):
+    """The release name with case and punctuation removed.
+
+    Indexers list one release under several spellings: dots, spaces or
+    underscores between words, a hyphen or a dot before the group, a plus sign
+    kept or replaced (``DD+7.1`` / ``DD_7.1``, ``HDR10+`` / ``HDR10_``). Every
+    spelling of a name has the same key.
+    """
+    name = without_media_extension(release_name_from_subject(title))
+    name = name.casefold().replace("'", "").replace("\u2019", "")
+    # Every letter and digit counts, in any script: an ASCII-only key gave two
+    # Chinese titles with the same year and tags one key, and one release.
+    return " ".join("".join(ch if ch.isalnum() else " " for ch in name).split())

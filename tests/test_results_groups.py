@@ -121,11 +121,38 @@ def test_rows_with_different_profiles_are_never_compared():
     copy.assert_not_called()
 
 
-def test_a_row_without_a_group_stays_alone():
+def test_rows_without_a_group_are_listed_together_by_name():
     title = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264"
-    rows = [_row(title, "x1"), _row(title, "x2")]
+    rows = [
+        _row(title, "x1"),
+        _row(ALPHA, "a1"),
+        _row(title.replace(".", " "), "x2"),
+        _row(title.replace("1080p", "720p"), "y1"),
+        _row(title.lower(), "x3"),
+    ]
 
-    assert _links(release_groups(rows)) == [["x1"], ["x2"]]
+    # One name in three spellings is one row; another name, or the same
+    # name with a group, is not part of it.
+    assert _links(release_groups(rows)) == [["x1", "x2", "x3"], ["a1"], ["y1"]]
+
+
+def test_a_groupless_name_in_two_containers_is_two_rows():
+    title = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264"
+    rows = [
+        _row(title + ".mkv", "m1"),
+        _row(title, "n1"),
+        _row(title + ".mp4", "p1"),
+        _row(title + ".mkv", "m2"),
+    ]
+
+    # The name that states no container goes with the first that does.
+    assert _links(release_groups(rows)) == [["m1", "n1", "m2"], ["p1"]]
+
+
+def test_a_name_that_is_all_punctuation_is_never_listed_with_another():
+    rows = [_row("...", "d1"), _row("---", "d2"), _row("", "d3"), _row("", "d4")]
+
+    assert len(release_groups(rows)) == 4
 
 
 def test_group_pick_prefers_an_already_downloaded_copy():

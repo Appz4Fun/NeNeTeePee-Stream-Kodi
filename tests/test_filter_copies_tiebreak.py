@@ -197,14 +197,16 @@ def test_release_check_runs_per_distinct_title_not_per_pair():
     assert _nzb_copy_count(rows[0], rows) == 10
 
 
-def test_groupless_identical_titles_do_not_pool():
-    # The shared rule never groups a row without a parsed group, not even
-    # with a listing of the identical name.
+def test_listings_of_one_groupless_name_pool_their_copies():
+    # The release rule never accepts a row without a parsed group, but rows
+    # with no group that carry one name are listed, and counted, as one
+    # release (``release_index``).
     title = "Some.Show.S01E01.1080p.WEB.H264"
-    rows = [_row(title, "x1"), _row(title, "x2")]
+    rows = [_row(title, "x1"), _row(title, "x2"), _row(title + "-GRP", "g1")]
 
     assert not rows[0]["_meta"]["group"]
-    assert _nzb_copy_count(rows[0], rows) == 1
+    assert _nzb_copy_count(rows[0], rows) == 2
+    assert _nzb_copy_count(rows[2], rows) == 1
 
 
 def test_dotted_and_parenthesized_listings_of_one_release_pool_their_copies():

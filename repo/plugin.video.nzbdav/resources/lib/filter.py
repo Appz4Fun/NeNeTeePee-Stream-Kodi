@@ -5,7 +5,6 @@
 
 import collections
 import datetime
-import functools
 import itertools
 import math
 import os
@@ -65,6 +64,7 @@ from resources.lib.filter_remux import (
 )
 from resources.lib.filter_tags import supplement_metadata
 from resources.lib.filter_upscale import is_ai_upscale
+from resources.lib.release_subject import name_form_key as _name_form_key
 from resources.lib.upload_count import count_copies
 
 # Re-exported so ``resources.lib.filter.<name>`` keeps resolving for callers
@@ -568,27 +568,6 @@ _META_DERIVED_ROW_KEYS = (
     "_fallback_title_tokens",
     "_fallback_title_tokens_title",
 )
-
-
-@functools.lru_cache(maxsize=4096)
-def _name_form_key(title):
-    """The release name with case and punctuation removed.
-
-    Indexers list one release under several spellings: dots, spaces or
-    underscores between words, a hyphen or a dot before the group, a plus sign
-    kept or replaced (``DD+7.1`` / ``DD_7.1``, ``HDR10+`` / ``HDR10_``). Every
-    spelling of a name has the same key.
-    """
-    from resources.lib.release_subject import (
-        release_name_from_subject,
-        without_media_extension,
-    )
-
-    name = without_media_extension(release_name_from_subject(title))
-    name = name.casefold().replace("'", "").replace("\u2019", "")
-    # Every letter and digit counts, in any script: an ASCII-only key gave two
-    # Chinese titles with the same year and tags one key, and one release.
-    return " ".join("".join(ch if ch.isalnum() else " " for ch in name).split())
 
 
 def _parse_detail(meta):
