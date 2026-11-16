@@ -32,13 +32,15 @@ A name with no release group is the one case the rule itself does not
 decide. ``same_release`` never accepts such a row, since nothing says whose
 release it is. Here, rows with no group that carry the same name (in any
 spelling, ``release_subject.name_form_key``) are one release: the same
-unnamed post listed by several indexers, and its reposts. Only a named
+unnamed post listed by several indexers, and its reposts. So are listings
+that took their parse from one of them (``filter_payload``). Only a named
 container keeps them apart (a ``.mkv`` and a ``.mp4`` of one name are two
 files). A name with no group still never joins a release that has one.
 """
 
 from resources.lib import fallback_streams as _fs
 from resources.lib import release_match
+from resources.lib.filter_payload import ADOPTED_KEY
 from resources.lib.release_subject import name_form_key
 
 # First in the exact key of a row with no release group.
@@ -197,8 +199,10 @@ def _keys(row):
         meta = _fs._result_meta(row)
         container = str(meta.get("container") or "").strip().casefold()
         if not release_match.profile_group(profile):
-            name = name_form_key(row.get("title"))
-            if not name:
+            # Its own name, or the name it took its parse from: listings of
+            # one payload that ended with no group stay one release.
+            name = meta.get(ADOPTED_KEY) or name_form_key(row.get("title"))
+            if not name or not isinstance(name, str):
                 return None
             return (_NO_GROUP, bool(row.get("_season_pack")), name), container
         identity = _fs._release_identity(row)

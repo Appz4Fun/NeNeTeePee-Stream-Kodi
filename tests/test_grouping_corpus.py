@@ -20,15 +20,18 @@ from resources.lib.upload_count import count_uploads
 #   8450 picker rows, 2882 of them a name with no group, 611 uploads split
 #   across picker rows: the release rule alone.
 #   6676 / 1108 / 119: names with no group listed together by name.
+#   6503 / 981 / 9: listings of one payload take one parse (a name cut
+#   short, or the same film or episode at a byte-equal size); 234 rows
+#   gained a group that way.
 EXPECTED = {
     "rows": 41446,
     "shown": 39688,
-    "picker_rows": 6676,
-    "groupless_rows": 2882,
-    "groupless_picker_rows": 1108,
-    "uploads_listed_twice": 7702,
-    "uploads_split": 119,
-    "multi_copy_rows": 4364,
+    "picker_rows": 6503,
+    "groupless_rows": 2648,
+    "groupless_picker_rows": 981,
+    "uploads_listed_twice": 7707,
+    "uploads_split": 9,
+    "multi_copy_rows": 4323,
 }
 
 

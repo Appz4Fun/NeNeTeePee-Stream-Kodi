@@ -131,7 +131,8 @@ def _plainly_the_same(member, row):
 
     Two names with a group are ``release_match.same_release``. Two names
     with no group are one release when they are the same name in any
-    spelling, unless both name a container and the containers differ.
+    spelling (or took their parse from the same name, ``filter_payload``),
+    unless both name a container and the containers differ.
     """
     from resources.lib.release_match import same_release
     from resources.lib.release_subject import name_form_key
@@ -148,8 +149,13 @@ def _plainly_the_same(member, row):
         return same_release(member, row)
     if left_container and right_container and left_container != right_container:
         return False
-    name = name_form_key(member.get("title"))
-    return bool(name) and name == name_form_key(row.get("title"))
+
+    def name_of(one):
+        # A listing that took another's parse goes by that listing's name.
+        taken = (one.get("_meta") or {}).get("parse_from_payload")
+        return taken or name_form_key(one.get("title"))
+
+    return bool(name_of(member)) and name_of(member) == name_of(row)
 
 
 def reference_upload_count(rows):

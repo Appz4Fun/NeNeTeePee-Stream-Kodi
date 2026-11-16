@@ -54,6 +54,8 @@ from resources.lib.filter_options import (
 from resources.lib.filter_options import (
     RESOLUTION_SETTINGS as _RESOLUTION_SETTINGS,
 )
+from resources.lib.filter_payload import ADOPTED_KEY as _ADOPTED_KEY
+from resources.lib.filter_payload import unify_one_payload
 from resources.lib.filter_remux import (
     DEFAULT_REMUX_GROUPS,
     compile_remux_tiers,
@@ -549,7 +551,9 @@ def _resolve_result_meta(result, parsed_by_title):
     meta = result.get("_meta")
     title = result["title"]
     if _has_filter_metadata_shape(meta):
-        if title not in parsed_by_title:
+        # A parse taken from another listing of the row's payload is this
+        # row's alone, not what its name parses to.
+        if title not in parsed_by_title and not meta.get(_ADOPTED_KEY):
             parsed_by_title[title] = meta
         return meta
     cached_meta = parsed_by_title.get(title)
@@ -649,6 +653,10 @@ def _unify_name_forms(rows):
         title = row.get("title")
         if not isinstance(title, str) or not isinstance(row.get("_meta"), dict):
             continue
+        if row["_meta"].get(_ADOPTED_KEY):
+            # Settled by its payload (``filter_payload``): the same name at
+            # another size is another upload, and must not take this parse.
+            continue
         key = _name_form_key(title)
         if key:
             forms.setdefault(key, {}).setdefault(title, []).append(row)
@@ -726,6 +734,14 @@ def _attach_metadata(results):
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
     _unify_name_forms(results)
+    # Listings of one payload under different names take one parse.
+    unify_one_payload(
+        results,
+        _parse_detail,
+        _meta_for_spelling,
+        _parses_agree,
+        _META_DERIVED_ROW_KEYS,
+    )
     # What a release's NFO said of its audio, once it has been read.
     nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS)
     share_atmos(results, _META_DERIVED_ROW_KEYS)
