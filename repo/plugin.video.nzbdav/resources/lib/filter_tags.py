@@ -94,26 +94,30 @@ _TAGS_START = _pattern(
 
 # A re-release tag: REPACK (RERIP is one to the parser), or PROPER.
 _REVISION = _pattern(r"(?P<repack>repack\d?|rerip\d?)|(?P<proper>proper)")
-# Where a name's free words (an episode title, a guest) have certainly
-# ended: the first source tag, or the first resolution, codec, HDR or audio
-# tag (``_TECH_PATTERNS``, built below the codec patterns).
+# Source tags. With the resolution, codec, HDR and audio tags they are the
+# format tags of a name (``_TECH_PATTERNS``, built below the codec patterns).
 _SOURCE = _pattern(
     r"blu[ ._-]?ray|bd[ ._-]?(?:rip|remux)|br[ ._-]?rip|remux|uhd"
-    r"|web(?:[ ._-]?(?:dl|rip|mux))?|hd[ ._-]?(?:tv|rip|dvd)|pdtv|sdtv"
-    r"|dvd(?:[ ._-]?(?:rip|scr|r))?"
+    r"|web(?:[ ._-]?(?:dl|rip|mux))?|hd[ ._-]?(?:tv|rip|dvd|cam|ts)|pdtv|sdtv"
+    r"|dvd(?:[ ._-]?(?:rip|scr|r|9|5))?|cam|telesync|telecine|screener|r5"
 )
-# Words that can stand between a re-release tag and the first of those tags
-# without making it part of a title: "REPACK.READNFO.1080p",
-# "PROPER.GERMAN.DL.1080p", "REAL.PROPER.720p".
+# Words that stand beside a re-release tag without being part of a title:
+# "REPACK.READNFO.1080p", "PROPER.GERMAN.DL.1080p", "REPACK.Directors.Cut".
+# Language words and streaming services count too (``_is_tag_word``).
+_REVISION_COMPANIONS = frozenset(
+    (
+        "real internal readnfo dirfix nfofix subfix extended unrated uncut "
+        "uncensored remastered limited imax theatrical criterion hybrid "
+        "complete retail multi dual audio dl ml dubbed subbed directors "
+        "director cut dc special edition open matte anniversary final ws fs "
+        "pal ntsc stv docu hc ts tc sdr 3d hsbs hou sbs vostfr vff vfq vf2 vfi "
+        "truefrench subfrench nordic"
+    ).split()
+)
 _REVISION_COMPANION = re.compile(
-    r"(?:real|proper|repack\d?|rerip\d?|internal|readnfo|dirfix|nfofix|subfix"
-    r"|extended|unrated|uncut|uncensored|remastered|limited|imax|theatrical"
-    r"|criterion|hybrid|3d|complete|multi|dual|dl|ml|dubbed|subbed"
-    r"|german|french|italian|spanish|dutch|nordic|swedish|norwegian|danish"
-    r"|finnish|polish|\d+)$",
-    re.I,
+    r"(?:proper|repack\d?|rerip\d?|\d+|\d+bit|[a-z]{0,3}subs?)$", re.I
 )
-_NAME_WORDS = re.compile(r"[^\s._\-\[\](){}+,]+")
+_NAME_WORDS = re.compile(r"[^\s._\-\[\](){}+,\"']+")
 
 _CODEC_PATTERNS = tuple(
     (name, _pattern(expression))
@@ -476,55 +480,99 @@ def main_track_channels(title, audio, quality="", parsed=""):
     return counts[0] if len(counts) == 1 else ""
 
 
-def _first_tech_tag(title, pos):
-    """Where the first source, resolution, codec, HDR or audio tag at or
-    after ``pos`` starts, or -1."""
+def _format_tags_start(name, anchor):
+    """Where the format tags of ``name`` begin, or -1: its resolution, else
+    its first source, codec, HDR or audio tag after the year or episode.
+
+    The resolution comes first because an episode title can hold a word
+    that reads as one of the others ("Charlottes.Web", "Magnum.Opus").
+    """
+    resolution = _RESOLUTION.search(name, anchor.start())
+    if resolution:
+        return resolution.start()
     starts = [
         match.start()
-        for match in (pattern.search(title, pos) for pattern in _TECH_PATTERNS)
+        for match in (pattern.search(name, anchor.end()) for pattern in _TECH_PATTERNS)
         if match
     ]
     return min(starts) if starts else -1
 
 
-def _is_revision_tag(title, match, tech):
+def _is_tag_word(word):
+    lowered = word.lower()
+    return bool(
+        lowered in _REVISION_COMPANIONS
+        or _REVISION_COMPANION.match(word)
+        or word in _NETWORKS
+        or is_language_word(word)
+    )
+
+
+def _only_tags(text, drop_last):
+    """Whether ``text`` holds nothing but tags: format tags, and the words
+    that go with a re-release tag. ``drop_last`` leaves out a final word,
+    the group of a name that ends there."""
+    for pattern in _TECH_PATTERNS:
+        text = pattern.sub(" ", text)
+    words = _NAME_WORDS.findall(text)
+    if drop_last:
+        words = words[:-1]
+    return all(_is_tag_word(word) for word in words)
+
+
+def _is_revision_tag(name, match, cut, plain_case):
     """Whether a "repack" / "proper" in a name is the tag, not a title word.
 
-    After the first source or format tag it is one. Before it, the word is
-    the tag only when nothing but other tags stands between the two: the
-    parser flags "Show.S03E02.A.Proper.Send.Off.720p" and a talk show's
-    "2026.11.12.Proper.Guest.720p" too, and those are titles. A name with
-    no source or format tag at all may end in one more word, its group.
+    The parser flags the word anywhere, so "Show.S03E02.A.Proper.Send.Off"
+    and a talk show's "2026.11.12.John.Proper.720p" would be PROPERs. A tag
+    is told from a title word like this:
+
+    * Before the format tags it is written in capitals, as release names
+      write it, and only other tags stand between it and them. A name with
+      no capitals at all (``plain_case``) is taken as it comes.
+    * After the format tags begin, capitals are enough. In another case
+      ("x264 Proper-GRP") only tags may follow it up to the group.
     """
-    if tech != -1 and match.start() > tech:
-        return True
-    between = title[match.end() : tech if tech != -1 else len(title)]
-    words = _NAME_WORDS.findall(between)
-    if tech == -1:
-        words = words[:-1]
-    return all(_REVISION_COMPANION.match(word) for word in words)
+    word = match.group()
+    if cut != -1 and match.start() > cut:
+        return bool(
+            word.isupper() or plain_case or _only_tags(name[match.end() :], True)
+        )
+    if not (word.isupper() or plain_case):
+        return False
+    if cut == -1:
+        return _only_tags(name[match.end() :], True)
+    return _only_tags(name[match.end() : cut], False)
 
 
 def detect_revision(title):
-    """ "repack", "proper" or "": the re-release tag a name carries.
+    """ "repack", "proper" or "": the re-release tag a name certainly has.
 
     A group posts a REPACK (or RERIP), or a PROPER, to replace a release
-    that had a fault. As with HYBRID, only a word after the year, episode or
-    resolution counts ("Proper.Villains.2019" has none), and of those only
-    one written as a tag (``_is_revision_tag``). A name with both reads as a
-    REPACK, the later of the two.
+    that had a fault. As with HYBRID, only a word after the year or episode
+    counts ("Proper.Villains.2019" has none), or directly before the
+    resolution of a name that has neither; and of those only one written as
+    a tag (``_is_revision_tag``). A name with both reads as a REPACK, the
+    later of the two.
 
-    The parser's own ``repack`` / ``proper`` flags are looser: they are set
-    by the word anywhere in the name, and not at all straight after an air
-    date ("Show.2026.11.12.REPACK.1080p").
+    This errs toward "": the picker strikes another release through on the
+    strength of it. The parser's own ``repack`` / ``proper`` flags are
+    looser, set by the word anywhere in the name, and are not set at all
+    straight after an air date ("Show.2026.11.12.REPACK.1080p").
     """
-    start = _TAGS_START.search(title)
-    if not start:
+    name = _MEDIA_EXTENSION.sub("", str(title or "").strip().strip('"'))
+    anchor = _TAGS_START.search(name)
+    if not anchor:
         return ""
-    tech = _first_tech_tag(title, start.start())
+    cut = _format_tags_start(name, anchor)
+    # A name whose first marker is its resolution has no year or episode to
+    # scan from: "[Group] Show - 05 REPACK (1080p)".
+    scan_from = 0 if cut == anchor.start() else anchor.end()
+    body = name[anchor.end() :].rpartition("-")[0] or name[anchor.end() :]
+    plain_case = not any(char.isupper() for char in body)
     found = ""
-    for match in _REVISION.finditer(title, start.end()):
-        if not _is_revision_tag(title, match, tech):
+    for match in _REVISION.finditer(name, scan_from):
+        if not _is_revision_tag(name, match, cut, plain_case):
             continue
         if match.group("repack"):
             return "repack"
@@ -621,9 +669,9 @@ def supplement_metadata(title, meta):
         title, meta["audio"], meta.get("quality", ""), meta.get("channels", "")
     )
     meta["hybrid"] = detect_hybrid(title)
-    # The tag the picker shows and strikes by. It also sets the parser's flag
-    # of the same name where the parser missed the tag; a flag the parser set
-    # from a title word is left as it was.
+    # The tag the picker strikes another release through by. It also sets
+    # the parser's flag of the same name where the parser missed the tag; a
+    # flag the parser set is left as it was, title word or not.
     meta["revision"] = detect_revision(title)
     if meta["revision"]:
         meta[meta["revision"]] = True

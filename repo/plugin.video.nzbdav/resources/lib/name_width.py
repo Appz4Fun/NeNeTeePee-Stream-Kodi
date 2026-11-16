@@ -15,6 +15,7 @@ the last letter reads as struck through, one that stops short does not.
 """
 
 import math
+import unicodedata
 
 # Width of chr(32) .. chr(126), in thousandths of the font size.
 _ASCII_WIDTHS = (
@@ -45,7 +46,8 @@ def _char_width(char):
     code = ord(char)
     if 32 <= code <= 126:
         return _ASCII_WIDTHS[code - 32]
-    if code < 32:
+    if code < 32 or unicodedata.combining(char):
+        # A combining accent is drawn on the letter before it.
         return 0
     return _WIDE_WIDTH if code >= _WIDE_FROM else _OTHER_WIDTH
 

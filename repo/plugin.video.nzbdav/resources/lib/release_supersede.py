@@ -7,16 +7,23 @@ and its replacement are different releases to the same-release rule
 (``release_match.same_release``), so neither is a copy of the other. The
 picker strikes the replaced one through.
 
-A row is replaced when the list holds another row that carries the tag
-(``filter_tags.detect_revision``: written as a tag, not a word of an episode
-title) and is the same release in everything else: title, year or episode,
-edition, resolution, HDR, audio, channels, codec, source, HYBRID, group and
-the rest of ``release_match.release_profile``; and the row itself carries no
-such tag. A group is needed on both, as everywhere the same-release rule is
-used: another group's PROPER is a different encode, not this file fixed. A
-REPACK and a PROPER of one release do not replace each other, and a REPACK2
-beside a REPACK is left alone: no count is kept, so the two read as one
-release already.
+Three kinds of row, by the parsed ``repack`` / ``proper`` flags and the tag
+``filter_tags.detect_revision`` is sure of:
+
+* **replacement**: the name certainly carries the tag;
+* **plain**: neither flag is set;
+* **unsure**: a flag is set, but by a word that may belong to an episode
+  title ("S03E02.A.Proper.Send.Off"), or by a tag written an unusual way.
+
+A plain row is replaced when the list holds a replacement that is the same
+release in everything else: title, year or episode, edition, resolution,
+HDR, audio, channels, codec, source, HYBRID, group and the rest of
+``release_match.release_profile``. An unsure row replaces nothing and is
+never replaced. A group is needed on both, as everywhere the same-release
+rule is used: another group's PROPER is a different encode, not this file
+fixed. So a REPACK and a PROPER of one release do not replace each other,
+and a REPACK2 beside a REPACK is left alone: no count is kept, so the two
+read as one release already.
 """
 
 from resources.lib.release_display import PROPER_LABEL, REPACK_LABEL
@@ -25,17 +32,27 @@ _REVISION_FLAGS = ("repack", "proper")
 _LABELS = {"repack": REPACK_LABEL, "proper": PROPER_LABEL}
 
 
-def revision_label(row, meta=None):
-    """ "REPACK", "PROPER" or "": the re-release tag of a picker row.
+def revision_label(meta):
+    """ "REPACK", "PROPER" or "": the picker's tag for a row's parsed flags.
+
+    The flags the row's name is built from (``release_display``), so the tag
+    and the name always agree. A name with both reads as a REPACK, the later
+    of the two.
+    """
+    if not isinstance(meta, dict):
+        return ""
+    if meta.get("repack"):
+        return REPACK_LABEL
+    return PROPER_LABEL if meta.get("proper") else ""
+
+
+def _certain_tag(row, meta):
+    """The tag ``row`` certainly carries, as a label, or "".
 
     ``meta["revision"]`` when the parse stored it, else read from the name:
     metadata parsed before the tag was kept (a cached search), or built by
     hand, has no such key.
     """
-    if not isinstance(meta, dict):
-        from resources.lib import fallback_streams as _fs
-
-        meta = _fs._result_meta(row)
     stored = meta.get("revision")
     if not isinstance(stored, str):
         from resources.lib.filter_tags import detect_revision
@@ -91,13 +108,19 @@ def _bucket_key(row):
 
 def _candidates(rows):
     """``(row, tag)`` for the rows of ``rows`` that can take part: readable,
-    and not synthetic."""
+    not synthetic, and either a replacement (``tag`` is its label) or plain
+    (``tag`` is ""). An unsure row is left out."""
+    from resources.lib import fallback_streams as _fs
+
     out = []
     for row in rows:
         if not isinstance(row, dict) or row.get("_display_title"):
             continue
         try:
-            out.append((row, revision_label(row)))
+            meta = _fs._result_meta(row)
+            tag = _certain_tag(row, meta)
+            if tag or not revision_label(meta):
+                out.append((row, tag))
         except Exception:  # pylint: disable=broad-except
             continue
     return out

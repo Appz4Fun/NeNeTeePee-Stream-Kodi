@@ -30,6 +30,8 @@ def test_letters_outside_ascii_have_a_width():
     assert name_width("é") > 0
     assert name_width("映画") > name_width("ab")
     assert name_width("\n") == 0
+    # A combining accent sits on its letter and adds no width.
+    assert name_width("e\u0301") == name_width("e")
 
 
 def test_strike_percent_is_a_share_of_the_column():

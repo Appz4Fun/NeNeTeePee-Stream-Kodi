@@ -436,9 +436,12 @@ which tag replaced it:
   and year or episode, edition, resolution, HDR, audio, channels, source,
   codec, HYBRID and release group, and every other field of the
   [same-release rule](nzbget-backend.md#what-counts-as-the-same-release).
-- The word has to be written as a tag. `Proper` in an episode title or a
-  guest's name, as in `Show.S03E02.A.Proper.Send.Off.720p`, isn't one and
-  strikes nothing.
+- The word has to be written as a tag: in capitals before the resolution and
+  source, with only other tags between, or anywhere after them. `Proper` in
+  an episode title or a guest's name, as in
+  `Show.S03E02.A.Proper.Send.Off.720p`, strikes nothing.
+- When the picker can't tell whether a release's own `Proper` or `Repack` is
+  a tag, that release is never struck through either.
 - Another group's PROPER strikes nothing. It is a different encode, not the
   same file fixed.
 - A REPACK and a PROPER of one release don't strike each other.

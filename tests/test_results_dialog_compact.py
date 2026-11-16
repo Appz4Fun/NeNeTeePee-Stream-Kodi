@@ -619,6 +619,21 @@ def test_a_release_is_struck_through_only_while_its_repack_is_in_the_view():
     assert ["strike" in _props(item) for item in shown] == [False, True]
 
 
+def test_a_group_holding_a_real_proper_is_not_struck_and_keeps_its_tag():
+    # The parser flags an episode-title "Proper" too, so the titled listing
+    # and the real PROPER are one group, and the titled one may lead it.
+    titled = "Show.S03E02.A.Proper.Send.Off.720p.HDTV.x264-GRPB"
+    proper = "Show.S03E02.PROPER.720p.HDTV.x264-GRPB"
+    plain = "Show.S03E02.720p.HDTV.x264-GRPB"
+    rows = [_row(titled, "t1"), _row(proper, "p1"), _row(plain, "a1")]
+    items = _made_items(_dialog(rows), COMPACT_LIST_ID)
+
+    (_lead_label, lead), (_plain_label, struck) = items
+    assert "strike" not in lead
+    assert lead["repack"] == "[COLOR FFFB923C]PROPER[/COLOR]"
+    assert "strike" in struck and struck["repack"] == ""
+
+
 def test_skin_draws_the_strike_and_the_repack_slot_in_every_row_layout():
     root = ET.parse(_DIALOG_XML_PATH).getroot()
     from resources.lib.results_dialog import _COMPACT_NAME_WIDTH, _LIST_NAME_WIDTH

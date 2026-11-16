@@ -164,14 +164,11 @@ def test_the_rows_keep_their_own_tags_and_release_profile():
     assert dict(profiles[0])["repack"] is True
 
 
-def test_revision_label_reads_the_stored_tag_else_the_name():
-    assert revision_label({"title": PLAIN}, {"revision": "repack"}) == "REPACK"
-    assert revision_label({"title": REPACK}, {"revision": "proper"}) == "PROPER"
-    assert revision_label({"title": REPACK}, {"revision": ""}) == ""
-    # Metadata parsed before the tag was kept, such as a cached search.
-    assert revision_label({"title": REPACK}, {"repack": True}) == "REPACK"
-    assert revision_label({"title": PLAIN}, {"repack": True}) == ""
-    assert revision_label({"title": REPACK}) == "REPACK"
+def test_revision_label_follows_the_parsed_flags():
+    assert revision_label({"repack": True, "proper": True}) == "REPACK"
+    assert revision_label({"proper": True}) == "PROPER"
+    assert revision_label({"repack": False}) == ""
+    assert revision_label(None) == ""
 
 
 @pytest.mark.parametrize(
@@ -185,25 +182,45 @@ def test_revision_label_reads_the_stored_tag_else_the_name():
         ("Show.S01E02.RERIP2.720p.HDTV.x264-GRP", "repack"),
         ("Show.S01E02.REAL.PROPER.720p.HDTV.x264-GRP", "proper"),
         ("Show.S01E02.Episode.Title.REPACK.1080p.WEB.h264-GRP", "repack"),
+        ("Show.S01E02.PROPER.HDTV.x264-GRP", "proper"),
+        # Other tags between the tag and the format tags.
         ("Show.S01E02.PROPER.GERMAN.DL.1080p.WEB.h264-GRP", "proper"),
-        ("Show.S01E02.REPACK-GRP", "repack"),
+        ("Show.S01E02.REPACK.AMZN.1080p.WEB-DL.DDP5.1.H.264-GRP", "repack"),
         ("Alpha.2024.REPACK.READNFO.2160p.UHD.BluRay.x265-GRP", "repack"),
+        ("Alpha.2024.REPACK.Directors.Cut.1080p.BluRay.x264-GRP", "repack"),
+        ("Alpha.2024.PROPER.iTA.ENG.1080p.BluRay.x264-GRP", "proper"),
+        ("Alpha.2024.REPACK.BluRay.1080p.DTS.x264-GRP", "repack"),
         ("Alpha.2024.PROPER.REPACK.1080p.BluRay.x264-GRP", "repack"),
+        # After the format tags begin, in any case.
         ("Alpha 2024 1080p BluRay x264 Proper-GRP", "proper"),
+        ("Alpha.2024.1080p.BluRay.REPACK.x264-GROUP-NAME", "repack"),
+        # A name with no capitals, no format tags, an extension, no year.
         ("show.s01e02.repack.1080p.web.h264-grp", "repack"),
+        ("Show.S01E02.REPACK-GRP", "repack"),
+        ("Show.S01E02.REPACK-GRP.mkv", "repack"),
+        ("[Group] Show - 05 REPACK (1080p)", "repack"),
         # A word of a title, an episode title or a guest's name.
         ("Proper.Villains.2019.1080p.WEB.h264-GRP", ""),
         ("Show.S03E02.A.Proper.Send.Off.720p.HDTV.x264-GRP", ""),
         ("Show.S01E05.Repack.Day.1080p.WEB.h264-GRP", ""),
         ("The.Late.Show.2026.11.12.Proper.Guest.720p.WEB.h264-GRP", ""),
+        ("The.Late.Show.2026.11.12.John.Proper.720p.WEB.h264-GRP", ""),
+        ("Show.S01E02.Mr.Proper.720p.HDTV.x264-GRP", ""),
+        ("Show.S01E02.Proper.2.720p.HDTV.x264-GRP", ""),
         ("Show.S01E02.A.Proper.Ending-GRP", ""),
+        ("Show.S01E02.Mr.Proper-GRP", ""),
+        # A title word that reads as a source or an audio format before it.
+        ("Show.S01E02.Charlottes.Web.Proper.Guest.720p.HDTV.x264-GRP", ""),
+        ("Show.S01E02.Magnum.Opus.Repack.Day.720p.HDTV.x264-GRP", ""),
+        ("Show.S01E02.Charlottes.Web.Proper.Guest.HDTV.x264-GRP", ""),
         # Part of another word, or no tag at all.
         ("Alpha.2024.1080p.WEB.h264-REPACKERS", ""),
         ("Show.2026.11.12.1080p.WEB.h264-GRP", ""),
         ("no tags at all", ""),
+        ("", ""),
     ],
 )
-def test_the_tag_is_read_where_names_put_it_and_not_from_title_words(title, tag):
+def test_only_a_word_written_as_a_tag_is_the_tag(title, tag):
     assert detect_revision(title) == tag
     assert parse_title_metadata(title)["revision"] == tag
 
@@ -219,17 +236,39 @@ def test_a_tag_the_parser_missed_sets_its_flag_and_no_other_flag_changes():
     assert (guest["repack"], guest["proper"]) == (False, False)
 
 
-def test_an_episode_title_word_strikes_nothing():
+def test_an_episode_title_word_strikes_nothing_and_is_not_struck():
     titled = "Show.S03E02.A.Proper.Send.Off.720p.HDTV.x264-GRPB"
     plain = "Show.S03E02.720p.HDTV.x264-GRPB"
-    repack = "Show.S03E02.REPACK.720p.HDTV.x264-GRPB"
+    proper = "Show.S03E02.PROPER.720p.HDTV.x264-GRPB"
 
+    # The parser flags the titled name as a PROPER; the picker is not sure.
+    assert _row(titled)["_meta"]["proper"] is True
     assert not _replaced([_row(titled), _row(plain)])
-    # A real REPACK replaces both listings of the first file.
-    assert _replaced([_row(repack), _row(titled), _row(plain)]) == {
-        titled: "REPACK",
-        plain: "REPACK",
-    }
+    # A real PROPER replaces the plain listing. The titled one may be the
+    # first file or the PROPER itself, so it is left alone.
+    assert _replaced([_row(titled), _row(proper), _row(plain)]) == {plain: "PROPER"}
+
+
+def test_a_tag_written_an_unusual_way_is_never_struck():
+    odd = "Alpha.2024.REPACK.Uncommonword.1080p.BluRay.x264-GRPA"
+    repack = "Alpha.2024.Uncommonword.REPACK.1080p.BluRay.x264-GRPA"
+    proper = "Alpha.2024.PROPER.Uncommonword.1080p.BluRay.x264-GRPA"
+
+    assert detect_revision(odd) == "" and _row(odd)["_meta"]["repack"] is True
+    assert not _replaced([_row(odd), _row(repack)])
+    assert not _replaced([_row(proper), _row(repack)])
+
+
+def test_metadata_cached_without_the_tag_is_read_from_the_name():
+    plain, repack, titled = (
+        _row(PLAIN),
+        _row(REPACK),
+        _row("Show.S03E02.A.Proper.Send.Off.720p.HDTV.x264-GRPB"),
+    )
+    for row in (plain, repack, titled):
+        del row["_meta"]["revision"]
+
+    assert superseded_rows([repack, plain, titled]) == {id(plain): "REPACK"}
 
 
 def test_a_bucket_of_many_unrelated_rows_compares_each_fixed_row_once():
