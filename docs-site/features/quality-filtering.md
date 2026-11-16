@@ -451,9 +451,18 @@ flowchart TD
     C -->|yes| D{Same title and year or episode,<br/>edition, resolution, HDR, audio,<br/>channels, source, codec and HYBRID?}
     D -->|no| KEEP
     D -->|yes| STRIKE[Name greyed and struck through]
+    classDef keep fill:#1E1E2E,stroke:#34D399,color:#FFFFFF
+    classDef strike fill:#1E1E2E,stroke:#F87171,color:#FFFFFF
+    class KEEP keep
+    class STRIKE strike
 ```
 
-![The picker with REPACK and PROPER tags and the releases they replace struck through](../images/picker-repack.png)
+![Moving through the picker in both views: REPACK and PROPER tags in orange, and the releases they replace struck through](../images/picker-repack.gif)
+
+In **List compacted**, the side panel of a struck-through release says which
+tag replaced it:
+
+![List compacted with a struck-through release focused; the side panel reads "Struck through: a PROPER of this release is in the list."](../images/picker-repack.png)
 
 A struck-through release still plays if you pick it. Kodi's text has no
 strikethrough, so the picker draws the line and estimates its length from the
