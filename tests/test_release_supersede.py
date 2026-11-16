@@ -164,31 +164,88 @@ def test_the_rows_keep_their_own_tags_and_release_profile():
     assert dict(profiles[0])["repack"] is True
 
 
-def test_revision_label():
-    assert revision_label({"repack": True, "proper": True}) == "REPACK"
-    assert revision_label({"proper": True}) == "PROPER"
-    assert revision_label({"repack": False}) == ""
-    assert revision_label(None) == ""
+def test_revision_label_reads_the_stored_tag_else_the_name():
+    assert revision_label({"title": PLAIN}, {"revision": "repack"}) == "REPACK"
+    assert revision_label({"title": REPACK}, {"revision": "proper"}) == "PROPER"
+    assert revision_label({"title": REPACK}, {"revision": ""}) == ""
+    # Metadata parsed before the tag was kept, such as a cached search.
+    assert revision_label({"title": REPACK}, {"repack": True}) == "REPACK"
+    assert revision_label({"title": PLAIN}, {"repack": True}) == ""
+    assert revision_label({"title": REPACK}) == "REPACK"
 
 
 @pytest.mark.parametrize(
-    "title,repack,proper",
+    "title,tag",
     [
-        ("Show.2026.11.12.REPACK.1080p.WEB.h264-GRP", True, False),
-        ("Show.2026.11.12.PROPER.1080p.WEB.h264-GRP", False, True),
-        ("Show.2026.11.12.1080p.WEB.h264.REPACK2-GRP", True, False),
-        ("Show.S01E02.RERIP.720p.HDTV.x264-GRP", True, False),
-        ("Show.S01E02.REAL.PROPER.720p.HDTV.x264-GRP", False, True),
-        ("Show.2026.11.12.1080p.WEB.h264-GRP", False, False),
+        # Straight after an air date, where the parser misses it.
+        ("Show.2026.11.12.REPACK.1080p.WEB.h264-GRP", "repack"),
+        ("Show.2026.11.12.PROPER.1080p.WEB.h264-GRP", "proper"),
+        ("Show.2026.11.12.1080p.WEB.h264.REPACK2-GRP", "repack"),
+        ("Show.S01E02.RERIP.720p.HDTV.x264-GRP", "repack"),
+        ("Show.S01E02.RERIP2.720p.HDTV.x264-GRP", "repack"),
+        ("Show.S01E02.REAL.PROPER.720p.HDTV.x264-GRP", "proper"),
+        ("Show.S01E02.Episode.Title.REPACK.1080p.WEB.h264-GRP", "repack"),
+        ("Show.S01E02.PROPER.GERMAN.DL.1080p.WEB.h264-GRP", "proper"),
+        ("Show.S01E02.REPACK-GRP", "repack"),
+        ("Alpha.2024.REPACK.READNFO.2160p.UHD.BluRay.x265-GRP", "repack"),
+        ("Alpha.2024.PROPER.REPACK.1080p.BluRay.x264-GRP", "repack"),
+        ("Alpha 2024 1080p BluRay x264 Proper-GRP", "proper"),
+        ("show.s01e02.repack.1080p.web.h264-grp", "repack"),
+        # A word of a title, an episode title or a guest's name.
+        ("Proper.Villains.2019.1080p.WEB.h264-GRP", ""),
+        ("Show.S03E02.A.Proper.Send.Off.720p.HDTV.x264-GRP", ""),
+        ("Show.S01E05.Repack.Day.1080p.WEB.h264-GRP", ""),
+        ("The.Late.Show.2026.11.12.Proper.Guest.720p.WEB.h264-GRP", ""),
+        ("Show.S01E02.A.Proper.Ending-GRP", ""),
+        # Part of another word, or no tag at all.
+        ("Alpha.2024.1080p.WEB.h264-REPACKERS", ""),
+        ("Show.2026.11.12.1080p.WEB.h264-GRP", ""),
+        ("no tags at all", ""),
     ],
 )
-def test_the_tags_are_read_after_a_date_too(title, repack, proper):
-    meta = parse_title_metadata(title)
+def test_the_tag_is_read_where_names_put_it_and_not_from_title_words(title, tag):
+    assert detect_revision(title) == tag
+    assert parse_title_metadata(title)["revision"] == tag
 
-    assert (meta["repack"], meta["proper"]) == (repack, proper)
+
+def test_a_tag_the_parser_missed_sets_its_flag_and_no_other_flag_changes():
+    after_date = parse_title_metadata("Show.2026.11.12.REPACK.1080p.WEB.h264-GRP")
+    guest = parse_title_metadata(
+        "The.Late.Show.2026.11.12.Proper.Guest.720p.WEB.h264-GRP"
+    )
+
+    assert (after_date["repack"], after_date["proper"]) == (True, False)
+    # The parser reads no tag after a date, and the word here is not one.
+    assert (guest["repack"], guest["proper"]) == (False, False)
 
 
-def test_a_title_word_before_the_year_is_not_a_tag_to_the_supplement():
-    assert detect_revision("Proper.Villains.2019.1080p.WEB.h264-GRP") == (False, False)
-    assert detect_revision("Alpha.2024.1080p.WEB.h264-REPACKERS") == (False, False)
-    assert detect_revision("no tags at all") == (False, False)
+def test_an_episode_title_word_strikes_nothing():
+    titled = "Show.S03E02.A.Proper.Send.Off.720p.HDTV.x264-GRPB"
+    plain = "Show.S03E02.720p.HDTV.x264-GRPB"
+    repack = "Show.S03E02.REPACK.720p.HDTV.x264-GRPB"
+
+    assert not _replaced([_row(titled), _row(plain)])
+    # A real REPACK replaces both listings of the first file.
+    assert _replaced([_row(repack), _row(titled), _row(plain)]) == {
+        titled: "REPACK",
+        plain: "REPACK",
+    }
+
+
+def test_a_bucket_of_many_unrelated_rows_compares_each_fixed_row_once():
+    from unittest.mock import patch
+
+    from resources.lib import release_supersede
+
+    def word(i):
+        return chr(97 + i // 26) + chr(97 + i % 26) + "story"
+
+    name = "{}.2024.1080p.WEB-DL.DDP5.1.H.264{}-GRPB"
+    plain = [_row(name.format(word(i), "")) for i in range(40)]
+    repacks = [_row(name.format(word(i), ".REPACK")) for i in range(40, 45)]
+    with patch.object(
+        release_supersede, "_untagged", wraps=release_supersede._untagged
+    ) as copies:
+        assert not superseded_rows(plain + repacks)
+
+    assert copies.call_count == len(plain) + len(repacks)

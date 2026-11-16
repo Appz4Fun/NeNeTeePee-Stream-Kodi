@@ -110,13 +110,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through in both views, and in List compacted the side panel says why. A
   REPACK or PROPER written straight after a daily show's air date
   (`Show.2026.11.12.REPACK.1080p`) is now read as one; it was missed, so the
-  fixed episode was grouped as a copy of the faulty one. Another group's PROPER
+  fixed episode was grouped as a copy of the faulty one. The tag and the
+  strike go by a word written as a tag: `Proper` in an episode title or a
+  guest's name (`S03E02.A.Proper.Send.Off.720p`) is neither. Another group's PROPER
   strikes nothing: it is a different encode. A release is struck through only
   while its replacement is in the view, so a filtered-out REPACK strikes
   nothing until **Show all**. Kodi's text has no strikethrough and a skin's
   font may lack the stroke character, so the line is drawn by the picker and
   its length is estimated from the name; it can run a few letters past the end
   on some skins.
+
 - **The audio a release's NFO names is read for the top releases.** A name
   such as `Movie.2004.MULTi.1080p.BluRay.x264-GRP` tags no audio and ranked
   as "audio unknown"; its NFO says `DTS-HD MA 5.1`. When an indexer offers a

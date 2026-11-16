@@ -190,7 +190,7 @@ def _set_result_properties(li, result):
     src_display = _SRC_SHORT.get(quality, quality)
     li.setProperty("quality", _c(src_display, _SRC_COLORS.get(quality, "FFAAAAAA")))
     li.setProperty("hybrid", _attribute_tag(meta))
-    li.setProperty("repack", _c(revision_label(meta), _REVISION_COLOR))
+    li.setProperty("repack", _c(revision_label(result, meta), _REVISION_COLOR))
 
     # Container (MKV, MP4, etc.)—default to MKV since most scene releases
     # are MKV and only MP4 releases tag the title.
