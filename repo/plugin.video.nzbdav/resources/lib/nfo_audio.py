@@ -736,6 +736,26 @@ def whose_nfo(text, title, describe):
         return UNCONFIRMED
 
 
+def shown_for(text, title, describe):
+    """Whether the picker's viewer shows an NFO for the listing ``title``.
+
+    Any NFO ``whose_nfo`` does not call ``WRONG``, and one more: a listing
+    named without a release group ("4k.Movie.DV") whose NFO names this very
+    film or episode. ``whose_nfo`` cannot tell whose encode that NFO is, so
+    its audio is not used to rank the listing; the viewer still shows it,
+    and marks what it adds to the name as new.
+    """
+    if whose_nfo(text, title, describe) != WRONG:
+        return True
+    if describe is None:
+        return False
+    try:
+        ours = describe(_CONTAINER.sub("", str(title or "").strip()))
+    except Exception:  # pylint: disable=broad-except
+        return False
+    return not ours.get("group") and bool(stated_release_name(text, title, describe))
+
+
 # --- asking the indexers ----------------------------------------------------
 
 
@@ -1167,10 +1187,10 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
     whose = whose_nfo(text, title, describe)
     # The text itself, for the picker's viewer: not another release's NFO,
     # nor an indexer's "no such item" reply.
-    if whose == WRONG or error is not None:
-        release_docs.mark_none(key, release_docs.NFO, _host(url))
-    else:
+    if error is None and shown_for(text, title, describe):
         release_docs.keep(key, release_docs.NFO, _host(url), text)
+    else:
+        release_docs.mark_none(key, release_docs.NFO, _host(url))
     if whose == WRONG:
         # Another release's NFO: what it says of the audio is not ours.
         xbmc.log(

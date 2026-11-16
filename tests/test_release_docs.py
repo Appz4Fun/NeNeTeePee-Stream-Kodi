@@ -291,6 +291,34 @@ def test_another_releases_nfo_is_not_kept(indexer):
     assert release_docs.asked_none(KEY) == {"nfo 127.0.0.1"}
 
 
+def test_a_tersely_named_listing_keeps_the_nfo_that_names_the_film(indexer):
+    # The listing has no group in its name; the NFO has the release's full
+    # name. Whose encode it is cannot be told, but it is this film's NFO.
+    terse = "Metropolis.1927.2160p.DV"
+    _Handler.replies["/api"] = (200, NFO_TEXT.encode())
+    rows = [{"title": terse, "indexer": "Hub", "nfo_url": _nfo_link(indexer)}]
+    with _known(**{"127_0_0_1": Offer(GETNFO, None)}):
+        doc_fetch.gather(rows, name_form_key(terse), terse, release_identity)
+        # The search's own read keeps it too, and still does not rank by it.
+        release_docs.forget_all()
+        nfo_audio.learn_for_top(
+            rows,
+            name_form_key,
+            lambda _k, default="": default,
+            describe=release_identity,
+        )
+
+    assert release_docs.kinds_known(name_form_key(terse)) == (True, False)
+    assert nfo_audio.whose_nfo(NFO_TEXT, terse, release_identity) == nfo_audio.WRONG
+    assert not nfo_audio._known(name_form_key(terse))["audio"]
+    # Another film's NFO, or another group's encode of a named group's
+    # release, is still not shown.
+    other = "Some.Other.Film.2004.1080p.BluRay.x264-OTHER"
+    assert not nfo_audio.shown_for(other, terse, release_identity)
+    assert not nfo_audio.shown_for(NFO_TEXT, NAME, release_identity)
+    assert nfo_audio.shown_for("greetings", terse, release_identity)
+
+
 def test_a_release_with_no_key_or_no_links_asks_nobody(indexer):
     assert doc_fetch.gather(_rows(indexer), "", NAME) == 0
     assert doc_fetch.gather([{"title": NAME}, None, {"nfo_url": 7}], KEY, NAME) == 0

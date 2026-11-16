@@ -133,11 +133,11 @@ def _read_nfo(key, host, link, title, describe):
         # No NFO there, said as an error or as an empty answer.
         release_docs.mark_none(key, release_docs.NFO, host)
     elif kind == "nfo":
-        if nfo_audio.whose_nfo(text, title, describe) == nfo_audio.WRONG:
+        if nfo_audio.shown_for(text, title, describe):
+            release_docs.keep(key, release_docs.NFO, host, text)
+        else:
             # Another release's NFO, attached by the indexer's matching.
             release_docs.mark_none(key, release_docs.NFO, host)
-        else:
-            release_docs.keep(key, release_docs.NFO, host, text)
     return True
 
 

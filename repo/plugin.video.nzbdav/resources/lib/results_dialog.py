@@ -5,6 +5,7 @@
 
 import re
 
+import xbmc
 import xbmcaddon
 import xbmcgui
 
@@ -60,6 +61,10 @@ ACTION_CONTEXT_MENU = 117
 
 LIST_ID = 50
 COMPACT_LIST_ID = 51
+# Kodi shows the active view's list one frame after ``view`` is set, and a
+# list that is not shown yet cannot take the focus (``_focus_list``).
+_FOCUS_TRIES = 25
+_FOCUS_WAIT_MS = 20
 
 VIEW_LIST = "list"
 VIEW_COMPACT = "compact"
@@ -612,12 +617,34 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
             return self._entries[pos]
         return None
 
+    def _focused_id(self):
+        """The focused control's id, or None when nothing has the focus."""
+        try:
+            return self.getFocusId()
+        except RuntimeError:
+            return None
+
+    def _focus_list(self):
+        """Give the active view's list the focus, once Kodi shows it.
+
+        Which list is shown follows the ``view`` property, and Kodi only
+        acts on that with its next frame. A short list is built before that
+        frame is drawn; the list is then still hidden, refuses the focus,
+        and every key would go nowhere. So the focus is asked for until the
+        list has it, for half a second at most.
+        """
+        for _ in range(_FOCUS_TRIES):
+            self.setFocusId(self._list_id)
+            if self._closing or self._focused_id() == self._list_id:
+                return
+            xbmc.sleep(_FOCUS_WAIT_MS)
+
     def onInit(self):
         """Populate the dialog with results data."""
         if self.all_results:
             self._ok_hold.start()
         self._populate()
-        self.setFocusId(self._list_id)
+        self._focus_list()
 
     def _toggle_show_all(self):
         """Flip views, repopulate, and re-focus the same row by identity.
@@ -702,12 +729,12 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
         action_id = action.getId()
         if action_id in (ACTION_SELECT,):
             if (
-                self.getFocusId() == self._list_id
+                self._focused_id() == self._list_id
                 and not self._ok_hold.defer_selection()
             ):
                 self._select_focused()
         elif action_id in (ACTION_MOVE_LEFT, ACTION_MOVE_RIGHT):
-            if self.getFocusId() == self._list_id:
+            if self._focused_id() == self._list_id:
                 self._open_viewer()
         elif action_id in (ACTION_PREVIOUS_MENU, ACTION_NAV_BACK):
             self._cancel()

@@ -422,6 +422,7 @@ class NfoViewer(
     def _draw_images(self, tab, lines, attributes):
         view = self._geometry
         scale = view["scale"]
+        # Kodi keeps a drawn image by its path: the name says all it shows.
         name = "{}-{}-{}x{}x{}".format(
             tab["digest"], self._page, view["columns"], view["rows"], scale
         )
@@ -440,12 +441,14 @@ class NfoViewer(
         )
         image.setImage(page_path, False)
 
-        words_path = os.path.join(
-            self._cache, "{}-words-{}.png".format(tab["digest"], scale)
-        )
+        # Kodi keeps a drawn image by its path: the name says all it shows.
+        words = attribute_words(attributes, text_image.check_mark(self._font))
         width = int(_ATTRIBUTES_WIDTH * view["pixels"])
+        said = hashlib.sha1(  # nosec B324
+            repr((words, width, scale)).encode("utf-8", "replace")
+        ).hexdigest()[:20]
+        words_path = os.path.join(self._cache, "words-{}.png".format(said))
         if not os.path.exists(words_path):
-            words = attribute_words(attributes, text_image.check_mark(self._font))
             _write(words_path, text_image.words_png(words, self._font, width, scale))
         strip = self.getControl(_ATTRIBUTES_ID)
         strip.setWidth(int(width / view["pixels"]))

@@ -609,6 +609,27 @@ def test_the_compacted_row_keeps_its_other_tags_when_the_viewer_closes():
     item.setProperty.assert_called_with("tags", "REPACK  " + _MEDIAINFO_TAG)
 
 
+def test_the_list_is_asked_to_take_the_focus_until_it_has_it():
+    # Kodi shows the active view's list a frame after the view is set; until
+    # then the list refuses the focus, and no key would reach it.
+    dialog = ResultsDialog(
+        "results-dialog.xml", "", "Default", "1080i", results=[_row()]
+    )
+    answers = iter([RuntimeError("no control has focus"), 0, LIST_ID])
+
+    def focused():
+        answer = next(answers)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    with patch.object(dialog, "getFocusId", side_effect=focused), patch.object(
+        dialog, "setFocusId"
+    ) as ask, patch("resources.lib.results_dialog.xbmc.sleep") as wait:
+        dialog.onInit()
+    assert ask.call_count == 3 and wait.call_count == 2
+
+
 def test_the_keys_do_nothing_off_the_list_or_once_the_picker_closes():
     dialog, _control = _picker([_row()])
     with patch.object(nfo_viewer, "show") as show:

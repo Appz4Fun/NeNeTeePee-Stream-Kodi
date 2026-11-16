@@ -47,15 +47,15 @@
 
     <!-- Header: the release's name, and the page -->
     <control type="label" id="1">
-      <left>525</left><top>45</top><width>1010</width><height>69</height>
+      <left>525</left><top>45</top><width>1060</width><height>69</height>
       <label>$INFO[Window.Property(name)]</label>
-      <font>font13</font>
+      <font>font12</font>
       <textcolor>FFF3F4F6</textcolor>
       <aligny>center</aligny>
       <scroll>true</scroll>
     </control>
     <control type="label" id="2">
-      <left>1545</left><top>45</top><width>255</width><height>69</height>
+      <left>1600</left><top>45</top><width>200</width><height>69</height>
       <label>$INFO[Window.Property(page)]</label>
       <font>font12</font>
       <textcolor>FFE5E7EB</textcolor>
