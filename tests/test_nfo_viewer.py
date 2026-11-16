@@ -517,8 +517,7 @@ def test_the_indexers_are_asked_even_when_drawing_fails(tmp_path):
     with patch.object(doc_fetch, "asking", return_value=1), patch.object(
         nfo_viewer.threading, "Thread"
     ) as thread, patch.object(viewer, "_load", side_effect=RuntimeError("no window")):
-        with pytest.raises(RuntimeError):
-            viewer.onInit()
+        viewer.onInit()
     thread.assert_called_once_with(target=viewer._ask, daemon=True)
 
 

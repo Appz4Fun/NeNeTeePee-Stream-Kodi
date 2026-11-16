@@ -198,7 +198,11 @@ def _save(key, record):
     on_disk = _read_index() or {}
     with _LOCK:
         for other, entry in on_disk.items():
-            _INDEX.setdefault(other, entry)
+            if other not in _INDEX or entry["at"] >= _INDEX[other]["at"]:
+                _INDEX[other] = entry
+        for gone in [n for n in _INDEX if n not in on_disk and n != name]:
+            if on_disk and not os.path.exists(os.path.join(_dir(), gone)):
+                del _INDEX[gone]
         _INDEX[name] = {
             NFO: any(doc["kind"] == NFO for doc in record["docs"]),
             MEDIAINFO: any(doc["kind"] == MEDIAINFO for doc in record["docs"]),

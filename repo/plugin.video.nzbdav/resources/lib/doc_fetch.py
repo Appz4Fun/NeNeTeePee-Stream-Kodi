@@ -230,7 +230,7 @@ def gather(rows, key, title, describe=None, wait_seconds=WAIT_SECONDS):
             if (key, host) in _RUNNING and _RUNNING[(key, host)].is_alive():
                 continue
             _RUNNING[(key, host)] = thread
-        thread.start()
+            thread.start()
         started += 1
     wait(key, wait_seconds)
     return started

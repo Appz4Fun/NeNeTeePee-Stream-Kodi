@@ -794,8 +794,8 @@ def without_keys(text, link):
     so is anything written as a key parameter.
     """
     text = str(text or "")
-    for value in link_key(link).values():
-        if len(value) >= _MIN_KEY_LENGTH:
+    for name, value in link_key(link).items():
+        if len(value) >= _MIN_KEY_LENGTH or name == "apikey":
             text = text.replace(value, "REDACTED")
     return redact_text(text)
 

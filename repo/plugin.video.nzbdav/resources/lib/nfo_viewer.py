@@ -581,12 +581,22 @@ class NfoViewer(
         if self._started:
             return
         self._started = True
-        self._asking = doc_fetch.asking(self._rows, self._key)
         try:
-            self._load()
-        finally:
-            if self._asking:
-                threading.Thread(target=self._ask, daemon=True).start()
+            self._asking = doc_fetch.asking(self._rows, self._key)
+        except Exception:  # pylint: disable=broad-except
+            self._asking = 0
+        self._redraw()
+        if self._asking:
+            threading.Thread(target=self._ask, daemon=True).start()
+
+    def _safe_draw(self):
+        try:
+            self._draw()
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: viewer draw failed: {}".format(exc),
+                xbmc.LOGWARNING,
+            )
 
     def _redraw(self):
         try:
@@ -628,7 +638,7 @@ class NfoViewer(
                 self._moved = True
                 self._tab = (self._tab + step) % len(self._tabs)
                 self._page = 0
-                self._draw()
+                self._safe_draw()
 
     def _turn(self, step):
         with self._lock:
@@ -639,7 +649,7 @@ class NfoViewer(
             if page != self._page:
                 self._moved = True
                 self._page = page
-                self._draw()
+                self._safe_draw()
 
     def onAction(self, action):  # pylint: disable=invalid-name
         """Left and Right change the tab, Up and Down the page, Back closes."""
