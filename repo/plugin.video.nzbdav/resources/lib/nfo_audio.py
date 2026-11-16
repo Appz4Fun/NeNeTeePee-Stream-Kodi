@@ -905,6 +905,9 @@ def _fetch_mediainfo(key, link, title):
         return False, {}, what
     if what == mediainfo_audio.NO_API:
         _note_rest(host, False)
+        search_progress.details_result(
+            host, search_progress.MEDIAINFO, search_progress.NOTHING
+        )
         return None, {}, what
     if what == mediainfo_audio.FAILED:
         search_progress.details_result(

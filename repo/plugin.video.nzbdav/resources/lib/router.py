@@ -172,6 +172,7 @@ from resources.lib.router_search import (  # noqa: F401
 )
 from resources.lib.router_settings import (  # noqa: F401
     _addon_instance,
+    _cancelled_on_close,
     _close_loading_dialog,
     _get_addon_setting,
     _open_loading_dialog,
@@ -1036,7 +1037,7 @@ def _handle_script_play(params):
         )
     finally:
         _close_loading_dialog(progress)
-    if prepared is None:
+    if prepared is None or _cancelled_on_close(progress):
         return
     filtered, all_rows, total_count, completed_jobs = prepared
     _script_play_picker_and_resolve(

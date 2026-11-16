@@ -236,7 +236,7 @@ class _Painter:
         with self._lock:
             if self._closed:
                 return
-            if self._surface.cancel_requested():
+            if self._surface.cancel_requested() is True:
                 # The search cannot be interrupted mid-request: the window
                 # goes now and the add-on stops at the next step.
                 self._session.cancel()
@@ -254,6 +254,13 @@ class _Painter:
             if self._closed:
                 return
             self._closed = True
+            try:
+                # A Cancel pressed after the last tick still counts: the
+                # caller checks the session once the window is closed.
+                if self._surface.cancel_requested() is True:
+                    self._session.cancel()
+            except Exception:  # pylint: disable=broad-except
+                pass
         try:
             self._surface.close()
         except Exception:  # pylint: disable=broad-except

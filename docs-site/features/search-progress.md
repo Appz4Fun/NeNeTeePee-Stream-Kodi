@@ -74,7 +74,7 @@ refused*, or *failed*.
 - **NZBHydra2:** Hydra's search answer lists the merged results only, not
   which indexers it asked. Right after the search, the add-on reads Hydra's
   own record of that search from its search history: two small requests to
-  your Hydra, none to any indexer, and only while this window is showing. This needs **Keep history** on in Hydra's
+  your Hydra, none to any indexer, and only while this window is showing. The search waits at most 1.5 seconds for that record, so a slow Hydra never delays the release list. This needs **Keep history** on in Hydra's
   main settings (on by default). If Hydra's web interface requires a sign-in,
   or the history is off, the table instead lists the indexers named in the
   results, with their result counts, and the failures are not shown.
