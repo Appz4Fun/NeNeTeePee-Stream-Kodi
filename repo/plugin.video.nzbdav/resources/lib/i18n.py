@@ -200,6 +200,8 @@ _FALLBACK_STRINGS = {
     30670: "{} could not be downloaded",
     30671: "1 duplicate upload",
     30672: "{} duplicate uploads",
+    30771: "1 pack under this name",
+    30772: "{} packs under this name",
     30673: "Backups: {}",
     30674: "1 twin",
     30675: "{} twins",

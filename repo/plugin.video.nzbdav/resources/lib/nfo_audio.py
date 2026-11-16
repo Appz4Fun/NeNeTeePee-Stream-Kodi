@@ -140,6 +140,8 @@ _PAUSED_HOSTS = {}
 # host -> whether it answers the MediaInfo call, and when that was learned.
 _REST_HOSTS = {}
 _LOADED = []
+# How many times the store changed in this run (``known_version``).
+_CHANGES = [0]
 
 
 def _audio_tracks(text):
@@ -242,6 +244,7 @@ def _load():
         if _LOADED:
             return
         _LOADED.append(True)
+        _CHANGES[0] += 1
         try:
             with open(_store_path(), "r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -337,6 +340,19 @@ def _remember(key, audio, channels, failed=False, exact=False, sure=False, video
         entry["video"] = dict(video)
     with _LOCK:
         _STORE[key] = entry
+        _CHANGES[0] += 1
+
+
+def known_version():
+    """A number that changes whenever what is known of any release does.
+
+    ``filter._attach_metadata`` applies what is known to a result list once;
+    while this stays the same, a second pass over those rows would find
+    nothing new. The store is read first, so that reading it later does not
+    count as a change.
+    """
+    _load()
+    return _CHANGES[0]
 
 
 def _settled(key):
@@ -399,6 +415,7 @@ def forget_all():
         _PAUSED_HOSTS.clear()
         _REST_HOSTS.clear()
         del _LOADED[:]
+        _CHANGES[0] += 1
 
 
 # --- putting it on the rows -------------------------------------------------

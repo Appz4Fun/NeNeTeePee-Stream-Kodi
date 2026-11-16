@@ -122,6 +122,9 @@ class FleetReport:
         # upload already in hand (same size, posted within two minutes).
         self.mirrors = 0
         self._mirror_links = set()
+        # Copies downloaded and found to be a pack that holds the release
+        # among other files (a season listed under one episode's name).
+        self.packs = 0
         self._blocked = blocked if blocked is not None else set()
 
     @staticmethod
@@ -153,6 +156,9 @@ class FleetReport:
     def duplicate(self):
         self.duplicates += 1
 
+    def pack(self):
+        self.packs += 1
+
     def mirror(self, row):
         """Count ``row`` as a second listing of an upload, once per listing.
 
@@ -174,7 +180,7 @@ class FleetReport:
 
     def not_sent(self):
         """How many copies were found but not kept."""
-        return sum(self.refused.values()) + self.failed + self.duplicates
+        return sum(self.refused.values()) + self.failed + self.duplicates + self.packs
 
     def found(self):
         return len(self.sent) + self.not_sent()
@@ -230,6 +236,8 @@ def not_sent_line(report, mirrors=True):
         parts.append(fmt(30670, report.failed))
     if duplicates:
         parts.append(_counted(duplicates, 30671, 30672))
+    if report.packs:
+        parts.append(_counted(report.packs, 30771, 30772))
     return fmt(30668, ", ".join(parts)) if parts else ""
 
 

@@ -16,8 +16,17 @@ def _pattern(expression):
 # "hdr10_" before another separator ("HDR10_.x265") is HDR10+ with the plus
 # sign replaced on the way from the indexer; in a name that separates every
 # word with underscores ("HDR10_x265") the underscore is only a separator.
+# "HDR10..x265" is the same thing with the plus sign turned into a dot.
 _HDR_PLUS = _pattern(
     r"hdr(?:10)?(?:[. _-]?plus|[. _-]?\+)|hdr(?:10)?p|hdr10_(?=[. \-\])]|$)"
+    r"|hdr10\.(?=\.)"
+)
+# A tag run into the codec after it: "HDR10x265", "HDR10H.265", "DV.HDRH.265",
+# "AtmosH.264". No name is written that way; the separator was lost on the
+# way from the indexer, and with it the tag and (for the parser) the codec.
+_GLUED_TO_CODEC = re.compile(
+    r"(?<![a-z0-9])(hdr10|hdr|dovi|dv|atmos)(?=(?:x26[45]|h[. ]?26[45])(?![a-z0-9]))",
+    re.I,
 )
 _HDR = _pattern(r"hdr(?:10)?")
 _DV = _pattern(r"dv|dovi|dolby[. _-]?vision")
@@ -251,6 +260,11 @@ _DOTTED_GROUP_AT_END = re.compile(r"-([a-z]+(?:\.[a-z]+){1,2})\s*$", re.I)
 _BRACKET_GROUP_AT_END = re.compile(r"\[([a-z][a-z0-9 ]*[a-z0-9])\]\s*$", re.I)
 # A whole tag block in trailing brackets that ends with "-GROUP".
 _BRACKET_BLOCK_AT_END = re.compile(r"\[([^\[\]]*-([a-z0-9][\w&@-]*))\]\s*$", re.I)
+# A tag block in trailing brackets, as a library manager renames a file:
+# "Show - S01E02 - Title[WEBDL-1080p.AC3.h264.EDITH]".
+_BRACKET_TAGS_AT_END = re.compile(r"\[([^\[\]]+)\]\s*$")
+# Such a block opens with the source and resolution joined by a hyphen.
+_MANAGER_BLOCK = re.compile(r"[a-z]+-\d{3,4}[pi](?![a-z0-9])", re.I)
 # Site and indexer tags seen in trailing brackets, never a group.
 _SITE_TAGS = frozenset(
     "rarbg eztv ettv tgx private nzb wtfnzb pre nzbgeek abnzb usenet".split()
@@ -290,6 +304,8 @@ def _spelled_out_group(name):
     * ``...MULTi[Ben The Men]``: a trailing bracket holding only a name;
     * ``[2160p.WEB-DL...English-HONE]``: a tag block wrapped in brackets
       that ends with "-GROUP";
+    * ``Title[WEBDL-1080p.AC3.h264.EDITH]``: a tag block in brackets, as a
+      library manager writes it, that ends with the group;
     * ``... H265 EAC3 TSRG`` and ``...h264.NTb``: the last word of the name,
       when it follows the resolution and a tag, and is no tag itself.
     """
@@ -308,22 +324,84 @@ def _spelled_out_group(name):
     block = _BRACKET_BLOCK_AT_END.search(name)
     if block and _RESOLUTION.search(block.group(1)):
         return _group_candidate(block.group(2))
+    tags = _BRACKET_TAGS_AT_END.search(name)
+    if tags and _RESOLUTION.search(tags.group(1)):
+        group = _tag_run_group(tags.group(1))
+        if group:
+            return group
     resolution = _RESOLUTION.search(name)
     words = [word for word in re.split(r"[. _]+", name) if word]
     if resolution and len(words) > 3:
         last = words[-1].lstrip("@")
         if (
-            # Two characters at least: the "H" left of "H.264" once ".264" is
-            # taken for a split-archive extension is not a group.
-            len(last) > 1
-            and last.isalnum()
-            and name.rfind(words[-1]) > resolution.end()
+            name.rfind(words[-1]) > resolution.end()
             # After a tag, not after a title word: "... H265 EAC3 TSRG",
             # "...WEBDL-1080p.EAC3.h264.NTb".
-            and not _valid_group(words[-2])
-            and _words_group([last])
+            and _word_after_a_tag(last, words[-2])
         ):
             return last
+    return ""
+
+
+def _tag_run_group(block):
+    """The group ending a run of dotted tags, else "".
+
+    "WEBDL-1080p.AC3.h264.EDITH": the last word, after a tag.
+    "WEBDL-1080p.AAC.h264" ends in a tag and has no group.
+    """
+    inner = [word for word in re.split(r"[. _]+", block) if word]
+    if len(inner) > 2 and _word_after_a_tag(inner[-1], inner[-2]):
+        return inner[-1]
+    return ""
+
+
+def _manager_block(name):
+    """The tag block of a library manager's file name, or None.
+
+    "Show - S01E02 - Title[WEBDL-1080p.AC3.h264.EDITH]": the trailing
+    brackets hold every tag, opening with source and resolution.
+    """
+    tags = _BRACKET_TAGS_AT_END.search(name)
+    if tags and _MANAGER_BLOCK.match(tags.group(1).strip()):
+        return tags.group(1)
+    return None
+
+
+def _word_after_a_tag(word, before):
+    """Whether ``word`` can be the group ending a run of tags."""
+    return (
+        # Two characters at least: the "H" left of "H.264" once ".264" is
+        # taken for a split-archive extension is not a group.
+        len(word) > 1
+        and word.isalnum()
+        and not _valid_group(before)
+        and bool(_words_group([word]))
+    )
+
+
+def trailing_word(title):
+    """The last word of a name, when only its place keeps it from a group.
+
+    ``...AAC.7.1.Japanese.Tigole``: a word after the resolution that is no
+    tag and no language, but follows a word that is no tag either, so the
+    name alone cannot tell a group from the end of a title or a language.
+    The caller decides with what else it knows (``filter`` accepts the word
+    when other rows of the result list carry it as their group). "" when
+    the name has no such word.
+    """
+    name = _release_name(title)
+    resolution = _RESOLUTION.search(name)
+    words = [word for word in re.split(r"[. _]+", name) if word]
+    if not resolution or len(words) <= 3:
+        return ""
+    last = words[-1].lstrip("@")
+    if (
+        len(last) > 1
+        and last.isalnum()
+        and name.rfind(words[-1]) > resolution.end()
+        and _words_group([last])
+    ):
+        return last
     return ""
 
 
@@ -336,11 +414,19 @@ def detect_release_group(title, parsed_group=""):
     (``[1/3] - "Name-GRP.mkv" yEnc``, read as group "1/3") loses it. Strip
     those from the end and read the "-GROUP" left there; else keep PTT's
     group when it is plausible, else a leading "[Group]" (anime style).
-    Unknown stays "".
+    Unknown stays "". A library manager's file name
+    ("Show - S01E02 - Title[WEBDL-1080p.AC3.h264.GRP]") is read from its
+    bracketed tag block alone.
     """
     title = str(title or "")
     name = _release_name(title)
     untrimmed = name
+    block = _manager_block(name)
+    if block is not None:
+        # The block says whether there is a group. Outside it the name is
+        # "Show - S01E02 - Episode Title", and a one-word title after that
+        # last hyphen is not one.
+        return _tag_run_group(block)
     previous = None
     while previous != name:
         previous = name
@@ -376,6 +462,22 @@ def _tag_block_group(name):
     if _valid_group(last) and not is_language_word(last):
         return last
     return ""
+
+
+def restore_glued_tags(name):
+    """``name`` with the separator put back between a tag and the codec.
+
+    ``HDR10x265`` reads as ``HDR10+.x265``: the listings that glue it are
+    the ones that lost the plus sign with the dot (the same upload is listed
+    elsewhere as ``HDR10+.x265`` and ``HDR10..x265``). Any other tag gets
+    its dot back and nothing more.
+    """
+
+    def _apart(match):
+        tag = match.group(1)
+        return tag + ("+." if tag.lower() == "hdr10" else ".")
+
+    return _GLUED_TO_CODEC.sub(_apart, str(name or ""))
 
 
 def detect_hdr(title):
@@ -652,19 +754,27 @@ _NETWORK_BEFORE_WEB = re.compile(
 _NETFLIX_MASTER = _pattern(r"netflix(u?hd)")
 
 
+# One service under two tags: a release is the same whichever its name uses.
+_NETWORK_ALIASES = {"ATV": "ATVP"}
+
+
 def detect_network(title):
-    """The streaming service a WEB release came from ("AMZN"), or ""."""
+    """The streaming service a WEB release came from ("AMZN"), or "".
+
+    Apple TV+ is written ``ATVP`` and ``ATV``; both read as ``ATVP``.
+    """
     title = str(title or "")
     for match in _NETWORK_BEFORE_WEB.finditer(title):
         token = match.group(1).upper()
         if token in _NETWORKS:
-            return token
+            return _NETWORK_ALIASES.get(token, token)
     match = _NETFLIX_MASTER.search(title)
     return "NETFLIX" + match.group(1).upper() if match else ""
 
 
 def supplement_metadata(title, meta):
     """Correct media metadata consistently without modifying vendored PTT."""
+    title = restore_glued_tags(title)
     match = _RESOLUTION.search(title)
     meta["resolution"] = normalize_resolution(
         match.group() if match else meta["resolution"]

@@ -271,9 +271,8 @@ every parsed release field is equal:
 - the air date, for a daily show named by date instead of season and episode
 
 A field one name states and the other leaves out counts as different. Language
-and soft-subtitle tags aren't compared. A result with no release group is never
-grouped with another, even one with the same name; a literal `NOGRP` or `P2P`
-tag counts as a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`, with or
+and soft-subtitle tags aren't compared. A literal `NOGRP` or `P2P` tag counts
+as a group. A raw Usenet subject (`[1/3] - "Name.mkv" yEnc`, with or
 without its quotes, size or poster wrapper) is read as the release name inside it.
 
 The parsed titles must be equal. Two shows from one group that share an episode
@@ -287,8 +286,25 @@ that are equal once case and punctuation are removed are read as one name, using
 the spelling that parses with the most detail. So `English-HONE` and
 `English.HONE` are both group HONE.
 
-**Oddly sized copies.** NeNeTeePee-Stream-Kodi never uses file size to decide
-whether two results are the same release. A release name can still cover very
+**Names with no release group.** Nothing in such a name says whose release
+it is, so it never joins a release that has a group. Results with no group
+that carry the same name, in any spelling, are one release: one picker row,
+one copy count, and each a backup of the other. A named container still
+separates them (`.mkv` and `.mp4` of one name are two files).
+
+**One upload under several names.** Indexers cut a name short
+(`...H.265` for `...H.265-FLUX`), drop a tag (`DV` for `DV.HDR`) or list the
+bare title. Listings with the same exact size in bytes are read as one
+upload, and given one set of tags, when they name the same film or episode,
+or when one name is the start of the other and both were posted within two
+minutes. The tags they share come from the listing whose group the rest of
+the results know best, then the most detailed one, so a reposter's
+`-Obfuscated` never replaces `-NTb`. A size that is a round number of
+megabytes proves nothing and is ignored. See
+[How listings become one row](quality-filtering.md#how-listings-become-one-row).
+
+**Oddly sized copies.** Size alone never makes two differently named results
+one release; it only counts with the name, as above. A release name can still cover very
 different posts: a 10 GB episode listed forty times and once at 91 GB, or once at
 60 MB. Among three or more sized copies of a release, one more than 1.35 times
 larger or smaller than the median is treated as an odd copy. Under Relevance it
@@ -325,6 +341,17 @@ listings of the same posting:
 - NZBs that share more than 1% of their article IDs count as one posting.
 - Re-uploads of the same file with different article IDs are kept. They live
   on different articles, so they're the best backups.
+- A backup that holds the very files of your pick, posted a second time, is
+  sent ahead of the other backups. The add-on tells from the NZBs alone: a
+  repost of the same files has the same segment sizes in the same order.
+  Two postings hold the same files when the matching ones make up 90% of the
+  smaller posting's bytes.
+- A backup that holds your pick's files and is 1.35 times its size or more is
+  a pack listed under the release's name, such as a whole season named as one
+  episode. It is not sent, so a failover never downloads the pack.
+
+Both checks need segment sizes that vary. A posting cut into articles of one
+fixed size (about four in ten) says nothing, and is sent as before.
 
 ### What the dialog shows while downloading
 
@@ -339,7 +366,8 @@ Not sent: Digital Carnage refused 1, 11 duplicate uploads
 ```
 
 A copy is left out when its indexer refused the download, when its NZB could
-not be downloaded for another reason, or when it is a duplicate upload. The
+not be downloaded for another reason, when it is a duplicate upload, or when
+it is a pack under the release's name (`1 pack under this name`). The
 duplicate count is every listing that was the same upload as a copy kept: the
 listings never downloaded because another indexer lists the same posting, and
 the NZBs that were downloaded and turned out to share their articles with one

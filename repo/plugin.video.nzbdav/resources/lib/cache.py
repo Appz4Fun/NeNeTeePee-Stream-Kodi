@@ -32,6 +32,8 @@ _PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
 
 # The rows' parsed details, as ``filter.attach_metadata`` stores them.
 _PARSED_KEY = "_meta"
+# ``filter.ATTACHED_KEY``: which parsing pass a row went through, this run.
+_ATTACHED_KEY = "_attached"
 # The entry's field naming the code that produced its parses.
 _PARSER_FIELD = "parser"
 # The entry's field holding the parses: release name -> parsed details.
@@ -370,6 +372,10 @@ def _write_entry(path, title, results, timestamp):
         from resources.lib.hydra import split_search_uploads
 
         plain_results, uploads = split_search_uploads(results)
+        for row in plain_results:
+            # The mark of a parsing pass belongs to this run (see
+            # ``filter._attach_metadata``); the copies are written without it.
+            row.pop(_ATTACHED_KEY, None)
         data = {
             "timestamp": timestamp,
             _PARSER_FIELD: _parser_stamp(),
