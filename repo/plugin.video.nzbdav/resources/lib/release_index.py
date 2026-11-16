@@ -128,13 +128,72 @@ def build(rows):
         bucket.setdefault(signature, []).append((at, row))
     releases = []
     for exact, bucket in buckets.items():
-        releases.extend(_bucket_groups(exact[0] is not _NO_GROUP, bucket))
+        if exact[0] is _NO_GROUP:
+            for members in _bucket_groups(False, bucket):
+                releases.extend(_by_size(members))
+        else:
+            releases.extend(_bucket_groups(True, bucket))
     placed = singles + [
         (members[0][0], [row for _at, row in members])
         for members in _joined_by_upload(releases)
     ]
     placed.sort(key=_position)
     return ReleaseIndex([group for _at, group in placed])
+
+
+# Set on a row with no group whose name is listed at two or more sizes far
+# apart: "NOGRP-A" for the largest posts, "NOGRP-B" for the next, and so on.
+SIZE_LABEL_KEY = "_nogroup_label"
+
+
+def _by_size(members):
+    """One release of rows with no group, split where the sizes are far apart.
+
+    A name with no group is all there is to go by, and one name can cover a
+    1 GB and a 50 GB post. The sized rows are sorted and cut wherever one
+    is more than ``_ODD_SIZE_FACTOR`` times the one before. Rows without a
+    size go with the part that has the most rows (the larger on a tie).
+    When there are two or more parts, each row is labelled after its part,
+    largest first (``SIZE_LABEL_KEY``).
+    """
+    for _at, row in members:
+        row.pop(SIZE_LABEL_KEY, None)
+    sized = sorted(
+        ((_row_size(row), at, row) for at, row in members if _row_size(row) > 0),
+        key=lambda one: (one[0], one[1]),
+    )
+    parts = []
+    for size, at, row in sized:
+        if parts and size <= parts[-1][-1][0] * _ODD_SIZE_FACTOR:
+            parts[-1].append((size, at, row))
+        else:
+            parts.append([(size, at, row)])
+    if len(parts) < 2:
+        return [members]
+    parts.reverse()  # largest first
+    unsized = [(at, row) for at, row in members if _row_size(row) <= 0]
+    biggest = max(range(len(parts)), key=lambda at: (len(parts[at]), -at))
+    out = []
+    for number, part in enumerate(parts):
+        label = "NOGRP-" + _letters(number)
+        rows = [(at, row) for _size, at, row in part]
+        if number == biggest:
+            rows.extend(unsized)
+        for _at, row in rows:
+            row[SIZE_LABEL_KEY] = label
+        rows.sort(key=_position)
+        out.append(rows)
+    return out
+
+
+def _letters(number):
+    """ "A" for 0, "B" for 1, ... "Z", then "AA", "AB" and on."""
+    out = ""
+    number += 1
+    while number:
+        number, rest = divmod(number - 1, 26)
+        out = chr(ord("A") + rest) + out
+    return out
 
 
 def _release_name(name, source, taken, names):

@@ -442,9 +442,12 @@ flowchart TD
   rounded (a whole number of megabytes, or a figure like 4.37 GB) is
   ignored: rounding could give two encodes one size.
 - **Names with no group.** Listings of one name with no group are one row
-  with a copy count, whatever their sizes; a copy far from the row's usual
-  size is listed last, as in any release. Such a name never joins a release
-  that has a group.
+  with a copy count. Where the name is listed at sizes far apart (more than
+  1.35 times between neighbours, such as 0.6 GB and 55 GB), each size range
+  is its own row, labelled `NOGRP-A` for the largest posts, then `NOGRP-B`
+  and so on. Such a name never joins a release that has a group.
+
+  ![A name with no group at 11 GB and 1.5 GB: two rows, NOGRP-A and NOGRP-B](../images/picker-nogrp-sizes.png)
 - **A name that fits two releases.** `Show.S01E01` with no year fits both
   the 2005 and the 2023 show. It is listed with the one more indexers list,
   the same way however the results arrived.

@@ -229,7 +229,7 @@ def test_a_bare_name_listed_beside_two_films_is_not_what_joins_them():
         bare("Film 1080p", "m1", 4000000123, took="film 2019 1080p"),
         bare("Film 2021 1080p", "b", 5000000321),
         bare("Film 1080p", "m2", 5000000321, took="film 2021 1080p"),
-        bare("Film 1080p", "m3", 6000000555),
+        bare("Film 1080p", "m3", 4300000555),
     ]
 
     # Each marked listing goes with the film it was listed beside; the two
@@ -305,7 +305,8 @@ def test_a_groupless_pick_is_backed_up_by_the_other_listings_of_its_name():
     assert not release_match.same_release(rows[0], rows[5])
 
 
-def test_a_groupless_pick_is_backed_up_only_by_copies_of_about_its_size():
+def test_a_groupless_name_at_sizes_far_apart_is_one_row_per_size_range():
+    from resources.lib.release_display import display_name
     from resources.lib.router_play import _same_release_backups
 
     name = "Film.2020.1080p.BluRay"
@@ -314,9 +315,33 @@ def test_a_groupless_pick_is_backed_up_only_by_copies_of_about_its_size():
         _row(name, "near", size="12000000000"),
         _row(name, "small", size="700000000"),
         _row(name, "huge", size="50000000000"),
+        _row(name, "huge2", size="51000000000"),
         _row(name, "unsized", size=""),
     ]
 
-    # One picker row, but only the copy within 1.35x is a backup.
-    assert len(release_index.build(rows).groups) == 1
+    index = release_index.build(rows)
+
+    assert sorted(sorted(g) for g in _links(index)) == [
+        ["huge", "huge2", "unsized"],
+        ["near", "pick"],
+        ["small"],
+    ]
+    labels = {row["link"]: row.get(release_index.SIZE_LABEL_KEY) for row in rows}
+    assert labels == {
+        "huge": "NOGRP-A",
+        "huge2": "NOGRP-A",
+        "unsized": "NOGRP-A",
+        "pick": "NOGRP-B",
+        "near": "NOGRP-B",
+        "small": "NOGRP-C",
+    }
+    assert display_name(rows[0]).endswith("-NOGRP-B")
     assert [row["link"] for row in _same_release_backups(rows[0], rows)] == ["near"]
+    # One size range: no label.
+    alone = [
+        _row(name, "one", size="10000000000"),
+        _row(name, "two", size="11000000000"),
+    ]
+    release_index.build(alone)
+    assert not any(release_index.SIZE_LABEL_KEY in row for row in alone)
+    assert release_index._letters(0) == "A" and release_index._letters(26) == "AA"

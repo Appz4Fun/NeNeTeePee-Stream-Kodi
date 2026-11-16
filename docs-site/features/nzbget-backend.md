@@ -290,9 +290,11 @@ the spelling that parses with the most detail. So `English-HONE` and
 it is, so it never joins a release that has a group. Results with no group
 that carry the same name, in any spelling, are one release: one picker row,
 one copy count, and each a backup of the other. A named container still
-separates them (`.mkv` and `.mp4` of one name are two files). Because one
-such name can cover very different posts, a pick with no group is backed up
-only by copies within 1.35 times its own size.
+separates them (`.mkv` and `.mp4` of one name are two files). One such name
+can cover very different posts, so its listings are split by size: wherever
+one size is more than 1.35 times the next smaller one, a new release begins.
+The picker labels them `NOGRP-A` (the largest posts), `NOGRP-B` and so on,
+and each is backed up only by its own copies.
 
 **One upload under several names.** Indexers cut a name short
 (`...H.265` for `...H.265-FLUX`), list the bare title, or tag one upload two
