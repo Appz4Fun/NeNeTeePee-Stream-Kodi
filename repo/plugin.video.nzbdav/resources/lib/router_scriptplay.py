@@ -308,7 +308,10 @@ def _script_play_search_results(
         )
         if not allow_local_pack:
             # The error dialog needs the screen: the progress window goes first.
+            session = search_progress.active()
             search_progress.dismiss()
+            if _router._cancelled_on_close(session):
+                return None
             _router._show_error_dialog(search_error)
             return None
         return []

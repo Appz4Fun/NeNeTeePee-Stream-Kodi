@@ -275,13 +275,6 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
             xbmc.LOGINFO,
         )
 
-    def _finish(self, key):
-        """Close a stage that is still open, keeping what it said."""
-        with self._lock:
-            stage = self._stages[key]
-            if stage.state in (PENDING, ACTIVE):
-                self._set(key, DONE, *stage.lines)
-
     def _state(self, key):
         with self._lock:
             return self._stages[key].state

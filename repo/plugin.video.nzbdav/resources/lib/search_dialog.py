@@ -82,6 +82,7 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
         self._canceled = False
         self._shown = False
         self._table = None
+        self._drawn = None
 
     def open(self, session):
         """Show the window with its fixed texts and the first snapshot."""
@@ -99,7 +100,11 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
         self._shown = True
 
     def render(self, snapshot):
-        """Draw a ``Session.snapshot()``."""
+        """Draw a ``Session.snapshot()``; skipped when nothing changed."""
+        drawn = (snapshot["version"], snapshot["elapsed"])
+        if drawn == self._drawn and snapshot["indexers"] == self._table:
+            return
+        self._drawn = drawn
         self.setProperty("subject", snapshot["subject"])
         self.setProperty("elapsed", _format_elapsed(snapshot["elapsed"]))
         for number, stage in enumerate(snapshot["stages"], 1):
@@ -127,8 +132,12 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
                 item.setProperty("details_state", row["details_state"])
                 items.append(item)
             control = self.getControl(INDEXER_LIST_ID)
+            # Keep the viewer's place when the table is refilled.
+            position = control.getSelectedPosition()
             control.reset()
             control.addItems(items)
+            if isinstance(position, int) and 0 < position < len(items):
+                control.selectItem(position)
             return True
         except Exception:  # pylint: disable=broad-except
             return False
@@ -142,13 +151,19 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
         return self._canceled
 
     def close(self):
-        """Close the window and forget the cancel mark."""
+        """Close the window and forget the cancel mark.
+
+        A Cancel pressed up to this moment is kept in ``cancel_requested``.
+        """
         try:
             if self._shown:
                 self._shown = False
                 super().close()
         finally:
-            _home().clearProperty(CANCEL_PROPERTY)
+            home = _home()
+            if home.getProperty(CANCEL_PROPERTY) == "1":
+                self._canceled = True
+            home.clearProperty(CANCEL_PROPERTY)
 
     def onAction(self, action):  # pylint: disable=invalid-name
         """Back, Escape and Stop cancel once delivered; nothing else closes it."""
@@ -254,15 +269,15 @@ class _Painter:
             if self._closed:
                 return
             self._closed = True
-            try:
-                # A Cancel pressed after the last tick still counts: the
-                # caller checks the session once the window is closed.
-                if self._surface.cancel_requested() is True:
-                    self._session.cancel()
-            except Exception:  # pylint: disable=broad-except
-                pass
         try:
             self._surface.close()
+        except Exception:  # pylint: disable=broad-except
+            pass
+        try:
+            # A Cancel pressed after the last tick, up to the close itself,
+            # still counts: the caller checks the session once it is closed.
+            if self._surface.cancel_requested() is True:
+                self._session.cancel()
         except Exception:  # pylint: disable=broad-except
             pass
 
