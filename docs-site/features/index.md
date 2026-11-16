@@ -15,6 +15,12 @@ devices.
     builds queries, how ID-based TV and movie search works, and how it merges
     results.
 
+-   :material-progress-clock: __[Search progress window](search-progress.md)__
+
+    Follow a search from pressing play to the release list: the title and IDs,
+    how each indexer answered or why it failed, which indexers supplied NFO or
+    MediaInfo details, and where the log is.
+
 -   :material-filter-variant: __[Quality filtering and sorting](quality-filtering.md)__
 
     Keep only the resolutions, HDR formats, codecs, audio, and languages you

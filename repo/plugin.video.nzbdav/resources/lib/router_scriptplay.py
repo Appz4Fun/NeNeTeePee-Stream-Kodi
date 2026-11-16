@@ -15,6 +15,8 @@ keep resolving and no top-level import cycle is introduced.
 
 import xbmc
 
+from resources.lib import search_progress
+
 
 def _script_play_recover_episode_info(params, title, season, episode):
     """Backfill (title, season, episode) for a RunScript episode play.
@@ -252,7 +254,12 @@ def _script_play_search_results(
     ``None`` so the caller stops, exactly as the prior inline block did.
     """
     import resources.lib.router as _router
-    from resources.lib.cache import get_cached, keep_parsed, set_cached
+    from resources.lib.cache import (
+        cached_age_seconds,
+        get_cached,
+        keep_parsed,
+        set_cached,
+    )
     from resources.lib.filter import attach_metadata
     from resources.lib.search_planner import SearchQuery
 
@@ -262,6 +269,9 @@ def _script_play_search_results(
     if results is not None:
         _router._script_play_stage(
             "loaded {} results from cache for '{}'".format(len(results), title)
+        )
+        search_progress.search_cached(
+            len(results), cached_age_seconds(search_type, title, **cache_kwargs)
         )
         # An entry stored without its rows' parsed details gets them now.
         keep_parsed(search_type, title, results, settings_getter=getter, **cache_kwargs)
@@ -285,6 +295,10 @@ def _script_play_search_results(
             set_cached(
                 search_type, title, results, settings_getter=getter, **cache_kwargs
             )
+    search_progress.search_finished(results, search_error)
+    if _script_play_cancelled():
+        # The viewer already left: no error dialog or "no results" toast.
+        return None
     if search_error:
         xbmc.log(
             ("NeNeTeePee-Stream-Kodi: Search stage: provider error - {}").format(
@@ -293,6 +307,11 @@ def _script_play_search_results(
             xbmc.LOGWARNING,
         )
         if not allow_local_pack:
+            # The error dialog needs the screen: the progress window goes first.
+            session = search_progress.active()
+            search_progress.dismiss()
+            if _router._cancelled_on_close(session):
+                return None
             _router._show_error_dialog(search_error)
             return None
         return []
@@ -311,26 +330,38 @@ def _script_play_search_results(
     return results
 
 
-def _script_play_search_filter_tag(
-    params, search_type, title, year, search_kwargs, notify, pack_result=None
+def _script_play_search_filter_tag(  # pylint: disable=too-many-arguments
+    params,
+    search_type,
+    title,
+    year,
+    search_kwargs,
+    notify,
+    pack_result=None,
+    progress=None,
 ):
     """Search, filter, optionally auto-play, and tag for the RunScript flow.
 
-    Runs the whole non-modal-loading-dialog phase. Returns ``None`` when the
-    caller should stop (provider error, no results, or an auto-selected release
-    was already played), otherwise the
+    Runs the whole search-progress phase. Returns ``None`` when the caller
+    should stop (provider error, no results, the viewer cancelled, or an
+    auto-selected release was already played), otherwise the
     ``(filtered, all_rows, total_count, completed_jobs)`` payload for the picker.
+    ``progress`` is the caller's open progress session; without one this
+    opens its own.
     """
     import resources.lib.router as _router
 
     # The indexer search + filtering below can take several seconds; with no
-    # on-screen indicator the player looks frozen/crashed. Show a NON-modal
-    # background progress dialog (see _open_loading_dialog—the modal
-    # DialogProgress native-crashes Kodi mid-search on CoreELEC/Arctic Fuse).
-    # The finally guarantees it is closed before the picker opens and on every
-    # early return / exception below.
-    loading = _router._open_loading_dialog(title)
+    # on-screen indicator the player looks frozen/crashed. The search progress
+    # window says what is happening (see _open_search_progress). It is shown,
+    # never run modally, and the modal DialogProgress is not used: that one
+    # native-crashes Kodi mid-search on CoreELEC/Arctic Fuse. The finally
+    # guarantees it is closed before the picker opens and on every early
+    # return / exception below.
+    loading = progress if progress is not None else _router._open_search_progress()
     try:
+        if _script_play_cancelled():
+            return None
         results = _script_play_search_results(
             search_type,
             title,
@@ -338,7 +369,7 @@ def _script_play_search_filter_tag(
             notify,
             allow_local_pack=pack_result is not None,
         )
-        if results is None:
+        if results is None or _script_play_cancelled():
             return None
         results = _router._requested_episode_rows(
             results,
@@ -384,14 +415,16 @@ def _script_play_filter_autoselect_tag(
     )
 
     total_count = len(results)
-    _router._update_loading_dialog(loading, 60, _router._string(30088))
+    search_progress.ranking(total_count)
     _router._script_play_stage(
         "filter start count={} for '{}'".format(len(results), title)
     )
     filtered, all_parsed = filter_results(
         results, settings_getter=_router._get_script_setting
     )
-    if learn_nfo_audio(filtered, _router._get_script_setting):
+    learned = learn_nfo_audio(filtered, _router._get_script_setting)
+    search_progress.sorting(total_count)
+    if learned:
         # An NFO named audio a release's name leaves out: rank again with it.
         _router._script_play_stage("nfo audio learned, filtering again")
         filtered, all_parsed = filter_results(
@@ -414,20 +447,42 @@ def _script_play_filter_autoselect_tag(
     filtered = _router._prepend_pack(filtered, pack_result)
     all_rows = _router._prepend_pack(all_parsed, pack_result)
     total_count += len(filtered) - provider_row_count
+    if _script_play_cancelled():
+        return None
 
     if (
         _router._get_script_setting("auto_select_best", "false").lower() == "true"
         and filtered
     ):
+        search_progress.auto_selected()
         # resolve_and_play blocks on the download; drop the indicator first.
         _router._close_loading_dialog(loading)
-        _script_play_auto_select(params, filtered[0], filtered)
+        if not _router._cancelled_on_close(loading):
+            _script_play_auto_select(params, filtered[0], filtered)
         return None
 
     # Tag the all-rows superset so DL tags / completed-reuse stay valid for
     # rows revealed by the picker's show-all toggle.
+    search_progress.checking_downloads()
     completed_jobs = _script_play_completed_jobs(_router, all_rows)
+    if _script_play_cancelled():
+        return None
+    search_progress.ready(len(filtered), total_count)
     return filtered, all_rows, total_count, completed_jobs
+
+
+def _script_play_cancelled():
+    """True when the viewer cancelled in the search progress window.
+
+    A request already on the wire is not interrupted; the play stops at the
+    next step instead, quietly, the way backing out of the picker does.
+    """
+    if not search_progress.cancelled():
+        return False
+    import resources.lib.router as _router
+
+    _router._script_play_stage("search cancelled by the viewer")
+    return True
 
 
 def _script_play_available_rows(filtered, all_parsed, title, notify, pack_result):

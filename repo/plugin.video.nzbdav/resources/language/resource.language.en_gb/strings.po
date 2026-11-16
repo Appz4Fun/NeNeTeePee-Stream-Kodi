@@ -1818,6 +1818,12 @@ msgctxt "#30488"
 msgid "Enter plays the top copy."
 msgstr "Enter plays the top copy."
 
+# Picker side panel, above 30487 / 30488, for a struck-through release.
+# {} is REPACK or PROPER.
+msgctxt "#30770"
+msgid "Struck through: a {} of this release is in the list."
+msgstr ""
+
 msgctxt "#30489"
 msgid "+{} more"
 msgstr "+{} more"
@@ -2592,4 +2598,240 @@ msgstr ""
 
 msgctxt "#30709"
 msgid "Cancel"
+msgstr ""
+
+msgctxt "#30710"
+msgid "Finding sources"
+msgstr ""
+
+msgctxt "#30711"
+msgid "Identify the title"
+msgstr ""
+
+msgctxt "#30712"
+msgid "Search"
+msgstr ""
+
+msgctxt "#30713"
+msgid "Indexer responses"
+msgstr ""
+
+msgctxt "#30714"
+msgid "Release details"
+msgstr ""
+
+msgctxt "#30715"
+msgid "Prepare the list"
+msgstr ""
+
+msgctxt "#30716"
+msgid "Indexers"
+msgstr ""
+
+msgctxt "#30718"
+msgid "Log file: {}[CR]The add-on's lines start with {}."
+msgstr ""
+
+msgctxt "#30719"
+msgid "{} · Season {}, Episode {}"
+msgstr ""
+
+msgctxt "#30720"
+msgid "{} · Season {}"
+msgstr ""
+
+msgctxt "#30721"
+msgid "{} (looked up)"
+msgstr ""
+
+msgctxt "#30722"
+msgid "No IDs supplied; searching by title"
+msgstr ""
+
+msgctxt "#30723"
+msgid "Reading the title"
+msgstr ""
+
+msgctxt "#30724"
+msgid "Waiting for {}"
+msgstr ""
+
+msgctxt "#30725"
+msgid "Using results saved moments ago"
+msgstr ""
+
+msgctxt "#30726"
+msgid "Using results saved {} min ago"
+msgstr ""
+
+msgctxt "#30727"
+msgid "Using results saved {} h ago"
+msgstr ""
+
+msgctxt "#30728"
+msgid "Nothing matched the ID; trying the title"
+msgstr ""
+
+msgctxt "#30729"
+msgid "{} results from {}"
+msgstr ""
+
+msgctxt "#30730"
+msgid "{} results"
+msgstr ""
+
+msgctxt "#30731"
+msgid "No results"
+msgstr ""
+
+msgctxt "#30732"
+msgid "The search failed"
+msgstr ""
+
+msgctxt "#30733"
+msgid "{} failed: {}"
+msgstr ""
+
+msgctxt "#30734"
+msgid "{} of {} indexers answered · {} results"
+msgstr ""
+
+msgctxt "#30735"
+msgid "{} results from {} indexers"
+msgstr ""
+
+msgctxt "#30736"
+msgid "No answer from {}"
+msgstr ""
+
+msgctxt "#30737"
+msgid "{} and {} more"
+msgstr ""
+
+msgctxt "#30738"
+msgid "searching…"
+msgstr ""
+
+msgctxt "#30739"
+msgid "{} results"
+msgstr ""
+
+msgctxt "#30740"
+msgid "1 result"
+msgstr ""
+
+msgctxt "#30741"
+msgid "no results"
+msgstr ""
+
+msgctxt "#30742"
+msgid "failed: {}"
+msgstr ""
+
+msgctxt "#30743"
+msgid "failed"
+msgstr ""
+
+msgctxt "#30744"
+msgid "Ranking {} results"
+msgstr ""
+
+msgctxt "#30745"
+msgid "Checking the top {} releases"
+msgstr ""
+
+msgctxt "#30746"
+msgid "Checking the top release"
+msgstr ""
+
+msgctxt "#30747"
+msgid "Asking {}"
+msgstr ""
+
+msgctxt "#30748"
+msgid "Turned off in settings"
+msgstr ""
+
+msgctxt "#30749"
+msgid "Nothing new to read for the top releases"
+msgstr ""
+
+msgctxt "#30750"
+msgid "MediaInfo from {}"
+msgstr ""
+
+msgctxt "#30751"
+msgid "NFO from {}"
+msgstr ""
+
+msgctxt "#30752"
+msgid "No new details for these releases"
+msgstr ""
+
+msgctxt "#30753"
+msgid "Refused by {}"
+msgstr ""
+
+msgctxt "#30754"
+msgid "No answer from {}"
+msgstr ""
+
+msgctxt "#30755"
+msgid "Still waiting on {}; carrying on"
+msgstr ""
+
+msgctxt "#30756"
+msgid "{} read"
+msgstr ""
+
+msgctxt "#30757"
+msgid "{}: nothing new"
+msgstr ""
+
+msgctxt "#30758"
+msgid "{} refused"
+msgstr ""
+
+msgctxt "#30759"
+msgid "{} failed"
+msgstr ""
+
+msgctxt "#30760"
+msgid "Filtering and sorting {} results"
+msgstr ""
+
+msgctxt "#30761"
+msgid "Checking what is already downloaded"
+msgstr ""
+
+msgctxt "#30762"
+msgid "{} of {} results match your filters"
+msgstr ""
+
+msgctxt "#30763"
+msgid "Opening the list"
+msgstr ""
+
+msgctxt "#30764"
+msgid "Playing the best match"
+msgstr ""
+
+msgctxt "#30765"
+msgid "Each indexer's answer appears here"
+msgstr ""
+
+msgctxt "#30766"
+msgid "Show search progress window"
+msgstr ""
+
+msgctxt "#30767"
+msgid "After you press play, show a window that follows the search step by step: the title and IDs, the search, how each indexer answered, the NFO and MediaInfo reads, and the list being prepared. It also says where the log file is. Turn this off to show only Kodi's small progress indicator in the corner."
+msgstr ""
+
+msgctxt "#30768"
+msgid "Search Progress"
+msgstr ""
+
+msgctxt "#30769"
+msgid "Direct indexers"
 msgstr ""

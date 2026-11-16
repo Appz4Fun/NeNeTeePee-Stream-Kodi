@@ -12,6 +12,7 @@ from resources.lib.filter_audio import audio_label
 from resources.lib.http_util import format_size as _format_size
 from resources.lib.i18n import fmt as _fmt
 from resources.lib.i18n import string as _string
+from resources.lib.name_width import strike_percent
 from resources.lib.release_display import (
     HYBRID_LABEL,
     UPSCALE_LABEL,
@@ -20,6 +21,7 @@ from resources.lib.release_display import (
     display_name,
     dynamic_range,
 )
+from resources.lib.release_supersede import revision_label, superseded_rows
 from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
 from resources.lib.upload_count import count_uploads
@@ -87,6 +89,15 @@ _HYBRID_COLOR = "FF22D3EE"
 # An upscale's warning takes that slot: it says why the row ranks last in
 # its resolution, which matters more than HYBRID on the same row.
 _UPSCALE_COLOR = "FFF87171"
+# REPACK (and PROPER) is a tag like HYBRID, in the slot beside it and in a
+# color of its own.
+_REVISION_COLOR = "FFFB923C"
+# The name of a release its own REPACK replaces: greyed, and struck through
+# by the skin (the ``strike`` property).
+_REPLACED_COLOR = "FF7C828D"
+# The width of the name column in each view's rows (``results-dialog.xml``).
+_LIST_NAME_WIDTH = 1140
+_COMPACT_NAME_WIDTH = 860
 _COPY_LEAD_COLOR = "FFFFFFFF"
 _COPY_COLOR = "FF4A9EFF"
 _COPIES_CHIP_COLOR = "FFA8CCFF"
@@ -115,9 +126,25 @@ def _list_item(label):
     return xbmcgui.ListItem(label=label, offscreen=True)
 
 
-def _build_result_item(result, row_index):
+def _named_item(label, replaced_by, column_width):
+    """An off-screen row named ``label``, struck through when a REPACK or
+    PROPER of the same release is listed (``replaced_by`` is its tag).
+
+    Kodi's text markup has no strikethrough, and a skin's font may not hold
+    the combining stroke character, so the skin draws a line over the name.
+    ``strike`` is how far along the ``column_width`` wide name column the
+    line runs, in percent (``name_width.strike_percent``).
+    """
+    if not replaced_by:
+        return _list_item(label)
+    item = _list_item(_c(label, _REPLACED_COLOR))
+    item.setProperty("strike", str(strike_percent(label, column_width)))
+    return item
+
+
+def _build_result_item(result, row_index, replaced_by=""):
     """Build a styled ListItem for a single search result row."""
-    li = _list_item(_row_label(result))
+    li = _named_item(_row_label(result), replaced_by, _LIST_NAME_WIDTH)
     _set_result_properties(li, result)
     # Alternating row background
     li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
@@ -163,6 +190,7 @@ def _set_result_properties(li, result):
     src_display = _SRC_SHORT.get(quality, quality)
     li.setProperty("quality", _c(src_display, _SRC_COLORS.get(quality, "FFAAAAAA")))
     li.setProperty("hybrid", _attribute_tag(meta))
+    li.setProperty("repack", _c(revision_label(meta), _REVISION_COLOR))
 
     # Container (MKV, MP4, etc.)—default to MKV since most scene releases
     # are MKV and only MP4 releases tag the title.
@@ -268,6 +296,7 @@ def _tech_summary(item_props):
         "audio",
         "quality",
         "hybrid",
+        "repack",
         "container",
         "group",
     )
@@ -400,7 +429,7 @@ class _PropertyRecorder:  # pylint: disable=too-few-public-methods
         self.item.setProperty(key, value)
 
 
-def _build_group_item(group, row_index):
+def _build_group_item(group, row_index, replaced_by=""):
     """Build the List compacted row for one release group.
 
     The row is the group's lead (top-ranked) copy, built like a List row, plus
@@ -408,10 +437,12 @@ def _build_group_item(group, row_index):
     reads from the focused item (``Container(51).ListItem.Property(...)``).
     The copy count is the separate uploads among the group's listings
     (``upload_count.count_uploads``); the panel gives the listings too.
+    ``replaced_by`` is the tag of a listed REPACK or PROPER of this release:
+    the row is struck through and the panel says why.
     """
     lead = group[0]
     label = _row_label(lead)
-    item = _list_item(label)
+    item = _named_item(label, replaced_by, _COMPACT_NAME_WIDTH)
     recorder = _PropertyRecorder(item)
     _set_result_properties(recorder, lead)
     item.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
@@ -448,7 +479,10 @@ def _build_group_item(group, row_index):
     item.setProperty("panel_indexers", names)
     item.setProperty("panel_sizes", sizes)
     item.setProperty("panel_ages", ages)
-    item.setProperty("panel_foot", _string(30487 if any_available else 30488))
+    foot = _string(30487 if any_available else 30488)
+    if replaced_by:
+        foot = "{}[CR]{}".format(_c(_fmt(30770, replaced_by), _REVISION_COLOR), foot)
+    item.setProperty("panel_foot", foot)
     # The highlighted (white) panel line is the copy Enter plays.
     return item
 
@@ -542,12 +576,14 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
 
         list_control = self.getControl(self._list_id)
         list_control.reset()
-        if compact:
-            items = [
-                _build_group_item(group, i) for i, group in enumerate(self._entries)
-            ]
-        else:
-            items = [_build_result_item(result, i) for i, result in enumerate(active)]
+        # Rows a REPACK or PROPER in this same view replaces. A group's rows
+        # share one release profile, so its lead answers for the group.
+        replaced = superseded_rows(active)
+        build = _build_group_item if compact else _build_result_item
+        items = [
+            build(entry if compact else entry[0], i, replaced.get(id(entry[0]), ""))
+            for i, entry in enumerate(self._entries)
+        ]
         list_control.addItems(items)
 
     def _focused_entry(self):

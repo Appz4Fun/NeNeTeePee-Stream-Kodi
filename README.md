@@ -162,7 +162,8 @@ Full walkthrough:
   **Sorting › Results view › List** restores one row per copy. Every row is
   shown under one normalized name, such as
   `Movie (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-GROUP`,
-  whatever the indexer sent, and HYBRID releases get their own colored tag.
+  whatever the indexer sent. HYBRID and REPACK releases get their own colored
+  tags, and a release its own REPACK replaces is struck through.
 - **Exact season-pack playback and reuse**: completed multi-episode downloads
   play the requested episode instead of the largest file, then appear as an
   already-downloaded pack for later episodes from that same backend job.

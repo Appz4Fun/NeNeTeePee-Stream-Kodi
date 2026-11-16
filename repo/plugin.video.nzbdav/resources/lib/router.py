@@ -25,7 +25,10 @@ import xbmcplugin
 # are kept here as router attributes even where this module no longer references
 # them directly: the suite patches several via ``resources.lib.router.<name>`` and
 # the moved sibling helpers reach them through that namespace at call time.
-from resources.lib import telemetry  # noqa: F401
+from resources.lib import (
+    search_progress,
+    telemetry,  # noqa: F401
+)
 from resources.lib.download_ledger import downloaded_pubdate_epochs  # noqa: F401
 from resources.lib.fallback_streams import (  # noqa: F401
     FALLBACK_CANDIDATES_DISABLED,
@@ -160,6 +163,7 @@ from resources.lib.router_search import (  # noqa: F401
     _hydra_duplicate_lookup_enabled,
     _LookupDoneJobs,
     _nzbget_mode_enabled,
+    _progress_name,
     _provider_error_message,
     _result_pubdate_consistent_with_downloads,
     _result_size_bytes,
@@ -168,9 +172,11 @@ from resources.lib.router_search import (  # noqa: F401
 )
 from resources.lib.router_settings import (  # noqa: F401
     _addon_instance,
+    _cancelled_on_close,
     _close_loading_dialog,
     _get_addon_setting,
     _open_loading_dialog,
+    _open_search_progress,
     _resolve_episode_tvdb_id,
     _resolve_movie_imdb_id,
     _script_settings_paths,
@@ -179,7 +185,6 @@ from resources.lib.router_settings import (  # noqa: F401
     _show_error_dialog,
     _snapshot_settings_getter,
     _translate_path,
-    _update_loading_dialog,
 )
 from resources.lib.streamnzb_player import play_streamnzb
 
@@ -611,6 +616,7 @@ def _search_all_providers(query, settings_getter=None, outcome=None):
 
     tvdb = _resolve_episode_tvdb_id(search_type, tvdb, tmdb_id, imdb, settings_getter)
     imdb = _resolve_movie_imdb_id(search_type, imdb, tmdb_id, settings_getter)
+    search_progress.ids_resolved(tvdb=tvdb, imdb=imdb)
 
     provider_settings_getter = _snapshot_settings_getter(
         settings_getter, _PROVIDER_SEARCH_SETTING_DEFAULTS
@@ -634,6 +640,9 @@ def _search_all_providers(query, settings_getter=None, outcome=None):
         direct_outcome=direct_outcome,
     )
 
+    search_progress.search_started(
+        [_progress_name(key, label) for key, label, _f, _a, _k in provider_jobs]
+    )
     provider_outcomes = _run_provider_jobs(provider_jobs)
     if outcome is not None:
         # The direct-indexer fan-out returns surviving rows without an error
@@ -979,29 +988,56 @@ def _handle_script_play(params):
 
     _script_play_log_route(params, search_type, title, imdb)
 
+    # Read before the progress window opens: the focused-ListItem fallback
+    # probes InfoLabels such as Container(50).ListItem, which Kodi would
+    # resolve against the window's own list while it is up.
     title, season, episode = _script_play_resolve_episode_args(
         params, search_type, title, season, episode, imdb
     )
     if search_type == "episode":
         params.update(title=title, season=season, episode=episode)
     _attach_episode_context(params, params, title=title, season=season, episode=episode)
-    pack_result = _season_pack_result(
-        params.get("_episode_context"), settings_getter=_get_script_setting
-    )
 
-    search_kwargs = dict(
-        year=year, imdb=imdb, season=season, episode=episode, tvdb=tvdb, tmdb_id=tmdb_id
-    )
-    prepared = _script_play_search_filter_tag(
-        params,
-        search_type,
-        title,
-        year,
-        search_kwargs,
-        notify,
-        pack_result=pack_result,
-    )
-    if prepared is None:
+    # From here to the picker the search progress window says what is going
+    # on (search_dialog). The finally closes it before the picker opens and
+    # on every early return or exception.
+    progress = _open_search_progress()
+    try:
+        search_progress.identified(
+            search_type,
+            title,
+            year=year,
+            season=season,
+            episode=episode,
+            tmdb=tmdb_id,
+            tvdb=tvdb,
+            imdb=imdb,
+        )
+        pack_result = _season_pack_result(
+            params.get("_episode_context"), settings_getter=_get_script_setting
+        )
+
+        search_kwargs = dict(
+            year=year,
+            imdb=imdb,
+            season=season,
+            episode=episode,
+            tvdb=tvdb,
+            tmdb_id=tmdb_id,
+        )
+        prepared = _script_play_search_filter_tag(
+            params,
+            search_type,
+            title,
+            year,
+            search_kwargs,
+            notify,
+            pack_result=pack_result,
+            progress=progress,
+        )
+    finally:
+        _close_loading_dialog(progress)
+    if prepared is None or _cancelled_on_close(progress):
         return
     filtered, all_rows, total_count, completed_jobs = prepared
     _script_play_picker_and_resolve(

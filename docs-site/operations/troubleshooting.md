@@ -16,7 +16,11 @@ order.
     the prefix used by your installed build. Kodi writes `kodi.log` to its
     temp folder (`/storage/.kodi/temp/kodi.log` on CoreELEC and LibreELEC). Some
     detail, such as the filter summary, is logged only when Kodi's debug
-    logging is on (**Settings → System → Logging**).
+    logging is on (**Settings → System → Logging**). The
+    [search progress window](../features/search-progress.md) shows the log's
+    location on your device, and each of its stages is logged as a
+    `Search progress:` line, so the log shows how far a search got and which
+    indexers failed.
 
 ## NeNeTeePee-Stream-Kodi stopped updating
 

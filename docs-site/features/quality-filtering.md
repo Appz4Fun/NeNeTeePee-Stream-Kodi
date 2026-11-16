@@ -426,6 +426,58 @@ with another's audio or Dolby Vision added to an HDR10+ encode. Only a
 `Hybrid` tag after the year, episode or resolution counts; a title such as
 *Hybrid (2007)* isn't one.
 
+**REPACK** and **PROPER** have an orange slot beside it. A group posts a
+REPACK (or a RERIP, which is shown as one) or a PROPER to replace a release of
+its own that had a fault. When the list holds both, the replaced release's name
+is greyed and struck through, and in **List compacted** the side panel says
+which tag replaced it:
+
+- The two must be the same release in everything but the tag: the same title
+  and year or episode, edition, resolution, HDR, audio, channels, source,
+  codec, HYBRID and release group, and every other field of the
+  [same-release rule](nzbget-backend.md#what-counts-as-the-same-release).
+- The word has to be written as a tag: in capitals, and either after the
+  resolution and source or before them with only other tags between. In
+  another case (`x264.Proper-GRP`) it counts only after the resolution, with
+  nothing but tags after it. `Proper` in an episode title or a guest's name,
+  as in `Show.S03E02.A.Proper.Send.Off.720p`, strikes nothing. A name written
+  all in one case can't be read by its capitals, so there the word is judged
+  by where it stands alone.
+- When the picker can't tell whether a release's own `Proper` or `Repack` is
+  a tag, that release is never struck through either.
+- Another group's PROPER strikes nothing. It is a different encode, not the
+  same file fixed.
+- A REPACK and a PROPER of one release don't strike each other.
+- A release is struck through only while its replacement is in the view. If
+  your filters hide the REPACK, the older release isn't struck through until
+  you show all results.
+
+```mermaid
+flowchart TD
+    A[A release in the view<br/>with no REPACK or PROPER tag] --> B{Has a release group?}
+    B -->|no| KEEP[Shown as usual]
+    B -->|yes| C{Is a REPACK or PROPER from that group,<br/>with the word written as a tag, in the view?}
+    C -->|no| KEEP
+    C -->|yes| D{Same title and year or episode,<br/>edition, resolution, HDR, audio,<br/>channels, source, codec and HYBRID?}
+    D -->|no| KEEP
+    D -->|yes| STRIKE[Name greyed and struck through]
+    classDef keep fill:#1E1E2E,stroke:#34D399,color:#FFFFFF
+    classDef strike fill:#1E1E2E,stroke:#F87171,color:#FFFFFF
+    class KEEP keep
+    class STRIKE strike
+```
+
+![Moving through the picker in both views: REPACK and PROPER tags in orange, and the releases they replace struck through](../images/picker-repack.gif)
+
+In **List compacted**, the side panel of a struck-through release says which
+tag replaced it:
+
+![List compacted with a struck-through release focused; the side panel reads "Struck through: a PROPER of this release is in the list."](../images/picker-repack.png)
+
+A struck-through release still plays if you pick it. Kodi's text has no
+strikethrough, so the picker draws the line and estimates its length from the
+name; on some skins it runs a few letters past the end.
+
 ## Filtered and all results in the picker
 
 The picker opens on the filtered list, and its header reads *Showing N of M

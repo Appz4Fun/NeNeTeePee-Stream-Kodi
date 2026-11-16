@@ -305,6 +305,19 @@ def get_cached(search_type, title, settings_getter=None, **kwargs):
         return None
 
 
+def cached_age_seconds(search_type, title, settings_getter=None, **kwargs):
+    """How old the entry ``get_cached`` just returned is, or None.
+
+    Takes ``get_cached``'s arguments. None when that search was not read
+    from the cache in this run.
+    """
+    del settings_getter
+    timestamp = _READ_TIMESTAMPS.get(_cache_path(search_type, title, kwargs))
+    if timestamp is None:
+        return None
+    return max(0.0, time.time() - timestamp)
+
+
 def set_cached(search_type, title, results, settings_getter=None, **kwargs):
     """Cache search results.
 

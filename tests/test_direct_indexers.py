@@ -932,3 +932,47 @@ def test_search_direct_indexers_reports_partial_failure(mock_one):
         outcome=outcome,
     )
     assert outcome == {"complete": True}
+
+
+@patch("resources.lib.direct_indexers.get_configured_indexers")
+@patch("resources.lib.direct_indexers.xbmcaddon")
+@patch("resources.lib.direct_indexers._http_get")
+def test_search_direct_indexers_tells_the_progress_window_each_answer(
+    mock_http, mock_xbmcaddon, mock_configured
+):
+    from resources.lib import search_progress
+    from resources.lib.direct_indexers import search_direct_indexers
+
+    mock_configured.return_value = [
+        {
+            "id": "bad",
+            "label": "Bad",
+            "api_url": "https://bad.example/api",
+            "api_key": "bad",
+        },
+        {
+            "id": "good",
+            "label": "Good",
+            "api_url": "https://good.example/api",
+            "api_key": "good",
+        },
+    ]
+    mock_xbmcaddon.Addon.return_value = _addon_with_settings({"max_results": "25"})
+
+    def _get(url, **_kwargs):
+        if "bad.example" in url:
+            raise RuntimeError("down")
+        return ONE_RESULT_RSS
+
+    mock_http.side_effect = _get
+    session = search_progress.activate(search_progress.Session())
+    try:
+        search_direct_indexers(SearchQuery("movie", "The Matrix"))
+    finally:
+        search_progress.deactivate()
+
+    rows = {row["name"]: row for row in session.snapshot()["indexers"]}
+    assert rows["Good"]["state"] == search_progress.OK
+    assert rows["Good"]["result"].startswith("1 result")
+    assert rows["Bad"]["state"] == search_progress.FAILED
+    assert "down" in rows["Bad"]["result"]

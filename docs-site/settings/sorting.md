@@ -25,6 +25,12 @@ Captured on the OrbStack Kodi VM from commit `db07f61`. Debug overlays are off, 
 | --- | --- | --- |
 | Auto-select best match (skip result list)[^source-auto_select_best]<br>`auto_select_best` | Off | For nzbdav / InfiniDysk and NZBGet, play the best result that passes the filters without opening the picker. If no result passes, open the picker. StreamNZB always opens the picker and ignores this switch. |
 
+### Search Progress
+
+| Option and setting ID | Default | What it does |
+| --- | --- | --- |
+| Show search progress window<br>`search_progress_window` | On | After you press play, show a window that follows the search step by step: the title and IDs, the search, how each indexer answered, the NFO and MediaInfo reads, and the list being prepared, with the log file's location and a Cancel button. Off shows only Kodi's small indicator in the corner, naming the stage in hand. See [Search progress window](../features/search-progress.md). |
+
 ## Source notes
 
 Labels and schema defaults are from commit [`db07f61`](https://github.com/Appz4Fun/NeNeTeePee-Stream-Kodi/blob/db07f61d4090a0c89ec8461ee9b3ca34f9607aa6/repo/plugin.video.nzbdav/resources/settings.xml). Runtime limits can differ from the editable schema; the explanations identify those limits. Links use the full commit ID, so later changes to `main` do not move them.

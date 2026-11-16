@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | Episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
+| [Unreleased](#unreleased--main) | on `main` | Search progress window between play and the picker, with per-indexer results and failures; episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -69,6 +69,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A search progress window replaces the corner spinner between play and the
+  release list.** It follows five stages live: the title with its season,
+  episode and TMDb, TVDB and IMDb IDs (marking the ones the add-on looked up);
+  the search and which provider it is waiting for; how many indexers answered
+  and which did not; which indexers supplied the NFO or MediaInfo of the top
+  releases; and the list being filtered, sorted and checked for downloads. A
+  table lists every indexer with its result count and response time, or the
+  reason it failed (`failed: 403 Forbidden`). NZBHydra2's per-indexer outcomes
+  are read from Hydra's search history right after the search, two local
+  requests that fail soft to the indexer names in the results. The window shows
+  elapsed time, where `kodi.log` is on the device and a **Cancel** button, and
+  each stage change is logged as a `Search progress:` line. **Show search
+  progress window** (`search_progress_window`, Sorting, on by default) turns it
+  off; Kodi's corner indicator, which now names the stage in hand, is used then
+  and whenever the window cannot open.
+
 - **AI upscales rank last in their resolution, and a setting hides them.**
   `Street Fighter II The Animated Movie 4k [2160]-AI-Raws` led the 2160p
   releases of a search: its name states 2160p, but the video is an upscale
@@ -83,6 +99,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   word is never one. The picker names such a release `[UPSCALE]` and tags it
   in red, and an upscale is no longer grouped with, or used as a backup of,
   the release it was made from.
+
+- **REPACK is a colored tag in the picker, and the release it replaces is
+  struck through.** A REPACK (a RERIP reads as one) or a PROPER now has an
+  orange slot of its own on the row's second line and in the side panel,
+  beside HYBRID. When the list also holds the same release without the tag,
+  from the same group and equal in everything else the same-release rule
+  compares (title, year or episode, edition, resolution, HDR, audio, channels,
+  source, codec, HYBRID), that older release's name is greyed and struck
+  through in both views, and in List compacted the side panel says why. A
+  REPACK or PROPER written straight after a daily show's air date
+  (`Show.2026.11.12.REPACK.1080p`) is now read as one; it was missed, so the
+  fixed episode was grouped as a copy of the faulty one. Only a word written
+  as a tag strikes anything: `Proper` in an episode title or a guest's name
+  (`S03E02.A.Proper.Send.Off.720p`) does not, and a release whose own tag the
+  picker is unsure of is never struck through. Another group's PROPER
+  strikes nothing: it is a different encode. A release is struck through only
+  while its replacement is in the view, so a filtered-out REPACK strikes
+  nothing until **Show all**. Kodi's text has no strikethrough and a skin's
+  font may lack the stroke character, so the line is drawn by the picker and
+  its length is estimated from the name; it can run a few letters past the end
+  on some skins.
+
 - **The audio a release's NFO names is read for the top releases.** A name
   such as `Movie.2004.MULTi.1080p.BluRay.x264-GRP` tags no audio and ranked
   as "audio unknown"; its NFO says `DTS-HD MA 5.1`. When an indexer offers a

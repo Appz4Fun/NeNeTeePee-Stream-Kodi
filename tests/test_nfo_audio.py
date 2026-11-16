@@ -1423,3 +1423,39 @@ def test_a_bare_dts_x_names_no_lossless_bed():
     )
     assert sorted(tracks[0]["audio"]) == ["DTS-HD MA", "DTS:X"]
     assert "DTS-HD MA" not in tracks[1]["audio"]
+
+
+def test_the_progress_window_hears_which_indexer_gave_what(indexer):
+    from resources.lib import search_progress
+
+    rows = _rows(PLAIN, OTHER)
+    _offer(rows[0], indexer, "plain")
+    _offer(rows[1], indexer, "refused")
+    session = search_progress.activate(search_progress.Session())
+    try:
+        assert filter_module.learn_nfo_audio(rows, _ttl) is True
+    finally:
+        search_progress.deactivate()
+
+    details = session.snapshot()["stages"][3]
+    assert details["state"] == search_progress.DONE
+    assert details["text"].startswith("NFO from 127.0.0.1")
+    (row,) = session.snapshot()["indexers"]
+    assert row["name"] == "127.0.0.1"
+    assert row["details_state"] == search_progress.READ
+
+
+def test_the_progress_window_hears_when_no_release_needs_a_read():
+    from resources.lib import search_progress
+
+    session = search_progress.activate(search_progress.Session())
+    try:
+        assert filter_module.learn_nfo_audio(_rows(PLAIN), _ttl) is False
+        assert session.snapshot()["stages"][3]["text"] == (
+            "Nothing new to read for the top releases"
+        )
+        off = search_progress.activate(search_progress.Session())
+        nfo_audio.learn_for_top(_rows(PLAIN), _key, lambda k, d="": "0")
+        assert off.snapshot()["stages"][3]["state"] == search_progress.SKIPPED
+    finally:
+        search_progress.deactivate()

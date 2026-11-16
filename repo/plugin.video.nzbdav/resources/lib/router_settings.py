@@ -53,20 +53,46 @@ def _open_loading_dialog(title):
         return None
 
 
-def _update_loading_dialog(dialog, percent, message):
-    """Update the background loading dialog; no-op when it failed to open."""
+def _open_search_progress():
+    """Start showing the search between play and the picker.
+
+    Opens the search progress window, or Kodi's corner indicator when the
+    ``search_progress_window`` setting is off or the window will not open
+    (see ``search_dialog``). Returns the progress session, closed like a
+    loading dialog with ``_close_loading_dialog``; ``None`` when nothing
+    could be set up, which never stops the search.
+    """
     import resources.lib.router as _router
 
-    if dialog is None:
-        return
     try:
-        dialog.update(percent, _router._addon_name(), message)
+        from resources.lib import search_dialog
+
+        setting = _router._get_script_setting(search_dialog.SETTING, "true")
+        return search_dialog.open_progress(
+            _router._addon_name(), detailed=str(setting).strip().lower() != "false"
+        )
     except Exception:  # pylint: disable=broad-except
-        pass
+        return None
+
+
+def _cancelled_on_close(progress):
+    """True when the viewer cancelled, up to the moment the window closed.
+
+    Call it after ``_close_loading_dialog``: a Cancel pressed just before the
+    window closed is only seen then. ``progress`` is a progress session, a
+    plain loading dialog, or ``None``.
+    """
+    import resources.lib.router as _router
+
+    cancelled = getattr(progress, "cancelled", None)
+    if not callable(cancelled) or cancelled() is not True:
+        return False
+    _router._script_play_stage("search cancelled by the viewer")
+    return True
 
 
 def _close_loading_dialog(dialog):
-    """Close the background loading dialog; safe to call more than once."""
+    """Close a loading dialog or progress session; safe to call more than once."""
     if dialog is None:
         return
     try:

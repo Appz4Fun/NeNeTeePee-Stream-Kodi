@@ -270,6 +270,7 @@ known release groups. An empty list means no exclusions.
 | Max results | `max_results` | `25` | Provider request limits are clamped to 1–10000. The filtered picker uses the raw positive integer as its limit; 0 or less leaves it unbounded. The picker's show-all view is not truncated. |
 | Read the NFO of the top releases | `nfo_audio_releases` | `3` | How many of the first releases of a search have their MediaInfo or NFO read for audio and dynamic-range details, when an indexer offers one. One to three API calls per release, remembered. `0` turns it off; values above 5 count as 5. |
 | Auto-select best match (skip result list) | `auto_select_best` | `false` | Play the top-ranked result that passed your filters and skip the picker. If nothing passed, the picker opens instead. |
+| Show search progress window | `search_progress_window` | `true` | Show the [search progress window](../features/search-progress.md) between pressing play and the picker. `false` shows only Kodi's corner indicator, naming the stage in hand. |
 
 ## Advanced
 
