@@ -113,6 +113,26 @@ _KODI_MARKUP = re.compile(
 _CACHE_PATH = "special://temp/nzbdav-viewer/"
 
 
+def _art_in_plain_characters():
+    """Box and block characters, each as the plain character nearest to it."""
+    table = {code: "+" for code in range(0x2500, 0x2580)}
+    for code in (0x2500, 0x2501, 0x2504, 0x2505, 0x2508, 0x2509, 0x254C, 0x254D):
+        table[code] = "-"
+    for code in (0x2502, 0x2503, 0x2506, 0x2507, 0x250A, 0x250B, 0x254E, 0x254F):
+        table[code] = "|"
+    table.update({code: "-" for code in range(0x2574, 0x2580, 2)})
+    table.update({code: "|" for code in range(0x2575, 0x2580, 2)})
+    table.update({0x2550: "=", 0x2551: "|"})
+    table.update({code: "#" for code in range(0x2580, 0x25A2)})
+    table.update({0x2591: ".", 0x2592: ":"})
+    return table
+
+
+# A skin's font seldom has the characters NFO art is drawn with, and Kodi
+# shows an empty box for each one it lacks.
+_PLAIN_ART = _art_in_plain_characters()
+
+
 def geometry(screen_width, screen_height):
     """How the text is drawn on a screen of this many pixels.
 
@@ -240,6 +260,11 @@ def attribute_words(attributes, check):
 def _plain(text):
     """``text`` with nothing Kodi would read as label markup."""
     return _KODI_MARKUP.sub(r"[ \1", text)
+
+
+def _for_skin_font(line):
+    """A line of text for the skin's text box (``_PLAIN_ART``, ``_plain``)."""
+    return _plain(line.translate(_PLAIN_ART))
 
 
 def attribute_label(attributes):
@@ -414,7 +439,9 @@ class NfoViewer(
         lines = tab["pages"][self._page]
         attributes = self._attributes(tab)
         if not self._font:
-            self.setProperty("text", "[CR]".join(_plain(line) for line in lines))
+            self.setProperty(
+                "text", "[CR]".join(_for_skin_font(line) for line in lines)
+            )
             self.setProperty("attributes", attribute_label(attributes))
             return
         self._draw_images(tab, lines, attributes)

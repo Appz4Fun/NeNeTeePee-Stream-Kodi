@@ -152,8 +152,20 @@ def _docs_tag(rows):
     )
 
 
-def _flow(*tags):
-    """The tags that are there, in one label, two spaces apart."""
+def _tags(rows):
+    """A release's tags in one label: HYBRID or UPSCALE, REPACK or PROPER,
+    NFO and MEDIAINFO, the ones that apply, two spaces apart.
+
+    ``rows`` are the release's listings, lead first. The tags share a label
+    under the name: a row has no room for a column per tag.
+    """
+    meta = rows[0].get("_meta") if rows and isinstance(rows[0], dict) else None
+    meta = meta if isinstance(meta, dict) else {}
+    tags = (
+        _attribute_tag(meta),
+        _c(revision_label(meta), _REVISION_COLOR),
+        _docs_tag(rows),
+    )
     return "  ".join(tag for tag in tags if tag)
 
 
@@ -161,7 +173,7 @@ def _build_result_item(result, row_index, replaced_by=""):
     """Build a styled ListItem for a single search result row."""
     li = _named_item(_row_label(result), replaced_by, _LIST_NAME_WIDTH)
     _set_result_properties(li, result)
-    li.setProperty("docs", _docs_tag([result]))
+    li.setProperty("tags", _tags([result]))
     # Alternating row background
     li.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
     return li
@@ -462,13 +474,7 @@ def _build_group_item(group, row_index, replaced_by=""):
     recorder = _PropertyRecorder(item)
     _set_result_properties(recorder, lead)
     item.setProperty("row_bg", _BG_A if row_index % 2 == 0 else _BG_B)
-    # HYBRID, REPACK, NFO and MEDIAINFO share one label in this narrower row.
-    item.setProperty(
-        "tags",
-        _flow(
-            recorder.props.get("hybrid"), recorder.props.get("repack"), _docs_tag(group)
-        ),
-    )
+    item.setProperty("tags", _tags(group))
     count = len(group)
     indexers = []
     for row in group:
@@ -692,15 +698,7 @@ class ResultsDialog(xbmcgui.WindowXMLDialog):
             item = self.getControl(self._list_id).getSelectedItem()
             if item is None or self._focused_entry() is not entry:
                 return
-            if self.view == VIEW_COMPACT:
-                tags = _flow(
-                    item.getProperty("hybrid"),
-                    item.getProperty("repack"),
-                    _docs_tag(entry),
-                )
-                item.setProperty("tags", tags)
-            else:
-                item.setProperty("docs", _docs_tag(entry))
+            item.setProperty("tags", _tags(entry))
         finally:
             self._viewing = False
 

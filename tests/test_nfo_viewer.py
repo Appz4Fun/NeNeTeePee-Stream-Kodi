@@ -453,15 +453,19 @@ def test_an_answer_that_comes_after_the_window_closed_is_not_drawn(tmp_path):
 
 
 def test_without_the_font_the_skins_text_box_shows_the_page(tmp_path):
-    release_docs.keep(KEY, release_docs.NFO, "hub.example", OWN_NFO + "[B]bold[/b] [x]")
+    art = "\u2554\u2550\u2557 \u2502 \u2500\u2500 \u2591\u2592\u2593\u2588\n"
+    release_docs.keep(
+        KEY, release_docs.NFO, "hub.example", OWN_NFO + "[B]bold[/b] [x]\n" + art
+    )
     viewer = _viewer(tmp_path, font=False)
     with patch.object(doc_fetch, "plan", return_value={}):
         viewer.onInit()
 
     assert viewer.getProperty("mode") == "text"
-    # Nothing in an NFO is read as Kodi's own markup.
+    # Nothing in an NFO is read as Kodi's own markup, and its art is drawn
+    # with characters any skin font has.
     assert viewer.getProperty("text") == (
-        NAME + "[CR][CR]  Audio....: DD+ 5.1[CR][ B]bold[ /b] [x]"
+        NAME + "[CR][CR]  Audio....: DD+ 5.1[CR][ B]bold[ /b] [x][CR]+=+ | -- .:##"
     )
     assert viewer.getProperty("attributes") == (
         "[COLOR FFA78BFA]2160p[/COLOR]     [COLOR FF94A3B8]H265[/COLOR]     "
@@ -540,25 +544,28 @@ _MEDIAINFO_TAG = "[COLOR FFA3E635]MEDIAINFO[/COLOR]"
 def test_a_row_is_tagged_for_what_the_viewer_can_show():
     plain = _props(_build_result_item(_row(), 0))
     linked = _props(_build_result_item(_row(nfo_url="https://hub.example/api?id=1"), 0))
-    assert plain["docs"] == ""
-    assert linked["docs"] == _NFO_TAG
+    assert plain["tags"] == ""
+    assert linked["tags"] == _NFO_TAG
 
     release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
-    assert _props(_build_result_item(_row(), 0))["docs"] == _MEDIAINFO_TAG
+    assert _props(_build_result_item(_row(), 0))["tags"] == _MEDIAINFO_TAG
     both = _props(_build_result_item(_row(nfo_url="https://hub.example/api?id=1"), 0))
-    assert both["docs"] == _NFO_TAG + "  " + _MEDIAINFO_TAG
-    assert _props(_build_result_item({"title": None, "_meta": {}}, 0))["docs"] == ""
+    assert both["tags"] == _NFO_TAG + "  " + _MEDIAINFO_TAG
+    assert _props(_build_result_item({"title": None, "_meta": {}}, 0))["tags"] == ""
 
 
-def test_a_compacted_row_lists_its_tags_in_one_label():
+def test_the_tags_of_a_row_share_one_label():
     name = "Metropolis.1927.REPACK.2160p.WEB-DL.H.265-GRP"
     group = [
         _row(name),
         _row(name, indexer="Slug", nfo_url="https://slug.example/a?id=1"),
     ]
-    props = _props(_build_group_item(group, 0))
-    assert props["tags"] == "[COLOR FFFB923C]REPACK[/COLOR]  " + _NFO_TAG
+    repack = "[COLOR FFFB923C]REPACK[/COLOR]"
+    assert _props(_build_group_item(group, 0))["tags"] == repack + "  " + _NFO_TAG
     assert _props(_build_group_item([_row()], 0))["tags"] == ""
+    # The plain list counts each listing's own link.
+    assert _props(_build_result_item(group[0], 0))["tags"] == repack
+    assert _props(_build_result_item(group[1], 0))["tags"] == repack + "  " + _NFO_TAG
 
 
 def _picker(rows, view=None):
@@ -590,23 +597,26 @@ def test_left_or_right_opens_the_viewer_on_the_focused_release(key):
     show.assert_called_once()
     # The row is tagged for what was read, and the picker is still open.
     control.getSelectedItem.return_value.setProperty.assert_called_with(
-        "docs", _NFO_TAG
+        "tags", _NFO_TAG
     )
     assert dialog._viewing is False and dialog._closed is False
     assert dialog.get_selected_result() is None
 
 
 def test_the_compacted_row_keeps_its_other_tags_when_the_viewer_closes():
-    dialog, control = _picker([_row()], view=VIEW_COMPACT)
-    item = control.getSelectedItem.return_value
-    item.getProperty.side_effect = {"hybrid": "", "repack": "REPACK"}.get
+    name = "Metropolis.1927.REPACK.2160p.WEB-DL.H.265-GRP"
+    dialog, control = _picker([_row(name)], view=VIEW_COMPACT)
 
     def viewed(_entry, _active):
-        release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
+        release_docs.keep(
+            name_form_key(name), release_docs.MEDIAINFO, "m.example", REPORT
+        )
 
     with patch.object(nfo_viewer, "show", side_effect=viewed):
         dialog.onAction(_Action(ACTION_MOVE_RIGHT))
-    item.setProperty.assert_called_with("tags", "REPACK  " + _MEDIAINFO_TAG)
+    control.getSelectedItem.return_value.setProperty.assert_called_with(
+        "tags", "[COLOR FFFB923C]REPACK[/COLOR]  " + _MEDIAINFO_TAG
+    )
 
 
 def test_the_list_is_asked_to_take_the_focus_until_it_has_it():
@@ -684,7 +694,6 @@ def test_the_pickers_lists_keep_the_focus_on_left_and_right():
     labels = [
         control.findtext("label") or "" for control in _controls("results-dialog.xml")
     ]
-    assert labels.count("$INFO[ListItem.Property(docs)]") == 2
     assert (
-        sum(label.startswith("$INFO[ListItem.Property(tags)]") for label in labels) == 2
+        sum(label.startswith("$INFO[ListItem.Property(tags)]") for label in labels) == 4
     )

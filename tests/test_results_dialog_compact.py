@@ -663,21 +663,13 @@ def test_skin_draws_the_strike_and_the_repack_slot_in_every_row_layout():
                 for control in layout.findall("control[@type='label']")
             }
             container_slot = slots["$INFO[ListItem.Property(container)]"]
-            if list_id == "51":
-                # List compacted: REPACK is one of the tags in one label.
-                (tags,) = [
-                    control
-                    for label, control in slots.items()
-                    if label.startswith("$INFO[ListItem.Property(tags)]")
-                ]
-                end = int(tags.findtext("left")) + int(tags.findtext("width"))
-                assert end <= int(container_slot.findtext("left"))
-                continue
-            hybrid = slots["$INFO[ListItem.Property(hybrid)]"]
-            repack = slots["$INFO[ListItem.Property(repack)]"]
-            end = int(hybrid.findtext("left")) + int(hybrid.findtext("width"))
-            assert end <= int(repack.findtext("left"))
-            end = int(repack.findtext("left")) + int(repack.findtext("width"))
+            # REPACK is one of the row's tags, which share one label.
+            (tags,) = [
+                control
+                for label, control in slots.items()
+                if label.startswith("$INFO[ListItem.Property(tags)]")
+            ]
+            end = int(tags.findtext("left")) + int(tags.findtext("width"))
             assert end <= int(container_slot.findtext("left"))
 
 

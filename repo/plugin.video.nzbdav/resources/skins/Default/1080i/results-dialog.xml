@@ -125,41 +125,36 @@
           <label>$INFO[ListItem.Property(group)]</label><aligny>center</aligny><align>right</align>
         </control>
 
-        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + REPACK + Container + NFO/MEDIAINFO + Filter reason -->
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + tags (HYBRID, REPACK, NFO, MEDIAINFO) + Container + Filter reason -->
         <control type="label">
           <left>20</left><top>34</top><width>100</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(resolution)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>120</left><top>34</top><width>200</width><height>26</height>
+          <left>120</left><top>34</top><width>170</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hdr)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>320</left><top>34</top><width>150</width><height>26</height>
+          <left>294</left><top>34</top><width>100</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(codec)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>470</left><top>34</top><width>250</width><height>26</height>
+          <left>398</left><top>34</top><width>240</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(audio)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>720</left><top>34</top><width>150</width><height>26</height>
+          <left>642</left><top>34</top><width>110</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>870</left><top>34</top><width>112</width><height>26</height>
+          <left>756</left><top>34</top><width>336</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
-          <label>$INFO[ListItem.Property(hybrid)]</label><aligny>center</aligny>
-        </control>
-        <control type="label">
-          <left>986</left><top>34</top><width>106</width><height>26</height>
-          <font>font12</font><textcolor>FFFFFFFF</textcolor>
-          <label>$INFO[ListItem.Property(repack)]</label><aligny>center</aligny>
+          <label>$INFO[ListItem.Property(tags)]</label><aligny>center</aligny>
         </control>
         <control type="label">
           <left>1096</left><top>34</top><width>80</width><height>26</height>
@@ -167,12 +162,7 @@
           <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>1180</left><top>34</top><width>200</width><height>26</height>
-          <font>font12</font><textcolor>FFFFFFFF</textcolor>
-          <label>$INFO[ListItem.Property(docs)]</label><aligny>center</aligny>
-        </control>
-        <control type="label">
-          <left>1384</left><top>34</top><width>516</width><height>26</height>
+          <left>1180</left><top>34</top><width>400</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
         </control>
@@ -249,7 +239,7 @@
           <scroll>true</scroll>
         </control>
 
-        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + REPACK + Container + NFO/MEDIAINFO + Filter reason -->
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + tags (HYBRID, REPACK, NFO, MEDIAINFO) + Container + Filter reason -->
         <control type="label">
           <left>20</left><top>34</top><width>100</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
@@ -257,39 +247,33 @@
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>120</left><top>34</top><width>200</width><height>26</height>
+          <left>120</left><top>34</top><width>170</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hdr)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>320</left><top>34</top><width>150</width><height>26</height>
+          <left>294</left><top>34</top><width>100</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(codec)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>470</left><top>34</top><width>250</width><height>26</height>
+          <left>398</left><top>34</top><width>240</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(audio)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>720</left><top>34</top><width>150</width><height>26</height>
+          <left>642</left><top>34</top><width>110</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>870</left><top>34</top><width>112</width><height>26</height>
+          <left>756</left><top>34</top><width>336</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
-          <label>$INFO[ListItem.Property(hybrid)]</label><aligny>center</aligny>
-          <scroll>true</scroll>
-        </control>
-        <control type="label">
-          <left>986</left><top>34</top><width>106</width><height>26</height>
-          <font>font12</font><textcolor>FFFFFFFF</textcolor>
-          <label>$INFO[ListItem.Property(repack)]</label><aligny>center</aligny>
+          <label>$INFO[ListItem.Property(tags)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
@@ -299,13 +283,7 @@
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>1180</left><top>34</top><width>200</width><height>26</height>
-          <font>font12</font><textcolor>FFFFFFFF</textcolor>
-          <label>$INFO[ListItem.Property(docs)]</label><aligny>center</aligny>
-          <scroll>true</scroll>
-        </control>
-        <control type="label">
-          <left>1384</left><top>34</top><width>516</width><height>26</height>
+          <left>1180</left><top>34</top><width>400</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
           <scroll>true</scroll>
