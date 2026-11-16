@@ -296,8 +296,11 @@ class Session:  # pylint: disable=too-many-instance-attributes,too-many-public-m
         for closer in closers:
             try:
                 closer()
-            except Exception:  # pylint: disable=broad-except
-                pass
+            except Exception as error:  # pylint: disable=broad-except
+                xbmc.log(
+                    "{}: search progress close step failed: {}".format(LOG_TAG, error),
+                    xbmc.LOGDEBUG,
+                )
 
     def cancel(self):
         """Note that the viewer asked to stop."""

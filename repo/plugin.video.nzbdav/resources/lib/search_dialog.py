@@ -68,6 +68,16 @@ def log_path():
     return os.path.join(folder, "kodi.log")
 
 
+def _debug(what, error):
+    """Log a window step that failed; the search goes on without it."""
+    xbmc.log(
+        "{}: search progress window: {} failed: {}".format(
+            search_progress.LOG_TAG, what, error
+        ),
+        xbmc.LOGDEBUG,
+    )
+
+
 def _format_elapsed(seconds):
     seconds = max(0, int(seconds))
     return "{}:{:02d}".format(seconds // 60, seconds % 60)
@@ -271,15 +281,15 @@ class _Painter:
             self._closed = True
         try:
             self._surface.close()
-        except Exception:  # pylint: disable=broad-except
-            pass
+        except Exception as error:  # pylint: disable=broad-except
+            _debug("closing", error)
         try:
             # A Cancel pressed after the last tick, up to the close itself,
             # still counts: the caller checks the session once it is closed.
             if self._surface.cancel_requested() is True:
                 self._session.cancel()
-        except Exception:  # pylint: disable=broad-except
-            pass
+        except Exception as error:  # pylint: disable=broad-except
+            _debug("reading Cancel on close", error)
 
 
 def _open_window(session):
@@ -290,8 +300,8 @@ def _open_window(session):
         # A half-opened window must not outlive the failure.
         try:
             window.close()
-        except Exception:  # pylint: disable=broad-except
-            pass
+        except Exception as error:  # pylint: disable=broad-except
+            _debug("closing a half-opened window", error)
         raise
     return window
 
@@ -336,7 +346,7 @@ def open_progress(heading, detailed=True):
         session.on_close(painter.close)
         try:
             painter.start()
-        except Exception:  # pylint: disable=broad-except
+        except Exception as error:  # pylint: disable=broad-except
             # No thread to draw with: leave the first frame up until close.
-            pass
+            _debug("starting the drawing thread", error)
     return search_progress.activate(session)

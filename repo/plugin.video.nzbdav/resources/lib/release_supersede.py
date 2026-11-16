@@ -26,6 +26,8 @@ and a REPACK2 beside a REPACK is left alone: no count is kept, so the two
 read as one release already.
 """
 
+import xbmc
+
 from resources.lib.release_display import PROPER_LABEL, REPACK_LABEL
 
 _REVISION_FLAGS = ("repack", "proper")
@@ -106,6 +108,18 @@ def _bucket_key(row):
     )
 
 
+def _skipped(what, error):
+    """Log a row or bucket left out because it could not be read.
+
+    Leaving it out is the fail-closed answer: nothing is struck through on
+    a guess. The reason goes to the debug log instead of being dropped.
+    """
+    xbmc.log(
+        "NeNeTeePee-Stream-Kodi: REPACK check skipped {}: {}".format(what, error),
+        xbmc.LOGDEBUG,
+    )
+
+
 def _candidates(rows):
     """``(row, tag)`` for the rows of ``rows`` that can take part: readable,
     not synthetic, and either a replacement (``tag`` is its label) or plain
@@ -121,8 +135,8 @@ def _candidates(rows):
             tag = _certain_tag(row, meta)
             if tag or not revision_label(meta):
                 out.append((row, tag))
-        except Exception:  # pylint: disable=broad-except
-            continue
+        except Exception as error:  # pylint: disable=broad-except
+            _skipped("an unreadable row", error)
     return out
 
 
@@ -166,8 +180,9 @@ def superseded_rows(rows):
     for row, tag in candidates:
         try:
             key = _bucket_key(row)
-        except Exception:  # pylint: disable=broad-except
-            continue
+        except Exception as error:  # pylint: disable=broad-except
+            _skipped("a row with no release key", error)
+            key = None
         if key is None:
             continue
         plain, revised = buckets.setdefault(key, ([], []))
@@ -181,6 +196,6 @@ def superseded_rows(rows):
             continue
         try:
             out.update(_replaced_in(plain, revised))
-        except Exception:  # pylint: disable=broad-except
-            continue
+        except Exception as error:  # pylint: disable=broad-except
+            _skipped("a release whose copies could not be compared", error)
     return out
