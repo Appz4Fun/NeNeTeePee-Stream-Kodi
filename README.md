@@ -164,6 +164,11 @@ Full walkthrough:
   `Movie (2024) [Remux-2160p][HYBRID][DV HDR10+][TrueHD Atmos 7.1][HEVC]-GROUP`,
   whatever the indexer sent. HYBRID and REPACK releases get their own colored
   tags, and a release its own REPACK replaces is struck through.
+- **An NFO and MediaInfo viewer in the picker**: Left or Right on a release
+  shows its NFO and MediaInfo over the list, in a terminal font, one tab per
+  unique text with every indexer that carries it. Under the text, what it
+  says of the release is marked as confirming the name or as new. Rows carry
+  `NFO` and `MEDIAINFO` tags for what there is to open.
 - **Exact season-pack playback and reuse**: completed multi-episode downloads
   play the requested episode instead of the largest file, then appear as an
   already-downloaded pack for later episodes from that same backend job.
