@@ -190,9 +190,9 @@ def test_the_page_follows_the_screen():
         "rows": 46,
         "pixels": 1.0,
     }
-    # Twice the pixels: the same page, drawn twice as fine.
+    # Twice the pixels: one font pixel each, twice the page.
     four_k = nfo_viewer.geometry(3840, 2160)
-    assert (four_k["scale"], four_k["columns"], four_k["rows"]) == (2, 160, 46)
+    assert (four_k["scale"], four_k["columns"], four_k["rows"]) == (1, 320, 92)
     # In between and below: one font pixel per pixel, 80 columns at least.
     assert nfo_viewer.geometry(2560, 1440)["rows"] == 61
     small = nfo_viewer.geometry(1280, 720)

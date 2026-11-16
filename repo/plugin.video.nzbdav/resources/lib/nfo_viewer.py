@@ -144,9 +144,8 @@ def geometry(screen_width, screen_height):
     ``{"scale", "columns", "rows", "pixels"}``: every font pixel is ``scale``
     screen pixels, a page is ``columns`` by ``rows`` characters, and
     ``pixels`` is how many screen pixels one window coordinate is. The scale
-    is one font pixel per pixel of a 1080-line screen, so the text is as
-    large on a 4K screen as on a 1080p one, about the size of the skin's
-    small text, and a whole NFO mostly fits on one page.
+    is one font pixel per screen pixel up to 4K, so the text is as small as
+    the font draws cleanly and a whole NFO mostly fits on one page.
     """
     try:
         pixels = min(float(screen_width) / 1920.0, float(screen_height) / 1080.0)
@@ -156,9 +155,9 @@ def geometry(screen_width, screen_height):
         pixels = 1.0
     width = int(_TEXT_WIDTH * pixels + 0.001)
     height = int(_TEXT_HEIGHT * pixels + 0.001)
-    # One font pixel per GUI pixel at 1080 lines: the size of a skin's own
-    # small text. Never larger than still shows an NFO's 80 columns.
-    scale = min(int(pixels + 0.5), width // (_NFO_COLUMNS * text_image.GLYPH_WIDTH))
+    # As small as the font draws cleanly: one font pixel per screen pixel,
+    # two from 5K up. Never larger than still shows an NFO's 80 columns.
+    scale = min(int(pixels / 2.5) + 1, width // (_NFO_COLUMNS * text_image.GLYPH_WIDTH))
     scale = min(text_image.MAX_SCALE, max(1, scale))
     return {
         "scale": scale,
