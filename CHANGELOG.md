@@ -82,17 +82,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Listings with the same exact size in bytes are one upload, and take one
       set of tags, when they name the same film or episode, or when one name
       is the start of the other and both were posted within two minutes. The
-      tags come from the listing whose group the rest of the results know
-      best, so `-NTb` wins over a reposter's `-Obfuscated`. A size that is a
-      round number of megabytes is ignored.
+      upload gets every tag any of its names states, and the group the rest
+      of the results know best, so `-NTb` wins over a reposter's
+      `-Obfuscated`. A size an indexer rounded is ignored.
     - A trailing word after a language (`...AAC.7.1.Japanese.Tigole`) is the
       group when two or more other listings of the search carry it as theirs,
       and a library manager's file name
       (`Show - S01E02 - Title[WEBDL-1080p.AC3.h264.EDITH]`) is read from its
       bracketed tags.
 
-  On those 23 searches the picker went from 8,450 rows to 6,489, and uploads
-  shown as two or more rows from 611 to 9.
+  On those 23 searches the picker went from 8,450 rows to 6,494, and uploads
+  shown as two or more rows from 611 to 7.
 
 - **A backup that holds your pick's own files is sent first, and a pack under
   the release's name is not sent** (NZBGet backend). An NZB gives every
@@ -100,10 +100,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same order. While it reads a fetched NZB's Message-IDs the add-on now
   gathers those sizes too. A backup whose matching files make up 90% of the
   smaller posting's bytes holds the same files and goes ahead of the other
-  backups; one that holds the pick's files and is 1.35 times its size or more
-  is a pack (a season listed as one episode) and is left out, counted in the
-  dialog as `1 pack under this name`. A posting cut into articles of one
-  fixed size says nothing and is sent as before.
+  backups (sent first, and given the highest backup score on a server that
+  fails over by score); one that holds the pick's files, is 1.35 times its
+  size or more and whose files name two or more episodes is a pack (a season
+  listed as one episode) and is left out, counted in the dialog as
+  `1 pack under this name`. A posting cut into articles of one fixed size
+  says nothing and is sent as before.
 
 - **A search progress window replaces the corner spinner between play and the
   release list.** It follows five stages live: the title with its season,
@@ -280,7 +282,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the development machine, and the slowest from 454 ms to 90 ms.
 - **Every listing of a release is ranked by one copy count**, the count its
   picker row shows. Two spellings of one name could be ranked with 25 and 26
-  copies, and a name with no year could count the copies of two shows.
+  copies, and a name with no year could count the copies of two shows. A
+  name that fits two releases now goes with the one more indexers list, and
+  the picker rows no longer depend on the order the results arrived in.
 - **An oddly sized copy is measured against the rows the picker lists with
   it**, where the size check kept a looser grouping of its own.
 

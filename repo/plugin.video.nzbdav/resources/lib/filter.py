@@ -672,7 +672,11 @@ def _unify_name_forms(rows):
     for spellings in forms.values():
         if len(spellings) < 2:
             continue
-        best = max(spellings.values(), key=lambda same: _parse_detail(same[0]["_meta"]))
+        # Equal detail: the same spelling wins whatever order the rows are in.
+        best = max(
+            spellings.values(),
+            key=lambda same: (_parse_detail(same[0]["_meta"]), same[0]["title"]),
+        )
         best_meta = best[0]["_meta"]
         for same in spellings.values():
             if same is best or _parses_agree(same[0]["_meta"], best_meta):

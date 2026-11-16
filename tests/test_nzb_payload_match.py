@@ -76,16 +76,10 @@ def test_the_scan_gives_each_files_bytes_signature_and_repair_flag():
     found = nzb_fingerprint_scan.scan_fingerprint(io.BytesIO(_nzb(files)), sizes)
 
     assert found is not nzb_fingerprint_scan.UNUSUAL and len(found) == 121
-    assert [total for total, _signature, _par2 in sizes.files] == [
-        sum(one) for _subject, one in files
-    ]
-    assert [par2 for _total, _signature, par2 in sizes.files] == [
-        False,
-        True,
-        False,
-        False,
-    ]
-    signatures = [signature for _total, signature, _par2 in sizes.files]
+    assert [one[0] for one in sizes.files] == [sum(one) for _subject, one in files]
+    assert [one[2] for one in sizes.files] == [False, True, False, False]
+    assert [one[3] for one in sizes.files] == [None] * 4
+    signatures = [one[1] for one in sizes.files]
     # One size on most segments, or too few segments, identifies nothing.
     assert signatures[0] and signatures[1] and signatures[2:] == [None, None]
     assert signatures[0] != signatures[1]
@@ -101,6 +95,21 @@ def test_the_parser_walk_reads_the_same_sizes_as_the_fast_scan(monkeypatch):
     # A file split across the reader's chunks is still one file.
     monkeypatch.setattr(nzb_fingerprint_scan, "_CHUNK_BYTES", 4096)
     assert posting_fingerprint(body).payload == fast.payload
+
+
+def test_both_readers_agree_on_odd_subjects_and_sizes():
+    # ".par2" in the poster is not a repair file; a size that is not plain
+    # digits makes its file say nothing, in the fast read and in the walk.
+    body = _nzb(EPISODE + [("S01E02.mkv", _sizes(5)), ("x.par2", _sizes(9))])
+    body = body.replace(b'poster="p"', b'poster="tool.par2@example.com"')
+    odd = body.replace(b'bytes="', b'bytes=" ', 1)
+    for one in (body, odd):
+        fast = posting_fingerprint(one)
+        walked = _walked_fingerprint(io.BytesIO(one))
+        assert fast.payload == walked.payload and fast.payload is not None
+        assert fast.payload[2] == frozenset(((1, 1), (1, 2)))
+    assert _payload(odd)[0] < _payload(body)[0]
+    assert len(_payload(odd)[1]) == len(_payload(body)[1]) - 1
 
 
 def test_a_fingerprint_without_usable_sizes_has_no_payload():
@@ -144,6 +153,22 @@ def test_a_pack_holds_the_episode_and_much_more():
     extras = _payload(_nzb(EPISODE + [("sample.mkv", _sizes(6, 20))], post="x"))
     assert not holds_more(extras, episode) and same_files(extras, episode)
     assert not holds_more(pack, None) and not holds_more(None, episode)
+
+
+def test_a_complete_repost_of_a_cut_short_pick_is_not_a_pack():
+    volumes = [("show.s01e01.r{:02d}".format(n), _sizes(n, 60)) for n in range(10)]
+    cut_short = _payload(_nzb(volumes[:6], post="pick"))
+    complete = _payload(_nzb(volumes, post="repost"))
+
+    # Larger than the pick and holding all of it, but one episode: the
+    # copy that will play when the pick does not.
+    assert complete[0] > 1.35 * cut_short[0]
+    assert not holds_more(complete, cut_short)
+    # The same files listed twice in one NZB are not a pack either.
+    assert not holds_more(_payload(_nzb(volumes[:6] * 2, post="x")), cut_short)
+    # Files that name no episode cannot show a pack.
+    plain = [("{:08x}".format(n), _sizes(n, 400)) for n in range(4)]
+    assert not holds_more(_payload(_nzb(plain)), _payload(_nzb(plain[:1], post="p")))
 
 
 @pytest.fixture(name="collect")
@@ -194,6 +219,40 @@ def test_the_fleet_sends_twins_first_and_leaves_a_pack_out(collect):
         "Not sent: 1 duplicate upload, 1 pack under this name"
     )
     assert dedup.report.found() == 6
+
+
+def test_the_scores_an_older_server_fails_over_by_follow_the_new_order():
+    importlib.import_module("resources.lib.nzbget_resolver")
+    from resources.lib.nzbget_fleet_run import _score_prepared
+    from resources.lib.nzbget_resolver_dupes import _twins_first
+
+    def rows():
+        pick = {"link": "p", "_is_pick": True, "score": 100}
+        one = {"link": "1", "score": 99}
+        twin = {"link": "2", "score": 98, "_same_files": True}
+        three = {"link": "3", "score": 97}
+        return pick, one, twin, three
+
+    pick, one, twin, three = rows()
+    ordered = [row for row, _h, _t in _twins_first([(r, None, None) for r in rows()])]
+    assert [row["link"] for row in ordered] == ["p", "2", "1", "3"]
+    assert [row["score"] for row in ordered] == [100, 99, 98, 97]
+
+    # Rows scored only after collection (a server that refused the bulk
+    # call): the twin is scored right behind the pick.
+    kept = [(row, None, None) for row in (pick, twin, one)]
+    _score_prepared({"pick_score": 500}, kept, [one, twin, three])
+    assert (pick["score"], twin["score"], one["score"], three["score"]) == (
+        500,
+        499,
+        498,
+        497,
+    )
+
+    # Rows without scores (the bulk call) are only reordered.
+    bare = [({"link": "p", "_is_pick": True}, None, None), ({"link": "1"}, None, None)]
+    assert [row for row, _h, _t in _twins_first(bare)] == [bare[0][0], bare[1][0]]
+    assert "score" not in bare[1][0]
 
 
 def test_a_pick_with_fixed_size_articles_changes_nothing(collect):

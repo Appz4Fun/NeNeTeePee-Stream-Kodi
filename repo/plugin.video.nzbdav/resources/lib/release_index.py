@@ -15,10 +15,15 @@ and ``group_of(row)`` is the group a row is in. The copy counts, the size
 check, the picker rows and the NZBGet backups all read that.
 
 How rows are grouped is what the picker has always done: a row joins the
-first group whose every member the rule accepts it against, in the order
-the rows are given. Every member, because the rule is not transitive: a
-name without a year matches both a 2005 and a 2023 show, which reject each
-other. Two things make that cheap without changing an answer:
+first group whose every member the rule accepts it against. Every member,
+because the rule is not transitive: a name without a year matches both a
+2005 and a 2023 show, which reject each other. Which of the two it joins
+used to depend on the order of the rows, so the copy count a release was
+ranked by (counted before ranking) could differ from its picker row
+(grouped after). Now the names of a bucket are placed in a fixed order,
+the one on the most rows first, and the grouping is the same for any
+order of the same rows. Two things make it cheap without changing an
+answer:
 
 * Rows can only be one release when they share an exact key: the parsed
   release profile, the title, and the episode. Each key is its own bucket,
@@ -75,76 +80,94 @@ def build(rows):
 
     Season packs (``_season_pack`` rows) are grouped among themselves and
     never with an episode, as the rule's callers always held.
+
+    The grouping does not depend on the order of ``rows``: the list is
+    grouped before it is ranked (for the copy counts) and again after (for
+    the picker and the backups), and both must come to the same releases.
     """
-    groups = []
+    singles = []
     buckets = {}
     by_name = {}
-    for row in rows:
+    for at, row in enumerate(rows):
         keys = _keys_once_per_name(row, by_name)
         if keys is None:
-            groups.append([row])
+            singles.append((at, [row]))
             continue
         exact, signature = keys
         bucket = buckets.get(exact)
         if bucket is None:
-            bucket = buckets[exact] = _Bucket(exact[0] is not _NO_GROUP)
-        group = bucket.group_for(signature, row)
-        if not group:
-            groups.append(group)
-        group.append(row)
-    return ReleaseIndex(groups)
+            bucket = buckets[exact] = {}
+        bucket.setdefault(signature, []).append((at, row))
+    placed = singles
+    for exact, bucket in buckets.items():
+        placed.extend(_bucket_groups(exact[0] is not _NO_GROUP, bucket))
+    placed.sort(key=_position)
+    return ReleaseIndex([group for _at, group in placed])
 
 
-class _Bucket:  # pylint: disable=too-few-public-methods
-    """The groups among rows of one exact key (see ``_keys``).
+def _position(placed):
+    """Sort key: where a row, or a release's first row, stands in the list."""
+    return placed[0]
 
-    ``named`` rows are grouped by the release rule. Rows with no group
+
+def _bucket_groups(named, bucket):
+    """The releases among the rows of one exact key (see ``_keys``).
+
+    ``bucket`` maps each signature to its ``(position, row)`` pairs, in list
+    order. Returns ``(position of the first row, rows in list order)`` for
+    each release.
+
+    A signature joins the first release whose every member it is accepted
+    against. Which one is "first" matters only where the rule is not
+    transitive: a name with no year fits both the 2005 and the 2023 show.
+    The signatures are therefore taken in a fixed order, the one on the
+    most rows first (then by the signature itself), so the name with no
+    year goes with the year more indexers list, however ``rows`` were
+    ordered.
+
+    ``named`` rows are compared by the release rule. Rows with no group
     share a name already (it is their key) and only a named container
     separates them.
     """
-
-    __slots__ = ("_named", "_placed", "_groups")
-
-    def __init__(self, named):
-        self._named = named
-        # signature -> [its group, its first row, whether two rows of it group]
-        self._placed = {}
-        # [(group, [(signature, a row of it), ...])], in the order they began
-        self._groups = []
-
-    def group_for(self, signature, row):
-        """The group ``row`` goes to; an empty list is a group just begun."""
-        placed = self._placed.get(signature)
-        if placed is None:
-            group = self._place(signature, row)
-            self._placed[signature] = [group, row, None]
-            return group
-        if placed[2] is None:
-            # The second row of a signature: the rule says once whether a
-            # release name groups with itself (it does, unless the rule
-            # cannot read it), and the rest follow.
-            placed[2] = not self._named or bool(
-                release_match.same_release(placed[1], row)
-            )
-        return placed[0] if placed[2] else []
-
-    def _place(self, signature, row):
-        for group, members in self._groups:
-            if all(
-                self._accepts(known, member, signature, row)
-                for known, member in members
+    order = sorted(
+        bucket.items(), key=lambda item: (-len(item[1]), _orderable(item[0]))
+    )
+    releases = []  # [[(position, row), ...], [(signature, a row of it), ...]]
+    for signature, listed in order:
+        first = listed[0][1]
+        if named and len(listed) > 1:
+            # The rule says once whether a release name groups with itself
+            # (it does, unless the rule cannot read it).
+            if not release_match.same_release(first, listed[1][1]):
+                releases.extend([[one], ()] for one in listed)
+                continue
+        for members, examples in releases:
+            if examples and all(
+                _accepts(named, known, example, signature, first)
+                for known, example in examples
             ):
-                members.append((signature, row))
-                return group
-        group = []
-        self._groups.append((group, [(signature, row)]))
-        return group
+                members.extend(listed)
+                examples.append((signature, first))
+                break
+        else:
+            releases.append([list(listed), [(signature, first)]])
+    groups = []
+    for members, _examples in releases:
+        members.sort(key=_position)
+        groups.append((members[0][0], [row for _at, row in members]))
+    return groups
 
-    def _accepts(self, known, member, signature, row):
-        if not self._named:
-            # The signature is the container: two named ones must be equal.
-            return not (known and signature and known != signature)
-        return _may_match(known, signature) and release_match.same_release(member, row)
+
+def _orderable(signature):
+    """A signature as a value that sorts against any other signature."""
+    return repr(signature)
+
+
+def _accepts(named, known, member, signature, row):
+    if not named:
+        # The signature is the container: two named ones must be equal.
+        return not (known and signature and known != signature)
+    return _may_match(known, signature) and release_match.same_release(member, row)
 
 
 def _may_match(left, right):

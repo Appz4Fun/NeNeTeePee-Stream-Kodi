@@ -85,16 +85,22 @@ class FileSizes:
     A posting's files can be told from another posting's without reading an
     article: a file's segments have the sizes its poster's tool gave them,
     and a repost of the same files gives the same sizes in the same order.
-    ``files`` holds one ``(bytes, signature, is_par2)`` per ``<file>``:
+    ``files`` holds one ``(bytes, signature, is_par2, episode)`` per
+    ``<file>``:
 
     * ``bytes``: the sum of its segments' sizes;
     * ``signature``: a value equal for files with the same segment sizes in
       the same order, or None when the sizes say too little: fewer than
-      ``MIN_SEGMENTS``, a segment without a size, or one size on most
-      segments (a tool that cuts every article to a fixed size gives every
-      file of that length the same sizes);
+      ``MIN_SEGMENTS``, a segment without a readable size, or one size on
+      most segments (a tool that cuts every article to a fixed size gives
+      every file of that length the same sizes);
     * ``is_par2``: the file's subject names a ``.par2`` file. Repair data
-      differs between two posts of the same files.
+      differs between two posts of the same files;
+    * ``episode``: the ``(season, episode)`` its subject names ("S01E02"),
+      or None.
+
+    Memory is four bytes per segment of the file being read, and nothing
+    of a file once it has ended.
     """
 
     MIN_SEGMENTS = 12
@@ -104,40 +110,56 @@ class FileSizes:
         self.files = []
         self._sizes = None
         self._segments = 0
-        self._par2 = False
+        self._unread = False
+        self._subject = b""
 
     def open_file(self, subject):
-        """A ``<file>`` begins; ``subject`` is its subject or its whole tag."""
-        self._sizes = []
+        """A ``<file>`` begins; ``subject`` is its subject, as bytes."""
+        self._sizes = array("I")
         self._segments = 0
-        self._par2 = b".par2" in subject.lower()
+        self._unread = False
+        self._subject = bytes(subject or b"").lower()
 
     def add(self, sizes, segments):
-        """``sizes`` (digits, as bytes) read from ``segments`` segments."""
-        if self._sizes is not None:
-            self._sizes.extend(sizes)
-            self._segments += segments
+        """``sizes`` (runs of digits, as bytes) read from ``segments`` segments."""
+        if self._sizes is None:
+            return
+        self._segments += segments
+        try:
+            self._sizes.extend(map(int, sizes))
+        except (ValueError, OverflowError):
+            self._unread = True
 
     def close_file(self):
         """The ``<file>`` ended: record it."""
         sizes, self._sizes = self._sizes, None
         if sizes is None:
             return
-        try:
-            total = sum(map(int, sizes))
-        except ValueError:
-            return
+        total = sum(sizes)
         signature = None
-        if len(sizes) == self._segments and len(sizes) >= self.MIN_SEGMENTS:
+        whole = not self._unread and len(sizes) == self._segments
+        if whole and len(sizes) >= self.MIN_SEGMENTS:
             body = sizes[:-1]
             most = collections.Counter(body).most_common(1)[0][1]
             if most < self.MOST * len(body):
-                signature = (len(sizes), total, zlib.crc32(b",".join(sizes)))
-        self.files.append((total, signature, self._par2))
+                signature = (len(sizes), total, zlib.crc32(sizes.tobytes()))
+        named = _EPISODE.search(self._subject)
+        episode = (int(named.group(1)), int(named.group(2))) if named else None
+        self.files.append((total, signature, b".par2" in self._subject, episode))
 
 
 # A segment's size attribute, inside a block of segments.
 _BYTES = re.compile(rb"""\sbytes\s*=\s*["'](\d+)["']""")
+# A file's subject attribute, inside its opening tag.
+_SUBJECT = re.compile(rb"""\ssubject\s*=\s*(?:"([^"]*)"|'([^']*)')""")
+# The episode a file's (lower-cased) subject names.
+_EPISODE = re.compile(rb"(?<![a-z0-9])s(\d{1,2})[ ._-]?e(\d{1,3})(?![0-9])")
+
+
+def file_subject(tag):
+    """The ``subject`` of a ``<file ...>`` opening tag, as bytes, or b""."""
+    found = _SUBJECT.search(tag)
+    return (found.group(1) or found.group(2) or b"") if found else b""
 
 
 def scan_fingerprint(stream, sizes=None):
@@ -146,7 +168,8 @@ def scan_fingerprint(stream, sizes=None):
     ``stream`` is a binary file object positioned at the start. The result is
     the ``array('I')`` the XML walk would build, in document order. Memory is
     one chunk plus the unfinished element carried over, never the document.
-    ``sizes`` is an optional ``FileSizes`` to fill in the same pass.
+    ``sizes`` is an optional ``FileSizes`` to fill in the same pass; it adds
+    four bytes per segment of the file being read.
     """
     hashes = array("I")
     stack = []
@@ -273,7 +296,7 @@ def _outer(region, stack, sizes=None):
             if match.group(1):
                 sizes.close_file()
             else:
-                sizes.open_file(match.group(0))
+                sizes.open_file(file_subject(match.group(0)))
     return tags == region.count(b"<")
 
 

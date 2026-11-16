@@ -21,9 +21,10 @@ backup, so this module collapses them before submission:
   every segment, and a repost of the same files gives the same sizes in the
   same order (``posting_payload``). Two postings whose matching files make
   up 90% of the smaller one's bytes hold the same files. A backup that is
-  such a twin of the pick is sent ahead of the other backups; a backup that
-  holds the pick's files and a good deal more is a pack listed under the
-  release's name, and is not sent as a copy of it.
+  such a twin of the pick goes ahead of the other backups; a backup that
+  holds the pick's files, is a good deal larger and names two or more
+  episodes is a pack listed under the release's name, and is not sent as a
+  copy of it.
 
 Release identity (``release_match.same_release``) uses size only when neither
 row names a group: postings of one release can differ by GBs.
@@ -192,20 +193,26 @@ _PACK_SIZE_FACTOR = 1.35
 def posting_payload(files):
     """What ``nzb_fingerprint_scan.FileSizes.files`` says of a posting.
 
-    ``(bytes, {signature: bytes})``: the bytes of every file that is not
-    repair data, and of each file whose segment sizes identify it, the bytes
-    under its signature (two equal files add up). None when no file can be
-    identified, as for a posting cut into articles of one fixed size.
+    ``(bytes, {signature: bytes}, episodes)``: the bytes of every file that
+    is not repair data; of each file whose segment sizes identify it, the
+    bytes under its signature (two equal files add up); and the episodes
+    its files' subjects name. None when no file can be identified, as for a
+    posting cut into articles of one fixed size.
     """
     total = 0
     known = {}
-    for size, signature, is_par2 in files or ():
+    episodes = set()
+    for size, signature, is_par2, episode in files or ():
         if is_par2:
             continue
         total += size
         if signature is not None:
             known[signature] = known.get(signature, 0) + size
-    return (total, known) if known and total > 0 else None
+        if episode is not None:
+            episodes.add(episode)
+    if not known or total <= 0:
+        return None
+    return total, known, frozenset(episodes)
 
 
 def _shared_bytes(left, right):
@@ -234,16 +241,20 @@ def same_files(left, right):
 
 
 def holds_more(posting, pick):
-    """Whether ``posting`` holds ``pick``'s files and a good deal besides.
+    """Whether ``posting`` is a pack that holds ``pick`` among other episodes.
 
     A season pack listed under one episode's name: nearly all of the pick's
-    bytes are in it, and it is ``_PACK_SIZE_FACTOR`` times the pick's size
-    or more. False when either payload is unknown.
+    bytes are in it, it is ``_PACK_SIZE_FACTOR`` times the pick's size or
+    more, and its files name two or more episodes. Size alone does not make
+    a pack: a pick whose own NZB was cut short is smaller than a complete
+    repost of the same files, and that repost is the copy to keep. False
+    when either payload is unknown.
     """
     if not posting or not pick:
         return False
     return (
-        posting[0] >= pick[0] * _PACK_SIZE_FACTOR
+        len(posting[2]) > 1
+        and posting[0] >= pick[0] * _PACK_SIZE_FACTOR
         and _shared_bytes(posting, pick) >= SAME_FILES_SHARE * pick[0]
     )
 
@@ -357,8 +368,10 @@ def _walked_fingerprint(path):
                 msgid = (elem.text or "").strip().strip("<>").lower()
                 if msgid:
                     hashes.append(zlib.crc32(msgid.encode("utf-8")))
-                size = str(elem.get("bytes") or "").strip()
-                sizes.add([size.encode("ascii", "replace")] if size else [], 1)
+                # Digits and nothing else, as the fast read takes them.
+                size = str(elem.get("bytes") or "")
+                digits = size.isascii() and size.isdigit()
+                sizes.add([size.encode("ascii")] if digits else [], 1)
             elif name == "file" and names == _FILE_PATH[:-1]:
                 sizes.close_file()
             if stack:
