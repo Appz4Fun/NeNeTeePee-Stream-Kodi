@@ -13,9 +13,10 @@ This store keeps ``name -> filter.parse_title_metadata(name)`` in one file,
 ``parsed_names.json`` in the add-on's profile folder, beside the search
 cache's folder. A parse depends only on the
 name and on the add-on's code, so the file carries the code's fingerprint
-(``cache._parser_stamp``) and is thrown away when the add-on changes. It is
+(``code_stamp``) and is thrown away when the add-on changes. It is
 capped at ``MAX_NAMES`` names (about 600 bytes each); past that the names
-used least recently go first.
+used least recently go first. Writing happens on a background thread, the
+serializing included, so the picker does not wait for it.
 
 What a later step adds to a row's parse (another spelling's details, the
 group of the upload it is, an NFO's audio) is not stored here: only what
@@ -31,15 +32,20 @@ import threading
 import time
 
 import xbmc
+import xbmcvfs
+
+from resources.lib.code_stamp import code_stamp
 
 MAX_NAMES = 8000
 _FILE_NAME = "parsed_names.json"
+# The add-on profile folder, as ``cache._PROFILE_PATH``.
+_PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
 _VERSION = 1
 
 _LOCK = threading.Lock()
 # name -> [day last used, parse], filled from the file on first use.
 _NAMES = {}
-_STATE = {"loaded": False, "changed": False, "stamp": None}
+_STATE = {"loaded": False, "changed": False, "stamp": None, "writes": 0, "written": 0}
 
 
 def _today():
@@ -52,14 +58,14 @@ def _store_path():
 
 
 def _profile_store_path():
-    """Where the file goes (``_store_path`` is the seam tests replace)."""
-    from resources.lib import cache
+    """Where the file goes (``_store_path`` is the seam tests replace).
 
+    The add-on's profile folder, beside the search cache's own folder:
+    inside it, the cache would count the file as a search and evict it.
+    """
     try:
-        # The add-on's profile folder, beside the search cache's own folder:
-        # inside it, the cache would count the file as a search and evict it.
-        return os.path.join(os.path.dirname(cache._get_cache_dir()), _FILE_NAME)
-    except (OSError, TypeError, ValueError):
+        return os.path.join(xbmcvfs.translatePath(_PROFILE_PATH), _FILE_NAME)
+    except (OSError, RuntimeError, TypeError, ValueError):
         return None
 
 
@@ -68,9 +74,7 @@ def _load():
     if _STATE["loaded"]:
         return
     _STATE["loaded"] = True
-    from resources.lib import cache
-
-    _STATE["stamp"] = cache._parser_stamp()
+    _STATE["stamp"] = code_stamp()
     path = _store_path()
     if path is None or _STATE["stamp"] is None:
         return
@@ -106,8 +110,11 @@ def parsed(name, parse):
     """
     with _LOCK:
         _load()
-        entry = _NAMES.get(name)
+        entry = _NAMES.pop(name, None)
         if entry is not None:
+            # Kept in order of use, the most recent last: that order is
+            # what is kept when the store is full, and what is written.
+            _NAMES[name] = entry
             if entry[0] != _today():
                 entry[0] = _today()
                 _STATE["changed"] = True
@@ -131,47 +138,70 @@ def save_soon():
         if not _STATE["changed"] or _STATE["stamp"] is None:
             return
         _STATE["changed"] = False
-        keep = sorted(_NAMES.items(), key=lambda item: item[1][0], reverse=True)
-        keep = keep[:MAX_NAMES]
-        if len(keep) < len(_NAMES):
-            _NAMES.clear()
-            _NAMES.update(keep)
-        data = {
-            "v": _VERSION,
-            "parser": _STATE["stamp"],
-            "names": dict(keep),
-        }
-        text = json.dumps(data, separators=(",", ":"))
+        # Oldest use first: past the cap, those go.
+        while len(_NAMES) > MAX_NAMES:
+            del _NAMES[next(iter(_NAMES))]
+        path = _store_path()
+        if path is None:
+            return
+        # A snapshot of the entries; their parses are never changed in place.
+        snapshot = (_STATE["stamp"], list(_NAMES.items()))
+        _STATE["writes"] += 1
+        number = _STATE["writes"]
     try:
         threading.Thread(
-            target=_write, args=(text,), name="nzbdav-parse-store", daemon=True
+            target=_write,
+            args=(path, snapshot, number),
+            name="nzbdav-parse-store",
+            daemon=True,
         ).start()
     except RuntimeError:
-        _write(text)
+        _write(path, snapshot, number)
 
 
-def _write(text):
-    path = _store_path()
-    if path is None:
-        return
-    tmp_path = path + ".tmp"
+def _write(path, snapshot, number):
+    """Write ``snapshot`` to ``path`` through a temporary file of its own.
+
+    ``number`` orders the writes of this run: one that finds a later write
+    already done leaves it, so an older snapshot never replaces a newer one.
+    Another Kodi run writing at the same time may still win; its names are
+    the ones kept then, and nothing is ever half written.
+    """
+    import tempfile
+
+    stamp, entries = snapshot
+    text = json.dumps(
+        {"v": _VERSION, "parser": stamp, "names": dict(entries)},
+        separators=(",", ":"),
+    )
+    tmp_path = None
     try:
-        with open(tmp_path, "w", encoding="utf-8") as handle:
-            handle.write(text)
-        os.replace(tmp_path, path)
+        handle, tmp_path = tempfile.mkstemp(
+            dir=os.path.dirname(path), prefix=".parsed_names-", suffix=".tmp"
+        )
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.write(text)
+        with _LOCK:
+            if number < _STATE["written"]:
+                return
+            os.replace(tmp_path, path)
+            _STATE["written"] = number
+            tmp_path = None
     except OSError as exc:
         xbmc.log(
             "NeNeTeePee-Stream-Kodi: parsed names not saved: {}".format(exc),
             xbmc.LOGDEBUG,
         )
-        try:
-            os.remove(tmp_path)
-        except OSError:
-            pass
+    finally:
+        if tmp_path is not None:
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
 
 
 def forget():
     """Drop what is held in memory, so the next use reads the file (tests)."""
     with _LOCK:
         _NAMES.clear()
-        _STATE.update(loaded=False, changed=False, stamp=None)
+        _STATE.update(loaded=False, changed=False, stamp=None, writes=0, written=0)

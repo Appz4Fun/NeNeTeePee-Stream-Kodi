@@ -54,6 +54,7 @@ files). A name with no group still never joins a release that has one.
 """
 
 import collections
+import threading
 
 from resources.lib import fallback_streams as _fs
 from resources.lib import release_match
@@ -99,6 +100,8 @@ class ReleaseIndex:  # pylint: disable=too-few-public-methods
 # The last few groupings made, for a list grouped again unchanged.
 _RECENT = collections.OrderedDict()
 _RECENT_KEPT = 4
+# Lists are filtered on worker threads too (``filter.filter_results``).
+_RECENT_LOCK = threading.Lock()
 
 
 def build(rows):
@@ -112,15 +115,20 @@ def build(rows):
     list's order.
     """
     key = _recent_key(rows)
-    earlier = _RECENT.get(key) if key is not None else None
+    earlier = None
+    if key is not None:
+        with _RECENT_LOCK:
+            earlier = _RECENT.get(key)
+            if earlier is not None:
+                _RECENT.move_to_end(key)
     if earlier is not None:
-        _RECENT.move_to_end(key)
         return _in_order(earlier, rows)
     index = _build(rows)
     if key is not None:
-        _RECENT[key] = index
-        while len(_RECENT) > _RECENT_KEPT:
-            _RECENT.popitem(last=False)
+        with _RECENT_LOCK:
+            _RECENT[key] = index
+            while len(_RECENT) > _RECENT_KEPT:
+                _RECENT.popitem(last=False)
     return index
 
 

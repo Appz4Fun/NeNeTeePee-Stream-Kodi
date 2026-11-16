@@ -83,12 +83,12 @@ def test_an_unreadable_file_or_folder_only_means_parsing_as_before():
 
 
 def test_the_store_keeps_the_names_used_most_recently():
-    with patch.object(parse_store, "MAX_NAMES", 2), patch.object(
-        parse_store, "_today", side_effect=[1, 2, 3]
-    ):
+    parse = filter_module.parse_title_metadata
+    with patch.object(parse_store, "MAX_NAMES", 2):
         for name in ("A.2001.1080p.WEB-GRP", "B.2002.1080p.WEB-GRP"):
-            parse_store.parsed(name, filter_module.parse_title_metadata)
-        parse_store.parsed("C.2003.1080p.WEB-GRP", filter_module.parse_title_metadata)
+            parse_store.parsed(name, parse)
+        parse_store.parsed("A.2001.1080p.WEB-GRP", parse)  # used again
+        parse_store.parsed("C.2003.1080p.WEB-GRP", parse)  # new, the same day
         with patch.object(parse_store, "_write") as write:
             parse_store.save_soon()
             for _ in range(100):
@@ -96,14 +96,32 @@ def test_the_store_keeps_the_names_used_most_recently():
                     break
                 time.sleep(0.01)
 
-    kept = json.loads(write.call_args.args[0])["names"]
-    assert sorted(kept) == ["B.2002.1080p.WEB-GRP", "C.2003.1080p.WEB-GRP"]
+    _path, (_stamp, entries), _number = write.call_args.args
+    assert [name for name, _entry in entries] == [
+        "A.2001.1080p.WEB-GRP",
+        "C.2003.1080p.WEB-GRP",
+    ]
 
 
-def test_the_file_sits_beside_the_search_cache_folder_not_in_it():
-    with patch.object(cache, "_get_cache_dir", return_value="/profile/cache"):
+def test_an_older_snapshot_never_replaces_a_newer_one(tmp_path):
+    path = str(tmp_path / "parsed_names.json")
+    parse_store._STATE["written"] = 0
+    parse_store._write(path, ("stamp", [("new", [1, {}])]), 2)
+    parse_store._write(path, ("stamp", [("old", [1, {}])]), 1)
+
+    with open(path, encoding="utf-8") as handle:
+        assert list(json.load(handle)["names"]) == ["new"]
+    assert sorted(os.listdir(tmp_path)) == ["parsed_names.json"]
+
+
+def test_the_file_sits_in_the_profile_folder_not_in_the_search_cache():
+    with patch.object(
+        parse_store.xbmcvfs, "translatePath", return_value="/profile"
+    ), patch.object(cache, "_get_cache_dir", return_value="/profile/cache"):
         assert parse_store._profile_store_path() == os.path.join(
             "/profile", "parsed_names.json"
         )
-    with patch.object(cache, "_get_cache_dir", side_effect=OSError("read-only")):
+    with patch.object(
+        parse_store.xbmcvfs, "translatePath", side_effect=RuntimeError("no profile")
+    ):
         assert parse_store._profile_store_path() is None
