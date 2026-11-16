@@ -436,10 +436,12 @@ which tag replaced it:
   and year or episode, edition, resolution, HDR, audio, channels, source,
   codec, HYBRID and release group, and every other field of the
   [same-release rule](nzbget-backend.md#what-counts-as-the-same-release).
-- The word has to be written as a tag: in capitals before the resolution and
-  source, with only other tags between, or anywhere after them. `Proper` in
-  an episode title or a guest's name, as in
-  `Show.S03E02.A.Proper.Send.Off.720p`, strikes nothing.
+- The word has to be written as a tag: in capitals, and either after the
+  resolution and source or before them with only other tags between. `Proper`
+  in an episode title or a guest's name, as in
+  `Show.S03E02.A.Proper.Send.Off.720p`, strikes nothing. A name written all
+  in one case can't be read by its capitals, so there the word is judged by
+  where it stands alone.
 - When the picker can't tell whether a release's own `Proper` or `Repack` is
   a tag, that release is never struck through either.
 - Another group's PROPER strikes nothing. It is a different encode, not the
@@ -453,7 +455,7 @@ which tag replaced it:
 flowchart TD
     A[A release in the view<br/>with no REPACK or PROPER tag] --> B{Has a release group?}
     B -->|no| KEEP[Shown as usual]
-    B -->|yes| C{Is a REPACK or PROPER<br/>from that group in the view?}
+    B -->|yes| C{Is a REPACK or PROPER from that group,<br/>with the word written as a tag, in the view?}
     C -->|no| KEEP
     C -->|yes| D{Same title and year or episode,<br/>edition, resolution, HDR, audio,<br/>channels, source, codec and HYBRID?}
     D -->|no| KEEP

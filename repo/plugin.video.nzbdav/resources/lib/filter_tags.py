@@ -481,21 +481,23 @@ def main_track_channels(title, audio, quality="", parsed=""):
 
 
 def _format_tags_start(name, anchor):
-    """Where the format tags of ``name`` begin, or -1: its resolution, else
-    its first source, codec, HDR or audio tag after the year or episode.
+    """``(position, is_resolution)``: where the format tags of ``name``
+    begin. Its resolution, else its first source, codec, HDR or audio tag
+    after the year or episode, else -1.
 
     The resolution comes first because an episode title can hold a word
-    that reads as one of the others ("Charlottes.Web", "Magnum.Opus").
+    that reads as one of the others ("Charlottes.Web", "Magnum.Opus"); a
+    name without one (an SD "HDTV.x264") has only those to go by.
     """
     resolution = _RESOLUTION.search(name, anchor.start())
     if resolution:
-        return resolution.start()
+        return resolution.start(), True
     starts = [
         match.start()
         for match in (pattern.search(name, anchor.end()) for pattern in _TECH_PATTERNS)
         if match
     ]
-    return min(starts) if starts else -1
+    return (min(starts) if starts else -1), False
 
 
 def _is_tag_word(word):
@@ -520,7 +522,7 @@ def _only_tags(text, drop_last):
     return all(_is_tag_word(word) for word in words)
 
 
-def _is_revision_tag(name, match, cut, plain_case):
+def _is_revision_tag(name, match, cut, sure_cut, one_case):
     """Whether a "repack" / "proper" in a name is the tag, not a title word.
 
     The parser flags the word anywhere, so "Show.S03E02.A.Proper.Send.Off"
@@ -528,21 +530,29 @@ def _is_revision_tag(name, match, cut, plain_case):
     is told from a title word like this:
 
     * Before the format tags it is written in capitals, as release names
-      write it, and only other tags stand between it and them. A name with
-      no capitals at all (``plain_case``) is taken as it comes.
+      write it, and only other tags stand between it and them.
     * After the format tags begin, capitals are enough. In another case
-      ("x264 Proper-GRP") only tags may follow it up to the group.
+      ("x264 Proper-GRP") only tags may follow it up to the group, and the
+      format tags must begin at a resolution (``sure_cut``): a title word
+      can read as a source ("Charlottes.Web.Proper.HDTV").
+
+    A name written all in one case (``one_case``) cannot be told by its
+    capitals, and is judged by position alone.
     """
-    word = match.group()
+    capitals = match.group().isupper() or one_case
     if cut != -1 and match.start() > cut:
-        return bool(
-            word.isupper() or plain_case or _only_tags(name[match.end() :], True)
-        )
-    if not (word.isupper() or plain_case):
+        return bool(capitals or (sure_cut and _only_tags(name[match.end() :], True)))
+    if not capitals:
         return False
     if cut == -1:
         return _only_tags(name[match.end() :], True)
     return _only_tags(name[match.end() : cut], False)
+
+
+# A release name is far shorter, and carries one or two of these words. The
+# limits keep a hostile name from costing more than a glance.
+_REVISION_NAME_LIMIT = 512
+_REVISION_WORD_LIMIT = 8
 
 
 def detect_revision(title):
@@ -550,10 +560,10 @@ def detect_revision(title):
 
     A group posts a REPACK (or RERIP), or a PROPER, to replace a release
     that had a fault. As with HYBRID, only a word after the year or episode
-    counts ("Proper.Villains.2019" has none), or directly before the
-    resolution of a name that has neither; and of those only one written as
-    a tag (``_is_revision_tag``). A name with both reads as a REPACK, the
-    later of the two.
+    counts ("Proper.Villains.2019" has none), or one before the resolution
+    of a name that has neither; and of those only one written as a tag
+    (``_is_revision_tag``). A name with both reads as a REPACK, the later of
+    the two.
 
     This errs toward "": the picker strikes another release through on the
     strength of it. The parser's own ``repack`` / ``proper`` flags are
@@ -561,18 +571,25 @@ def detect_revision(title):
     straight after an air date ("Show.2026.11.12.REPACK.1080p").
     """
     name = _MEDIA_EXTENSION.sub("", str(title or "").strip().strip('"'))
+    name = name[:_REVISION_NAME_LIMIT]
     anchor = _TAGS_START.search(name)
     if not anchor:
         return ""
-    cut = _format_tags_start(name, anchor)
+    cut, sure_cut = _format_tags_start(name, anchor)
     # A name whose first marker is its resolution has no year or episode to
-    # scan from: "[Group] Show - 05 REPACK (1080p)".
-    scan_from = 0 if cut == anchor.start() else anchor.end()
-    body = name[anchor.end() :].rpartition("-")[0] or name[anchor.end() :]
-    plain_case = not any(char.isupper() for char in body)
+    # scan from: "[Group] Show - 05 REPACK (1080p)". Its case is read from
+    # the whole name; otherwise from the tags, which follow the marker.
+    whole = cut == anchor.start()
+    scan_from = 0 if whole else anchor.end()
+    cased = name if whole else name[anchor.end() :]
+    cased = cased.rpartition("-")[0] or cased
+    one_case = not any(char.isupper() for char in cased) or not any(
+        char.islower() for char in cased
+    )
     found = ""
-    for match in _REVISION.finditer(name, scan_from):
-        if not _is_revision_tag(name, match, cut, plain_case):
+    matches = _REVISION.finditer(name, scan_from)
+    for _count, match in zip(range(_REVISION_WORD_LIMIT), matches):
+        if not _is_revision_tag(name, match, cut, sure_cut, one_case):
             continue
         if match.group("repack"):
             return "repack"

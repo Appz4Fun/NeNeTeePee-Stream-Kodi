@@ -213,6 +213,17 @@ def test_revision_label_follows_the_parsed_flags():
         ("Show.S01E02.Charlottes.Web.Proper.Guest.720p.HDTV.x264-GRP", ""),
         ("Show.S01E02.Magnum.Opus.Repack.Day.720p.HDTV.x264-GRP", ""),
         ("Show.S01E02.Charlottes.Web.Proper.Guest.HDTV.x264-GRP", ""),
+        # A name with no resolution: a title word can read as its source.
+        ("Show.S01E05.Charlottes.Web.Proper.HDTV.x264-GRP", ""),
+        ("Show.S01E05.Web.of.Lies.Proper.DVDRip.XviD-GRP", ""),
+        ("Show.S01E05.Charlottes.Web.PROPER.HDTV.x264-GRP", "proper"),
+        # A name whose first marker is its resolution: the title comes first.
+        ("[Group] Keeping It Proper - 05 [1080p].mkv", ""),
+        ("[Group] Show Repack - 05 (1080p) [12345678].mkv", ""),
+        # All in one case, capitals as well as none: judged by position alone.
+        ("SHOW.S01E05.REPACK.720P.HDTV.X264-GRP", "repack"),
+        ("SHOW.S01E05.A.PROPER.SEND.OFF.720P.HDTV.X264-GRP", ""),
+        ("SHOW.S01E05.KEEPING.IT.PROPER.720P.HDTV.X264-GRP", "proper"),
         # Part of another word, or no tag at all.
         ("Alpha.2024.1080p.WEB.h264-REPACKERS", ""),
         ("Show.2026.11.12.1080p.WEB.h264-GRP", ""),
@@ -252,11 +263,24 @@ def test_an_episode_title_word_strikes_nothing_and_is_not_struck():
 def test_a_tag_written_an_unusual_way_is_never_struck():
     odd = "Alpha.2024.REPACK.Uncommonword.1080p.BluRay.x264-GRPA"
     repack = "Alpha.2024.Uncommonword.REPACK.1080p.BluRay.x264-GRPA"
-    proper = "Alpha.2024.PROPER.Uncommonword.1080p.BluRay.x264-GRPA"
 
     assert detect_revision(odd) == "" and _row(odd)["_meta"]["repack"] is True
+    assert detect_revision(repack) == "repack"
+    # Cleared of the tag the two are one release, so only the flag on the
+    # odd one keeps it from being struck.
     assert not _replaced([_row(odd), _row(repack)])
-    assert not _replaced([_row(proper), _row(repack)])
+    assert _replaced([_row(repack), _row(repack.replace(".REPACK", ""))])
+
+
+def test_a_name_stuffed_with_the_word_costs_a_bounded_look():
+    import time
+
+    name = "Show.S01E01." + "PROPER." * 5000 + "1080p-GRP"
+    started = time.monotonic()
+
+    # Only the head of the name is read, so the answer is the head's.
+    assert detect_revision(name) == "proper"
+    assert time.monotonic() - started < 1.0
 
 
 def test_metadata_cached_without_the_tag_is_read_from_the_name():
