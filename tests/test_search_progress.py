@@ -262,13 +262,11 @@ def _rows_with_hosts():
 def test_release_detail_reads_are_named_by_indexer(session):
     session.search_finished(_rows_with_hosts())
     session.ranking(2)
-    assert _stage(session, sp.DETAILS)["text"] == (
-        "Ranking 2 results to find the top releases"
-    )
+    assert _stage(session, sp.DETAILS)["text"] == ("Ranking 2 results")
 
     session.details_started(3, ["api.alpha.example", "beta.example"])
     assert _stage(session, sp.DETAILS)["text"] == (
-        "Reading NFO and MediaInfo for the top 3 releases[CR]Asking Alpha, Beta"
+        "Checking the top 3 releases[CR]Asking Alpha, Beta"
     )
 
     session.details_result("beta.example", sp.MEDIAINFO, sp.READ)
@@ -287,9 +285,7 @@ def test_release_detail_reads_are_named_by_indexer(session):
 def test_an_indexer_still_reading_when_the_wait_ends_is_named(session):
     session.search_finished(_rows_with_hosts())
     session.details_started(1, ["api.alpha.example", "beta.example"])
-    assert _stage(session, sp.DETAILS)["text"].startswith(
-        "Reading NFO and MediaInfo for the top release"
-    )
+    assert _stage(session, sp.DETAILS)["text"].startswith("Checking the top release")
     session.details_result("beta.example", sp.NFO, sp.NOTHING)
 
     session.details_finished()
@@ -475,8 +471,8 @@ def test_every_string_is_in_the_language_file_and_the_fallbacks():
     for name, msg_id in sp.TEXT_IDS.items():
         assert po.get(msg_id), "strings.po lacks #{} ({})".format(msg_id, name)
         assert _FALLBACK_STRINGS.get(msg_id) == po[msg_id], name
-    # The window's XML uses these two by number, and settings.xml these three.
-    for msg_id in (30709, 30717, 30766, 30767, 30768):
+    # The window's XML uses this one by number, and settings.xml these three.
+    for msg_id in (30709, 30766, 30767, 30768):
         assert po.get(msg_id), "strings.po lacks #{}".format(msg_id)
 
 

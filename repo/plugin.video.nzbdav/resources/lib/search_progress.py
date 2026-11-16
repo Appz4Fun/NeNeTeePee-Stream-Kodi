@@ -59,7 +59,7 @@ TEXT_IDS = {
     "stage_details": 30714,
     "stage_prepare": 30715,
     "table_heading": 30716,
-    # 30717 ("Cancelling...") and 30709 ("Cancel") are used by the window's XML.
+    # 30709 ("Cancel") is used by the window's XML.
     "log_hint": 30718,
     "episode": 30719,
     "season": 30720,

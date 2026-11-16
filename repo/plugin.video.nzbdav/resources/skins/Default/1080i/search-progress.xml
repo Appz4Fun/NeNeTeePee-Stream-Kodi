@@ -4,8 +4,8 @@
      and up to two lines; how each indexer answered on the right; the time
      taken, where the log is and Cancel below. search_dialog.py sets every
      text as a window property. Cancel and Back set a Home window property
-     that the add-on reads, so a cancel is seen while the add-on's own thread
-     is still waiting on the network. The icons are drawn by
+     that the add-on reads, so a cancel closes the window at once even while
+     the add-on's own thread is still waiting on the network. The icons are drawn by
      scripts/make_progress_icons.py. -->
 <window type="dialog" id="1102">
   <defaultcontrol always="true">10</defaultcontrol>
@@ -528,18 +528,8 @@
       <label>$INFO[Window.Property(log_hint)]</label>
       <font>font10</font>
       <textcolor>FF6B7280</textcolor>
-      <visible>String.IsEmpty(Window(home).Property(nzbdav.search.cancel))</visible>
     </control>
 
-    <!-- Shown once a cancel was asked for, until the add-on closes the window -->
-    <control type="label" id="7">
-      <left>250</left><top>878</top><width>1080</width><height>60</height>
-      <label>$ADDON[plugin.video.nzbdav 30717]</label>
-      <font>font12</font>
-      <textcolor>FF9CA3AF</textcolor>
-      <aligny>center</aligny>
-      <visible>!String.IsEmpty(Window(home).Property(nzbdav.search.cancel))</visible>
-    </control>
 
     <!-- Cancel -->
     <control type="button" id="10">

@@ -194,6 +194,29 @@ rule isn't transitive. The group keeps the position of its best-ranked copy, and
 selecting it plays the first copy with a **DL** tag, otherwise that best-ranked
 copy. **List** (`results_view` `1`) skips the grouping.
 
+## Progress while it searches
+
+On the TMDBHelper RunScript path, `search_dialog.open_progress` shows the
+[search progress window](../features/search-progress.md) from the start of
+title identification until the picker opens, and closes it on every early
+return. The window is shown, not run modally (the modal `DialogProgress`
+crashes Kodi mid-search on CoreELEC and Arctic Fuse), and a short-lived thread
+redraws it while the add-on's own thread searches. Each step reports to the
+active `search_progress.Session`: ID resolution, the provider fan-out, each
+direct indexer's answer, the NFO and MediaInfo reads in `nfo_audio`, and the
+filter, tag and picker steps. A report never raises and does nothing when no
+window is shown.
+
+NZBHydra2's Newznab answer doesn't say which indexers it asked.
+`hydra_history.report_indexers` reads Hydra's record of the search just run
+(`POST /internalapi/history/searches`, then
+`GET /internalapi/history/searches/details/{id}`, with Hydra's XSRF token) and
+matches the entry by source, IDs, season, episode and time. It fails soft to the
+indexer names in the result rows.
+
+Cancel sets a Home window property the drawing thread reads; the window closes
+at once, and the add-on stops after the request in flight, before the picker.
+
 ## Caching
 
 NeNeTeePee-Stream-Kodi caches the merged, **pre-filter** results on disk, keyed by a SHA-256 of

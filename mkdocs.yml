@@ -106,6 +106,7 @@ nav:
   - Features:
       - Overview: features/index.md
       - Search and indexers: features/search-and-indexers.md
+      - Search progress window: features/search-progress.md
       - Quality filtering and sorting: features/quality-filtering.md
       - Playback, remux, and seeking: features/playback-and-remux.md
       - Fallback streams: features/fallback-streams.md

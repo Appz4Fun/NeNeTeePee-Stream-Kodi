@@ -9,9 +9,12 @@ With the connections configured and TMDBHelper set up, you're ready to stream.
 1. Open **TMDBHelper** and browse to a movie or TV episode.
 2. Start playback. If TMDBHelper asks which player to use, choose
    **NeNeTeePee-Stream-Kodi**.
-3. NeNeTeePee-Stream-Kodi searches your providers and shows the **source picker**. If no
-   provider returns anything, you get a **No results found** notification
-   instead.
+3. NeNeTeePee-Stream-Kodi searches your providers. A
+   [search progress window](../features/search-progress.md) shows each step:
+   the title and IDs, the search, how each indexer answered, the NFO and
+   MediaInfo reads, and the list being prepared. Then the **source picker**
+   opens. If no provider returns anything, you get a **No results found**
+   notification instead.
 
 ## Choose a source
 
