@@ -33,9 +33,17 @@ answer:
   always get one answer, so each signature is placed once and the rows
   follow it.
 
-A name with no release group is the one case the rule itself does not
-decide. ``same_release`` never accepts such a row, since nothing says whose
-release it is. Here, rows with no group that carry the same name (in any
+Two things the rule itself does not decide are decided here.
+
+Two names of one group for one upload. A group's release is listed as
+``...DV.x265-GRP`` by one indexer and ``...DV.HDR.x265-GRP`` by another:
+the parses differ, so the rule keeps them apart. When a listing of each is
+the same film or episode at the same exact size in bytes, they are one
+upload, and the two releases are joined whole (``_joined_by_upload``).
+
+A name with no release group. ``same_release`` never accepts such a row,
+since nothing says whose release it is. Here, rows with no group that
+carry the same name (in any
 spelling, ``release_subject.name_form_key``) are one release: the same
 unnamed post listed by several indexers, and its reposts. So are listings
 that took their parse from one of them (``filter_payload``). Only a named
@@ -45,7 +53,7 @@ files). A name with no group still never joins a release that has one.
 
 from resources.lib import fallback_streams as _fs
 from resources.lib import release_match
-from resources.lib.filter_payload import ADOPTED_KEY
+from resources.lib.filter_payload import ADOPTED_KEY, exact_size, item_of, same_item
 from resources.lib.release_subject import name_form_key
 
 # First in the exact key of a row with no release group.
@@ -86,27 +94,132 @@ def build(rows):
     the picker and the backups), and both must come to the same releases.
     """
     singles = []
-    buckets = {}
+    keyed = []
+    names = _Names()
     by_name = {}
     for at, row in enumerate(rows):
         keys = _keys_once_per_name(row, by_name)
         if keys is None:
             singles.append((at, [row]))
             continue
-        exact, signature = keys
+        keyed.append((at, row, keys))
+        if keys[0][0] is _NO_GROUP:
+            names.join(keys[0][2], keys[0][3])
+    buckets = {}
+    for at, row, (exact, signature) in keyed:
+        if exact[0] is _NO_GROUP:
+            # One release for every name linked by a shared upload.
+            exact = exact[:2] + (names.of(exact[2]),)
         bucket = buckets.get(exact)
         if bucket is None:
             bucket = buckets[exact] = {}
         bucket.setdefault(signature, []).append((at, row))
-    placed = singles
+    releases = []
     for exact, bucket in buckets.items():
-        placed.extend(_bucket_groups(exact[0] is not _NO_GROUP, bucket))
+        releases.extend(_bucket_groups(exact[0] is not _NO_GROUP, bucket))
+    placed = singles + [
+        (members[0][0], [row for _at, row in members])
+        for members in _joined_by_upload(releases)
+    ]
     placed.sort(key=_position)
     return ReleaseIndex([group for _at, group in placed])
 
 
+class _Names:
+    """Names with no group that are one release with each other.
+
+    A listing that took its parse from another name (``filter_payload``)
+    is one upload with it, and each name is one release with its own other
+    listings, so the names are joined into sets. A set goes by its first
+    name in sorted order, whatever order the rows came in.
+    """
+
+    def __init__(self):
+        self._parent = {}
+
+    def of(self, name):
+        """The name the set of ``name`` goes by."""
+        parent = self._parent
+        root = name
+        while parent.get(root, root) != root:
+            root = parent[root]
+        while parent.get(name, name) != root:
+            parent[name], name = root, parent[name]
+        return root
+
+    def join(self, name, other):
+        """``name`` and ``other`` (or None) are one release."""
+        if not other or other == name:
+            return
+        left, right = self.of(name), self.of(other)
+        if left != right:
+            low, high = sorted((left, right))
+            self._parent[high] = low
+
+
+def _joined_by_upload(releases):
+    """``releases`` with those joined that share an upload.
+
+    A group names one upload two ways (``DV`` on one indexer, ``DV.HDR`` on
+    another; ``PROPER`` here, ``REPACK`` there). The parses differ, so the
+    rule keeps the names apart, and each name has its own other listings.
+    Two listings of one group, of the same film or episode, at the same
+    exact size are one upload (``filter_payload``: two encodes never come
+    to the same number of bytes), so their releases are one release: the
+    whole of both, not just the two listings.
+
+    ``releases`` is a list of ``[(position, row), ...]``, each in list
+    order; so is the result.
+    """
+    uploads = {}
+    for number, members in enumerate(releases):
+        for _at, row in members:
+            key = _upload_key(row)
+            if key is not None:
+                uploads.setdefault(key[:3], []).append((number, key[3]))
+    parent = list(range(len(releases)))
+
+    def find(number):
+        while parent[number] != number:
+            parent[number] = parent[parent[number]]
+            number = parent[number]
+        return number
+
+    for listed in uploads.values():
+        first_number, first_item = listed[0]
+        for number, item in listed[1:]:
+            if find(number) != find(first_number) and same_item(first_item, item):
+                low, high = sorted((find(number), find(first_number)))
+                parent[high] = low
+    joined = {}
+    for number, members in enumerate(releases):
+        joined.setdefault(find(number), []).extend(members)
+    if len(joined) == len(releases):
+        return releases
+    for members in joined.values():
+        members.sort(key=_position)
+    return list(joined.values())
+
+
+def _upload_key(row):
+    """``(group, size, what it is of, item)`` of a named row, or None.
+
+    None for a row with no group, a season pack, a row whose size cannot
+    stand for an upload (missing, or rounded by its indexer) or whose parse
+    names no film or episode.
+    """
+    if row.get("_season_pack"):
+        return None
+    group = release_match.title_key((row.get("_meta") or {}).get("group"))
+    size = exact_size(row) if group else 0
+    item = item_of(row) if size else None
+    if item is None:
+        return None
+    return group, size, item[0], item
+
+
 def _position(placed):
-    """Sort key: where a row, or a release's first row, stands in the list."""
+    """Sort key: the list position that leads a ``(position, ...)`` pair."""
     return placed[0]
 
 
@@ -114,8 +227,8 @@ def _bucket_groups(named, bucket):
     """The releases among the rows of one exact key (see ``_keys``).
 
     ``bucket`` maps each signature to its ``(position, row)`` pairs, in list
-    order. Returns ``(position of the first row, rows in list order)`` for
-    each release.
+    order. Returns each release as its ``(position, row)`` pairs in list
+    order.
 
     A signature joins the first release whose every member it is accepted
     against. Which one is "first" matters only where the rule is not
@@ -151,11 +264,9 @@ def _bucket_groups(named, bucket):
                 break
         else:
             releases.append([list(listed), [(signature, first)]])
-    groups = []
     for members, _examples in releases:
         members.sort(key=_position)
-        groups.append((members[0][0], [row for _at, row in members]))
-    return groups
+    return [members for members, _examples in releases]
 
 
 def _orderable(signature):
@@ -222,12 +333,14 @@ def _keys(row):
         meta = _fs._result_meta(row)
         container = str(meta.get("container") or "").strip().casefold()
         if not release_match.profile_group(profile):
-            # Its own name, or the name it took its parse from: listings of
-            # one payload that ended with no group stay one release.
-            name = meta.get(ADOPTED_KEY) or name_form_key(row.get("title"))
-            if not name or not isinstance(name, str):
+            name = name_form_key(row.get("title"))
+            if not name:
                 return None
-            return (_NO_GROUP, bool(row.get("_season_pack")), name), container
+            # The name it took its parse from, when it took one: listings of
+            # one upload that ended with no group stay one release.
+            taken = meta.get(ADOPTED_KEY)
+            taken = taken if isinstance(taken, str) and taken else None
+            return (_NO_GROUP, bool(row.get("_season_pack")), name, taken), container
         identity = _fs._release_identity(row)
         upscaled = _fs._meta_bool_from_meta(meta, "upscaled")
     except Exception:  # pylint: disable=broad-except

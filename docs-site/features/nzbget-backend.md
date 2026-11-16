@@ -293,16 +293,23 @@ one copy count, and each a backup of the other. A named container still
 separates them (`.mkv` and `.mp4` of one name are two files).
 
 **One upload under several names.** Indexers cut a name short
-(`...H.265` for `...H.265-FLUX`), drop a tag (`DV` for `DV.HDR`) or list the
-bare title. Listings with the same exact size in bytes are read as one
-upload, and given one set of tags, when they name the same film or episode,
-or when one name is the start of the other and both were posted within two
-minutes. The upload gets every tag any of its names states (`DV` beside
-`HDR`, `REMUX`, a `PROPER`), and the group the rest of the results know
-best, so a reposter's `-Obfuscated` never replaces `-NTb`. Where two names
-contradict each other, the fuller name's value stands. A size an indexer
-rounded (a whole number of megabytes, or a figure like 4.37 GB) proves
-nothing and is ignored. See
+(`...H.265` for `...H.265-FLUX`), list the bare title, or tag one upload two
+ways (`DV` on one indexer, `DV.HDR` on another). Listings with the same exact
+size in bytes are one upload when they name the same film or episode, or
+when one name is the start of the other and both were posted within two
+minutes. Then:
+
+- a listing with no group takes the named listing's group and tags, and so
+  does one whose group was cut short (`-GUA` for `-GUACAMOLE`). Between two
+  such groups the one the rest of the results know better is used, so `-GRP`
+  is not replaced by `-GRP_mp4`;
+- two names from one group keep their own tags, and their releases become
+  one release: every listing of both names, in one picker row;
+- a listing never takes another group's name. Two groups at one exact size
+  stay two releases.
+
+A size an indexer rounded (a whole number of megabytes, or a figure like
+4.37 GB) proves nothing and is ignored. See
 [How listings become one row](quality-filtering.md#how-listings-become-one-row).
 
 **Oddly sized copies.** Size alone never makes two differently named results
@@ -350,11 +357,13 @@ listings of the same posting:
   alone: a repost of the same files has the same segment sizes in the same
   order. Two postings hold the same files when the matching ones make up 90%
   of the smaller posting's bytes.
-- A backup that holds your pick's files, is 1.35 times its size or more, and
-  whose files name two or more episodes is a pack listed under the release's
-  name, such as a whole season named as one episode. It is not sent, so a
-  failover never downloads the pack. Size alone never makes a pack: a larger
-  posting of the same single episode is a complete copy, and is kept.
+- A backup that holds your pick's files among other episodes, at 1.35 times
+  its size or more, is a pack listed under the release's name, such as a
+  whole season named as one episode. It is not sent, so a failover never
+  downloads the pack. The add-on reads the episodes from the NZB's file
+  names; where they name none, a pack is a posting whose other files come to
+  as much as your pick again. A larger posting of the same single episode is
+  a complete copy, and is kept.
 
 Both checks need segment sizes that vary. A posting cut into articles of one
 fixed size (about four in ten) says nothing, and is sent as before.

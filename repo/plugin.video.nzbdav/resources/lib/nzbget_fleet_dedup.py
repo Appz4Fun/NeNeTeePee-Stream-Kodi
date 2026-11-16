@@ -22,9 +22,9 @@ backup, so this module collapses them before submission:
   same order (``posting_payload``). Two postings whose matching files make
   up 90% of the smaller one's bytes hold the same files. A backup that is
   such a twin of the pick goes ahead of the other backups; a backup that
-  holds the pick's files, is a good deal larger and names two or more
-  episodes is a pack listed under the release's name, and is not sent as a
-  copy of it.
+  holds the pick's files among a good deal of other files (``holds_more``)
+  is a pack listed under the release's name, and is not sent as a copy of
+  it.
 
 Release identity (``release_match.same_release``) uses size only when neither
 row names a group: postings of one release can differ by GBs.
@@ -241,22 +241,30 @@ def same_files(left, right):
 
 
 def holds_more(posting, pick):
-    """Whether ``posting`` is a pack that holds ``pick`` among other episodes.
+    """Whether ``posting`` is a pack that holds ``pick`` among other things.
 
     A season pack listed under one episode's name: nearly all of the pick's
-    bytes are in it, it is ``_PACK_SIZE_FACTOR`` times the pick's size or
-    more, and its files name two or more episodes. Size alone does not make
-    a pack: a pick whose own NZB was cut short is smaller than a complete
-    repost of the same files, and that repost is the copy to keep. False
-    when either payload is unknown.
+    bytes are in it and it is ``_PACK_SIZE_FACTOR`` times the pick's size
+    or more. What the extra is decides:
+
+    * its files name two or more episodes: a pack;
+    * its files name one episode: not a pack, however large. A pick whose
+      own NZB was cut short is smaller than a complete repost of the same
+      files, and that repost is the copy to keep;
+    * its files name no episode (obfuscated subjects, anime numbering): a
+      pack when the files the pick does not have come to as much as the
+      pick again.
+
+    False when either payload is unknown.
     """
     if not posting or not pick:
         return False
-    return (
-        len(posting[2]) > 1
-        and posting[0] >= pick[0] * _PACK_SIZE_FACTOR
-        and _shared_bytes(posting, pick) >= SAME_FILES_SHARE * pick[0]
-    )
+    shared = _shared_bytes(posting, pick)
+    if posting[0] < pick[0] * _PACK_SIZE_FACTOR or shared < SAME_FILES_SHARE * pick[0]:
+        return False
+    if posting[2]:
+        return len(posting[2]) > 1
+    return posting[0] - shared >= pick[0]
 
 
 def posting_fingerprint(nzb_bytes):

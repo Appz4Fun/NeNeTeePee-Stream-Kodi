@@ -260,6 +260,10 @@ def test_apple_tv_is_one_service_under_either_tag():
         ("Show - S01E02 - Title [WEBDL-1080p.AC3.h264-EDITH]", "EDITH"),
         ("Film (2020) [Bluray-2160p.DV.HDR10.DDP5.1.h265-FLUX]", "FLUX"),
         ("Show - S01E02 - Title [WEBDL-1080p]", ""),
+        ("Show - S01E02 - Title [WEBDL-1080p.h264-EDITH-Obfuscated]", "EDITH"),
+        # A hyphenated tag is not a group.
+        ("Film (2020) [Bluray-2160p.h265.DTS-X]", ""),
+        ("Film (2020) [WEBDL-1080p.h264.DTS-ES]", ""),
         # No group in the block: it ends in a tag.
         ("Show - S02E01 - Welcome[WEBDL-1080p.AAC.h264]", ""),
         ("Show - S02E01 - Welcome[WEBDL-1080p.AAC.h264.German]", ""),

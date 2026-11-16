@@ -96,8 +96,8 @@ class FileSizes:
       every file of that length the same sizes);
     * ``is_par2``: the file's subject names a ``.par2`` file. Repair data
       differs between two posts of the same files;
-    * ``episode``: the ``(season, episode)`` its subject names ("S01E02"),
-      or None.
+    * ``episode``: the ``(season, episode)`` its subject names ("S01E02",
+      "1x02"), or None.
 
     Memory is four bytes per segment of the file being read, and nothing
     of a file once it has ended.
@@ -144,7 +144,10 @@ class FileSizes:
             if most < self.MOST * len(body):
                 signature = (len(sizes), total, zlib.crc32(sizes.tobytes()))
         named = _EPISODE.search(self._subject)
-        episode = (int(named.group(1)), int(named.group(2))) if named else None
+        episode = None
+        if named:
+            season = named.group(1) or named.group(3)
+            episode = (int(season), int(named.group(2) or named.group(4)))
         self.files.append((total, signature, b".par2" in self._subject, episode))
 
 
@@ -153,7 +156,9 @@ _BYTES = re.compile(rb"""\sbytes\s*=\s*["'](\d+)["']""")
 # A file's subject attribute, inside its opening tag.
 _SUBJECT = re.compile(rb"""\ssubject\s*=\s*(?:"([^"]*)"|'([^']*)')""")
 # The episode a file's (lower-cased) subject names.
-_EPISODE = re.compile(rb"(?<![a-z0-9])s(\d{1,2})[ ._-]?e(\d{1,3})(?![0-9])")
+_EPISODE = re.compile(
+    rb"(?<![a-z0-9])(?:s(\d{1,2})[ ._-]?e(\d{1,3})|(\d{1,2})x(\d{2,3}))(?![0-9])"
+)
 
 
 def file_subject(tag):

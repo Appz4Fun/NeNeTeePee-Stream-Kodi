@@ -788,16 +788,17 @@ def _attach_metadata(results):
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
     _recover_list_groups(results)
     _unify_name_forms(results)
-    # Listings of one payload under different names take one parse.
-    unify_one_payload(
+    # A listing that lost its group takes the parse of its upload's name.
+    other_names = unify_one_payload(
         results,
         _parse_detail,
         _meta_for_spelling,
         _parses_agree,
         _META_DERIVED_ROW_KEYS,
     )
-    # What a release's NFO said of its audio, once it has been read.
-    nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS)
+    # What a release's NFO said of its audio, once it has been read: for its
+    # own name, or for another name its upload is listed under.
+    nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS, other_names)
     share_atmos(results, _META_DERIVED_ROW_KEYS)
     token = "{}-{}".format(_ATTACH_RUN, next(_ATTACH_NUMBERS))
     _ATTACH_PASSES[token] = known

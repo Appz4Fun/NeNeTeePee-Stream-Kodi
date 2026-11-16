@@ -407,33 +407,35 @@ flowchart TD
     A[Every listing of the search] --> B[Parse each name]
     B --> C[Spellings of one name<br>take the most detailed parse]
     C --> D{Same exact size in bytes?}
-    D -- "and the same film or episode" --> E[One upload: one set of tags]
+    D -- "and the same film or episode" --> E[One upload]
     D -- "and one name is the other cut short,<br>posted within two minutes" --> E
-    D -- no --> F[Keeps its own tags]
-    E --> G{Has a release group?}
-    F --> G
+    D -- no --> G
+    E --> K[A name with no group, or a cut-off group,<br>takes the named listing's group and tags]
+    K --> G{Has a release group?}
     G -- yes --> H[One row per release:<br>every parsed field equal]
     G -- no --> I[One row per name]
-    H --> J[Copies counted, odd sizes last]
+    H --> L[Two names of one group<br>for one upload: one row]
+    L --> J[Copies counted, odd sizes last]
     I --> J
 
     classDef step fill:#1E1E2E,stroke:#4A9EFF,color:#FFFFFF
     classDef ask fill:#151520,stroke:#FBBF24,color:#FFFFFF
     classDef done fill:#151520,stroke:#34D399,color:#FFFFFF
-    class A,B,C,E,F step
+    class A,B,C,E,K step
     class D,G ask
-    class H,I,J done
+    class H,I,J,L done
 ```
 
 - **A name cut short.** `...DV.HDR.TrueHD.7.1.Atmos.HEVC` from one indexer
   and `...HEVC-GRPA` from two others, the same size and minute: the short one
   is the same upload, so it takes the group and joins the row.
 - **The same film or episode at one exact size.** Two encodes never come to
-  the same number of bytes, so `...1080p.WEB-DL.DDP5.1.H.264-GRPD` and
-  `...1080p WEB-DL H264-GRPD` at one size are one upload whenever they were
-  posted. The upload gets every tag any of its names states, and where two
-  names contradict each other the fuller name's value stands. A size an
-  indexer rounded (a whole number of megabytes, or a figure like 4.37 GB) is
+  the same number of bytes. A listing with no group at the size of a named
+  one takes its group and tags. Two names from one group at one size
+  (`...1080p.WEB-DL.DDP5.1.H.264-GRPD` and `...1080p WEB-DL H264-GRPD`) keep
+  their own tags and become one row, with every other listing of both names.
+  Two different groups at one size stay two releases. A size an indexer
+  rounded (a whole number of megabytes, or a figure like 4.37 GB) is
   ignored: rounding could give two encodes one size.
 - **Names with no group.** Listings of one name with no group are one row
   with a copy count, whatever their sizes; a copy far from the row's usual

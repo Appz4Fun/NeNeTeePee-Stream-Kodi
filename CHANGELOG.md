@@ -79,20 +79,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
       spelling, are one release: one row with its copy count, ranked and
       size-checked as one, each a backup of the other on the NZBGet backend.
       A name with no group still never joins a release that has one.
-    - Listings with the same exact size in bytes are one upload, and take one
-      set of tags, when they name the same film or episode, or when one name
-      is the start of the other and both were posted within two minutes. The
-      upload gets every tag any of its names states, and the group the rest
-      of the results know best, so `-NTb` wins over a reposter's
-      `-Obfuscated`. A size an indexer rounded is ignored.
+    - Listings with the same exact size in bytes are one upload when they
+      name the same film or episode, or when one name is the start of the
+      other and both were posted within two minutes. A listing with no
+      group, or with a group cut short (`-GUA` for `-GUACAMOLE`), takes the
+      named listing's group and tags. Two names from one group for one
+      upload (`DV` here, `DV.HDR` there) keep their own tags and become one
+      row with every listing of both. A listing never takes another group's
+      name, and a size an indexer rounded is ignored.
     - A trailing word after a language (`...AAC.7.1.Japanese.Tigole`) is the
       group when two or more other listings of the search carry it as theirs,
       and a library manager's file name
       (`Show - S01E02 - Title[WEBDL-1080p.AC3.h264.EDITH]`) is read from its
       bracketed tags.
 
-  On those 23 searches the picker went from 8,450 rows to 6,494, and uploads
-  shown as two or more rows from 611 to 7.
+  On those 23 searches the picker went from 8,450 rows to 6,476, and uploads
+  shown as two or more rows from 611 to 22.
 
 - **A backup that holds your pick's own files is sent first, and a pack under
   the release's name is not sent** (NZBGet backend). An NZB gives every
@@ -101,10 +103,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gathers those sizes too. A backup whose matching files make up 90% of the
   smaller posting's bytes holds the same files and goes ahead of the other
   backups (sent first, and given the highest backup score on a server that
-  fails over by score); one that holds the pick's files, is 1.35 times its
-  size or more and whose files name two or more episodes is a pack (a season
-  listed as one episode) and is left out, counted in the dialog as
-  `1 pack under this name`. A posting cut into articles of one fixed size
+  fails over by score); one that holds the pick's files among other
+  episodes, at 1.35 times its size or more, is a pack (a season listed as
+  one episode) and is left out, counted in the dialog as
+  `1 pack under this name`. A larger posting of the same single episode is a
+  complete copy and is kept. A posting cut into articles of one fixed size
   says nothing and is sent as before.
 
 - **A search progress window replaces the corner spinner between play and the
