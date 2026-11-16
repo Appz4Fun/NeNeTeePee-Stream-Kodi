@@ -284,7 +284,7 @@ def test_identical_nfos_are_one_tab_listing_their_indexers(tmp_path):
     _keep_three()
     viewer = _viewer(tmp_path)
     nfo_viewer.xbmcgui.ControlLabel.reset_mock()
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
 
     assert [(tab["kind"], tab["indexers"]) for tab in viewer._tabs] == [
@@ -306,7 +306,7 @@ def test_identical_nfos_are_one_tab_listing_their_indexers(tmp_path):
 def test_the_page_and_the_attributes_are_drawn_as_images(tmp_path):
     _keep_three()
     viewer = _viewer(tmp_path)
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
 
     image = viewer.getControl(20)
@@ -331,7 +331,7 @@ def test_the_page_and_the_attributes_are_drawn_as_images(tmp_path):
 def test_what_is_drawn_is_as_large_as_the_screen_asks(tmp_path):
     _keep_three()
     viewer = _viewer(tmp_path, view=nfo_viewer.geometry(3840, 2160))
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
     image = viewer.getControl(20)
     with open(image.setImage.call_args.args[0], "rb") as handle:
@@ -345,7 +345,7 @@ def test_what_is_drawn_is_as_large_as_the_screen_asks(tmp_path):
 def test_left_and_right_change_the_tab_and_wrap(tmp_path):
     _keep_three()
     viewer = _viewer(tmp_path)
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
     first = viewer.getControl(20).setImage.call_args.args[0]
 
@@ -366,7 +366,7 @@ def test_up_and_down_turn_the_page_and_stop_at_the_ends(tmp_path):
     long_nfo = NAME + "\n" + "\n".join("line {}".format(n) for n in range(50))
     release_docs.keep(KEY, release_docs.NFO, "hub.example", long_nfo)
     viewer = _viewer(tmp_path)
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
 
     # 51 lines at 23 to the page: Down twice shows it all.
@@ -387,7 +387,7 @@ def test_up_and_down_turn_the_page_and_stop_at_the_ends(tmp_path):
 def test_back_closes_and_other_keys_do_nothing(tmp_path):
     _keep_three()
     viewer = _viewer(tmp_path)
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
     _press(viewer, 7)
     assert viewer._closed is False
@@ -398,14 +398,19 @@ def test_back_closes_and_other_keys_do_nothing(tmp_path):
 def _answering(viewer):
     """Patches under which the viewer's two indexers answer when ``_ask`` runs."""
 
-    def answer(rows, key, title, describe):
+    def answer(rows, key, title, describe, wait_seconds):
         assert (rows, key, title) == (viewer._rows, KEY, NAME) and describe
+        assert wait_seconds == 0
         release_docs.keep(key, release_docs.NFO, "hub.example", OWN_NFO)
 
     return (
-        patch.object(doc_fetch, "plan", return_value={"a": {}, "b": {}}),
+        patch.object(doc_fetch, "asking", return_value=2),
         patch.object(nfo_viewer.threading, "Thread"),
-        patch.object(doc_fetch, "gather", side_effect=answer),
+        patch.multiple(
+            doc_fetch,
+            gather=MagicMock(side_effect=answer),
+            wait=MagicMock(return_value=0),
+        ),
     )
 
 
@@ -413,7 +418,7 @@ def test_indexers_not_asked_yet_are_asked_in_the_background(tmp_path):
     release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
     viewer = _viewer(tmp_path)
     plan, thread_class, gather = _answering(viewer)
-    with plan, thread_class as thread, gather:
+    with plan, gather, thread_class as thread:
         viewer.onInit()
         # What is kept is shown at once, with a note that more is coming.
         assert [tab["kind"] for tab in viewer._tabs] == ["mediainfo"]
@@ -450,9 +455,76 @@ def test_the_place_is_kept_when_more_texts_arrive_after_a_key(tmp_path):
     assert viewer._tab == 1 and viewer.getProperty("page").startswith("Page 2 /")
 
 
+def test_the_tabs_are_drawn_again_as_each_indexer_answers(tmp_path):
+    viewer = _viewer(tmp_path)
+    left = iter([2, 2, 1, 0])
+
+    def waited(key, seconds):
+        assert key == KEY and seconds > 0
+        now = next(left)
+        if now == 1:
+            release_docs.keep(KEY, release_docs.NFO, "hub.example", OWN_NFO)
+        if now == 0:
+            release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
+        return now
+
+    seen = []
+    with patch.object(doc_fetch, "asking", return_value=2), patch.object(
+        nfo_viewer.threading, "Thread"
+    ), patch.object(doc_fetch, "gather"), patch.object(
+        doc_fetch, "wait", side_effect=waited
+    ), patch.object(
+        viewer,
+        "_draw",
+        side_effect=lambda: seen.append((len(viewer._tabs), viewer._asking)),
+    ):
+        viewer.onInit()
+        viewer._ask()
+    # Drawn at the start, when the first indexer answered and when the last
+    # one did: not once for every second of waiting.
+    assert seen == [(0, 2), (1, 1), (2, 0)]
+
+
+def test_waiting_for_a_slow_indexer_ends(tmp_path):
+    viewer = _viewer(tmp_path)
+    with patch.object(doc_fetch, "asking", return_value=1), patch.object(
+        nfo_viewer.threading, "Thread"
+    ), patch.object(doc_fetch, "gather"), patch.object(
+        doc_fetch, "wait", return_value=1
+    ) as wait, patch.object(
+        nfo_viewer, "_ASK_SECONDS", 0
+    ):
+        viewer.onInit()
+        viewer._ask()
+    wait.assert_called_once()
+    assert viewer.getProperty("status") == (
+        "No indexer has an NFO or MediaInfo for this release."
+    )
+
+
+def test_a_report_that_cannot_be_laid_out_is_shown_as_it_came(tmp_path):
+    release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
+    viewer = _viewer(tmp_path)
+    with patch.object(doc_fetch, "asking", return_value=0), patch.object(
+        nfo_viewer.mediainfo_text, "as_text", side_effect=RuntimeError("odd report")
+    ):
+        viewer.onInit()
+    assert viewer.getProperty("page") == "Page 1 / 1" and viewer._tabs[0]["pages"][0]
+
+
+def test_the_indexers_are_asked_even_when_drawing_fails(tmp_path):
+    viewer = _viewer(tmp_path)
+    with patch.object(doc_fetch, "asking", return_value=1), patch.object(
+        nfo_viewer.threading, "Thread"
+    ) as thread, patch.object(viewer, "_load", side_effect=RuntimeError("no window")):
+        with pytest.raises(RuntimeError):
+            viewer.onInit()
+    thread.assert_called_once_with(target=viewer._ask, daemon=True)
+
+
 def test_the_window_says_so_while_it_waits_and_when_nothing_came(tmp_path):
     viewer = _viewer(tmp_path)
-    with patch.object(doc_fetch, "plan", return_value={"a": {}}), patch.object(
+    with patch.object(doc_fetch, "asking", return_value=1), patch.object(
         nfo_viewer.threading, "Thread"
     ), patch.object(doc_fetch, "gather", side_effect=RuntimeError("down")):
         viewer.onInit()
@@ -471,9 +543,11 @@ def test_the_window_says_so_while_it_waits_and_when_nothing_came(tmp_path):
 
 def test_an_answer_that_comes_after_the_window_closed_is_not_drawn(tmp_path):
     viewer = _viewer(tmp_path)
-    with patch.object(doc_fetch, "plan", return_value={"a": {}}), patch.object(
+    with patch.object(doc_fetch, "asking", return_value=1), patch.object(
         nfo_viewer.threading, "Thread"
-    ), patch.object(doc_fetch, "gather"):
+    ), patch.object(doc_fetch, "gather"), patch.object(
+        doc_fetch, "wait", return_value=0
+    ):
         viewer.onInit()
         viewer.close()
         _keep_three()
@@ -487,7 +561,7 @@ def test_without_the_font_the_skins_text_box_shows_the_page(tmp_path):
         KEY, release_docs.NFO, "hub.example", OWN_NFO + "[B]bold[/b] [x]\n" + art
     )
     viewer = _viewer(tmp_path, font=False)
-    with patch.object(doc_fetch, "plan", return_value={}):
+    with patch.object(doc_fetch, "asking", return_value=0):
         viewer.onInit()
 
     assert viewer.getProperty("mode") == "text"

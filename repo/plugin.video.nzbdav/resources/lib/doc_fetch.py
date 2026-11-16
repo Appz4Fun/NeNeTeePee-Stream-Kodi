@@ -38,12 +38,50 @@ def _link(row, name):
     return value if isinstance(value, str) else ""
 
 
-def plan(rows, record):
+_RUNNING_LOCK = threading.Lock()
+# (release key, host) -> the thread asking that indexer about that release.
+_RUNNING = {}
+
+
+def running(key):
+    """How many indexers are being asked about the release ``key`` right now."""
+    with _RUNNING_LOCK:
+        for pair in [
+            pair for pair, thread in _RUNNING.items() if not thread.is_alive()
+        ]:
+            del _RUNNING[pair]
+        return sum(1 for release, _host in _RUNNING if release == key)
+
+
+def wait(key, seconds):
+    """Wait up to ``seconds`` for the indexers asked about ``key``; returns
+    how many have still not answered."""
+    deadline = time.monotonic() + max(0.0, seconds)
+    with _RUNNING_LOCK:
+        threads = [
+            thread for (release, _host), thread in _RUNNING.items() if release == key
+        ]
+    for thread in threads:
+        thread.join(max(0.0, deadline - time.monotonic()))
+    return running(key)
+
+
+def asking(rows, key):
+    """How many indexers have yet to answer for the release ``key``: the
+    ones ``gather`` would ask, and the ones being asked."""
+    if not key:
+        return 0
+    return len(plan(rows, release_docs.load(key), key)) + running(key)
+
+
+def plan(rows, record, key=""):
     """``{host: {"mediainfo": link, "nfo": link}}``: what to ask, and of whom.
 
     ``rows`` are the listings of one release; ``record`` is what is already
     kept for it. An indexer that is paused, or that was already asked, is
-    left out.
+    left out, and so is one that is being asked about the release ``key``
+    at this moment: closing the viewer and opening it again sends nothing
+    twice.
     """
     keyed = {}
     for row in rows:
@@ -52,12 +90,14 @@ def plan(rows, record):
             host = nfo_audio.host_of(link) if link else ""
             if host and host not in keyed and has_key(link):
                 keyed[host] = link
+    with _RUNNING_LOCK:
+        busy = {pair for pair, thread in _RUNNING.items() if thread.is_alive()}
     jobs = {}
     for row in rows:
         nfo_url = _link(row, "nfo_url")
         link = nfo_url or _link(row, "media_ref")
         host = nfo_audio.host_of(link) if link else ""
-        if not host or nfo_audio.host_paused(host):
+        if not host or nfo_audio.host_paused(host) or (key, host) in busy:
             continue
         job = jobs.setdefault(host, {})
         if nfo_url and "nfo" not in job:
@@ -99,7 +139,10 @@ def _read_mediainfo(key, host, link):
     what, _tracks = mediainfo_audio.read_reply(status, body)
     if what == mediainfo_audio.TRACKS:
         release_docs.keep(
-            key, release_docs.MEDIAINFO, host, mediainfo_audio.mediainfo_xml_of(body)
+            key,
+            release_docs.MEDIAINFO,
+            host,
+            nfo_audio.without_keys(mediainfo_audio.mediainfo_xml_of(body), link),
         )
         return True
     if what == mediainfo_audio.MISSING:
@@ -134,7 +177,9 @@ def _read_nfo(key, host, link, title, describe):
         release_docs.mark_none(key, release_docs.NFO, host)
     elif kind == "nfo":
         if nfo_audio.shown_for(text, title, describe):
-            release_docs.keep(key, release_docs.NFO, host, text)
+            release_docs.keep(
+                key, release_docs.NFO, host, nfo_audio.without_keys(text, link)
+            )
         else:
             # Another release's NFO, attached by the indexer's matching.
             release_docs.mark_none(key, release_docs.NFO, host)
@@ -157,27 +202,35 @@ def _ask(key, host, job, title, describe):
             ),
             xbmc.LOGWARNING,
         )
+    finally:
+        with _RUNNING_LOCK:
+            if _RUNNING.get((key, host)) is threading.current_thread():
+                del _RUNNING[(key, host)]
 
 
-def gather(rows, key, title, describe=None, wait=WAIT_SECONDS):
+def gather(rows, key, title, describe=None, wait_seconds=WAIT_SECONDS):
     """Ask every indexer listing the release for what it has; returns how
-    many indexers were asked.
+    many indexers were newly asked.
 
     The requests run on daemon threads, one per indexer, and this waits
-    ``wait`` seconds for them. A slower answer is still kept when it comes.
+    ``wait_seconds`` for every indexer being asked about the release, the
+    ones an earlier call started included. A slower answer is still kept
+    when it comes: ``running`` says how many are outstanding, and ``wait``
+    waits for them.
     """
     if not key:
         return 0
-    jobs = plan(rows, release_docs.load(key))
-    threads = [
-        threading.Thread(
+    jobs = plan(rows, release_docs.load(key), key)
+    started = 0
+    for host, job in jobs.items():
+        thread = threading.Thread(
             target=_ask, args=(key, host, job, title, describe), daemon=True
         )
-        for host, job in jobs.items()
-    ]
-    for thread in threads:
+        with _RUNNING_LOCK:
+            if (key, host) in _RUNNING and _RUNNING[(key, host)].is_alive():
+                continue
+            _RUNNING[(key, host)] = thread
         thread.start()
-    deadline = time.monotonic() + max(0.0, wait)
-    for thread in threads:
-        thread.join(max(0.0, deadline - time.monotonic()))
-    return len(threads)
+        started += 1
+    wait(key, wait_seconds)
+    return started

@@ -11,6 +11,8 @@ Only the fields worth reading are shown, with their numbers made readable
 a report made on someone's machine can carry a path.
 """
 
+import math
+
 from resources.lib.xml_safety import ParseError, UnsafeXmlError, safe_fromstring
 
 _LABEL_WIDTH = 25
@@ -21,10 +23,13 @@ def _local(tag):
 
 
 def _number(text):
+    """``text`` as a number, or None: also for NaN and the infinities, which
+    ``float`` reads and no formatter here can write."""
     try:
-        return float(str(text).strip())
+        value = float(str(text).strip())
     except (TypeError, ValueError):
         return None
+    return value if math.isfinite(value) and abs(value) < 1e18 else None
 
 
 def _bit_rate(text):
@@ -117,6 +122,14 @@ _FIELDS = {"general": _GENERAL, "video": _VIDEO, "audio": _AUDIO, "text": _TEXT}
 _HEADINGS = {"general": "General", "video": "Video", "audio": "Audio", "text": "Text"}
 
 
+def _written(write, value):
+    """``value`` as ``write`` puts it; as it came when ``write`` cannot."""
+    try:
+        return write(value)
+    except (ArithmeticError, TypeError, ValueError):
+        return str(value)
+
+
 def _line(label, value):
     return "{} : {}".format(label.ljust(_LABEL_WIDTH), value)
 
@@ -162,7 +175,7 @@ def as_text(xml):
             lines.append(_line("Complete name", name))
         for field, label, write in _FIELDS[kind]:
             if values.get(field):
-                lines.append(_line(label, write(values[field])))
+                lines.append(_line(label, _written(write, values[field])))
         if len(lines) > 1:
             blocks.append("\n".join(lines))
     return "\n\n".join(blocks) if blocks else raw

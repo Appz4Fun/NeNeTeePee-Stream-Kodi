@@ -27,6 +27,7 @@ import hashlib
 import os
 import re
 import threading
+import time
 
 import xbmc
 import xbmcaddon
@@ -111,6 +112,10 @@ _KODI_MARKUP = re.compile(
     r"\[(/?(?:B|I|COLOR|CR|UPPERCASE|LOWERCASE|CAPITALIZE|LIGHT|TABS))", re.I
 )
 _CACHE_PATH = "special://temp/nzbdav-viewer/"
+# The window is redrawn this often while indexers are still answering, and
+# stops waiting for them after this long (each request has its own timeout).
+_REDRAW_SECONDS = 1.0
+_ASK_SECONDS = 45.0
 
 
 def _art_in_plain_characters():
@@ -280,8 +285,16 @@ def attribute_label(attributes):
 
 
 def _shown_text(tab):
+    """The text of a tab as it is shown; as it was kept when that fails."""
     if tab["kind"] == release_docs.MEDIAINFO:
-        return mediainfo_text.as_text(tab["text"])
+        try:
+            return mediainfo_text.as_text(tab["text"])
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: a MediaInfo report could not be laid "
+                "out: {}".format(exc),
+                xbmc.LOGWARNING,
+            )
     return tab["text"]
 
 
@@ -568,20 +581,14 @@ class NfoViewer(
         if self._started:
             return
         self._started = True
-        self._asking = len(doc_fetch.plan(self._rows, release_docs.load(self._key)))
-        self._load()
-        if self._asking:
-            threading.Thread(target=self._ask, daemon=True).start()
-
-    def _ask(self):
+        self._asking = doc_fetch.asking(self._rows, self._key)
         try:
-            doc_fetch.gather(self._rows, self._key, self._title, release_identity)
-        except Exception as exc:  # pylint: disable=broad-except
-            xbmc.log(
-                "NeNeTeePee-Stream-Kodi: asking the indexers failed: {}".format(exc),
-                xbmc.LOGWARNING,
-            )
-        self._asking = 0
+            self._load()
+        finally:
+            if self._asking:
+                threading.Thread(target=self._ask, daemon=True).start()
+
+    def _redraw(self):
         try:
             self._load()
         except Exception as exc:  # pylint: disable=broad-except
@@ -590,6 +597,30 @@ class NfoViewer(
                 "NeNeTeePee-Stream-Kodi: the viewer was not redrawn: {}".format(exc),
                 xbmc.LOGDEBUG,
             )
+
+    def _ask(self):
+        """Ask the indexers, and draw the tabs again as each one answers."""
+        try:
+            doc_fetch.gather(
+                self._rows, self._key, self._title, release_identity, wait_seconds=0
+            )
+            deadline = time.monotonic() + _ASK_SECONDS
+            while not self._closed:
+                left = doc_fetch.wait(self._key, _REDRAW_SECONDS)
+                if left != self._asking:
+                    self._asking = left
+                    self._redraw()
+                if not left or time.monotonic() >= deadline:
+                    break
+        except Exception as exc:  # pylint: disable=broad-except
+            xbmc.log(
+                "NeNeTeePee-Stream-Kodi: asking the indexers failed: {}".format(exc),
+                xbmc.LOGWARNING,
+            )
+        if self._asking:
+            # Gave up waiting, or could not ask: say so instead of "asking".
+            self._asking = 0
+            self._redraw()
 
     def _switch(self, step):
         with self._lock:
@@ -655,7 +686,7 @@ def show(entry, active_rows=None):
     key = name_form_key(title) if title else ""
     if key:
         record = release_docs.load(key)
-        if not record["docs"] and not doc_fetch.plan(rows, record):
+        if not record["docs"] and not doc_fetch.asking(rows, key):
             key = ""
     if not key:
         xbmcgui.Dialog().notification(addon_name(), _string(30780), time=3000)

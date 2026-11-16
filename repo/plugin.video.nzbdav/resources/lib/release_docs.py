@@ -20,6 +20,7 @@ Texts hold no key: they are what the indexer returned, never the link.
 import hashlib
 import json
 import os
+import re
 import threading
 import time
 
@@ -41,6 +42,9 @@ _VERSION = 1
 _MAX_RELEASES = 400
 _MAX_TEXT = 200000
 
+# A release's file: the start of a SHA-1 of its key (``_file_name``).
+_FILE_NAME = re.compile(r"^[0-9a-f]{24}\.json$")
+
 _LOCK = threading.Lock()
 # One writer at a time, from the read of a release's file to its replace.
 _SAVE_LOCK = threading.Lock()
@@ -58,31 +62,76 @@ def _file_name(key):
     return hashlib.sha1(key.encode("utf-8")).hexdigest()[:24] + ".json"  # nosec B324
 
 
+def _entry(entry):
+    """An index entry in the shape the module keeps, whatever was read."""
+    return {
+        NFO: entry.get(NFO) is True,
+        MEDIAINFO: entry.get(MEDIAINFO) is True,
+        "at": entry.get("at") if isinstance(entry.get("at"), int) else 0,
+        "none": [pair for pair in entry.get("none") or () if isinstance(pair, str)],
+    }
+
+
+def _read_index():
+    """The index on disk as ``{file name: entry}``; None when it cannot be
+    read. A name that is not one of this module's file names is left out:
+    names from the index are joined to the folder and removed when old."""
+    try:
+        with open(os.path.join(_dir(), _INDEX_NAME), "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, TypeError, ValueError):
+        return None
+    entries = data.get("releases") if isinstance(data, dict) else None
+    if not isinstance(entries, dict) or data.get("v") != _VERSION:
+        return None
+    return {
+        name: _entry(entry)
+        for name, entry in entries.items()
+        if isinstance(name, str) and _FILE_NAME.match(name) and isinstance(entry, dict)
+    }
+
+
+def _scan():
+    """An index made from the release files themselves.
+
+    For a folder whose index is missing or unreadable: without it the files
+    of the releases kept so far would never be counted, nor removed.
+    """
+    entries = {}
+    try:
+        names = os.listdir(_dir())
+    except OSError:
+        return entries
+    for name in names:
+        if not _FILE_NAME.match(name):
+            continue
+        path = os.path.join(_dir(), name)
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle)
+            at = int(os.path.getmtime(path))
+        except (OSError, TypeError, ValueError):
+            continue
+        if not isinstance(data, dict) or data.get("v") != _VERSION:
+            continue
+        docs = [doc for doc in data.get("docs") or () if _valid_doc(doc)]
+        none = data.get("none")
+        entries[name] = {
+            NFO: any(doc["kind"] == NFO for doc in docs),
+            MEDIAINFO: any(doc["kind"] == MEDIAINFO for doc in docs),
+            "at": at,
+            "none": sorted(none) if isinstance(none, dict) else [],
+        }
+    return entries
+
+
 def _load_index():
     with _LOCK:
         if _LOADED:
             return
         _LOADED.append(True)
-        try:
-            with open(os.path.join(_dir(), _INDEX_NAME), "r", encoding="utf-8") as fh:
-                data = json.load(fh)
-        except (OSError, TypeError, ValueError):
-            return
-        entries = data.get("releases") if isinstance(data, dict) else None
-        if not isinstance(entries, dict) or data.get("v") != _VERSION:
-            return
-        for name, entry in entries.items():
-            if isinstance(name, str) and isinstance(entry, dict):
-                _INDEX[name] = {
-                    NFO: entry.get(NFO) is True,
-                    MEDIAINFO: entry.get(MEDIAINFO) is True,
-                    "at": entry.get("at") if isinstance(entry.get("at"), int) else 0,
-                    "none": [
-                        pair
-                        for pair in entry.get("none") or ()
-                        if isinstance(pair, str)
-                    ],
-                }
+        entries = _read_index()
+        _INDEX.update(_scan() if entries is None else entries)
 
 
 def _write_json(path, data):
@@ -143,7 +192,13 @@ def _save(key, record):
     if not _write_json(os.path.join(_dir(), name), data):
         return
     _load_index()
+    # Kodi runs each call of the add-on in an interpreter of its own: what
+    # another one kept since this one read the index is taken in, so writing
+    # the index does not drop it.
+    on_disk = _read_index() or {}
     with _LOCK:
+        for other, entry in on_disk.items():
+            _INDEX.setdefault(other, entry)
         _INDEX[name] = {
             NFO: any(doc["kind"] == NFO for doc in record["docs"]),
             MEDIAINFO: any(doc["kind"] == MEDIAINFO for doc in record["docs"]),

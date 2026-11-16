@@ -69,7 +69,12 @@ from resources.lib import (
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
-from resources.lib.indexer_media import has_key, serves_mediainfo, with_key_from
+from resources.lib.indexer_media import (
+    has_key,
+    link_key,
+    serves_mediainfo,
+    with_key_from,
+)
 from resources.lib.mediainfo_audio import (
     CHANNEL_COUNT,
     OBJECT_FORMATS,
@@ -776,6 +781,25 @@ def shown_for(text, title, describe):
     return not ours.get("group") and bool(stated_release_name(text, title, describe))
 
 
+# A key is long: a short value of a key parameter (a user number) is not one,
+# and taking it out would take digits out of the text.
+_MIN_KEY_LENGTH = 16
+
+
+def without_keys(text, link):
+    """``text`` as it may be kept: with no API key in it.
+
+    A reply can repeat the request it answers (an error page that echoes the
+    link). The key of ``link`` is taken out wherever the text holds it, and
+    so is anything written as a key parameter.
+    """
+    text = str(text or "")
+    for value in link_key(link).values():
+        if len(value) >= _MIN_KEY_LENGTH:
+            text = text.replace(value, "REDACTED")
+    return redact_text(text)
+
+
 # --- asking the indexers ----------------------------------------------------
 
 
@@ -1038,7 +1062,10 @@ def _fetch_mediainfo(key, link, title):
         return None, {}, what
     # The report itself, for the picker's viewer.
     release_docs.keep(
-        key, release_docs.MEDIAINFO, host, mediainfo_audio.mediainfo_xml_of(body)
+        key,
+        release_docs.MEDIAINFO,
+        host,
+        without_keys(mediainfo_audio.mediainfo_xml_of(body), link),
     )
     video = mediainfo_video.from_reply(body)
     if video:
@@ -1208,7 +1235,7 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
     # The text itself, for the picker's viewer: not another release's NFO,
     # nor an indexer's "no such item" reply.
     if error is None and shown_for(text, title, describe):
-        release_docs.keep(key, release_docs.NFO, _host(url), text)
+        release_docs.keep(key, release_docs.NFO, _host(url), without_keys(text, url))
     else:
         release_docs.mark_none(key, release_docs.NFO, _host(url))
     if whose == WRONG:

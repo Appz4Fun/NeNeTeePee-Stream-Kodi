@@ -134,6 +134,55 @@ def test_only_the_newest_releases_are_kept(store):
     assert len(list(store.glob("*.json"))) == 3  # two releases and the index
 
 
+def test_a_lost_index_is_made_again_from_the_files(store):
+    release_docs.keep(KEY, release_docs.NFO, "a.example", "text")
+    release_docs.mark_none(KEY, release_docs.MEDIAINFO, "a.example")
+    release_docs.keep("another", release_docs.MEDIAINFO, "b.example", REPORT)
+    (store / "index.json").write_text("{not json")
+    (store / "notes.json").write_text("{}")
+    release_docs.forget_all()
+
+    # Known again without the index, so the old files still count, and go
+    # when their turn comes.
+    assert release_docs.kinds_known(KEY) == (True, False)
+    assert release_docs.asked_none(KEY) == {"mediainfo a.example"}
+    with patch.object(release_docs, "_MAX_RELEASES", 2):
+        release_docs.keep("third", release_docs.NFO, "a.example", "text")
+    assert len(json.loads((store / "index.json").read_text())["releases"]) == 2
+    assert len(list(store.glob("*.json"))) == 4  # two releases, the index, notes
+
+
+def test_what_another_run_kept_is_not_dropped_from_the_index(store):
+    release_docs.keep(KEY, release_docs.NFO, "a.example", "text")
+    # Another interpreter of the add-on keeps a release this one never saw.
+    index = json.loads((store / "index.json").read_text())
+    theirs = release_docs._file_name("theirs")
+    index["releases"][theirs] = {"nfo": True, "mediainfo": False, "at": 5, "none": []}
+    (store / "index.json").write_text(json.dumps(index))
+
+    release_docs.keep("mine", release_docs.NFO, "a.example", "text")
+    assert theirs in json.loads((store / "index.json").read_text())["releases"]
+    assert release_docs.kinds_known("theirs") == (True, False)
+
+
+def test_only_this_folders_own_files_are_ever_removed(store, tmp_path):
+    outside = tmp_path / "keep-me.json"
+    outside.write_text("{}")
+    release_docs.keep(KEY, release_docs.NFO, "a.example", "text")
+    index = json.loads((store / "index.json").read_text())
+    for name in ("../keep-me.json", str(outside), "index.json"):
+        index["releases"][name] = {"nfo": True, "mediainfo": False, "at": 0, "none": []}
+    (store / "index.json").write_text(json.dumps(index))
+    release_docs.forget_all()
+
+    with patch.object(release_docs, "_MAX_RELEASES", 1):
+        release_docs.keep("newer", release_docs.NFO, "a.example", "text")
+    assert outside.exists() and (store / "index.json").exists()
+    assert list(json.loads((store / "index.json").read_text())["releases"]) == [
+        release_docs._file_name("newer")
+    ]
+
+
 def test_identical_texts_share_a_tab_that_names_every_indexer():
     release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
     release_docs.keep(KEY, release_docs.NFO, "life.example", "another NFO")
@@ -291,6 +340,83 @@ def test_another_releases_nfo_is_not_kept(indexer):
     assert release_docs.asked_none(KEY) == {"nfo 127.0.0.1"}
 
 
+def test_closing_and_opening_again_does_not_ask_the_same_indexer_twice(indexer):
+    release = threading.Event()
+    replies = _Handler.replies
+
+    class _Slow(dict):
+        def get(self, key, default=None):
+            release.wait(5)
+            return replies.get(key, default)
+
+    replies["/api"] = (200, OWN_NFO.encode())
+    _Handler.replies = _Slow()
+    rows = [{"title": NAME, "indexer": "Hub", "nfo_url": _nfo_link(indexer)}]
+    try:
+        with _known(**{"127_0_0_1": Offer(GETNFO, None)}):
+            # The viewer opens, is closed before the indexer answers, and
+            # opens again: the request in hand is the only one.
+            assert doc_fetch.gather(rows, KEY, NAME, release_identity, 0) == 1
+            assert doc_fetch.running(KEY) == 1 and doc_fetch.asking(rows, KEY) == 1
+            assert doc_fetch.plan(rows, release_docs.load(KEY), KEY) == {}
+            assert doc_fetch.gather(rows, KEY, NAME, release_identity, 0) == 0
+            # Another release on the same indexer is its own request.
+            assert list(doc_fetch.plan(rows, release_docs.load("other"), "other"))
+            release.set()
+            assert doc_fetch.wait(KEY, 5) == 0
+    finally:
+        release.set()
+        _Handler.replies = replies
+    assert len(_Handler.requests) == 1
+    assert release_docs.kinds_known(KEY) == (True, False)
+    assert doc_fetch.asking(rows, KEY) == 0 and doc_fetch.asking(rows, "") == 0
+
+
+def test_an_answer_slower_than_the_wait_is_still_kept(indexer):
+    release = threading.Event()
+    replies = _Handler.replies
+
+    class _Slow(dict):
+        def get(self, key, default=None):
+            release.wait(5)
+            return replies.get(key, default)
+
+    replies["/api"] = (200, OWN_NFO.encode())
+    _Handler.replies = _Slow()
+    rows = [{"title": NAME, "indexer": "Hub", "nfo_url": _nfo_link(indexer)}]
+    try:
+        with _known(**{"127_0_0_1": Offer(GETNFO, None)}):
+            doc_fetch.gather(rows, KEY, NAME, release_identity, wait_seconds=0.05)
+            assert release_docs.load(KEY)["docs"] == []
+            assert doc_fetch.wait(KEY, 0.05) == 1
+            release.set()
+            assert doc_fetch.wait(KEY, 5) == 0
+    finally:
+        release.set()
+        _Handler.replies = replies
+    assert [doc["host"] for doc in release_docs.load(KEY)["docs"]] == ["127.0.0.1"]
+
+
+def test_a_reply_that_repeats_the_key_is_kept_without_it(indexer):
+    key = "0123456789abcdef0123456789abcdef"
+    link = "{}/api?t=getnfo&id={}&apikey={}&i=7&raw=1".format(indexer, _ID, key)
+    echo = "{}\nrequest was /api?t=getnfo&apikey={}&i=7 from user 7\n".format(NAME, key)
+    _Handler.replies["/api"] = (200, echo.encode())
+    rows = [{"title": NAME, "indexer": "Hub", "nfo_url": link}]
+    with _known(**{"127_0_0_1": Offer(GETNFO, None)}):
+        doc_fetch.gather(rows, KEY, NAME, release_identity)
+        (kept,) = [doc["text"] for doc in release_docs.load(KEY)["docs"]]
+        release_docs.forget_all()
+        # The search's own read keeps the same text.
+        nfo_audio.learn_for_top(rows, name_form_key, lambda _k, default="": default)
+
+    assert key not in kept and "apikey=REDACTED" in kept
+    # A short value of a key parameter is a user number: it stays in the text.
+    assert "from user 7" in kept and kept.startswith(NAME)
+    assert key not in json.dumps(release_docs.load(KEY))
+    assert nfo_audio.without_keys(None, link) == ""
+
+
 def test_a_tersely_named_listing_keeps_the_nfo_that_names_the_film(indexer):
     # The listing has no group in its name; the NFO has the release's full
     # name. Whose encode it is cannot be told, but it is this film's NFO.
@@ -415,6 +541,25 @@ def test_several_tracks_of_a_kind_are_numbered():
         "Audio #1\nFormat                    : TrueHD\n\n"
         "Audio #2\nFormat                    : AC-3"
     )
+
+
+def test_numbers_that_are_not_numbers_are_written_as_they_came():
+    report = (
+        '<MediaInfo><media><track type="General"><Duration>NaN</Duration>'
+        "<FileSize>inf</FileSize><OverallBitRate>1e400</OverallBitRate>"
+        '</track><track type="Video"><Width>-inf</Width><Height>abc</Height>'
+        "</track></media></MediaInfo>"
+    )
+    assert mediainfo_text.as_text(report).splitlines() == [
+        "General",
+        "File size                 : inf",
+        "Duration                  : NaN",
+        "Overall bit rate          : 1e400",
+        "",
+        "Video",
+        "Width                     : -inf",
+        "Height                    : abc",
+    ]
 
 
 def test_a_report_that_cannot_be_read_is_shown_as_it_came():
