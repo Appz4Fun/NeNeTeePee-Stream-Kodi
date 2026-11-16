@@ -93,6 +93,17 @@
           <font>font13</font><textcolor>FFD4D4D8</textcolor>
           <label>$INFO[ListItem.Label]</label><aligny>center</aligny>
         </control>
+        <!-- Strikethrough for a release its own REPACK replaces. Kodi text has
+             no strikethrough and a skin font may lack the stroke character, so
+             it is a drawn line; "strike" is how far along the name column the
+             name runs, in percent. -->
+        <control type="progress">
+          <visible>!String.IsEmpty(ListItem.Property(strike))</visible>
+          <left>40</left><top>19</top><width>1140</width><height>2</height>
+          <info>ListItem.Property(strike)</info>
+          <texturebg colordiffuse="00FFFFFF">white.png</texturebg>
+          <midtexture colordiffuse="FFB4B8C0">white.png</midtexture>
+        </control>
         <control type="label">
           <left>1190</left><top>4</top><width>120</width><height>30</height>
           <font>font13</font><textcolor>FFFFFFFF</textcolor>
@@ -114,7 +125,7 @@
           <label>$INFO[ListItem.Property(group)]</label><aligny>center</aligny><align>right</align>
         </control>
 
-        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + Container + Filter reason -->
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + REPACK + Container + Filter reason -->
         <control type="label">
           <left>20</left><top>34</top><width>100</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
@@ -141,17 +152,22 @@
           <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>870</left><top>34</top><width>100</width><height>26</height>
+          <left>870</left><top>34</top><width>112</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hybrid)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>980</left><top>34</top><width>80</width><height>26</height>
+          <left>986</left><top>34</top><width>106</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(repack)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>1096</left><top>34</top><width>80</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>1070</left><top>34</top><width>400</width><height>26</height>
+          <left>1180</left><top>34</top><width>400</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
         </control>
@@ -192,6 +208,17 @@
           <label>$INFO[ListItem.Label]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
+        <!-- Strikethrough for a release its own REPACK replaces. Kodi text has
+             no strikethrough and a skin font may lack the stroke character, so
+             it is a drawn line; "strike" is how far along the name column the
+             name runs, in percent. -->
+        <control type="progress">
+          <visible>!String.IsEmpty(ListItem.Property(strike))</visible>
+          <left>40</left><top>19</top><width>1140</width><height>2</height>
+          <info>ListItem.Property(strike)</info>
+          <texturebg colordiffuse="00FFFFFF">white.png</texturebg>
+          <midtexture colordiffuse="FFB4B8C0">white.png</midtexture>
+        </control>
         <control type="label">
           <left>1190</left><top>4</top><width>120</width><height>30</height>
           <font>font13</font><textcolor>FFFFFFFF</textcolor>
@@ -217,7 +244,7 @@
           <scroll>true</scroll>
         </control>
 
-        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + Container + Filter reason -->
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + REPACK + Container + Filter reason -->
         <control type="label">
           <left>20</left><top>34</top><width>100</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
@@ -249,19 +276,25 @@
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>870</left><top>34</top><width>100</width><height>26</height>
+          <left>870</left><top>34</top><width>112</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hybrid)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>980</left><top>34</top><width>80</width><height>26</height>
+          <left>986</left><top>34</top><width>106</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(repack)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>1096</left><top>34</top><width>80</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>1070</left><top>34</top><width>400</width><height>26</height>
+          <left>1180</left><top>34</top><width>400</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
           <scroll>true</scroll>
@@ -325,6 +358,17 @@
           <font>font13</font><textcolor>FFD4D4D8</textcolor>
           <label>$INFO[ListItem.Label]</label><aligny>center</aligny>
         </control>
+        <!-- Strikethrough for a release its own REPACK replaces. Kodi text has
+             no strikethrough and a skin font may lack the stroke character, so
+             it is a drawn line; "strike" is how far along the name column the
+             name runs, in percent. -->
+        <control type="progress">
+          <visible>!String.IsEmpty(ListItem.Property(strike))</visible>
+          <left>40</left><top>19</top><width>860</width><height>2</height>
+          <info>ListItem.Property(strike)</info>
+          <texturebg colordiffuse="00FFFFFF">white.png</texturebg>
+          <midtexture colordiffuse="FFB4B8C0">white.png</midtexture>
+        </control>
         <control type="label">
           <left>910</left><top>4</top><width>140</width><height>30</height>
           <font>font13</font><textcolor>FFFFFFFF</textcolor>
@@ -336,49 +380,54 @@
           <label>$INFO[ListItem.Property(copies)]</label><aligny>center</aligny><align>right</align>
         </control>
 
-        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + Container + Filter reason + Group -->
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + REPACK + Container + Filter reason + Group -->
         <control type="label">
-          <left>20</left><top>34</top><width>88</width><height>26</height>
+          <left>20</left><top>34</top><width>78</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(resolution)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>112</left><top>34</top><width>148</width><height>26</height>
+          <left>102</left><top>34</top><width>144</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hdr)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>264</left><top>34</top><width>88</width><height>26</height>
+          <left>250</left><top>34</top><width>76</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(codec)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>356</left><top>34</top><width>250</width><height>26</height>
+          <left>330</left><top>34</top><width>230</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(audio)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>610</left><top>34</top><width>102</width><height>26</height>
+          <left>564</left><top>34</top><width>98</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>716</left><top>34</top><width>102</width><height>26</height>
+          <left>666</left><top>34</top><width>112</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hybrid)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>822</left><top>34</top><width>60</width><height>26</height>
+          <left>782</left><top>34</top><width>104</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(repack)]</label><aligny>center</aligny>
+        </control>
+        <control type="label">
+          <left>890</left><top>34</top><width>56</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>886</left><top>34</top><width>150</width><height>26</height>
+          <left>950</left><top>34</top><width>96</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
         </control>
         <control type="label">
-          <left>1040</left><top>34</top><width>196</width><height>26</height>
+          <left>1050</left><top>34</top><width>186</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(group)]</label><aligny>center</aligny><align>right</align>
         </control>
@@ -416,6 +465,17 @@
           <label>$INFO[ListItem.Label]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
+        <!-- Strikethrough for a release its own REPACK replaces. Kodi text has
+             no strikethrough and a skin font may lack the stroke character, so
+             it is a drawn line; "strike" is how far along the name column the
+             name runs, in percent. -->
+        <control type="progress">
+          <visible>!String.IsEmpty(ListItem.Property(strike))</visible>
+          <left>40</left><top>19</top><width>860</width><height>2</height>
+          <info>ListItem.Property(strike)</info>
+          <texturebg colordiffuse="00FFFFFF">white.png</texturebg>
+          <midtexture colordiffuse="FFB4B8C0">white.png</midtexture>
+        </control>
         <control type="label">
           <left>910</left><top>4</top><width>140</width><height>30</height>
           <font>font13</font><textcolor>FFFFFFFF</textcolor>
@@ -429,57 +489,63 @@
           <scroll>true</scroll>
         </control>
 
-        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + Container + Filter reason + Group -->
+        <!-- LINE 2: Res + HDR + Codec + Audio + Source + HYBRID + REPACK + Container + Filter reason + Group -->
         <control type="label">
-          <left>20</left><top>34</top><width>88</width><height>26</height>
+          <left>20</left><top>34</top><width>78</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(resolution)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>112</left><top>34</top><width>148</width><height>26</height>
+          <left>102</left><top>34</top><width>144</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hdr)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>264</left><top>34</top><width>88</width><height>26</height>
+          <left>250</left><top>34</top><width>76</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(codec)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>356</left><top>34</top><width>250</width><height>26</height>
+          <left>330</left><top>34</top><width>230</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(audio)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>610</left><top>34</top><width>102</width><height>26</height>
+          <left>564</left><top>34</top><width>98</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(quality)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>716</left><top>34</top><width>102</width><height>26</height>
+          <left>666</left><top>34</top><width>112</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(hybrid)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>822</left><top>34</top><width>60</width><height>26</height>
+          <left>782</left><top>34</top><width>104</width><height>26</height>
+          <font>font12</font><textcolor>FFFFFFFF</textcolor>
+          <label>$INFO[ListItem.Property(repack)]</label><aligny>center</aligny>
+          <scroll>true</scroll>
+        </control>
+        <control type="label">
+          <left>890</left><top>34</top><width>56</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(container)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>886</left><top>34</top><width>150</width><height>26</height>
+          <left>950</left><top>34</top><width>96</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(filter_reason)]</label><aligny>center</aligny>
           <scroll>true</scroll>
         </control>
         <control type="label">
-          <left>1040</left><top>34</top><width>196</width><height>26</height>
+          <left>1050</left><top>34</top><width>186</width><height>26</height>
           <font>font12</font><textcolor>FFFFFFFF</textcolor>
           <label>$INFO[ListItem.Property(group)]</label><aligny>center</aligny><align>right</align>
           <scroll>true</scroll>

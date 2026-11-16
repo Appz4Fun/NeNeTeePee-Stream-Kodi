@@ -533,3 +533,136 @@ def test_separate_uploads_read_as_before():
     props = _group_props(group)
     assert "2 copies" in props["copies"]
     assert props["panel_kicker"] == "2 copies on 2 indexers"
+
+
+# ---------------------------------------------------------------------------
+# REPACK tag, and the release a REPACK replaces
+# ---------------------------------------------------------------------------
+
+_PLAIN = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264-GRPA"
+_REPACK = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264.REPACK-GRPA"
+_PROPER = "Alpha.2024.1080p.WEB-DL.DDP5.1.H264.PROPER-GRPA"
+_HYBRID_REPACK = "Alpha.2024.2160p.BluRay.REMUX.HEVC.TrueHD.7.1.HYBRID.REPACK-GRPA"
+
+
+def _made_items(dialog, list_id):
+    """``[(label, props)]`` of the rows a populated dialog built."""
+    made = []
+
+    def make(label="", **_kwargs):
+        item = MagicMock()
+        made.append((label, item))
+        return item
+
+    with patch("resources.lib.results_dialog.xbmcgui.ListItem", side_effect=make):
+        dialog.onInit()
+    assert len(dialog.getControl(list_id).addItems.call_args.args[0]) == len(made)
+    return [(label, _props(item)) for label, item in made]
+
+
+def test_repack_and_proper_are_a_colored_tag_beside_hybrid():
+    repack = _group_props([_row(_HYBRID_REPACK, "r1")])
+    proper = _group_props([_row(_PROPER, "p1")])
+    plain = _group_props([_row(_PLAIN, "a1")])
+
+    assert repack["repack"] == "[COLOR FFFB923C]REPACK[/COLOR]"
+    assert "HYBRID" in repack["hybrid"] and "REPACK" not in repack["hybrid"]
+    assert proper["repack"] == "[COLOR FFFB923C]PROPER[/COLOR]"
+    assert plain["repack"] == ""
+    # The panel's tech line carries the tag after HYBRID.
+    tech = repack["panel_tech"]
+    assert tech.index("HYBRID") < tech.index("REPACK") < tech.index("GRPA")
+    assert "REPACK" not in plain["panel_tech"]
+
+
+def test_compact_view_strikes_through_the_release_a_repack_replaces():
+    plain = [_row(_PLAIN, "a1"), _row(_PLAIN, "a2")]
+    rows = [_row(_REPACK, "r1")] + plain + [_row(BRAVO, "b1")]
+    items = _made_items(_dialog(rows), COMPACT_LIST_ID)
+
+    (repack_label, repack), (plain_label, plain), (_bravo_label, bravo) = items
+    assert "strike" not in repack and "strike" not in bravo
+    assert not repack_label.startswith("[COLOR")
+    # Greyed, with a line as long as the name: a share of the 860 px column.
+    assert plain_label.startswith("[COLOR FF7C828D]Alpha (2024)")
+    assert 1 <= int(plain["strike"]) < 100
+    assert plain["panel_foot"] == (
+        "[COLOR FFFB923C]Struck through: a REPACK of this release is in the list."
+        "[/COLOR][CR]Enter plays the top copy."
+    )
+    assert repack["panel_foot"] == "Enter plays the top copy."
+
+
+def test_list_view_strikes_through_every_listing_of_the_replaced_release():
+    rows = [_row(_PROPER, "p1"), _row(_PLAIN, "a1"), _row(_PLAIN, "a2")]
+    items = _made_items(_dialog(rows, view=VIEW_LIST), LIST_ID)
+
+    assert ["strike" in props for _label, props in items] == [False, True, True]
+    # The List view's name column is wider, so the same name covers less.
+    compact = _made_items(_dialog(rows), COMPACT_LIST_ID)
+    assert int(items[1][1]["strike"]) < int(compact[1][1]["strike"])
+
+
+def test_a_release_is_struck_through_only_while_its_repack_is_in_the_view():
+    plain = _row(_PLAIN, "a1")
+    hidden_repack = _row(_REPACK, "r1", reject="size")
+    dialog = _dialog([plain], all_results=[hidden_repack, plain])
+
+    filtered = _made_items(dialog, COMPACT_LIST_ID)
+    assert "strike" not in filtered[0][1]
+
+    with patch("resources.lib.results_dialog.xbmcgui.ListItem") as made:
+        made.side_effect = lambda label="", **_kwargs: MagicMock(name=label)
+        dialog.getControl(COMPACT_LIST_ID).getSelectedPosition.return_value = 0
+        dialog._toggle_show_all()
+    shown = dialog.getControl(COMPACT_LIST_ID).addItems.call_args.args[0]
+    assert ["strike" in _props(item) for item in shown] == [False, True]
+
+
+def test_skin_draws_the_strike_and_the_repack_slot_in_every_row_layout():
+    root = ET.parse(_DIALOG_XML_PATH).getroot()
+    from resources.lib.results_dialog import _COMPACT_NAME_WIDTH, _LIST_NAME_WIDTH
+
+    for list_id, name_width in (("50", _LIST_NAME_WIDTH), ("51", _COMPACT_NAME_WIDTH)):
+        container = root.find(".//control[@type='list'][@id='{}']".format(list_id))
+        for layout in (container.find("itemlayout"), container.find("focusedlayout")):
+            name = next(
+                control
+                for control in layout.findall("control")
+                if control.findtext("label") == "$INFO[ListItem.Label]"
+            )
+            assert int(name.findtext("width")) == name_width
+            (strike,) = layout.findall("control[@type='progress']")
+            assert strike.findtext("info") == "ListItem.Property(strike)"
+            assert strike.findtext("visible") == (
+                "!String.IsEmpty(ListItem.Property(strike))"
+            )
+            # The line starts where the name starts and spans its column.
+            assert strike.findtext("left") == name.findtext("left")
+            assert int(strike.findtext("width")) == name_width
+            slots = {
+                control.findtext("label"): control
+                for control in layout.findall("control[@type='label']")
+            }
+            hybrid = slots["$INFO[ListItem.Property(hybrid)]"]
+            repack = slots["$INFO[ListItem.Property(repack)]"]
+            container_slot = slots["$INFO[ListItem.Property(container)]"]
+            end = int(hybrid.findtext("left")) + int(hybrid.findtext("width"))
+            assert end <= int(repack.findtext("left"))
+            end = int(repack.findtext("left")) + int(repack.findtext("width"))
+            assert end <= int(container_slot.findtext("left"))
+
+
+def test_no_line_two_slot_overlaps_the_next_in_any_row_layout():
+    root = ET.parse(_DIALOG_XML_PATH).getroot()
+    for list_id in ("50", "51"):
+        container = root.find(".//control[@type='list'][@id='{}']".format(list_id))
+        for layout in (container.find("itemlayout"), container.find("focusedlayout")):
+            spans = sorted(
+                (int(control.findtext("left")), int(control.findtext("width")))
+                for control in layout.findall("control[@type='label']")
+                if control.findtext("top") == "34"
+            )
+            for (left, width), (next_left, _next_width) in zip(spans, spans[1:]):
+                assert left + width <= next_left
+            assert spans[-1][0] + spans[-1][1] <= int(layout.get("width"))

@@ -426,6 +426,39 @@ with another's audio or Dolby Vision added to an HDR10+ encode. Only a
 `Hybrid` tag after the year, episode or resolution counts; a title such as
 *Hybrid (2007)* isn't one.
 
+**REPACK** and **PROPER** have an orange slot beside it. A group posts a
+REPACK (or a RERIP, which is shown as one) or a PROPER to replace a release of
+its own that had a fault. When the list holds both, the replaced release's name
+is greyed and struck through, and in **List compacted** the side panel says
+which tag replaced it:
+
+- The two must be the same release in everything but the tag: the same title
+  and year or episode, edition, resolution, HDR, audio, channels, source,
+  codec, HYBRID and release group.
+- Another group's PROPER strikes nothing. It is a different encode, not the
+  same file fixed.
+- A REPACK and a PROPER of one release don't strike each other.
+- A release is struck through only while its replacement is in the view. If
+  your filters hide the REPACK, the older release isn't struck through until
+  you show all results.
+
+```mermaid
+flowchart TD
+    A[A release in the view<br/>with no REPACK or PROPER tag] --> B{Has a release group?}
+    B -->|no| KEEP[Shown as usual]
+    B -->|yes| C{Is a REPACK or PROPER<br/>from that group in the view?}
+    C -->|no| KEEP
+    C -->|yes| D{Same title and year or episode,<br/>edition, resolution, HDR, audio,<br/>channels, source, codec and HYBRID?}
+    D -->|no| KEEP
+    D -->|yes| STRIKE[Name greyed and struck through]
+```
+
+![The picker with REPACK and PROPER tags and the releases they replace struck through](../images/picker-repack.png)
+
+A struck-through release still plays if you pick it. Kodi's text has no
+strikethrough, so the picker draws the line and estimates its length from the
+name; on some skins it runs a few letters past the end.
+
 ## Filtered and all results in the picker
 
 The picker opens on the filtered list, and its header reads *Showing N of M

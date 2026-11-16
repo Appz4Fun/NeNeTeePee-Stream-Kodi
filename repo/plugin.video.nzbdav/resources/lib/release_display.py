@@ -95,6 +95,10 @@ HYBRID_LABEL = "HYBRID"
 # A release tagged as an upscale, by AI or otherwise (``filter_upscale``).
 UPSCALE_LABEL = "UPSCALE"
 COMPLETE_LABEL = "Complete"
+# The picker's tags for a release its group posted again to fix a fault
+# (``release_supersede``). The parser reads a RERIP as a REPACK.
+REPACK_LABEL = "REPACK"
+PROPER_LABEL = "PROPER"
 # A re-release marker ``filter.parse_title_metadata`` stores as a variant.
 _REVISION = re.compile(r"v[2-9]")
 

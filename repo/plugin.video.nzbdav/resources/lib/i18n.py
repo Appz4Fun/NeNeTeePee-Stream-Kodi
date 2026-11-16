@@ -289,6 +289,7 @@ _FALLBACK_STRINGS = {
     30763: "Opening the list",
     30764: "Playing the best match",
     30765: "Each indexer's answer appears here",
+    30770: "Struck through: a {} of this release is in the list.",
 }
 
 
