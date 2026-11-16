@@ -204,8 +204,14 @@ def _submit_legacy_fleet(ctx, nzb_url, title, dupe_key, prepared=None):
 
 
 def _score_prepared(dupe, kept, prior):
-    """Assign old-server scores to the full sequence, including unused extras."""
-    ranked = [kept[0][0]] + list(prior) + [row for row, _handle, _token in kept]
+    """Assign old-server scores to the full sequence, including unused extras.
+
+    A kept backup that holds the pick's own files (``_same_files``, see
+    ``nzbget_resolver_dupes._twins_first``) is scored right behind the pick.
+    """
+    rows = [row for row, _handle, _token in kept]
+    twins = [row for row in rows[1:] if row.get("_same_files")]
+    ranked = [kept[0][0]] + twins + list(prior) + rows
     seen = {}
     base = int(dupe.get("pick_score") or 0)
     for row in ranked:

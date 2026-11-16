@@ -27,15 +27,19 @@ from resources.lib.upload_count import count_uploads
 #   ("HDR10x265", once read as season 10 episode 265 and dropped from a
 #   film search), ATV as Apple TV+, and a trailing word the list knows as
 #   a group (207 rows).
+#   6494 / 924 / 7: one upload's names pool their tags where one name's
+#   parse replaced the others; sizes an indexer rounded to hundredths of a
+#   gibibyte prove nothing; names with no group that parse alike at one
+#   size are one row; the grouping no longer depends on the rows' order.
 EXPECTED = {
     "rows": 41446,
     "shown": 39733,
-    "picker_rows": 6489,
+    "picker_rows": 6494,
     "groupless_rows": 2531,
-    "groupless_picker_rows": 934,
+    "groupless_picker_rows": 924,
     "uploads_listed_twice": 7713,
-    "uploads_split": 9,
-    "multi_copy_rows": 4329,
+    "uploads_split": 7,
+    "multi_copy_rows": 4347,
 }
 
 
@@ -112,3 +116,29 @@ def test_every_listing_of_a_release_is_ranked_by_one_count(opened):
         ranked_by = _nzb_copy_counts(one.filtered)
         for group in one.groups:
             assert len({ranked_by[id(row)] for row in group}) == 1
+
+
+def test_the_order_the_rows_arrive_in_changes_nothing():
+    # Three of the smaller searches, each shuffled: the same picker rows and
+    # the same parse on every row.
+    shuffler = random.Random(9)
+
+    def outcome(one):
+        parses = {
+            grouping_corpus._ident(row): (
+                row["_meta"]["group"],
+                row["_meta"]["quality"],
+                row["_meta"]["resolution"],
+                tuple(row["_meta"]["hdr"]),
+                tuple(row["_meta"]["audio"]),
+            )
+            for row in one.filtered
+        }
+        return grouping_corpus.partition(one.groups), parses
+
+    for search in sorted(grouping_corpus.load(), key=lambda s: len(s.rows))[:3]:
+        expected = outcome(grouping_corpus.open_picker(search))
+        rows = grouping_corpus.load_search(search.name)
+        shuffler.shuffle(rows)
+
+        assert outcome(grouping_corpus.open_picker(search, rows)) == expected

@@ -58,6 +58,11 @@ def load():
     return searches
 
 
+def load_search(name):
+    """Fresh rows of the search called ``name`` (``Search.name``)."""
+    return next(search.rows for search in load() if search.name == name)
+
+
 def _row(packed):
     row = {
         "title": packed["title"],
@@ -108,9 +113,15 @@ def reference_groups(rows):
     A row joins the first group whose every member it is the same release
     as (``_plainly_the_same``), and a season pack never groups. No keys,
     buckets or caches: this is what any faster grouping has to equal.
+
+    The rule is not transitive, so the outcome depends on the order rows
+    are taken in. They are taken as ``release_index`` documents: the name
+    and parse carried by the most rows first (``_commonest_first``). The
+    groups come back in list order, each with its rows in list order.
     """
+    position = {id(row): at for at, row in enumerate(rows)}
     groups = []
-    for row in rows:
+    for row in _commonest_first(rows):
         if not row.get("_season_pack"):
             for group in groups:
                 if all(
@@ -123,7 +134,45 @@ def reference_groups(rows):
                 groups.append([row])
         else:
             groups.append([row])
+    for group in groups:
+        group.sort(key=lambda row: position[id(row)])
+    groups.sort(key=lambda group: position[id(group[0])])
     return groups
+
+
+def _commonest_first(rows):
+    """``rows`` ordered by how many rows read exactly as they do, most first.
+
+    What a row reads as is everything the rule looks at: its parsed release
+    fields, what it is a release of, its container and its upscale flag.
+    Equal counts are ordered by that reading itself, so the order never
+    depends on how ``rows`` came.
+    """
+    from resources.lib import fallback_streams as _fs
+    from resources.lib.release_match import profile_group, release_profile
+    from resources.lib.release_subject import name_form_key
+
+    def reading(row):
+        meta = row.get("_meta") or {}
+        container = str(meta.get("container") or "").strip().casefold()
+        try:
+            profile = release_profile(row)
+            if profile_group(profile):
+                identity = _fs._release_identity(row)
+                upscaled = _fs._meta_bool_from_meta(meta, "upscaled")
+                return (profile, repr((identity, container, upscaled)))
+        except Exception:  # pylint: disable=broad-except
+            return ("unreadable", id(row))
+        taken = meta.get("parse_from_payload")
+        return ("no group", taken or name_form_key(row.get("title")), repr(container))
+
+    readings = [reading(row) for row in rows]
+    counts = collections.Counter(readings)
+    order = sorted(
+        range(len(rows)),
+        key=lambda at: (-counts[readings[at]], repr(readings[at][-1]), at),
+    )
+    return [rows[at] for at in order]
 
 
 def _plainly_the_same(member, row):

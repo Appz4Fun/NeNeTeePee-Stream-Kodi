@@ -235,8 +235,9 @@ def test_dotted_and_parenthesized_listings_of_one_release_pool_their_copies():
 def test_a_count_is_the_count_of_the_picker_row():
     # same_release is not transitive: the yearless listing matches both
     # dated reboots, which reject each other. The picker lists the yearless
-    # one with the first dated release it meets, and each row is ranked by
-    # the count its picker row shows: two for that pair, one for the other.
+    # one with one of them (the one on more rows; here each is on one), and
+    # each row is ranked by the count its picker row shows: two for that
+    # pair, one for the other.
     yearless = "Doctor.Who.S01E01.1080p.WEB-DL.DDP5.1.H264-GRP"
     rows = [
         _row(yearless, "y1"),

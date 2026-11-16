@@ -391,11 +391,14 @@ def _collect_unique(stream, state, cancel_event, need):
 
 
 def _twins_first(kept):
-    """``kept`` with the backups that hold the pick's own files sent first.
+    """``kept`` with the backups that hold the pick's own files put first.
 
     The same files posted a second time, with their own articles: if the
     pick fails, such a backup has exactly what the pick had. The pick stays
-    first and everything else keeps its order.
+    first and everything else keeps its order. Where the rows already carry
+    the scores an older server fails over by, the same scores are handed
+    out again in the new order, so the backup sent first is also the one
+    tried first.
     """
 
     def rank(entry):
@@ -404,7 +407,17 @@ def _twins_first(kept):
             return 0
         return 1 if candidate.get("_same_files") else 2
 
-    return sorted(kept, key=rank)
+    ordered = sorted(kept, key=rank)
+    backups = [entry[0] for entry in ordered if not entry[0].get("_is_pick")]
+    scores = [row["score"] for row in backups if _is_score(row.get("score"))]
+    if len(scores) == len(backups):
+        for row, score in zip(backups, sorted(scores, reverse=True)):
+            row["score"] = score
+    return ordered
+
+
+def _is_score(value):
+    return isinstance(value, int) and not isinstance(value, bool)
 
 
 def _discard(spool, payload):

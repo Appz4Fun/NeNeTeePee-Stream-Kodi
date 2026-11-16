@@ -66,6 +66,13 @@ _AUDIO_PATTERNS = tuple(
 )
 
 _AUDIO_ORDER = tuple(name for name, _pattern_ in _AUDIO_PATTERNS)
+
+
+def audio_order():
+    """The audio formats in the order ``detect_audio`` lists them."""
+    return _AUDIO_ORDER
+
+
 # "DDPA5.1", "DD+A", "DDPAtmos5.1": Dolby Digital Plus with Atmos as one tag.
 _DDP_ATMOS = _pattern(r"dd(?:p|\+)a(?:tmos)?(?:[1-9][. _]?\d)?")
 # "DD_5.1" in a dotted name, "DD 5.1" in a dotted or underscored one: the
@@ -423,10 +430,15 @@ def detect_release_group(title, parsed_group=""):
     untrimmed = name
     block = _manager_block(name)
     if block is not None:
-        # The block says whether there is a group. Outside it the name is
-        # "Show - S01E02 - Episode Title", and a one-word title after that
-        # last hyphen is not one.
-        return _tag_run_group(block)
+        # The block says whether there is a group: its last word after a
+        # tag, or what follows its last hyphen ("...h264-EDITH"). Outside
+        # it the name is "Show - S01E02 - Episode Title", and a one-word
+        # title after that last hyphen is not one.
+        group = _tag_run_group(block)
+        if group:
+            return group
+        hyphened = _BRACKET_BLOCK_AT_END.search(name)
+        return _group_candidate(hyphened.group(2)) if hyphened else ""
     previous = None
     while previous != name:
         previous = name

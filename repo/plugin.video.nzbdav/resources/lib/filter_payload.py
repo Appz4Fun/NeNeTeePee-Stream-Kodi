@@ -19,15 +19,21 @@ downloaded, and both need the **byte-equal size**:
   minutes, not told apart by poster or password). This also covers a cut
   that took part of the title with it.
 
-Such listings all take one parse among them (``_fullest``: the one whose
-group the result list knows best, then the most detailed), and so does a
-name with no group beside a named listing of the payload. They keep their
-own names and containers; the release rule then groups them on equal parsed
+Such listings all take one parse, pooled from what each name says
+(``_pooled``). Its title, episode and group are those of the name whose
+group the result list knows best, then the most detailed one. To that are
+added the tags the other names carry and it lacks: ``DV`` beside ``HDR``,
+``Atmos``, ``REMUX`` on ``BluRay``, a ``PROPER``. One upload has every tag
+any of its names states; where two names contradict each other (1080p and
+2160p) the leading name's value stands. A name with no group beside a named
+listing of the payload takes the group with the rest. Rows keep their own
+names and containers; the release rule then groups them on equal parsed
 fields, as it groups everything else. When the parse they share has no
 group, ``release_index`` lists them together by the name it came from.
 
-A size that is a round number of megabytes is left alone: an indexer that
-rounds could give two encodes one size.
+A size that an indexer rounded is left alone: a whole number of megabytes,
+or of hundredths of a gibibyte ("4.37 GB"), could be two encodes at one
+size. Sizes to the kilobyte are exact enough to stand for one upload.
 """
 
 from resources.lib.release_subject import name_form_key
@@ -36,6 +42,13 @@ from resources.lib.release_subject import name_form_key
 # (``name_form_key``) of the listing it came from.
 ADOPTED_KEY = "parse_from_payload"
 _ROUND = (1000000, 1048576)
+# Sizes shown as "4.37 GB" or "512.3 MB" and turned back into bytes.
+_ROUND_SHOWN = (1073741824 / 100.0, 1048576 / 10.0)
+_HDR_ORDER = ("Dolby Vision", "HDR10+", "HDR10", "HLG")
+# A parse's fields that hold one value, a list of values, or a flag.
+_ONE_VALUE = ("quality", "edition", "resolution", "codec", "channels", "network")
+_SEVERAL = ("audio", "languages", "variant")
+_FLAGS = ("proper", "repack", "hybrid", "upscaled", "ai_upscale")
 # More names than this at one exact size is not one payload listed a few
 # ways; nothing is unified there.
 _MAX_NAMES = 12
@@ -49,6 +62,8 @@ def _exact_size(row):
     except (TypeError, ValueError):
         return 0
     if size <= 0 or any(size % unit == 0 for unit in _ROUND):
+        return 0
+    if any(abs(size - round(size / unit) * unit) <= 1 for unit in _ROUND_SHOWN):
         return 0
     return size
 
@@ -168,8 +183,8 @@ def _tags(meta):
     )
 
 
-def _fullest(payload, parse_detail, group_names):
-    """The entry of ``payload`` whose parse the others take.
+def _ranked(payload, parse_detail, group_names):
+    """``payload``'s entries, the one whose parse leads first.
 
     First the parse whose group the rest of the list knows best: ``-NTb``
     over the ``-Obfuscated`` a repost carries, ``-GRP`` over ``-GRP_mp4``,
@@ -177,9 +192,9 @@ def _fullest(payload, parse_detail, group_names):
     name counts for nothing there. Then the most detailed parse
     (``parse_detail``, but with how much is set ahead of whether a group
     is: a bare word misread as a group must not beat a full name), then
-    the one with more tags (``DV.HDR`` over ``DV``), then the name that is
-    not a cut of another, then the one more indexers list, then the first
-    met.
+    the one with more tags, then the name that is not a cut of another,
+    then the one more indexers list, then the name itself, so the order
+    of the rows never decides.
     """
     from resources.lib.release_match import title_key
 
@@ -197,13 +212,71 @@ def _fullest(payload, parse_detail, group_names):
             _tags(meta),
             not cut,
             len(rows),
+            name,
+            rows[0]["title"],
         )
 
-    best = payload[0]
-    for entry in payload[1:]:
-        if rank(entry) > rank(best):
-            best = entry
-    return best
+    return sorted(payload, key=rank, reverse=True)
+
+
+def _wider(value, other):
+    """``other`` when it says what ``value`` says and more, else ``value``.
+
+    "BluRay REMUX" over "BluRay" or "REMUX", anything over nothing. Two
+    values that contradict each other ("1080p", "2160p") leave ``value``.
+    """
+    value, other = str(value or ""), str(other or "")
+    if other and value.casefold() != other.casefold():
+        if not value or value.casefold() in other.casefold():
+            return other
+    return value
+
+
+def _in_order(values, order):
+    """``values`` without repeats, those of ``order`` first and in its order."""
+    seen = []
+    for value in values:
+        if value and value not in seen:
+            seen.append(value)
+    rank = {name: at for at, name in enumerate(order)}
+    return sorted(seen, key=lambda value: rank.get(value, len(rank)))
+
+
+def _pooled(metas):
+    """One parse for a payload from its names' parses, the leading one first.
+
+    A copy of the first parse, with what the others add: a wider single
+    value, every tag of a list, any flag one of them sets, a year or a
+    revision the first lacks.
+    """
+    from copy import deepcopy
+
+    from resources.lib.filter_tags import audio_order
+
+    pooled = deepcopy(_own_fields(metas[0]))
+    for meta in metas[1:]:
+        for key in _ONE_VALUE:
+            pooled[key] = _wider(pooled.get(key), meta.get(key))
+        for key in _FLAGS:
+            pooled[key] = bool(pooled.get(key) or meta.get(key))
+        for key in ("revision", "year", "track_channels"):
+            pooled[key] = pooled.get(key) or meta.get(key) or pooled.get(key)
+    for key in _SEVERAL:
+        every = [value for meta in metas for value in _listed(meta.get(key))]
+        pooled[key] = _in_order(every, audio_order() if key == "audio" else ())
+    pooled["variant"] = sorted(pooled["variant"])
+    ranges = [value for meta in metas for value in _listed(meta.get("hdr"))]
+    pooled["hdr"] = _in_order(
+        [value for value in ranges if value in _HDR_ORDER], _HDR_ORDER
+    ) or ["SDR"]
+    identity = pooled.get("ptt_identity")
+    if isinstance(identity, dict) and not identity.get("year") and pooled.get("year"):
+        identity["year"] = pooled["year"]
+    return pooled
+
+
+def _listed(value):
+    return value if isinstance(value, (list, tuple)) else []
 
 
 def _own_fields(meta):
@@ -214,7 +287,7 @@ def _own_fields(meta):
 
 
 def unify_one_payload(rows, parse_detail, meta_for, parses_agree, derived_keys=()):
-    """Give listings of one payload the fullest parse among them.
+    """Give listings of one payload one parse, pooled from their names.
 
     ``rows`` carry ``_meta``, spellings already unified. ``parse_detail``,
     ``meta_for`` and ``parses_agree`` are ``filter``'s helpers for spellings
@@ -234,6 +307,7 @@ def unify_one_payload(rows, parse_detail, meta_for, parses_agree, derived_keys=(
             by_size.setdefault(size, {}).setdefault(row["title"], []).append(row)
     changed = 0
     group_names = None
+    tools = (meta_for, parses_agree, derived_keys)
     for titles in by_size.values():
         if not 2 <= len(titles) <= _MAX_NAMES:
             continue
@@ -244,22 +318,37 @@ def unify_one_payload(rows, parse_detail, meta_for, parses_agree, derived_keys=(
         for payload in _clusters(names):
             if group_names is None:
                 group_names = _group_names(rows)
-            best_name, best_rows, _item_of = _fullest(
-                payload, parse_detail, group_names
-            )
-            best_meta = best_rows[0]["_meta"]
-            # Whose parse it is: the name the fullest row took its own from,
+            ranked = _ranked(payload, parse_detail, group_names)
+            best_name, best_rows, _item_of = ranked[0]
+            shared = _pooled([same[0]["_meta"] for _name, same, _item_of in ranked])
+            # Whose parse it is: the name the leading row took its own from,
             # when it took one in an earlier pass.
-            source = best_meta.get(ADOPTED_KEY) or best_name
-            for _name, same, _item_of in payload:
+            source = best_rows[0]["_meta"].get(ADOPTED_KEY) or best_name
+            for name, same, _item_of in ranked:
                 for row in same:
-                    if row["_meta"] is best_meta or parses_agree(
-                        _own_fields(row["_meta"]), _own_fields(best_meta)
-                    ):
-                        continue
-                    row["_meta"] = meta_for(best_meta, row)
-                    row["_meta"][ADOPTED_KEY] = source
-                    for key in derived_keys:
-                        row.pop(key, None)
-                    changed += 1
+                    changed += _share(row, shared, (source, name == best_name), tools)
     return changed
+
+
+def _share(row, shared, lead, tools):
+    """Give ``row`` the payload's ``shared`` parse; 1 if the row changed.
+
+    ``lead`` is ``(the name the parse leads from, whether the row carries
+    that name)``. A row whose parse already agrees keeps its own. When the
+    shared parse has no group, a row of another name is still marked with
+    the leading name: that mark is what lists it with the others
+    (``release_index``).
+    """
+    meta_for, parses_agree, derived_keys = tools
+    source, leading = lead
+    meta = row["_meta"]
+    if not parses_agree(_own_fields(meta), shared):
+        row["_meta"] = meta_for(shared, row)
+        row["_meta"][ADOPTED_KEY] = source
+    elif not leading and not shared.get("group") and meta.get(ADOPTED_KEY) != source:
+        meta[ADOPTED_KEY] = source
+    else:
+        return 0
+    for key in derived_keys:
+        row.pop(key, None)
+    return 1

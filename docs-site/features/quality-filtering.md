@@ -435,11 +435,17 @@ flowchart TD
 - **The same film or episode at one exact size.** Two encodes never come to
   the same number of bytes, so `...1080p.WEB-DL.DDP5.1.H.264-GRPD` and
   `...1080p WEB-DL H264-GRPD` at one size are one upload whenever they were
-  posted, and the fuller name's tags are used for both. A size that is a
-  round number of megabytes is ignored: an indexer that rounds could give two
-  encodes one size.
+  posted. The upload gets every tag any of its names states, and where two
+  names contradict each other the fuller name's value stands. A size an
+  indexer rounded (a whole number of megabytes, or a figure like 4.37 GB) is
+  ignored: rounding could give two encodes one size.
 - **Names with no group.** Listings of one name with no group are one row
-  with a copy count. Such a name never joins a release that has a group.
+  with a copy count, whatever their sizes; a copy far from the row's usual
+  size is listed last, as in any release. Such a name never joins a release
+  that has a group.
+- **A name that fits two releases.** `Show.S01E01` with no year fits both
+  the 2005 and the 2023 show. It is listed with the one more indexers list,
+  the same way however the results arrived.
 - **A tag run into the codec.** `HDR10x265` and `AtmosH.264` lost a
   separator on the way from the indexer. They are read as `HDR10+`, `x265`
   and `Atmos`, `H.264`; the first used to parse as season 10, episode 265
