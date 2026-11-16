@@ -303,3 +303,20 @@ def test_a_groupless_pick_is_backed_up_by_the_other_listings_of_its_name():
     assert backups == ["u3", "u2"]
     # The rule itself still refuses a name with no group, pair by pair.
     assert not release_match.same_release(rows[0], rows[5])
+
+
+def test_a_groupless_pick_is_backed_up_only_by_copies_of_about_its_size():
+    from resources.lib.router_play import _same_release_backups
+
+    name = "Film.2020.1080p.BluRay"
+    rows = [
+        _row(name, "pick", size="10000000000"),
+        _row(name, "near", size="12000000000"),
+        _row(name, "small", size="700000000"),
+        _row(name, "huge", size="50000000000"),
+        _row(name, "unsized", size=""),
+    ]
+
+    # One picker row, but only the copy within 1.35x is a backup.
+    assert len(release_index.build(rows).groups) == 1
+    assert [row["link"] for row in _same_release_backups(rows[0], rows)] == ["near"]
