@@ -60,7 +60,12 @@ from urllib.parse import urlsplit
 import xbmc
 import xbmcvfs
 
-from resources.lib import mediainfo_audio, mediainfo_video, search_progress
+from resources.lib import (
+    mediainfo_audio,
+    mediainfo_video,
+    release_docs,
+    search_progress,
+)
 from resources.lib.filter_audio import main_audio
 from resources.lib.filter_tags import detect_audio, detect_channels
 from resources.lib.http_util import http_get, redact_text
@@ -366,6 +371,27 @@ def _host_paused(host):
     return when is not None and time.time() - when < _RETRY_AFTER_SECONDS
 
 
+def host_of(url):
+    """The indexer host of a link, as this module names it."""
+    return _host(url)
+
+
+def host_paused(host):
+    """Whether ``host`` refused a read lately and is being left alone."""
+    return _host_paused(host)
+
+
+def pause_host(host):
+    """Leave ``host`` alone for a while, and write that down."""
+    _pause_host(host)
+    _save()
+
+
+def may_ask_mediainfo(host):
+    """Whether ``host`` has, or may have, the MediaInfo call."""
+    return _may_ask_mediainfo(host)
+
+
 def forget_all():
     """Drop what was read this run (for tests)."""
     with _LOCK:
@@ -617,6 +643,43 @@ def names_release(text, title):
     return len(wanted) >= _MIN_NAME_LENGTH and wanted in _words(text)
 
 
+def _names_in(text):
+    """The release names written in an NFO, in order, a dozen at most."""
+    names = []
+    for found in _NAME_IN_NFO.findall(str(text or "")):
+        found = _CONTAINER.sub("", found)
+        if _NAME_MARK.search(found) and found not in names:
+            names.append(found)
+        if len(names) >= _MAX_NAMES_CHECKED:
+            break
+    return names
+
+
+def stated_release_name(text, title, describe):
+    """The release name an NFO gives for the film or episode of ``title``.
+
+    A listing can be named in short ("4k.Movie.DV") while its NFO holds the
+    release's full name, with the source, the audio and the group. Returns
+    the first name in the NFO that parses to the same film or episode, one
+    with a group before one without, or "" when it names none.
+    """
+    if describe is None:
+        return ""
+    try:
+        ours = describe(_CONTAINER.sub("", str(title or "").strip()))
+        fallback = ""
+        for found in _names_in(text):
+            theirs = describe(found)
+            if not _same_work(ours, theirs):
+                continue
+            if theirs.get("group"):
+                return found
+            fallback = fallback or found
+        return fallback
+    except Exception:  # pylint: disable=broad-except
+        return ""
+
+
 def whose_nfo(text, title, describe):
     """Whether an NFO is about the release named ``title``.
 
@@ -637,13 +700,7 @@ def whose_nfo(text, title, describe):
         return CONFIRMED
     if describe is None:
         return UNCONFIRMED
-    names = []
-    for found in _NAME_IN_NFO.findall(text):
-        found = _CONTAINER.sub("", found)
-        if _NAME_MARK.search(found) and found not in names:
-            names.append(found)
-        if len(names) >= _MAX_NAMES_CHECKED:
-            break
+    names = _names_in(text)
     if not names:
         return UNCONFIRMED
     try:
@@ -919,7 +976,13 @@ def _fetch_mediainfo(key, link, title):
         search_progress.details_result(
             host, search_progress.MEDIAINFO, search_progress.NOTHING
         )
+        if what == mediainfo_audio.MISSING:
+            release_docs.mark_none(key, release_docs.MEDIAINFO, host)
         return None, {}, what
+    # The report itself, for the picker's viewer.
+    release_docs.keep(
+        key, release_docs.MEDIAINFO, host, mediainfo_audio.mediainfo_xml_of(body)
+    )
     video = mediainfo_video.from_reply(body)
     if video:
         xbmc.log(
@@ -1011,6 +1074,30 @@ def _remember_no_audio(key, video, failed=False):
 _HTML_BREAK = re.compile(r"<br\s*/?>(?:\r?\n)?", re.I)
 
 
+def read_nfo_reply(text):
+    """``(kind, text)`` for the body an indexer returned for an NFO link.
+
+    ``kind`` is "nfo" with the cleaned text, "none" when the indexer says
+    the release has no NFO, or "refused" for any other error reply, with
+    "pause" in its place when the error is one that pauses the indexer.
+    For the picker's viewer, which reads NFOs the same way as ``_fetch_nfo``.
+    """
+    error = _error_code(text)
+    if error is None:
+        return "nfo", _HTML_BREAK.sub("\n", str(text or ""))
+    if error in _NO_NFO_CODES:
+        return "none", ""
+    return ("pause" if _is_refusal_code(error) else "refused"), ""
+
+
+def get_with_status(url, headers):
+    """``(status, body)`` of a GET, for the viewer's MediaInfo call."""
+    return _get_with_status(url, headers)
+
+
+REFUSAL_STATUSES = _REFUSAL_STATUSES
+
+
 def _fetch_nfo(key, url, title, describe=None, video=None):
     """Fetch one NFO, read it and remember the answer; True when it told
     something.
@@ -1061,6 +1148,12 @@ def _fetch_nfo(key, url, title, describe=None, video=None):
         return bool(video)
     text = _HTML_BREAK.sub("\n", text)
     whose = whose_nfo(text, title, describe)
+    # The text itself, for the picker's viewer: not another release's NFO,
+    # nor an indexer's "no such item" reply.
+    if whose == WRONG or error is not None:
+        release_docs.mark_none(key, release_docs.NFO, _host(url))
+    else:
+        release_docs.keep(key, release_docs.NFO, _host(url), text)
     if whose == WRONG:
         # Another release's NFO: what it says of the audio is not ours.
         xbmc.log(
