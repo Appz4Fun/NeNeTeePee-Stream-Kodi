@@ -159,7 +159,7 @@ def _linked_names(rows):
     for row in rows:
         meta = row.get("_meta") or {}
         source = meta.get("parse_from_payload")
-        if not meta.get("group") and isinstance(source, str) and source:
+        if not _named(meta) and isinstance(source, str) and source:
             took[name_form_key(row.get("title"))].add(source)
     sets = []
     for name, sources in took.items():
@@ -177,6 +177,13 @@ def _linked_names(rows):
 
 
 _AMBIGUOUS = object()
+
+
+def _named(meta):
+    """Whether a parse has a group, as the release rule reads it."""
+    from resources.lib.release_match import title_key
+
+    return bool(title_key(meta.get("group")))
 
 
 def _listed_under(row, linked):
@@ -307,7 +314,7 @@ def _plainly_the_same(member, row, linked):
 
     def unnamed(one):
         meta = one.get("_meta") or {}
-        return not meta.get("group"), str(meta.get("container") or "").casefold()
+        return not _named(meta), str(meta.get("container") or "").casefold()
 
     (left_bare, left_container), (right_bare, right_container) = (
         unnamed(member),

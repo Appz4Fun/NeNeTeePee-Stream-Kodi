@@ -407,15 +407,20 @@ def _names_at(titles):
     """
     from resources.lib.release_match import title_key
 
-    return [
-        _Name(
-            name_form_key(title),
-            same,
-            item_of(same[0]),
-            title_key(same[0]["_meta"].get("group")),
+    names = []
+    for (title, _group), same in titles.items():
+        # The row whose parse stands for the name: the same one whatever
+        # order the rows came in (two answers joined can differ in tags).
+        same = sorted(same, key=lambda row: repr(sorted(row["_meta"].items())))
+        names.append(
+            _Name(
+                name_form_key(title),
+                same,
+                item_of(same[0]),
+                title_key(same[0]["_meta"].get("group")),
+            )
         )
-        for (title, _group), same in titles.items()
-    ]
+    return names
 
 
 def _other_names(by_size):
