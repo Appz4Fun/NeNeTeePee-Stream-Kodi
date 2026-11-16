@@ -291,8 +291,8 @@ def test_zero_survivors_opens_in_show_all_with_toggle_disabled():
     items = dialog.getControl(LIST_ID).addItems.call_args.args[0]
     assert len(items) == 1
     assert dialog.getProperty("filter_info") == "Showing all 1 sources (filters off)"
-    assert (
-        dialog.getProperty("footer_hints") == "[Enter] Download & Play     [Esc] Back"
+    assert dialog.getProperty("footer_hints") == (
+        "[Left/Right] NFO and MediaInfo     [Enter] Download & Play     [Esc] Back"
     )
     dialog.onAction(_Action(ACTION_CONTEXT_MENU))  # remain in the usable view
     assert dialog._closed is False

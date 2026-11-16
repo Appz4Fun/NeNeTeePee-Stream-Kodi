@@ -184,8 +184,8 @@ class _FakeWindowXMLDialog:
     attributes makes the subclass ITSELF a MagicMock, so the subclass
     body's methods are unreachable and dialog behavior is untestable
     (same failure class as the ``xbmc.Player`` note). Minimal
-    real base: a property store, per-id control mocks, and a no-op
-    modal lifecycle.
+    real base: a property store, per-id control mocks, the controls a
+    script adds itself, and a no-op modal lifecycle.
     """
 
     def __init__(self, *args, **kwargs):
@@ -193,6 +193,14 @@ class _FakeWindowXMLDialog:
         self._controls = {}
         self._focus_id = None
         self._closed = False
+        self._added = []
+
+    def addControls(self, controls):
+        self._added.extend(controls)
+
+    def removeControls(self, controls):
+        for control in controls:
+            self._added.remove(control)
 
     def setProperty(self, key, value):
         self._properties[key] = value

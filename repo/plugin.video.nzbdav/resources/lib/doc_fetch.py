@@ -65,8 +65,8 @@ def plan(rows, record):
                 job["nfo"] = nfo_url
         if serves_mediainfo(host) is True and "mediainfo" not in job:
             if not release_docs.settled(record, release_docs.MEDIAINFO, host):
-                keyed_link = link if has_key(link) else with_key_from(
-                    link, keyed.get(host, "")
+                keyed_link = (
+                    link if has_key(link) else with_key_from(link, keyed.get(host, ""))
                 )
                 if keyed_link and mediainfo_audio.request_for(keyed_link):
                     job["mediainfo"] = keyed_link
@@ -129,9 +129,10 @@ def _read_nfo(key, host, link, title, describe):
     if kind == "pause":
         nfo_audio.pause_host(host)
         return False
-    if kind == "none":
+    if kind == "none" or (kind == "nfo" and not text.strip()):
+        # No NFO there, said as an error or as an empty answer.
         release_docs.mark_none(key, release_docs.NFO, host)
-    elif kind == "nfo" and text.strip():
+    elif kind == "nfo":
         if nfo_audio.whose_nfo(text, title, describe) == nfo_audio.WRONG:
             # Another release's NFO, attached by the indexer's matching.
             release_docs.mark_none(key, release_docs.NFO, host)

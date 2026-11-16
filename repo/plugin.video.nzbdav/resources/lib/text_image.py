@@ -43,9 +43,7 @@ def _spread(scale):
         run = (1 << scale) - 1
         table = tuple(
             sum(
-                run << (scale * (7 - bit))
-                for bit in range(8)
-                if byte & (0x80 >> bit)
+                run << (scale * (7 - bit)) for bit in range(8) if byte & (0x80 >> bit)
             ).to_bytes(scale, "big")
             for byte in range(256)
         )
@@ -197,6 +195,17 @@ def page_png(lines, font, columns, rows, color="D4D4D8", scale=2):
     return _png(width, height, 1, [(0, 0, 0), _rgb(color)], scanlines)
 
 
+def _stamp(canvas, glyph, left, top, size, ink):
+    """Draw one glyph on ``canvas`` at ``left``, ``top``, ``size`` times as big."""
+    for row in range(GLYPH_HEIGHT):
+        bits = glyph[row]
+        for column in range(GLYPH_WIDTH) if bits else ():
+            if bits & (0x80 >> column):
+                x = left + column * size
+                for dy in range(size):
+                    canvas[top + row * size + dy][x : x + size] = ink * size
+
+
 # The row of an 8x16 glyph its letters stand on.
 _BASELINE = 12
 
@@ -216,30 +225,22 @@ def words_png(words, font, width, scale=2, gap=3):
     canvas = [bytearray(width) for _ in range(height)]
     cursor = 0
     for text, color, small in words:
+        size = max(1, scale // 2) if small else scale
+        start = cursor
+        if cursor:
+            start += GLYPH_WIDTH * size if small else gap * GLYPH_WIDTH * scale
         rgb = _rgb(color)
+        if start + len(text) * GLYPH_WIDTH * size > width or (
+            rgb not in palette and len(palette) >= 255
+        ):
+            break
         if rgb not in palette:
-            if len(palette) >= 255:
-                break
             palette.append(rgb)
         ink = bytes((palette.index(rgb),))
-        size = max(1, scale // 2) if small else scale
         top = _BASELINE * (scale - size)
-        if cursor:
-            cursor += GLYPH_WIDTH * size if small else gap * GLYPH_WIDTH * scale
-        if cursor + len(text) * GLYPH_WIDTH * size > width:
-            break
+        cursor = start
         for char in text:
-            glyph = _glyph(font, char)
-            for row in range(GLYPH_HEIGHT):
-                bits = glyph[row]
-                if not bits:
-                    continue
-                for column in range(GLYPH_WIDTH):
-                    if bits & (0x80 >> column):
-                        x = cursor + column * size
-                        for dy in range(size):
-                            line = canvas[top + row * size + dy]
-                            line[x : x + size] = ink * size
+            _stamp(canvas, _glyph(font, char), cursor, top, size, ink)
             cursor += GLYPH_WIDTH * size
     return _png(width, height, 8, palette, [bytes(line) for line in canvas])
 

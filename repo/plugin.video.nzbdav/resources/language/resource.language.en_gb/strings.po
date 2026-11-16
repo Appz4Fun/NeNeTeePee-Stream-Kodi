@@ -2844,3 +2844,43 @@ msgstr ""
 msgctxt "#30769"
 msgid "Direct indexers"
 msgstr ""
+
+# The picker's footer: Left or Right opens the NFO and MediaInfo viewer.
+msgctxt "#30773"
+msgid "[Left/Right] NFO and MediaInfo"
+msgstr ""
+
+# The NFO and MediaInfo viewer. {} are the page shown and the number of pages.
+msgctxt "#30774"
+msgid "Page {} / {}"
+msgstr ""
+
+msgctxt "#30775"
+msgid "[Left/Right] Other tab"
+msgstr ""
+
+msgctxt "#30776"
+msgid "[Up/Down] Page"
+msgstr ""
+
+msgctxt "#30777"
+msgid "[Back] Close"
+msgstr ""
+
+# {} is how many indexers have not answered yet.
+msgctxt "#30778"
+msgid "Asking {} indexers for the NFO and MediaInfo..."
+msgstr ""
+
+msgctxt "#30779"
+msgid "Asking {} indexer for the NFO and MediaInfo..."
+msgstr ""
+
+msgctxt "#30780"
+msgid "No indexer has an NFO or MediaInfo for this release."
+msgstr ""
+
+# Set small beside an attribute that the NFO or MediaInfo gave and the release's name did not.
+msgctxt "#30781"
+msgid "NEW"
+msgstr ""

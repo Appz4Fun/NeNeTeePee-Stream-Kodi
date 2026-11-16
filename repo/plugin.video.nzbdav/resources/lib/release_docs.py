@@ -28,6 +28,11 @@ import xbmcvfs
 NFO = "nfo"
 MEDIAINFO = "mediainfo"
 KINDS = (NFO, MEDIAINFO)
+# How a kind is named and colored, on the picker's rows and in the viewer:
+# the tag, its color, and the color of the tag of a tab that is not selected.
+LABELS = {NFO: "NFO", MEDIAINFO: "MEDIAINFO"}
+COLORS = {NFO: "FFFDE047", MEDIAINFO: "FFA3E635"}
+DIMMED_COLORS = {NFO: "FF8A7A26", MEDIAINFO: "FF65902A"}
 
 _PROFILE_PATH = "special://profile/addon_data/plugin.video.nzbdav/"
 _DIR_NAME = "release_docs"

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The NFO and MediaInfo viewer, opened over the list of releases with
+     Left or Right. On the left, one tab per unique text with every indexer
+     that carries it: nfo_viewer.py adds those controls itself, because a tab
+     is as tall as its list of indexers. On the right, the release's name,
+     the page number, the text, and under it what the text says of the
+     release. The text is an image nfo_viewer.py draws with the add-on's own
+     terminal font (control 20); without that font it is the skin's text box
+     (control 21). nfo_viewer.py sets every text as a window property. -->
+<window type="dialog" id="1103">
+  <defaultcontrol always="true">10</defaultcontrol>
+  <coordinates>
+    <system>1</system>
+  </coordinates>
+  <controls>
+
+    <!-- Dim the list of releases behind the panel -->
+    <control type="image">
+      <left>0</left><top>0</top><width>1920</width><height>1080</height>
+      <colordiffuse>A3040408</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+
+    <!-- Panel: see-through enough to tell the list is still there -->
+    <control type="image">
+      <left>89</left><top>44</top><width>1742</width><height>974</height>
+      <colordiffuse>FF2C2E44</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+    <control type="image">
+      <left>90</left><top>45</top><width>1740</width><height>972</height>
+      <colordiffuse>F50D0D13</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+
+    <!-- Tab rail -->
+    <control type="image">
+      <left>90</left><top>45</top><width>405</width><height>972</height>
+      <colordiffuse>FF101018</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+    <control type="image">
+      <left>494</left><top>45</top><width>1</width><height>972</height>
+      <colordiffuse>FF2C2E44</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+
+    <!-- Header: the release's name, and the page -->
+    <control type="label" id="1">
+      <left>525</left><top>45</top><width>1010</width><height>69</height>
+      <label>$INFO[Window.Property(name)]</label>
+      <font>font13</font>
+      <textcolor>FFF3F4F6</textcolor>
+      <aligny>center</aligny>
+      <scroll>true</scroll>
+    </control>
+    <control type="label" id="2">
+      <left>1545</left><top>45</top><width>255</width><height>69</height>
+      <label>$INFO[Window.Property(page)]</label>
+      <font>font12</font>
+      <textcolor>FFE5E7EB</textcolor>
+      <align>right</align>
+      <aligny>center</aligny>
+    </control>
+    <control type="image">
+      <left>495</left><top>114</top><width>1335</width><height>1</height>
+      <colordiffuse>FF2C2E44</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+
+    <!-- The text, drawn by nfo_viewer.py (sized there, pixel for pixel) -->
+    <control type="image" id="20">
+      <visible>String.IsEqual(Window.Property(mode),image)</visible>
+      <left>528</left><top>135</top><width>1280</width><height>736</height>
+      <texture></texture>
+    </control>
+    <!-- The text in the skin's own font, when the add-on's font is missing -->
+    <control type="textbox" id="21">
+      <visible>String.IsEqual(Window.Property(mode),text)</visible>
+      <left>528</left><top>135</top><width>1280</width><height>736</height>
+      <label>$INFO[Window.Property(text)]</label>
+      <font>Mono26</font>
+      <textcolor>FFD4D4D8</textcolor>
+    </control>
+    <!-- What is going on, while there is no text to show -->
+    <control type="label" id="22">
+      <visible>!String.IsEmpty(Window.Property(status))</visible>
+      <left>528</left><top>135</top><width>1280</width><height>736</height>
+      <label>$INFO[Window.Property(status)]</label>
+      <font>font13</font>
+      <textcolor>FF9CA3AF</textcolor>
+      <align>center</align>
+      <aligny>center</aligny>
+      <wrapmultiline>true</wrapmultiline>
+    </control>
+
+    <!-- Footer: what the text says of the release, and the keys -->
+    <control type="image">
+      <left>495</left><top>900</top><width>1335</width><height>117</height>
+      <colordiffuse>FF13131C</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+    <control type="image">
+      <left>495</left><top>900</top><width>1335</width><height>1</height>
+      <colordiffuse>FF2C2E44</colordiffuse>
+      <texture>white.png</texture>
+    </control>
+    <control type="image" id="30">
+      <visible>String.IsEqual(Window.Property(mode),image)</visible>
+      <left>525</left><top>916</top><width>1275</width><height>32</height>
+      <texture></texture>
+    </control>
+    <control type="label" id="31">
+      <visible>String.IsEqual(Window.Property(mode),text)</visible>
+      <left>525</left><top>912</top><width>1275</width><height>40</height>
+      <label>$INFO[Window.Property(attributes)]</label>
+      <font>font12</font>
+      <textcolor>FFFFFFFF</textcolor>
+      <aligny>center</aligny>
+    </control>
+    <control type="label" id="32">
+      <left>525</left><top>962</top><width>1000</width><height>40</height>
+      <label>$INFO[Window.Property(hints)]</label>
+      <font>font10</font>
+      <textcolor>FF9CA3AF</textcolor>
+      <aligny>center</aligny>
+    </control>
+    <control type="label" id="33">
+      <left>1500</left><top>962</top><width>300</width><height>40</height>
+      <label>$INFO[Window.Property(close_hint)]</label>
+      <font>font10</font>
+      <textcolor>FF9CA3AF</textcolor>
+      <align>right</align>
+      <aligny>center</aligny>
+    </control>
+
+    <!-- Holds the focus; every key is handled by nfo_viewer.py -->
+    <control type="button" id="10">
+      <left>-20</left><top>-20</top><width>1</width><height>1</height>
+      <label></label>
+      <texturefocus></texturefocus>
+      <texturenofocus></texturenofocus>
+      <onup>10</onup><ondown>10</ondown><onleft>10</onleft><onright>10</onright>
+    </control>
+
+  </controls>
+</window>
