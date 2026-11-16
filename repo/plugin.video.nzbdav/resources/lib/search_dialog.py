@@ -82,6 +82,7 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
         self._canceled = False
         self._shown = False
         self._table = None
+        self._drawn = None
 
     def open(self, session):
         """Show the window with its fixed texts and the first snapshot."""
@@ -99,7 +100,11 @@ class SearchWindow(xbmcgui.WindowXMLDialog):
         self._shown = True
 
     def render(self, snapshot):
-        """Draw a ``Session.snapshot()``."""
+        """Draw a ``Session.snapshot()``; skipped when nothing changed."""
+        drawn = (snapshot["version"], snapshot["elapsed"])
+        if drawn == self._drawn and snapshot["indexers"] == self._table:
+            return
+        self._drawn = drawn
         self.setProperty("subject", snapshot["subject"])
         self.setProperty("elapsed", _format_elapsed(snapshot["elapsed"]))
         for number, stage in enumerate(snapshot["stages"], 1):

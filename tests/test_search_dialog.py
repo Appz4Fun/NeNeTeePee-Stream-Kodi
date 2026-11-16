@@ -395,3 +395,17 @@ def test_refilling_the_table_keeps_the_viewers_place(home):
     window.render(session.snapshot())
 
     control.selectItem.assert_called_once_with(2)
+
+
+def test_an_unchanged_snapshot_is_not_drawn_again(home):
+    del home
+    session = sp.Session()
+    window = _window(session)
+    snapshot = session.snapshot()
+    window.render(snapshot)
+    with patch.object(window, "setProperty") as set_property:
+        window.render(snapshot)
+        set_property.assert_not_called()
+        session.search_started(["NZBHydra2"])
+        window.render(session.snapshot())
+        set_property.assert_called()
