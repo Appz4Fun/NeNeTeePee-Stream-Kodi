@@ -53,6 +53,9 @@ container keeps them apart (a ``.mkv`` and a ``.mp4`` of one name are two
 files). A name with no group still never joins a release that has one.
 """
 
+import collections
+import threading
+
 from resources.lib import fallback_streams as _fs
 from resources.lib import release_match
 from resources.lib.filter_payload import (
@@ -77,10 +80,12 @@ class ReleaseIndex:  # pylint: disable=too-few-public-methods
     that cannot be parsed is a group of one.
     """
 
-    __slots__ = ("groups", "_group_at")
+    __slots__ = ("groups", "labels", "_group_at")
 
-    def __init__(self, groups):
+    def __init__(self, groups, labels=None):
         self.groups = groups
+        # id(row) -> the size label this grouping gave it (``_by_size``).
+        self.labels = labels or {}
         self._group_at = {id(row): group for group in groups for row in group}
 
     def group_of(self, row):
@@ -92,8 +97,79 @@ class ReleaseIndex:  # pylint: disable=too-few-public-methods
         return group if group is not None else [row]
 
 
+# The last few groupings made, for a list grouped again unchanged.
+_RECENT = collections.OrderedDict()
+_RECENT_KEPT = 4
+# Lists are filtered on worker threads too (``filter.filter_results``).
+_RECENT_LOCK = threading.Lock()
+
+
 def build(rows):
     """Group ``rows`` into releases and return the ``ReleaseIndex``.
+
+    One picker open groups the same rows several times: to count copies
+    before ranking, for the picker's rows, for the NZBGet backups. The
+    grouping depends on the rows and their parses, not on their order, so
+    a list grouped again with the same rows, parses and metadata pass
+    (``filter.ATTACHED_KEY``) takes the earlier grouping, put in this
+    list's order.
+    """
+    key = _recent_key(rows)
+    earlier = None
+    if key is not None:
+        with _RECENT_LOCK:
+            earlier = _RECENT.get(key)
+            if earlier is not None:
+                _RECENT.move_to_end(key)
+    if earlier is not None:
+        return _in_order(earlier, rows)
+    index = _build(rows)
+    if key is not None:
+        with _RECENT_LOCK:
+            _RECENT[key] = index
+            while len(_RECENT) > _RECENT_KEPT:
+                _RECENT.popitem(last=False)
+    return index
+
+
+def _recent_key(rows):
+    """What a list's grouping depends on, or None when it cannot be told.
+
+    Each row, its parse object and the mark of the pass that made it. A
+    row with no mark may have had its parse changed in place, so a list
+    with one is grouped afresh.
+    """
+    key = []
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("_attached"):
+            return None
+        key.append((id(row), id(row.get("_meta")), row["_attached"]))
+    return frozenset(key) if key else None
+
+
+def _in_order(index, rows):
+    """``index``'s groups with their rows, and themselves, in ``rows``' order.
+
+    The size labels (``SIZE_LABEL_KEY``) are put back as this grouping made
+    them: a grouping of another list may have relabelled a shared row.
+    """
+    for group in index.groups:
+        for row in group:
+            label = index.labels.get(id(row))
+            if label:
+                row[SIZE_LABEL_KEY] = label
+            else:
+                row.pop(SIZE_LABEL_KEY, None)
+    position = {id(row): at for at, row in enumerate(rows)}
+    groups = [
+        sorted(group, key=lambda row: position[id(row)]) for group in index.groups
+    ]
+    groups.sort(key=lambda group: position[id(group[0])])
+    return ReleaseIndex(groups, index.labels)
+
+
+def _build(rows):
+    """``build`` without the reuse of an earlier grouping.
 
     Season packs (``_season_pack`` rows) are grouped among themselves and
     never with an episode, as the rule's callers always held.
@@ -138,7 +214,14 @@ def build(rows):
         for members in _joined_by_upload(releases)
     ]
     placed.sort(key=_position)
-    return ReleaseIndex([group for _at, group in placed])
+    groups = [group for _at, group in placed]
+    labels = {
+        id(row): row[SIZE_LABEL_KEY]
+        for group in groups
+        for row in group
+        if isinstance(row, dict) and row.get(SIZE_LABEL_KEY)
+    }
+    return ReleaseIndex(groups, labels)
 
 
 # Set on a row with no group whose name is listed at two or more sizes far
@@ -253,13 +336,24 @@ def _joined_by_upload(releases):
     """
     by_size = {}
     for number, members in enumerate(releases):
+        if members[0][1].get("_season_pack"):
+            continue
         usual = _usual_size(members)
         for _at, row in members:
-            key = _upload_key(row)
-            if key is not None and _near(key[1], usual):
-                by_size.setdefault(key[1], []).append((number, row, key))
+            size = exact_size(row)
+            if size and _near(size, usual):
+                by_size.setdefault(size, []).append((number, row))
     shared = set()
     for listed in by_size.values():
+        if len({number for number, _row in listed}) < 2:
+            # Every listing at this size is in one release already.
+            continue
+        listed = [
+            (number, row, key)
+            for number, row in listed
+            for key in (_upload_key(row),)
+            if key is not None
+        ]
         for at, (number, row, key) in enumerate(listed):
             for other, other_row, other_key in listed[at + 1 :]:
                 if other != number and _one_upload(row, key, other_row, other_key):

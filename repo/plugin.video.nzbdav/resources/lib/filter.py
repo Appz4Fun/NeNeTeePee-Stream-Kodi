@@ -18,7 +18,7 @@ import xbmc
 import xbmcaddon  # noqa: F401  pylint: disable=unused-import  (module-scope Kodi imports are the repo convention; tests patch <mod>.xbmcaddon and the thread-safety contract tests forbid its use on no-getter paths)
 import xbmcgui  # re-exported via __all__ for callers/tests; not used here
 
-from resources.lib import nfo_audio, release_index, telemetry
+from resources.lib import nfo_audio, parse_store, release_index, telemetry
 from resources.lib.filter_atmos import share_atmos
 from resources.lib.filter_audio import audio_tier
 from resources.lib.filter_fallback import (
@@ -568,7 +568,8 @@ def _resolve_result_meta(result, parsed_by_title):
     cached_meta = parsed_by_title.get(title)
     if cached_meta is not None:
         return deepcopy(cached_meta)
-    meta = parse_title_metadata(title)
+    # A name seen in an earlier search is not parsed again (``parse_store``).
+    meta = parse_store.parsed(title, parse_title_metadata)
     parsed_by_title[title] = meta
     return meta
 
@@ -678,6 +679,24 @@ def _leading_spelling(spellings, known):
     return best[1]
 
 
+def _pin_identity_title(rows):
+    """Give the leading spelling's rows the title its other spellings take.
+
+    With no parsed title, the identity falls back to the whole name, and
+    ``_meta_for_spelling`` pins the other spellings to the leading one's.
+    The leading rows carry the same title, so a later pass (a search read
+    back from the cache) finds every spelling agreeing and changes none.
+    """
+    from resources.lib.release_subject import without_media_extension
+
+    for row in rows:
+        identity = row["_meta"].get("ptt_identity")
+        if isinstance(identity, dict) and not identity.get("title"):
+            identity["title"] = without_media_extension(identity.get("name") or "")
+            for key in _META_DERIVED_ROW_KEYS:
+                row.pop(key, None)
+
+
 def _unify_name_forms(rows):
     """Give every spelling of one release name the same parsed metadata.
 
@@ -715,6 +734,7 @@ def _unify_name_forms(rows):
         if len(spellings) < 2:
             continue
         best = _leading_spelling(spellings, known)
+        _pin_identity_title(best)
         best_meta = best[0]["_meta"]
         for same in spellings.values():
             if same is best or _parses_agree(same[0]["_meta"], best_meta):
@@ -739,6 +759,8 @@ _ATTACH_PASSES_KEPT = 64
 # A group must be on this many other rows of the list for a trailing word
 # to be read as it.
 _LIST_GROUP_ROWS = 2
+# Set on a parse whose group ``_recover_list_groups`` read from the list.
+_LIST_GROUP_KEY = "group_from_list"
 
 
 def _recover_list_groups(rows):
@@ -759,10 +781,14 @@ def _recover_list_groups(rows):
         if not isinstance(meta, dict) or not isinstance(row.get("title"), str):
             continue
         group = title_key(meta.get("group"))
-        if group:
-            known[group] += 1
-        else:
+        if not group:
             bare.append((row, meta))
+        elif not meta.get(_LIST_GROUP_KEY) and not meta.get(_ADOPTED_KEY):
+            # Only groups names state count: one this step or
+            # ``filter_payload`` added on an earlier pass (a row read back
+            # from the search cache) would make this pass find more than
+            # the first did.
+            known[group] += 1
     if not known:
         return 0
     changed = 0
@@ -770,6 +796,7 @@ def _recover_list_groups(rows):
         word = trailing_word(row["title"])
         if word and known[title_key(word)] >= _LIST_GROUP_ROWS:
             meta["group"] = word
+            meta[_LIST_GROUP_KEY] = True
             for key in _META_DERIVED_ROW_KEYS:
                 row.pop(key, None)
             changed += 1
@@ -824,11 +851,15 @@ def _attach_metadata(results):
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result["_meta"] = _resolve_result_meta(result, parsed_by_title)
+    parse_store.save_soon()
     _unify_name_forms(results)
     # After the spellings: one that parses a group ("-DNU-TAoE") gives it to
     # the others, and only a name with no group in any spelling is asked
-    # whether its last word is a group the list knows.
-    _recover_list_groups(results)
+    # whether its last word is a group the list knows. What it finds goes to
+    # the other spellings of the name too, as a group a pass read back from
+    # the cache would carry already.
+    if _recover_list_groups(results):
+        _unify_name_forms(results)
     # A listing that lost its group takes the parse of its upload's name.
     other_names = unify_one_payload(
         results,

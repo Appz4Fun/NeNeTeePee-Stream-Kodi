@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import resources.lib.cache as cache_module
+from resources.lib import code_stamp
 from resources.lib import filter as filter_module
 
 get_cached = cache_module.get_cached
@@ -256,32 +257,32 @@ def _addon_tree(tmp_path):
 
 def test_the_build_fingerprint_changes_with_any_code_file(tmp_path):
     lib = _addon_tree(tmp_path)
-    with patch.object(cache_module, "__file__", str(lib / "cache.py")):
-        first = cache_module._compute_parser_stamp()
-        assert first and first == cache_module._compute_parser_stamp()
+    with patch.object(code_stamp, "__file__", str(lib / "cache.py")):
+        first = code_stamp._compute()
+        assert first and first == code_stamp._compute()
 
         (lib / "ptt" / "parse.py").write_text("# parse, fixed\n")
-        second = cache_module._compute_parser_stamp()
+        second = code_stamp._compute()
         assert second != first
 
         (tmp_path / "addon" / "addon.xml").write_text("<addon version='2'/>")
-        third = cache_module._compute_parser_stamp()
+        third = code_stamp._compute()
         assert third not in (first, second)
 
         (lib / "new_module.py").write_text("")
-        assert cache_module._compute_parser_stamp() not in (first, second, third)
+        assert code_stamp._compute() not in (first, second, third)
 
         # A file that is not code does not count.
-        before = cache_module._compute_parser_stamp()
+        before = code_stamp._compute()
         (lib / "notes.txt").write_text("x")
-        assert cache_module._compute_parser_stamp() == before
+        assert code_stamp._compute() == before
 
 
 def test_the_build_fingerprint_is_none_when_the_code_cannot_be_read(tmp_path):
     lib = _addon_tree(tmp_path)
     os.remove(str(tmp_path / "addon" / "addon.xml"))
-    with patch.object(cache_module, "__file__", str(lib / "cache.py")):
-        assert cache_module._compute_parser_stamp() is None
+    with patch.object(code_stamp, "__file__", str(lib / "cache.py")):
+        assert code_stamp._compute() is None
 
 
 @patch("resources.lib.router._search_all_providers")
@@ -344,12 +345,14 @@ def test_an_entry_from_another_build_is_parsed_once_then_stored(mock_search, cac
         data["parser"] = "another-build"
         path.write_text(json.dumps(data), encoding="utf-8")
 
-        # The first open after the update parses again and stores the result.
+        # The entry's parses are dropped. The names are not parsed again: this
+        # build already parsed them, and kept them (``parse_store``).
         _script_play_search_results("movie", "Some Movie", kwargs, MagicMock())
-        assert parse.call_count == 6
-        # Every later open reads it back.
+        assert parse.call_count == 3
+        assert _entry(cache_dir)[1]["parser"] == cache_module._parser_stamp()
+        # Every later open reads them back from the entry.
         _script_play_search_results("movie", "Some Movie", kwargs, MagicMock())
-        assert parse.call_count == 6
+        assert parse.call_count == 3
 
     assert mock_search.call_count == 1
 

@@ -19,6 +19,8 @@ import xbmc
 import xbmcaddon
 import xbmcvfs
 
+from resources.lib.code_stamp import code_stamp
+
 # Raised from 50 MB when entries began to carry the parsed details of their
 # release names (about 40% more per entry), so the cache still holds as many
 # searches.
@@ -40,40 +42,15 @@ _PARSER_FIELD = "parser"
 _PARSES_FIELD = "parsed"
 # path -> the timestamp of the entry last read from it, for ``keep_parsed``.
 _READ_TIMESTAMPS = {}
-_STAMP = []
 
 
 def _parser_stamp():
-    """A fingerprint of the add-on's code, or None when it cannot be read.
+    """A fingerprint of the add-on's code (``code_stamp.code_stamp``).
 
     A parse stored by one build must not be reused by another: a fix to the
-    name parser would otherwise wait out the cache window. The fingerprint is
-    the name, size and modification time of ``addon.xml`` and every Python
-    file under ``resources/lib``, so any install or update changes it.
+    name parser would otherwise wait out the cache window.
     """
-    if not _STAMP:
-        _STAMP.append(_compute_parser_stamp())
-    return _STAMP[0]
-
-
-def _compute_parser_stamp():
-    import hashlib
-
-    lib = os.path.dirname(os.path.abspath(__file__))
-    addon_xml = os.path.join(os.path.dirname(os.path.dirname(lib)), "addon.xml")
-    seen = []
-    try:
-        paths = [addon_xml]
-        for folder, _dirs, names in os.walk(lib):
-            paths.extend(
-                os.path.join(folder, name) for name in names if name.endswith(".py")
-            )
-        for path in paths:
-            stat = os.stat(path)
-            seen.append((os.path.relpath(path, lib), stat.st_size, stat.st_mtime_ns))
-    except (OSError, ValueError):
-        return None
-    return hashlib.sha256(repr(sorted(seen)).encode("utf-8")).hexdigest()[:20]
+    return code_stamp()
 
 
 def _drop_parses(rows):
