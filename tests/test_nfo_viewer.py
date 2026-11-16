@@ -394,31 +394,59 @@ def test_back_closes_and_other_keys_do_nothing(tmp_path):
     assert viewer._closed is True
 
 
-def test_indexers_not_asked_yet_are_asked_in_the_background(tmp_path):
-    release_docs.keep(KEY, release_docs.NFO, "hub.example", OWN_NFO)
-    viewer = _viewer(tmp_path)
+def _answering(viewer):
+    """Patches under which the viewer's two indexers answer when ``_ask`` runs."""
 
     def answer(rows, key, title, describe):
         assert (rows, key, title) == (viewer._rows, KEY, NAME) and describe
-        release_docs.keep(key, release_docs.MEDIAINFO, "maps.example", REPORT)
+        release_docs.keep(key, release_docs.NFO, "hub.example", OWN_NFO)
 
-    with patch.object(doc_fetch, "plan", return_value={"a": {}, "b": {}}), patch.object(
-        nfo_viewer.threading, "Thread"
-    ) as thread, patch.object(doc_fetch, "gather", side_effect=answer):
+    return (
+        patch.object(doc_fetch, "plan", return_value={"a": {}, "b": {}}),
+        patch.object(nfo_viewer.threading, "Thread"),
+        patch.object(doc_fetch, "gather", side_effect=answer),
+    )
+
+
+def test_indexers_not_asked_yet_are_asked_in_the_background(tmp_path):
+    release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", REPORT)
+    viewer = _viewer(tmp_path)
+    plan, thread_class, gather = _answering(viewer)
+    with plan, thread_class as thread, gather:
         viewer.onInit()
         # What is kept is shown at once, with a note that more is coming.
-        assert len(viewer._tabs) == 1
+        assert [tab["kind"] for tab in viewer._tabs] == ["mediainfo"]
         assert viewer.getProperty("hints") == (
             "Asking 2 indexers for the NFO and MediaInfo..."
         )
         thread.assert_called_once_with(target=viewer._ask, daemon=True)
-        _press(viewer, nfo_viewer.ACTION_MOVE_DOWN)
         viewer.onInit()  # Kodi may call it again: nothing is asked twice
         thread.assert_called_once()
         viewer._ask()
 
+    # The NFO came: it is the first tab, and the one shown.
     assert [tab["kind"] for tab in viewer._tabs] == ["nfo", "mediainfo"]
-    assert viewer._tab == 0 and viewer.getProperty("hints") == "[Left/Right] Other tab"
+    assert viewer._tab == 0 and viewer.getProperty("name") == NAME
+    assert viewer.getProperty("hints") == "[Left/Right] Other tab"
+
+
+def test_the_place_is_kept_when_more_texts_arrive_after_a_key(tmp_path):
+    long_report = REPORT.replace(
+        "</media>",
+        "".join('<track type="Text"><Format>PGS</Format></track>' for _ in range(20))
+        + "</media>",
+    )
+    release_docs.keep(KEY, release_docs.MEDIAINFO, "maps.example", long_report)
+    viewer = _viewer(tmp_path)
+    plan, thread_class, gather = _answering(viewer)
+    with plan, thread_class, gather:
+        viewer.onInit()
+        _press(viewer, nfo_viewer.ACTION_MOVE_DOWN)
+        assert viewer.getProperty("page").startswith("Page 2 /")
+        viewer._ask()
+
+    assert [tab["kind"] for tab in viewer._tabs] == ["nfo", "mediainfo"]
+    assert viewer._tab == 1 and viewer.getProperty("page").startswith("Page 2 /")
 
 
 def test_the_window_says_so_while_it_waits_and_when_nothing_came(tmp_path):

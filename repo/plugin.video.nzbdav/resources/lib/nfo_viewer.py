@@ -19,7 +19,8 @@ the release:
 
 What is already kept for the release is shown at once. The indexers that
 were not asked yet are asked in the background (``doc_fetch``), and the
-tabs are redrawn when they have answered.
+tabs are redrawn when they have answered: from the first tab, or where the
+user is when they already changed the tab or the page.
 """
 
 import hashlib
@@ -356,6 +357,9 @@ class NfoViewer(
         self._rail = []
         self._started = False
         self._closed = False
+        # Whether a key changed the tab or the page: the place is then kept
+        # when more texts arrive.
+        self._moved = False
         super().__init__(*args)
 
     # --- what is shown ------------------------------------------------------
@@ -366,7 +370,11 @@ class NfoViewer(
         return _FALLBACK_COLUMNS, _FALLBACK_ROWS
 
     def _load(self):
-        """Read what is kept for the release and draw it, keeping the place."""
+        """Read what is kept for the release and draw it.
+
+        The first tab is shown, unless the user already moved: the tab and
+        page they are on are then kept when more texts arrive.
+        """
         record = release_docs.load(self._key)
         columns, page_rows = self._page_size()
         tabs = build_tabs(record, self._rows, self._title, columns, page_rows)
@@ -379,7 +387,7 @@ class NfoViewer(
             self._tab = 0
             self._page = 0
             for index, tab in enumerate(tabs):
-                if tab["digest"] == before:
+                if self._moved and tab["digest"] == before:
                     self._tab = index
                     self._page = min(page, len(tab["pages"]) - 1)
             self._draw()
@@ -587,6 +595,7 @@ class NfoViewer(
     def _switch(self, step):
         with self._lock:
             if len(self._tabs) > 1:
+                self._moved = True
                 self._tab = (self._tab + step) % len(self._tabs)
                 self._page = 0
                 self._draw()
@@ -598,6 +607,7 @@ class NfoViewer(
                 return
             page = min(max(0, self._page + step), len(tab["pages"]) - 1)
             if page != self._page:
+                self._moved = True
                 self._page = page
                 self._draw()
 

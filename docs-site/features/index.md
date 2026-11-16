@@ -27,6 +27,12 @@ devices.
     want. Rank by relevance, size, or age, and optionally auto-select the best.
     The picker shows each release once and lists the indexers that carry it.
 
+-   :material-file-document-outline: __[NFO and MediaInfo viewer](nfo-viewer.md)__
+
+    Press Left or Right on a release to read its NFO and MediaInfo over the
+    list, in a terminal font, with every indexer that carries each text and
+    what the text adds to the release's name.
+
 -   :material-play-speed: __[Playback, remux, and seeking](playback-and-remux.md)__
 
     A local proxy preserves seeking, rewrites tail-`moov` MP4s, recovers from

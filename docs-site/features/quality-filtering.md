@@ -148,6 +148,10 @@ plus sign was replaced on the way from the indexer.
 
 #### Audio from the NFO
 
+!!! tip "Read the NFO yourself"
+    Left or Right on a release in the picker opens its NFO and MediaInfo:
+    see [NFO and MediaInfo viewer](nfo-viewer.md).
+
 A release name can leave its audio out altogether:
 `Movie.2004.MULTi.1080p.BluRay.x264-GRP`. Such a release ranks as "audio
 unknown", after every release that tags its audio. Its NFO usually says what

@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Released | What it's about |
 |---|---|---|
-| [Unreleased](#unreleased--main) | on `main` | One row per upload in the picker: names with no group listed together, a cut-short or re-named listing takes its upload's tags, a picker open in about half the time; Search progress window between play and the picker, with per-indexer results and failures; episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
+| [Unreleased](#unreleased--main) | on `main` | NFO and MediaInfo viewer in the picker (Left or Right on a release), with `NFO` and `MEDIAINFO` tags on the rows; One row per upload in the picker: names with no group listed together, a cut-short or re-named listing takes its upload's tags, a picker open in about half the time; Search progress window between play and the picker, with per-indexer results and failures; episode searches list the requested episode only, and a daily show's requested night; normalized release names in the picker, HYBRID as its own attribute and colored tag, Dolby Digital Plus / Atmos / DTS:X read correctly, three audio ranking tiers, CiNEPHiLES and FraMeSToR pinned first in their resolution |
 | **[2.0.0-rc.1](#200-rc1--2026-11-09)** | 2026-11-09 | List compacted picker (one row per release), one same-release rule for the picker and NZBGet backups, more NZB copies rank first among relevance ties, release groups read in more names; playback failure dialog with file and mount diagnosis, one-tap share remount; backend-specific playback options under Playback backend; NZBGet backups independent of the nzbdav fallback switch; next episode after one ends, including season rollover |
 | **[2.0.0-beta.3](#200-beta3--2026-10-11)** | 2026-10-11 | Renamed NeNeTeePee-Stream-Kodi, StreamNZB backend and one Playback backend section, NZBGet duplicate backups in one request, complete media filters and resolution-then-HDR-then-REMUX ranking, picker show-all toggle, TMDbHelper scrobbling restored, EBML-aware MKV/WebM gap concealment, search cache in minutes shared with TMDBHelper plays |
 | **[2.0.0-beta.2](#200-beta2--2026-07-18)** | 2026-07-18 | Exact season-pack episode reuse, SMB readability gate before playback, results-dialog label scrolling, unified XML-safety parsing |
@@ -68,6 +68,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased][] — main
 
 ### Added
+
+- **Read a release's NFO and MediaInfo from the picker.** Left or Right on a
+  release opens a viewer over the list
+  ([NFO and MediaInfo viewer](https://appz4fun.github.io/NeNeTeePee-Stream-Kodi/features/nfo-viewer/)):
+    - One tab per unique text. Indexers mostly carry the very same NFO, so
+      identical texts share a tab that lists every indexer carrying it.
+    - The text is drawn with the add-on's own terminal font, so NFO art lines
+      up on any skin, and is paged for the screen: the header says how many
+      pages there are, and Up and Down turn them.
+    - Under the text, what it says of the release (resolution, dynamic range,
+      codec, audio, source, group), each with a check when the listing's name
+      already says it or a small NEW when the text is where it comes from.
+    - Rows of the picker carry `NFO` and `MEDIAINFO` tags for what there is
+      to open, beside `HYBRID` and `REPACK`, and the bottom bar lists the
+      shortcut.
+    - What the search already read is shown at once. Each other indexer that
+      lists the release is asked once, when the viewer opens, and never again
+      for that release.
 
 - **Listings of one upload are one picker row, however the indexers named
   them.** A search listed the same files several times: under a name one
@@ -268,6 +286,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A row's tags share one label.** `HYBRID` (or `UPSCALE`), `REPACK` and the
+  new `NFO` and `MEDIAINFO` tags follow each other under the name, two spaces
+  apart, in both picker views. Each had a column of its own before, and the
+  row has no room for two more.
+
 - **A cached picker open takes about half the time.** Which listings are the
   same release was worked out by three pieces of code, each with its own
   shortcut, and the metadata pass ran up to four times per open. A result
@@ -403,6 +426,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   compacted columns were resized so these fit without being cut off.
 
 ### Fixed
+
+- **The picker's list always takes the keyboard focus.** Kodi shows the list
+  of the active view one frame after the picker opens. A short result list
+  was ready before that frame, the list refused the focus while still hidden,
+  and no key reached it: neither the arrows nor Enter. The picker now asks
+  for the focus until the list has it.
 
 - **A release tagged `HDR10x265` no longer disappears from a film search.**
   A tag run into the codec (`HDR10x265`, `HDR10H.265`, `DV.HDRH.265`,
