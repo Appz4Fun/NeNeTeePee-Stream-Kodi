@@ -345,6 +345,10 @@ def _collect_unique(stream, state, cancel_event, need):
             )
             dedup.report.duplicate()
             continue
+        if payload:
+            # A distinct posting in hand: its listed size counts towards the
+            # release's usual size (``FleetDedup.stray_from_pick``).
+            dedup.note_listed_size(candidate, fingerprint)
         if is_pick:
             dedup.note_pick(fingerprint)
         elif dedup.pack_around_pick(fingerprint):
@@ -360,6 +364,20 @@ def _collect_unique(stream, state, cancel_event, need):
                 _core.xbmc.LOGINFO,
             )
             dedup.report.pack()
+            continue
+        elif dedup.stray_from_pick(fingerprint, candidate):
+            # Files of its own at a size far from the release's: another post
+            # under this name (a broken one, or a payload posted under several
+            # names), not a copy that could stand in for the pick.
+            _discard(spool, payload)
+            _core.xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Skipped NZBGet backup '{}' (other "
+                "files, at a size far from this release's)".format(
+                    candidate.get("title") or ""
+                ),
+                _core.xbmc.LOGINFO,
+            )
+            dedup.report.stray()
             continue
         elif dedup.twin_of_pick(fingerprint):
             candidate["_same_files"] = True

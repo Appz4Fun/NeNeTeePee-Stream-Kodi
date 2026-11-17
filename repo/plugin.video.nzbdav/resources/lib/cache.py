@@ -40,8 +40,14 @@ _ATTACHED_KEY = "_attached"
 _PARSER_FIELD = "parser"
 # The entry's field holding the parses: release name -> parsed details.
 _PARSES_FIELD = "parsed"
+# The entry's field saying the parses came from one whole metadata pass
+# (``filter.attached_record``), so reading it back can skip that pass.
+_ATTACHED_FIELD = "attached"
 # path -> the timestamp of the entry last read from it, for ``keep_parsed``.
 _READ_TIMESTAMPS = {}
+# Paths read with their parses whose pass no longer stands (something new is
+# known of a release): ``keep_parsed`` runs the pass and stores it afresh.
+_STALE_PASSES = set()
 
 
 def _parser_stamp():
@@ -249,6 +255,12 @@ def _read_fresh_cache(path, cache_ttl, title):
         _drop_parses(results)
     else:
         _attach_parses(results, data.get(_PARSES_FIELD))
+        from resources.lib.filter import resume_attached
+
+        if resume_attached(results, data.get(_ATTACHED_FIELD)):
+            _STALE_PASSES.discard(path)
+        else:
+            _STALE_PASSES.add(path)
     _READ_TIMESTAMPS[path] = timestamp
     uploads = data.get("hydra_uploads")
     if isinstance(results, list) and isinstance(uploads, list):
@@ -319,11 +331,16 @@ def keep_parsed(search_type, title, results, settings_getter=None, **kwargs):
     ``results`` is what ``get_cached`` returned. An entry written before
     parses were stored, or by another build of the add-on, comes back without
     them; this parses the rows once and rewrites the entry so the next open is
-    fast. The entry keeps its age: it still expires when it would have.
+    fast. An entry whose pass no longer stands (an NFO or MediaInfo read since
+    told something of one of its releases) is passed again and rewritten, so
+    the next open can skip the pass (``filter.resume_attached``). The entry
+    keeps its age: it still expires when it would have.
     """
     path = _cache_path(search_type, title, kwargs)
     timestamp = _READ_TIMESTAMPS.get(path)
-    if timestamp is None or _all_parsed(results):
+    stale = path in _STALE_PASSES
+    _STALE_PASSES.discard(path)
+    if timestamp is None or (_all_parsed(results) and not stale):
         return
     if _get_cache_ttl_seconds(settings_getter) <= 0:
         return
@@ -346,7 +363,10 @@ def _write_entry(path, title, results, timestamp):
     """Write one cache entry, dated ``timestamp``; a failed write is ignored."""
     tmp_path = path + ".tmp"
     try:
+        from resources.lib.filter import attached_record
         from resources.lib.hydra import split_search_uploads
+
+        attached = attached_record(results)
 
         plain_results, uploads = split_search_uploads(results)
         for row in plain_results:
@@ -357,6 +377,7 @@ def _write_entry(path, title, results, timestamp):
             "timestamp": timestamp,
             _PARSER_FIELD: _parser_stamp(),
             _PARSES_FIELD: _split_parses(plain_results),
+            _ATTACHED_FIELD: attached,
             "results": plain_results,
             "hydra_uploads": uploads,
         }

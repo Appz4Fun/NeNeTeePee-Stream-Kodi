@@ -202,6 +202,8 @@ _FALLBACK_STRINGS = {
     30672: "{} duplicate uploads",
     30771: "1 pack under this name",
     30772: "{} packs under this name",
+    30787: "1 post that is not this release",
+    30788: "{} posts that are not this release",
     30773: "[Left/Right] NFO and MediaInfo",
     30774: "Page {} / {}",
     30775: "[Left/Right] Other tab",

@@ -474,6 +474,13 @@ class FleetDedup:
         self.aborted = None
         # What the pick's files are (``posting_payload``), once it is fetched.
         self._pick_payload = None
+        # The listed sizes of the copies seen so far, and the pick's
+        # (``stray_from_pick``).
+        self._listed_sizes = []
+        self._pick_listed = 0
+        # What each counted posting's files are: a posting seen again (one
+        # skipped, or forgotten after a failed append) is not counted twice.
+        self._sized_postings = set()
 
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.
@@ -534,6 +541,57 @@ class FleetDedup:
     def twin_of_pick(self, fingerprint):
         """Whether a backup holds the same files as the pick, posted anew."""
         return same_files(getattr(fingerprint, "payload", None), self._pick_payload)
+
+    def note_listed_size(self, row, fingerprint=None):
+        """Count ``row``'s listed size towards the release's typical size.
+
+        Call it once per distinct posting in hand (the pick, and each backup
+        downloaded that is not the same posting as one already counted): a
+        second listing of the pick's own NZB must not make the pick's size
+        look like the release's usual one.
+        """
+        size = _size_bytes(row) if isinstance(row, dict) else 0
+        payload = getattr(fingerprint, "payload", None)
+        if payload:
+            files = (payload[0], frozenset(payload[1]))
+            if files in self._sized_postings:
+                return
+            self._sized_postings.add(files)
+        if size > 0:
+            self._listed_sizes.append(size)
+            if row.get("_is_pick"):
+                self._pick_listed = size
+
+    def stray_from_pick(self, fingerprint, row):
+        """Whether a backup is another post listed under the release's name.
+
+        Its files are not the pick's (``SAME_FILES_SHARE`` of the smaller of
+        the two is not shared), its files come to ``_PACK_SIZE_FACTOR`` times
+        the pick's or more, or that much less, and its listed size is that far
+        from the median listed size of the copies seen so far while the
+        pick's is not. A broken post, a mislabelled episode, or one payload
+        posted under several release names: none of them is a copy of the
+        release, and the size rule of the ranking only sees it when the
+        release has three listed copies. False when anything is unknown.
+        """
+        posting = getattr(fingerprint, "payload", None)
+        pick = self._pick_payload
+        if not posting or not pick or len(self._listed_sizes) < 3:
+            return False
+        small, large = sorted((posting[0], pick[0]))
+        if small <= 0 or large < small * _PACK_SIZE_FACTOR:
+            return False
+        if _shared_bytes(posting, pick) >= SAME_FILES_SHARE * small:
+            return False
+        typical = sorted(self._listed_sizes)[len(self._listed_sizes) // 2]
+
+        def off(size):
+            return size <= 0 or not (
+                typical / _PACK_SIZE_FACTOR <= size <= typical * _PACK_SIZE_FACTOR
+            )
+
+        listed = _size_bytes(row)
+        return listed > 0 and off(listed) and not off(self._pick_listed)
 
     def pack_around_pick(self, fingerprint):
         """Whether a backup is a pack that holds the pick among other files."""

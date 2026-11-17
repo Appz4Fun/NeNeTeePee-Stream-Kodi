@@ -67,6 +67,7 @@ from resources.lib.filter_payload import (
     same_item,
 )
 from resources.lib.release_subject import name_form_key
+from resources.lib.upload_count import count_copies
 
 # First in the exact key of a row with no release group.
 _NO_GROUP = "no group"
@@ -80,13 +81,33 @@ class ReleaseIndex:  # pylint: disable=too-few-public-methods
     that cannot be parsed is a group of one.
     """
 
-    __slots__ = ("groups", "labels", "_group_at")
+    __slots__ = ("groups", "labels", "copies", "_group_at")
 
-    def __init__(self, groups, labels=None):
+    def __init__(self, groups, labels=None, copies=None):
         self.groups = groups
         # id(row) -> the size label this grouping gave it (``_by_size``).
         self.labels = labels or {}
+        # id(row) -> its release's copy count, once asked (``copies_in``).
+        # One dict for a grouping and every reordering of it.
+        self.copies = {} if copies is None else copies
         self._group_at = {id(row): group for group in groups for row in group}
+
+    def copies_in(self, group):
+        """How many copies the release ``group`` (one of ``groups``) has.
+
+        ``upload_count.count_copies``, counted once per grouping: the ranking
+        asks first, and the picker row of the same release shows that count
+        instead of counting again in another order (the count depends on
+        which listing of an upload comes first).
+        """
+        if not group:
+            return 1
+        known = self.copies.get(id(group[0]))
+        if known is None:
+            known = count_copies(group) if len(group) > 1 else 1
+            for row in group:
+                self.copies[id(row)] = known
+        return known
 
     def group_of(self, row):
         """The group ``row`` is in: the same list object for every member.
@@ -132,6 +153,25 @@ def build(rows):
     return index
 
 
+def copies_of(group):
+    """The copy count of a picker row's release (``ReleaseIndex.copies_in``).
+
+    ``group`` is a group a recent grouping returned (``results_groups``):
+    the count is the one the ranking used. A group no recent grouping holds
+    as it is is counted here.
+    """
+    if not group:
+        return 1
+    with _RECENT_LOCK:
+        indexes = list(_RECENT.values())
+    members = {id(row) for row in group}
+    for index in reversed(indexes):
+        held = index.group_of(group[0])
+        if len(held) == len(members) and all(id(row) in members for row in held):
+            return index.copies_in(held)
+    return count_copies(group) if len(group) > 1 else 1
+
+
 def _recent_key(rows):
     """What a list's grouping depends on, or None when it cannot be told.
 
@@ -165,7 +205,7 @@ def _in_order(index, rows):
         sorted(group, key=lambda row: position[id(row)]) for group in index.groups
     ]
     groups.sort(key=lambda group: position[id(group[0])])
-    return ReleaseIndex(groups, index.labels)
+    return ReleaseIndex(groups, index.labels, index.copies)
 
 
 def _build(rows):

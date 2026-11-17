@@ -9,7 +9,7 @@ import xbmc
 import xbmcaddon
 import xbmcgui
 
-from resources.lib import doc_fetch, nfo_viewer, release_docs
+from resources.lib import doc_fetch, nfo_viewer, release_docs, release_index
 from resources.lib.filter_audio import audio_label
 from resources.lib.http_util import format_size as _format_size
 from resources.lib.i18n import fmt as _fmt
@@ -29,7 +29,6 @@ from resources.lib.release_subject import name_form_key
 from resources.lib.release_supersede import revision_label, superseded_rows
 from resources.lib.results_groups import group_pick, release_groups
 from resources.lib.results_input import OkHold
-from resources.lib.upload_count import count_copies
 
 _SRC_SHORT = {
     "BluRay REMUX": "REMUX",
@@ -487,7 +486,7 @@ def _build_group_item(group, row_index, replaced_by=""):
         item.setProperty("available", _available_text())
     # Several indexers list one upload: the row counts separate uploads, and
     # the panel says how many listings and indexers they came from.
-    uploads = count_copies(group) if count > 1 else 1
+    uploads = release_index.copies_of(group) if count > 1 else 1
     if uploads > 1:
         item.setProperty("copies", _c(_fmt(30479, uploads), _COPIES_CHIP_COLOR))
         if uploads == count:

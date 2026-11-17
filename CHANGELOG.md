@@ -296,6 +296,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A repeat open of a cached search skips the whole parsing pass.** The
+  cache entry records that its details came from one whole pass and what was
+  known then of its releases' NFOs and MediaInfo; while that still holds, the
+  rows read back are used as they are. The picker also shows the copy count
+  the ranking used, counted once per release.
+- **A backup that is another post under the release's name is not sent.**
+  Its files are not the pick's, it is 1.35 times off the pick's size, and its
+  listed size is off the release's usual size while the pick's is not: a
+  broken post, a mislabelled episode, or one payload posted under several
+  names. The dialog counts it as `1 post that is not this release`.
 - **A first search of names seen before opens much faster.** Parsed release
   names are kept in `parsed_names.json` in the add-on's profile folder, up to
   8,000 names (about 5 MB), the least recently used dropped first, and thrown

@@ -6062,14 +6062,19 @@ def test_play_and_script_paths_do_not_share_cache_across_provider_sets(
         ]
         assert mock_search.call_count == 2
 
-        # Each path now hits its own entry. A row read back from the cache
-        # carries no mark of this run's parsing pass.
-        hydra_row.pop("_attached", None)
+        # Each path now hits its own entry. A row read back from the cache is
+        # marked as a parsing pass of its own (``filter.resume_attached``).
+        def unmarked(rows):
+            return [{k: v for k, v in row.items() if k != "_attached"} for row in rows]
+
+        hydra_mark = hydra_row.pop("_attached", None)
         prowlarr_row.pop("_attached", None)
-        assert _search_with_cache("episode", "Task", kwargs) == ([hydra_row], None)
-        assert _script_play_search_results("episode", "Task", kwargs, MagicMock()) == [
-            prowlarr_row
-        ]
+        cached, error = _search_with_cache("episode", "Task", kwargs)
+        assert (unmarked(cached), error) == ([hydra_row], None)
+        assert cached[0]["_attached"] and cached[0]["_attached"] != hydra_mark
+        assert unmarked(
+            _script_play_search_results("episode", "Task", kwargs, MagicMock())
+        ) == [prowlarr_row]
         assert mock_search.call_count == 2
 
 
