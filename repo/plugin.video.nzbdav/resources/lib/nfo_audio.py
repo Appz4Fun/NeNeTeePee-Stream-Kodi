@@ -378,7 +378,7 @@ def stamp_for(keys):
         known = [[key, _what_applies(_STORE[key])] for key in wanted if key in _STORE]
     known = [pair for pair in known if pair[1]]
     text = json.dumps(known, sort_keys=True, separators=(",", ":"))
-    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def _what_applies(entry):
