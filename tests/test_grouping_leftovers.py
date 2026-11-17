@@ -279,6 +279,15 @@ def test_a_complete_repost_of_an_incomplete_pick_is_kept():
     assert not dedup.stray_from_pick(_fingerprint(_payload(10 * 10**9)), repost)
 
 
+def test_a_posting_seen_again_counts_its_size_once():
+    dedup = _fleet(10 * 10**9, [10 * 10**9])
+    stray = _fingerprint(_payload(3 * 10**9))
+    for _ in range(3):
+        dedup.note_listed_size({"size": str(3 * 10**9)}, stray)
+
+    assert dedup.stray_from_pick(stray, {"size": str(3 * 10**9)})
+
+
 def test_strays_are_counted_and_named_in_the_summary():
     report = nzbget_progress.FleetReport()
     report.stray()

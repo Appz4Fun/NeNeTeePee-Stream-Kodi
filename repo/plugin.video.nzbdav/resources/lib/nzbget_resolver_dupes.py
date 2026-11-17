@@ -348,7 +348,7 @@ def _collect_unique(stream, state, cancel_event, need):
         if payload:
             # A distinct posting in hand: its listed size counts towards the
             # release's usual size (``FleetDedup.stray_from_pick``).
-            dedup.note_listed_size(candidate)
+            dedup.note_listed_size(candidate, fingerprint)
         if is_pick:
             dedup.note_pick(fingerprint)
         elif dedup.pack_around_pick(fingerprint):

@@ -478,6 +478,9 @@ class FleetDedup:
         # (``stray_from_pick``).
         self._listed_sizes = []
         self._pick_listed = 0
+        # What each counted posting's files are: a posting seen again (one
+        # skipped, or forgotten after a failed append) is not counted twice.
+        self._sized_postings = set()
 
     def clusters(self, candidates):
         """Group ``candidates`` into same-listing clusters, in rank order.
@@ -539,7 +542,7 @@ class FleetDedup:
         """Whether a backup holds the same files as the pick, posted anew."""
         return same_files(getattr(fingerprint, "payload", None), self._pick_payload)
 
-    def note_listed_size(self, row):
+    def note_listed_size(self, row, fingerprint=None):
         """Count ``row``'s listed size towards the release's typical size.
 
         Call it once per distinct posting in hand (the pick, and each backup
@@ -548,6 +551,12 @@ class FleetDedup:
         look like the release's usual one.
         """
         size = _size_bytes(row) if isinstance(row, dict) else 0
+        payload = getattr(fingerprint, "payload", None)
+        if payload:
+            files = (payload[0], frozenset(payload[1]))
+            if files in self._sized_postings:
+                return
+            self._sized_postings.add(files)
         if size > 0:
             self._listed_sizes.append(size)
             if row.get("_is_pick"):

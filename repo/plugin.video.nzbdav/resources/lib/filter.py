@@ -909,10 +909,13 @@ def attached_record(results):
     the pass's outcome depends on nothing else but the rows and the code,
     and the cache already drops parses made by other code.
     """
+    known = nfo_audio.known_version()
     if not _attached_already(results):
         return None
     keys = _list_name_keys(results)
-    return {"keys": keys, "nfo": nfo_audio.stamp_for(keys)}
+    stamp = nfo_audio.stamp_for(keys)
+    # An answer stored meanwhile may be in the stamp but not in the parses.
+    return {"keys": keys, "nfo": stamp} if nfo_audio.known_version() == known else None
 
 
 def resume_attached(results, record):
@@ -935,9 +938,13 @@ def resume_attached(results, record):
     ]
     if not named or not all(isinstance(result.get("_meta"), dict) for result in named):
         return False
+    known = nfo_audio.known_version()
     if record.get("nfo") != nfo_audio.stamp_for(keys):
         return False
-    _mark_pass(named, nfo_audio.known_version())
+    if nfo_audio.known_version() != known:
+        # An answer was stored meanwhile: the pass may not stand for it.
+        return False
+    _mark_pass(named, known)
     return True
 
 
