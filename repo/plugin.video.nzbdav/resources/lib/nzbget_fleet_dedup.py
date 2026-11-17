@@ -540,7 +540,13 @@ class FleetDedup:
         return same_files(getattr(fingerprint, "payload", None), self._pick_payload)
 
     def note_listed_size(self, row):
-        """Count ``row``'s listed size towards the release's typical size."""
+        """Count ``row``'s listed size towards the release's typical size.
+
+        Call it once per distinct posting in hand (the pick, and each backup
+        downloaded that is not the same posting as one already counted): a
+        second listing of the pick's own NZB must not make the pick's size
+        look like the release's usual one.
+        """
         size = _size_bytes(row) if isinstance(row, dict) else 0
         if size > 0:
             self._listed_sizes.append(size)
@@ -575,7 +581,8 @@ class FleetDedup:
                 typical / _PACK_SIZE_FACTOR <= size <= typical * _PACK_SIZE_FACTOR
             )
 
-        return off(_size_bytes(row)) and not off(self._pick_listed)
+        listed = _size_bytes(row)
+        return listed > 0 and off(listed) and not off(self._pick_listed)
 
     def pack_around_pick(self, fingerprint):
         """Whether a backup is a pack that holds the pick among other files."""

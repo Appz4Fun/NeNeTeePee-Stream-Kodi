@@ -45,6 +45,9 @@ _PARSES_FIELD = "parsed"
 _ATTACHED_FIELD = "attached"
 # path -> the timestamp of the entry last read from it, for ``keep_parsed``.
 _READ_TIMESTAMPS = {}
+# Paths read with their parses whose pass no longer stands (something new is
+# known of a release): ``keep_parsed`` runs the pass and stores it afresh.
+_STALE_PASSES = set()
 
 
 def _parser_stamp():
@@ -254,7 +257,10 @@ def _read_fresh_cache(path, cache_ttl, title):
         _attach_parses(results, data.get(_PARSES_FIELD))
         from resources.lib.filter import resume_attached
 
-        resume_attached(results, data.get(_ATTACHED_FIELD))
+        if resume_attached(results, data.get(_ATTACHED_FIELD)):
+            _STALE_PASSES.discard(path)
+        else:
+            _STALE_PASSES.add(path)
     _READ_TIMESTAMPS[path] = timestamp
     uploads = data.get("hydra_uploads")
     if isinstance(results, list) and isinstance(uploads, list):
@@ -325,11 +331,16 @@ def keep_parsed(search_type, title, results, settings_getter=None, **kwargs):
     ``results`` is what ``get_cached`` returned. An entry written before
     parses were stored, or by another build of the add-on, comes back without
     them; this parses the rows once and rewrites the entry so the next open is
-    fast. The entry keeps its age: it still expires when it would have.
+    fast. An entry whose pass no longer stands (an NFO or MediaInfo read since
+    told something of one of its releases) is passed again and rewritten, so
+    the next open can skip the pass (``filter.resume_attached``). The entry
+    keeps its age: it still expires when it would have.
     """
     path = _cache_path(search_type, title, kwargs)
     timestamp = _READ_TIMESTAMPS.get(path)
-    if timestamp is None or _all_parsed(results):
+    stale = path in _STALE_PASSES
+    _STALE_PASSES.discard(path)
+    if timestamp is None or (_all_parsed(results) and not stale):
         return
     if _get_cache_ttl_seconds(settings_getter) <= 0:
         return

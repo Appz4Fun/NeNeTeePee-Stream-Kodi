@@ -35,6 +35,7 @@ def _ttl(key, default=""):
 @pytest.fixture(name="cache_dir", autouse=True)
 def _cache_dir(tmp_path):
     cache_module._READ_TIMESTAMPS.clear()
+    cache_module._STALE_PASSES.clear()
     with patch("resources.lib.cache._get_cache_dir", return_value=str(tmp_path)):
         yield tmp_path
 
@@ -79,6 +80,55 @@ def test_rows_read_back_redo_the_pass_once_an_answer_for_a_release_changed(store
     assert not any(row.get("_attached") for row in cached)
     filter_module.attach_metadata(cached)
     assert "Atmos" in cached[1]["_meta"]["audio"]
+
+
+def test_a_failed_read_for_a_listed_release_keeps_the_skip(store):
+    # After a first open, the add-on reads the NFOs of the top releases; a
+    # read that fails or finds nothing is stored too. It changes no row.
+    rows = _rows()
+    filter_module.attach_metadata(rows)
+    cache_module.set_cached("movie", "Some Movie", rows, settings_getter=_ttl)
+    key = filter_module._name_form_key(_TITLES[0])
+    store[key] = {"audio": [], "channels": "", "failed": True, "at": 123}
+
+    for _ in range(2):
+        cached = cache_module.get_cached("movie", "Some Movie", settings_getter=_ttl)
+        assert all(row["_attached"] for row in cached)
+
+
+def test_an_entry_whose_pass_went_stale_is_stored_again(store, cache_dir):
+    rows = _rows()
+    filter_module.attach_metadata(rows)
+    cache_module.set_cached("movie", "Some Movie", rows, settings_getter=_ttl)
+    key = filter_module._name_form_key(_TITLES[1])
+    store[key] = {"audio": ["DD+", "Atmos"], "channels": "5.1", "at": 1}
+
+    stale = cache_module.get_cached("movie", "Some Movie", settings_getter=_ttl)
+    assert not any(row.get("_attached") for row in stale)
+    cache_module.keep_parsed("movie", "Some Movie", stale, settings_getter=_ttl)
+    again = cache_module.get_cached("movie", "Some Movie", settings_getter=_ttl)
+
+    assert all(row["_attached"] for row in again)
+    assert "Atmos" in again[1]["_meta"]["audio"]
+
+
+def test_a_read_back_list_equals_a_fresh_pass_on_the_corpus():
+    import grouping_corpus
+
+    for search in grouping_corpus.load():
+        cache_module._READ_TIMESTAMPS.clear()
+        rows = search.rows
+        filter_module.attach_metadata(rows)
+        cache_module.set_cached("movie", search.name, rows, settings_getter=_ttl)
+        cached = cache_module.get_cached("movie", search.name, settings_getter=_ttl)
+        assert all(row["_attached"] for row in cached), search.name
+        fresh = [
+            {k: v for k, v in row.items() if not k.startswith("_")} for row in cached
+        ]
+        filter_module.attach_metadata(fresh)
+        assert [row["_meta"] for row in cached] == [
+            row["_meta"] for row in fresh
+        ], search.name
 
 
 def test_an_answer_for_a_release_not_in_the_list_changes_nothing(store):
@@ -213,6 +263,20 @@ def test_nothing_is_decided_with_too_few_sizes_or_an_odd_pick():
     )
     unknown = _fleet(6 * 10**9, [6 * 10**9 + 1, 30 * 10**9])
     assert not unknown.stray_from_pick(_fingerprint(None), {"size": str(30 * 10**9)})
+
+
+def test_a_backup_without_a_listed_size_is_never_a_stray():
+    dedup = _fleet(6 * 10**9, [6 * 10**9 + 1, 6 * 10**9 + 2])
+    assert not dedup.stray_from_pick(_fingerprint(_payload(30 * 10**9)), {})
+
+
+def test_a_complete_repost_of_an_incomplete_pick_is_kept():
+    # The pick's NZB misses articles, so none of its file signatures match a
+    # complete repost. Only distinct postings count towards the usual size:
+    # with the pick and the repost alone there is no usual size to judge by.
+    dedup = _fleet(6 * 10**9, [10 * 10**9])
+    repost = {"size": str(10 * 10**9)}
+    assert not dedup.stray_from_pick(_fingerprint(_payload(10 * 10**9)), repost)
 
 
 def test_strays_are_counted_and_named_in_the_summary():

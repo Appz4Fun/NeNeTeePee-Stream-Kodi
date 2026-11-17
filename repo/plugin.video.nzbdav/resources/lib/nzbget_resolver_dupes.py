@@ -313,7 +313,6 @@ def _collect_unique(stream, state, cancel_event, need):
             _discard(spool, payload)
             break
         is_pick = bool(candidate.get("_is_pick"))
-        dedup.note_listed_size(candidate)
         if isinstance(payload, (bytes, bytearray)) and not is_pick:
             # The in-memory body is taken (the spool's budget owns it now).
             release = getattr(fetch, "release_memory", None)
@@ -346,6 +345,10 @@ def _collect_unique(stream, state, cancel_event, need):
             )
             dedup.report.duplicate()
             continue
+        if payload:
+            # A distinct posting in hand: its listed size counts towards the
+            # release's usual size (``FleetDedup.stray_from_pick``).
+            dedup.note_listed_size(candidate)
         if is_pick:
             dedup.note_pick(fingerprint)
         elif dedup.pack_around_pick(fingerprint):
