@@ -49,6 +49,7 @@ The links carry the user's API key for that indexer, so they are never
 logged.
 """
 
+import hashlib
 import json
 import os
 import re
@@ -358,6 +359,24 @@ def known_version():
     """
     _load()
     return _CHANGES[0]
+
+
+def stamp_for(keys):
+    """A fingerprint of what is known of the releases ``keys`` name.
+
+    ``keys`` are release-name keys (``filter._name_form_key``). The
+    fingerprint stays the same while no answer for any of them is added,
+    changed or dropped, in this run or a later one: a result list stored
+    with it (``cache``) can be read back without applying the answers again
+    while it matches. ``known_version`` cannot do that, as it counts the
+    changes of one run.
+    """
+    _load()
+    wanted = sorted({key for key in keys if isinstance(key, str) and key})
+    with _LOCK:
+        known = [[key, _STORE[key]] for key in wanted if key in _STORE]
+    text = json.dumps(known, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
 
 
 def _settled(key):

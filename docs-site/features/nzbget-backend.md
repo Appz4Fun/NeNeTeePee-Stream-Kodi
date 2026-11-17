@@ -370,6 +370,29 @@ listings of the same posting:
   names; where they name none, a pack is a posting whose other files come to
   as much as your pick again. A larger posting of the same single episode is
   a complete copy, and is kept.
+- A backup whose files are not your pick's, at 1.35 times its size or more
+  (or that much less), while its listed size is also that far from the
+  release's usual size and your pick's is not, is another post under the
+  release's name: a broken post, a mislabelled episode, or one payload posted
+  under several release names. It is not sent. This decision needs at least
+  three listed copies to know the release's usual size.
+
+```mermaid
+flowchart TD
+    A[Backup NZB downloaded] --> B{Same articles as<br>a copy kept?}
+    B -->|yes| D1[Not sent:<br>duplicate upload]
+    B -->|no| C{Holds the pick's files<br>and other episodes?}
+    C -->|yes| D2[Not sent:<br>pack under this name]
+    C -->|no| E{Other files, far off the<br>release's usual size?}
+    E -->|yes| D3[Not sent:<br>post that is not this release]
+    E -->|no| F{Same files as the pick?}
+    F -->|yes| K1[Kept, sent first]
+    F -->|no| K2[Kept]
+    classDef stop fill:#1E1E2E,stroke:#F87171,color:#F87171
+    classDef keep fill:#1E1E2E,stroke:#34D399,color:#34D399
+    class D1,D2,D3 stop
+    class K1,K2 keep
+```
 
 Both checks need segment sizes that vary. A posting cut into articles of one
 fixed size (about four in ten) says nothing, and is sent as before.
@@ -387,8 +410,9 @@ Not sent: Digital Carnage refused 1, 11 duplicate uploads
 ```
 
 A copy is left out when its indexer refused the download, when its NZB could
-not be downloaded for another reason, when it is a duplicate upload, or when
-it is a pack under the release's name (`1 pack under this name`). The
+not be downloaded for another reason, when it is a duplicate upload, when
+it is a pack under the release's name (`1 pack under this name`), or when it
+is another post under the release's name (`1 post that is not this release`). The
 duplicate count is every listing that was the same upload as a copy kept: the
 listings never downloaded because another indexer lists the same posting, and
 the NZBs that were downloaded and turned out to share their articles with one

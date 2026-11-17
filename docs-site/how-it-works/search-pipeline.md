@@ -279,6 +279,10 @@ the search type, title, year, season/episode, IDs, and the enabled provider set.
   repeat open skips the name parsing, the slowest step on a low-power box.
   Those details are reused only by the build that stored them: after an
   update, an entry is parsed once more and stored again.
+- When the details were stored from one whole pass over the list, and
+  nothing new has been read since from any of its releases' NFOs or
+  MediaInfo, a repeat open also skips the rest of that pass (spellings,
+  shared tags, shared Atmos): the stored details are what it would make.
 - The cache self-limits to 70 MB and 1000 entries, evicting the oldest first,
   and writes atomically.
 

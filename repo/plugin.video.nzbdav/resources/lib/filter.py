@@ -71,7 +71,6 @@ from resources.lib.filter_tags import (
 )
 from resources.lib.filter_upscale import is_ai_upscale
 from resources.lib.release_subject import name_form_key as _name_form_key
-from resources.lib.upload_count import count_copies
 
 # Re-exported so ``resources.lib.filter.<name>`` keeps resolving for callers
 # and tests after the fallback parser, groups dialog, and metadata
@@ -872,6 +871,15 @@ def _attach_metadata(results):
     # own name, or for another name its upload is listed under.
     nfo_audio.apply_known(results, _name_form_key, _META_DERIVED_ROW_KEYS, other_names)
     share_atmos(results, _META_DERIVED_ROW_KEYS)
+    _mark_pass(results, known)
+
+
+def _mark_pass(results, known):
+    """Mark every named row of ``results`` with a new pass's token.
+
+    ``known`` is ``nfo_audio.known_version`` when the pass was made; the
+    pass stands while that stays the same (``_attached_already``).
+    """
     token = "{}-{}".format(_ATTACH_RUN, next(_ATTACH_NUMBERS))
     _ATTACH_PASSES[token] = known
     while len(_ATTACH_PASSES) > _ATTACH_PASSES_KEPT:
@@ -879,6 +887,58 @@ def _attach_metadata(results):
     for result in results:
         if isinstance(result, dict) and "title" in result:
             result[ATTACHED_KEY] = token
+
+
+def _list_name_keys(results):
+    """The release-name keys of the named rows of ``results``, sorted."""
+    keys = set()
+    for result in results:
+        title = result.get("title") if isinstance(result, dict) else None
+        if isinstance(title, str):
+            keys.add(_name_form_key(title))
+    keys.discard("")
+    return sorted(keys)
+
+
+def attached_record(results):
+    """What a cache entry keeps so that reading it back skips the pass.
+
+    None unless one pass that still stands attached every row of
+    ``results`` (``_attached_already``). Otherwise the list's release-name
+    keys and what was known of those releases (``nfo_audio.stamp_for``):
+    the pass's outcome depends on nothing else but the rows and the code,
+    and the cache already drops parses made by other code.
+    """
+    if not _attached_already(results):
+        return None
+    keys = _list_name_keys(results)
+    return {"keys": keys, "nfo": nfo_audio.stamp_for(keys)}
+
+
+def resume_attached(results, record):
+    """Mark rows read from the cache as attached when ``record`` still holds.
+
+    ``record`` is what ``attached_record`` gave when the rows were stored,
+    and the rows carry the parses stored with them. While nothing new is
+    known of their releases the pass would come to the same parses, so the
+    rows are marked as one pass of this run and every later
+    ``attach_metadata`` over them, or over some of them, returns at once.
+    Returns whether the rows were marked.
+    """
+    if not isinstance(record, dict):
+        return False
+    keys = record.get("keys")
+    if not isinstance(keys, list) or not all(isinstance(key, str) for key in keys):
+        return False
+    named = [
+        result for result in results if isinstance(result, dict) and "title" in result
+    ]
+    if not named or not all(isinstance(result.get("_meta"), dict) for result in named):
+        return False
+    if record.get("nfo") != nfo_audio.stamp_for(keys):
+        return False
+    _mark_pass(named, nfo_audio.known_version())
+    return True
 
 
 def learn_nfo_audio(rows, settings_getter):
@@ -1739,7 +1799,7 @@ def _nzb_copy_counts(rows, index=None):
         index = release_index.build(rows)
     counts = {}
     for group in index.groups:
-        copies = count_copies(group) if len(group) > 1 else 1
+        copies = index.copies_in(group)
         for row in group:
             counts[id(row)] = copies
     return counts

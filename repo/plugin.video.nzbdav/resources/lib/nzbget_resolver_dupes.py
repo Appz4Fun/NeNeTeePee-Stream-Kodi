@@ -313,6 +313,7 @@ def _collect_unique(stream, state, cancel_event, need):
             _discard(spool, payload)
             break
         is_pick = bool(candidate.get("_is_pick"))
+        dedup.note_listed_size(candidate)
         if isinstance(payload, (bytes, bytearray)) and not is_pick:
             # The in-memory body is taken (the spool's budget owns it now).
             release = getattr(fetch, "release_memory", None)
@@ -360,6 +361,20 @@ def _collect_unique(stream, state, cancel_event, need):
                 _core.xbmc.LOGINFO,
             )
             dedup.report.pack()
+            continue
+        elif dedup.stray_from_pick(fingerprint, candidate):
+            # Files of its own at a size far from the release's: another post
+            # under this name (a broken one, or a payload posted under several
+            # names), not a copy that could stand in for the pick.
+            _discard(spool, payload)
+            _core.xbmc.log(
+                "NeNeTeePee-Stream-Kodi: Skipped NZBGet backup '{}' (other "
+                "files, at a size far from this release's)".format(
+                    candidate.get("title") or ""
+                ),
+                _core.xbmc.LOGINFO,
+            )
+            dedup.report.stray()
             continue
         elif dedup.twin_of_pick(fingerprint):
             candidate["_same_files"] = True

@@ -40,6 +40,9 @@ _ATTACHED_KEY = "_attached"
 _PARSER_FIELD = "parser"
 # The entry's field holding the parses: release name -> parsed details.
 _PARSES_FIELD = "parsed"
+# The entry's field saying the parses came from one whole metadata pass
+# (``filter.attached_record``), so reading it back can skip that pass.
+_ATTACHED_FIELD = "attached"
 # path -> the timestamp of the entry last read from it, for ``keep_parsed``.
 _READ_TIMESTAMPS = {}
 
@@ -249,6 +252,9 @@ def _read_fresh_cache(path, cache_ttl, title):
         _drop_parses(results)
     else:
         _attach_parses(results, data.get(_PARSES_FIELD))
+        from resources.lib.filter import resume_attached
+
+        resume_attached(results, data.get(_ATTACHED_FIELD))
     _READ_TIMESTAMPS[path] = timestamp
     uploads = data.get("hydra_uploads")
     if isinstance(results, list) and isinstance(uploads, list):
@@ -346,7 +352,10 @@ def _write_entry(path, title, results, timestamp):
     """Write one cache entry, dated ``timestamp``; a failed write is ignored."""
     tmp_path = path + ".tmp"
     try:
+        from resources.lib.filter import attached_record
         from resources.lib.hydra import split_search_uploads
+
+        attached = attached_record(results)
 
         plain_results, uploads = split_search_uploads(results)
         for row in plain_results:
@@ -357,6 +366,7 @@ def _write_entry(path, title, results, timestamp):
             "timestamp": timestamp,
             _PARSER_FIELD: _parser_stamp(),
             _PARSES_FIELD: _split_parses(plain_results),
+            _ATTACHED_FIELD: attached,
             "results": plain_results,
             "hydra_uploads": uploads,
         }

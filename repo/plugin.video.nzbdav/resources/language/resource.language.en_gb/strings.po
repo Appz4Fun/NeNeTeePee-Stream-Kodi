@@ -2904,3 +2904,11 @@ msgstr ""
 msgctxt "#30786"
 msgid "Large"
 msgstr ""
+
+msgctxt "#30787"
+msgid "1 post that is not this release"
+msgstr ""
+
+msgctxt "#30788"
+msgid "{} posts that are not this release"
+msgstr ""

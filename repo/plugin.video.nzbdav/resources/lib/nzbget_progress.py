@@ -125,6 +125,9 @@ class FleetReport:
         # Copies downloaded and found to be a pack that holds the release
         # among other files (a season listed under one episode's name).
         self.packs = 0
+        # Copies downloaded and found to be another post under the release's
+        # name: files of their own, at a size far from the release's.
+        self.strays = 0
         self._blocked = blocked if blocked is not None else set()
 
     @staticmethod
@@ -159,6 +162,9 @@ class FleetReport:
     def pack(self):
         self.packs += 1
 
+    def stray(self):
+        self.strays += 1
+
     def mirror(self, row):
         """Count ``row`` as a second listing of an upload, once per listing.
 
@@ -180,7 +186,13 @@ class FleetReport:
 
     def not_sent(self):
         """How many copies were found but not kept."""
-        return sum(self.refused.values()) + self.failed + self.duplicates + self.packs
+        return (
+            sum(self.refused.values())
+            + self.failed
+            + self.duplicates
+            + self.packs
+            + self.strays
+        )
 
     def found(self):
         return len(self.sent) + self.not_sent()
@@ -238,6 +250,8 @@ def not_sent_line(report, mirrors=True):
         parts.append(_counted(duplicates, 30671, 30672))
     if report.packs:
         parts.append(_counted(report.packs, 30771, 30772))
+    if report.strays:
+        parts.append(_counted(report.strays, 30787, 30788))
     return fmt(30668, ", ".join(parts)) if parts else ""
 
 
